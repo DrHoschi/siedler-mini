@@ -1,144 +1,191 @@
 /* ============================================================================
  * Datei    : core/unit-overlay.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-units-overlay
- * Zweck    : Zeichnet die Träger (Carrier) als kleine Kreise über der Karte.
+ * Version  : v25.11.30-units-overlay-direct
+ * Zweck    : Zeichnet Träger direkt in ein eigenes Canvas über dem Spiel.
  *
- * Abhängigkeiten:
- *   – window.GameUnits.getUnits()
- *   – window.GameCamera (tileToScreen / worldToScreen / tileWidth / tileHeight)
- *   – OverlayHooks.register(id, drawFn) ODER PathOverlay.registerLayer(id, drawFn)
+ *  - völlig unabhängig vom Path-Overlay
+ *  - liest Positionen aus GameUnits.getUnits() / Game.getUnits() / window.__units
+ *  - nutzt GameCamera.worldToScreen(), falls vorhanden
+ *  - läuft per requestAnimationFrame
  * ============================================================================ */
 (() => {
   'use strict';
 
-  const TAG  = '[units.overlay]';
+  const TAG  = '[units-overlay]';
   const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // --- Hilfsfunktionen -------------------------------------------------------
+  /** Canvas + Kontext *********************************************************/
+
+  /** @type {HTMLCanvasElement|null} */
+  let _canvas = null;
+  /** @type {CanvasRenderingContext2D|null} */
+  let _ctx = null;
+
+  let _width  = 0;
+  let _height = 0;
+
+  function ensureCanvas() {
+    if (_canvas && _ctx) return;
+
+    const gameCanvas = document.getElementById('game');
+    if (!gameCanvas) {
+      WARN('kein #game Canvas gefunden');
+      return;
+    }
+
+    const parent = gameCanvas.parentNode || document.body;
+
+    const c = document.createElement('canvas');
+    c.id = 'units-overlay';
+    c.style.position      = 'absolute';
+    c.style.left          = gameCanvas.offsetLeft + 'px';
+    c.style.top           = gameCanvas.offsetTop + 'px';
+    c.style.pointerEvents = 'none';   // Klicks gehen weiter an das Spiel
+    c.style.zIndex        = '15';     // über #game (10), unter UI (1020)
+    c.style.imageRendering = 'pixelated';
+
+    parent.insertBefore(c, gameCanvas.nextSibling);
+
+    const ctx = c.getContext('2d');
+    if (!ctx) {
+      WARN('konnte 2D-Context nicht anlegen');
+      return;
+    }
+
+    _canvas = c;
+    _ctx    = ctx;
+
+    resizeToGame();
+    LOG('Canvas erstellt & bereit');
+  }
+
+  function resizeToGame() {
+    if (!_canvas) return;
+    const gameCanvas = document.getElementById('game');
+    if (!gameCanvas) return;
+
+    const rect = gameCanvas.getBoundingClientRect();
+
+    // interne Canvasgröße in Pixeln der Spiellogik
+    _canvas.width  = gameCanvas.width;
+    _canvas.height = gameCanvas.height;
+
+    // CSS-Größe an sichtbare Größe koppeln
+    _canvas.style.width  = rect.width  + 'px';
+    _canvas.style.height = rect.height + 'px';
+
+    _width  = _canvas.width;
+    _height = _canvas.height;
+  }
+
+  /** Helpers ******************************************************************/
 
   function getUnits() {
     try {
-      return window.GameUnits?.getUnits?.() || [];
-    } catch (e) {
-      WARN('getUnits fehlgeschlagen:', e?.message || e);
-      return [];
+      if (window.GameUnits && typeof window.GameUnits.getUnits === 'function') {
+        return window.GameUnits.getUnits();
+      }
+      if (window.Game && typeof window.Game.getUnits === 'function') {
+        return window.Game.getUnits();
+      }
+      if (Array.isArray(window.__units)) {
+        return window.__units;
+      }
+    } catch (err) {
+      WARN('getUnits() Fehler', err);
     }
+    return [];
   }
 
-  function getCamera() {
-    if (window.GameCamera) return window.GameCamera;
-    return null;
-  }
-
-  /**
-   * Tile-Koordinate → Canvas-Pixel
-   * Nutzt wenn möglich GameCamera.tileToScreen/worldToScreen,
-   * sonst einfache Isometrie mit 64x32-Fallback.
-   */
-  function tileToCanvas(tx, ty) {
-    const cam = getCamera();
-
-    try {
-      if (cam && typeof cam.tileToScreen === 'function') {
-        return cam.tileToScreen(tx, ty);
-      }
-      if (cam && typeof cam.worldToScreen === 'function') {
-        return cam.worldToScreen(tx, ty);
-      }
-    } catch (e) {
-      WARN('tileToCanvas via GameCamera fehlgeschlagen', e?.message || e);
+  function worldToScreen(tx, ty) {
+    // bevorzugt: echte Kamera benutzen, falls vorhanden
+    if (window.GameCamera && typeof window.GameCamera.worldToScreen === 'function') {
+      return window.GameCamera.worldToScreen({ x: tx, y: ty });
     }
 
-    const tileW = (cam && cam.tileWidth)  || 64;
-    const tileH = (cam && cam.tileHeight) || 32;
-    const camX  = (cam && cam.x) || 0;
-    const camY  = (cam && cam.y) || 0;
-
-    const sx = (tx - ty) * (tileW / 2) - camX;
-    const sy = (tx + ty) * (tileH / 2) - camY;
-
+    // Fallback: einfache ISO-Projektion ungefähr mittig
+    const TILE_W = 64;
+    const TILE_H = 32;
+    const sx = (tx - ty) * (TILE_W / 2) + (_width / 2);
+    const sy = (tx + ty) * (TILE_H / 2);
     return { x: sx, y: sy };
   }
 
-  // --- Zeichnen --------------------------------------------------------------
+  /** Zeichnen *****************************************************************/
 
-  function draw(ctx) {
+  function drawUnits() {
+    if (!_canvas || !_ctx) return;
+
     const units = getUnits();
-    if (!units.length) return;
-
-    const cam   = getCamera();
-    const zoom  = cam?.zoom || 1;
-
-    ctx.save();
-    ctx.scale(zoom, zoom);
+    _ctx.clearRect(0, 0, _canvas.width, _canvas.height);
+    if (!units || !units.length) return;
 
     for (const u of units) {
-      if (u.type !== 'carrier') continue;
+      if (!u || u.type !== 'carrier') continue;
 
-      const p = tileToCanvas(u.x, u.y);
-      const r = 6; // Radius in Pixeln (vor Zoom)
+      const p = worldToScreen(u.x, u.y);
+      const r = 6;
 
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fillStyle   = 'rgba(20, 200, 255, 0.85)'; // hellblauer Punkt
-      ctx.fill();
-      ctx.lineWidth   = 1;
-      ctx.strokeStyle = '#003344';
-      ctx.stroke();
+      _ctx.beginPath();
+      _ctx.arc(p.x, p.y - 10, r, 0, Math.PI * 2, false);
+      _ctx.fillStyle   = 'rgba(255, 255, 0, 0.9)';   // gelber Punkt
+      _ctx.strokeStyle = 'rgba(80, 40, 0, 0.9)';     // braune Umrandung
+      _ctx.lineWidth   = 2;
+      _ctx.fill();
+      _ctx.stroke();
 
-      // kleines "C" in die Mitte schreiben
-      ctx.font         = '8px system-ui, sans-serif';
-      ctx.fillStyle    = '#001016';
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('C', p.x, p.y);
+      // kleiner Debug-Schatten darunter
+      _ctx.beginPath();
+      _ctx.ellipse(p.x, p.y - 4, r + 2, r / 2, 0, 0, Math.PI * 2);
+      _ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      _ctx.fill();
     }
-
-    ctx.restore();
   }
 
-  // --- Registrierung beim Overlay-System ------------------------------------
+  /** Animations-Loop **********************************************************/
 
-  function registerOverlayLayer() {
-    function tryRegister() {
-      // Neue Variante: OverlayHooks
-      const oh = window.OverlayHooks;
-      if (oh && typeof oh.register === 'function') {
-        oh.register('units', (ctx) => draw(ctx));
-        LOG('Overlay-Layer "units" via OverlayHooks registriert');
-        return true;
-      }
+  let _loopStarted = false;
+  let _lastTS = 0;
 
-      // Ältere Variante: PathOverlay
-      const po = window.PathOverlay;
-      if (po && typeof po.registerLayer === 'function') {
-        po.registerLayer('units', (ctx) => draw(ctx));
-        LOG('Overlay-Layer "units" via PathOverlay registriert');
-        return true;
-      }
+  function loop(ts) {
+    if (!_loopStarted) {
+      _loopStarted = true;
+      _lastTS = ts;
+    }
+    const dt = ts - _lastTS;
+    _lastTS = ts;
 
-      return false;
+    try {
+      ensureCanvas();
+      resizeToGame();
+      drawUnits();
+    } catch (err) {
+      WARN('Fehler im Overlay-Loop', err);
     }
 
-    // Sofort versuchen …
-    if (tryRegister()) return;
-
-    // … sonst ein paar Mal nachladen (OverlayHooks kommt evtl. später)
-    let tries = 0;
-    const maxTries = 40; // ~4 Sekunden bei 100ms
-    const t = setInterval(() => {
-      if (tryRegister()) {
-        clearInterval(t);
-      } else if (++tries > maxTries) {
-        clearInterval(t);
-        WARN('OverlayHooks/PathOverlay nicht gefunden – Units-Layer nicht aktiv');
-      }
-    }, 100);
+    window.requestAnimationFrame(loop);
   }
 
-  // Auto-Start
-  registerOverlayLayer();
-  LOG('Modul geladen v25.11.30-units-overlay');
+  /** Boot-Hooks ***************************************************************/
+
+  // Starten, sobald das Spiel losläuft
+  window.addEventListener('cb:game:start', () => {
+    try {
+      ensureCanvas();
+      resizeToGame();
+      window.requestAnimationFrame(loop);
+      LOG('Overlay-Loop gestartet');
+    } catch (err) {
+      WARN('Fehler beim Start des Overlays', err);
+    }
+  }, { once: true });
+
+  // Sicherheitsnetz: falls resize später passiert
+  window.addEventListener('resize', () => {
+    resizeToGame();
+  });
+
+  LOG('Modul geladen v25.11.30-units-overlay-direct');
 })();
