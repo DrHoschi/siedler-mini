@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-30T14:33:14.847Z",
+  "createdAt": "2025-11-30T18:32:10.442Z",
   "root": ".",
   "count": 537,
   "entries": [
@@ -1279,7 +1279,7 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 3365
+      "size": 5838
     },
     {
       "type": "file",
@@ -1309,7 +1309,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 5238
+      "size": 8911
     },
     {
       "type": "file",
@@ -1334,7 +1334,7 @@
     {
       "type": "file",
       "path": "core/job.engine.js",
-      "size": 4649
+      "size": 8500
     },
     {
       "type": "file",
@@ -1429,7 +1429,7 @@
     {
       "type": "file",
       "path": "core/unit-overlay.js",
-      "size": 4620
+      "size": 6356
     },
     {
       "type": "file",
@@ -2583,12 +2583,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53208
+      "size": 52941
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20209
+      "size": 20128
     },
     {
       "type": "file",
