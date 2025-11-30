@@ -1,15 +1,20 @@
 /* ============================================================================
  * Datei   : core/game.construction.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-buildstep3
+ * Version : v25.11.30-buildstep4-multiphasic
  *
  * Zweck   :
- *   - Steuert die Bauphasen von Gebäuden (Baustelle → Bau → fertig)
- *   - Verarbeitet Material-Lieferungen der Träger (cb:build:deliver)
- *   - Zählt Needs/Delivered pro Baustelle
- *   - Erzeugt Boden-Drops (Ressourcenkugeln) um die Baustelle
- *   - Zeichnet Drops + Baufortschrittsbalken
- *   - Meldet fertige Gebäude (cb:build:complete)
+ *   - Mehrstufige Baustellen-Logik:
+ *       Bild 0 → Bild 1 → Bild 2 → fertiges Gebäude
+ *   - Ressourcen werden an Baustelle geliefert (cb:build:deliver)
+ *   - Wenn alle Needs erfüllt sind:
+ *       → zwei Bauarbeiter werden gespawnt
+ *       → 5s Bild 1 (Bauphase 1)
+ *       → 5s Bild 2 (Bauphase 2)
+ *       → dann fertiges Gebäude
+ *   - Zeichnet Boden-Ressourcenkugeln + Fortschrittsbalken
+ *   - Zeichnet einfache Bauarbeiter-Kreise, die hin- und herlaufen
+ *   - Meldet fertige Gebäude per cb:build:complete
  * ========================================================================== */
 
 (function(){
@@ -19,18 +24,28 @@
   const LOG  = (...a)=> (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // Phasen im Bauprozess
+  // ---------------------------------------------------------------------------
+  // Phasen & Konstanten
+  // ---------------------------------------------------------------------------
+
+  // Grobe Bau-Phasen (für Zustandsautomat)
   const PHASE = {
-    SITE    : 0,  // Baustelle angelegt, wartet auf Material
-    BUILD   : 1,  // alle Ressourcen da, Bau läuft (Progress-Balken)
-    COMPLETE: 2   // Bau fertig, fertiges Gebäude
+    SITE    : 0,  // nur Baustelle / Material sammeln (Bild 0)
+    BUILD   : 1,  // Bau läuft (Bild 1 + 2)
+    COMPLETE: 2   // fertig (fertiges Gebäude)
   };
 
-  // Bauzeit, nachdem alle Ressourcen da sind (ms)
-  const DEFAULT_BUILD_TIME = 6000;
+  // Bauzeit, nachdem alle Ressourcen da sind (in Millisekunden)
+  // → 5s Bild 1 + 5s Bild 2 = 10s
+  const BUILD_TOTAL_TIME_MS   = 10000;
+  const BUILD_STAGE1_TIME_MS  = 5000;   // Grenze zwischen Bild 1 und Bild 2
+
+  // Bauarbeiter-Konstanten
+  const BUILDER_COUNT         = 2;
+  const BUILDER_SPEED_TPS     = 1.2;    // Tiles pro Sekunde
 
   // ---------------------------------------------------------------------------
-  // Hilfsfunktionen: Basis
+  // Hilfsfunktionen Basis
   // ---------------------------------------------------------------------------
 
   function getBuildings(){
@@ -45,7 +60,7 @@
   }
 
   /**
-   * Gebäude finden, dessen Tile-Rechteck die Positions-Koordinate enthält.
+   * Gebäude finden, dessen Tile-Rechteck die übergebene Position enthält.
    */
   function findBuildingAt(posX, posY){
     const list = getBuildings();
@@ -70,12 +85,19 @@
   }
 
   /**
-   * Standardwerte für Baustellen-Felder setzen.
+   * Grundzustand für Baustellen-Felder sicherstellen.
+   *
+   * WICHTIG:
+   *   buildStage:
+   *     0 = Baustelle Bild 0
+   *     1 = Baustelle Bild 1
+   *     2 = Baustelle Bild 2
+   *     3 = fertiges Gebäude
    */
   function ensureConstructionState(b){
     if (!b) return;
 
-    // Soll-Kosten (needs)
+    // Soll-Kosten
     if (!b.needs || typeof b.needs !== 'object'){
       const src = (b.cost && typeof b.cost === 'object') ? b.cost : null;
       const fallback = { wood: 2, stone: 1 };
@@ -110,7 +132,7 @@
 
     // Zeit / Progress
     if (typeof b.buildTime !== 'number' || b.buildTime <= 0){
-      b.buildTime = DEFAULT_BUILD_TIME;
+      b.buildTime = BUILD_TOTAL_TIME_MS;
     }
     if (typeof b.buildElapsed !== 'number'){
       b.buildElapsed = 0;
@@ -124,16 +146,30 @@
       b.status = 'pending';
     }
 
-    // Visuelle Bau-Stufe für game.renderer.js:
-    //   0 = Baustelle zeichnen
-    //   1 = fertiges Gebäude zeichnen
+    // Unter-Baustufe (nur während BUILD)
+    if (typeof b.buildSubStage !== 'number'){
+      // 0 = Vorbereitung, 1 = Bild1, 2 = Bild2
+      b.buildSubStage = 0;
+    }
+
+    // Visuelle Stufe für Renderer:
+    // 0,1,2 = Baustellen-Bilder, 3 = fertiges Gebäude
     if (typeof b.buildStage !== 'number'){
-      b.buildStage = (b.buildPhase === PHASE.COMPLETE) ? 1 : 0;
+      if (b.buildPhase === PHASE.COMPLETE){
+        b.buildStage = 3;
+      } else {
+        b.buildStage = 0;
+      }
+    }
+
+    // Lokale Bauarbeiter der Baustelle
+    if (!Array.isArray(b.builders)){
+      b.builders = [];
     }
   }
 
   /**
-   * Sind alle benötigten Ressourcen geliefert?
+   * Prüfen, ob alle benötigten Ressourcen geliefert wurden.
    */
   function hasAllMaterial(b){
     if (!b || !b.needs) return false;
@@ -148,7 +184,7 @@
   }
 
   /**
-   * Drop (Ressourcenkugel) um die Baustelle erzeugen.
+   * Drop (Ressourcenkugel) an / um Baustelle erzeugen.
    */
   function addDrop(b, resKey, posX, posY){
     ensureConstructionState(b);
@@ -174,10 +210,82 @@
     b.drops.push(drop);
   }
 
-  /**
-   * Bau abschließen: Phase COMPLETE, Drops löschen, fertiges Gebäude melden.
-   * WICHTIG: buildStage = 1 → Renderer zeichnet jetzt das richtige Gebäude.
-   */
+  // ---------------------------------------------------------------------------
+  // Bauarbeiter (lokal pro Baustelle)
+  // ---------------------------------------------------------------------------
+
+  function spawnBuilders(b){
+    ensureConstructionState(b);
+
+    const bw = toNumber(b.w, 1);
+    const bh = toNumber(b.h, 1);
+    const cx = b.x + bw / 2;
+    const cy = b.y + bh / 2;
+
+    b.builders = [];
+
+    for (let i = 0; i < BUILDER_COUNT; i++){
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.max(bw, bh) * 0.3;
+
+      const x = cx + Math.cos(angle) * radius * 0.5;
+      const y = cy + Math.sin(angle) * radius * 0.5;
+
+      b.builders.push({
+        x,
+        y,
+        targetX   : cx,
+        targetY   : cy,
+        carryPhase: 0      // 0/1 → ob er "Material" trägt
+      });
+    }
+  }
+
+  function pickNewBuilderTarget(b, worker){
+    const bw = toNumber(b.w, 1);
+    const bh = toNumber(b.h, 1);
+    const cx = b.x + bw / 2;
+    const cy = b.y + bh / 2;
+
+    const radius = Math.max(bw, bh) * 0.45;
+    const angle  = Math.random() * Math.PI * 2;
+
+    worker.targetX = cx + Math.cos(angle) * radius;
+    worker.targetY = cy + Math.sin(angle) * radius;
+
+    // ein/aus „Material tragen“ toggeln
+    worker.carryPhase = worker.carryPhase ? 0 : 1;
+  }
+
+  function updateBuilders(b, dt){
+    if (!Array.isArray(b.builders) || !b.builders.length) return;
+
+    const speed = BUILDER_SPEED_TPS; // Tiles pro Sekunde
+    const step  = speed * dt;
+
+    for (const w of b.builders){
+      const dx = (w.targetX ?? w.x) - w.x;
+      const dy = (w.targetY ?? w.y) - w.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (!dist || dist <= step){
+        // Ziel erreicht → neues Ziel picken
+        pickNewBuilderTarget(b, w);
+        continue;
+      }
+
+      // ein Stück in Richtung Ziel laufen
+      const nx = dx / dist;
+      const ny = dy / dist;
+      w.x += nx * step;
+      w.y += ny * step;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bau fertig
+  // ---------------------------------------------------------------------------
+
   function completeBuilding(b){
     ensureConstructionState(b);
 
@@ -186,11 +294,13 @@
     b.buildProgress = 1;
     b.status        = 'done';
 
-    // fertiges Gebäude sichtbar machen
-    b.buildStage    = 1;
+    // fertiges Gebäude anzeigen
+    b.buildSubStage = 2;
+    b.buildStage    = 3;
 
-    // Drops löschen
-    b.drops = [];
+    // Drops & Bauarbeiter entfernen
+    b.drops    = [];
+    b.builders = [];
 
     try{
       window.dispatchEvent(new CustomEvent('cb:build:complete', {
@@ -216,6 +326,7 @@
   // ---------------------------------------------------------------------------
   // Event: Material geliefert – cb:build:deliver
   // ---------------------------------------------------------------------------
+
   window.addEventListener('cb:build:deliver', (ev)=>{
     const d     = ev.detail || {};
     const posX  = toNumber(d.x, NaN);
@@ -245,7 +356,7 @@
     }
     b.delivered[res] = next;
 
-    // Nur die "neuen" Einheiten als Drops auf den Boden legen
+    // Nur die „neuen“ Mengen als Drops anzeigen
     let inc = next - prev;
     if (inc < 0) inc = 0;
     for (let i = 0; i < inc; i++){
@@ -254,12 +365,14 @@
 
     // Wenn jetzt alles da ist → Bauphase starten
     if (hasAllMaterial(b) && b.buildPhase === PHASE.SITE){
-      b.buildPhase    = PHASE.BUILD;
-      b.buildElapsed  = 0;
-      b.buildProgress = 0;
-      b.status        = 'building';
-      b.hasMaterial   = true;
-      b.buildStage    = 0; // noch Baustellen-Grafik
+      b.buildPhase     = PHASE.BUILD;
+      b.buildElapsed   = 0;
+      b.buildProgress  = 0;
+      b.buildSubStage  = 1;   // wir steigen direkt mit Bild 1 ein
+      b.status         = 'building';
+      b.hasMaterial    = true;
+      b.buildStage     = 1;   // Bild 1 sichtbar
+      spawnBuilders(b);
     }
 
     LOG('Material geliefert', {
@@ -275,6 +388,7 @@
   // ---------------------------------------------------------------------------
   // Tick: Baufortschritt (pro Frame aus game.js)
   // ---------------------------------------------------------------------------
+
   function tick(dt){
     const list = getBuildings();
     if (!list.length) return;
@@ -286,19 +400,37 @@
 
       switch (b.buildPhase){
         case PHASE.SITE: {
-          // wartet auf Material
-          b.status     = 'pending';
-          b.buildStage = 0;  // sicherstellen, dass Baustelle gezeichnet wird
+          // Ressourcen einsammeln, noch kein Bau
+          b.status        = 'pending';
+          b.buildStage    = 0;   // Bild 0
+          b.buildSubStage = 0;
           break;
         }
 
         case PHASE.BUILD: {
           b.buildElapsed  += ms;
-          b.buildProgress  = Math.min(1, b.buildElapsed / b.buildTime);
-          b.status         = 'building';
-          b.buildStage     = 0;  // immer noch Baustelle + Fortschrittsbalken
+          let progress     = b.buildElapsed / b.buildTime;
+          if (progress < 0) progress = 0;
+          if (progress > 1) progress = 1;
 
-          if (b.buildProgress >= 1){
+          b.buildProgress  = progress;
+          b.status         = 'building';
+
+          // Unterphasen & Bilder:
+          //   0.00–0.50 → Bild 1
+          //   0.50–1.00 → Bild 2
+          if (b.buildElapsed < BUILD_STAGE1_TIME_MS){
+            b.buildSubStage = 1;
+            b.buildStage    = 1;
+          } else if (b.buildElapsed < b.buildTime){
+            b.buildSubStage = 2;
+            b.buildStage    = 2;
+          }
+
+          // Bauarbeiter bewegen
+          updateBuilders(b, dt);
+
+          if (progress >= 1){
             completeBuilding(b);
           }
           break;
@@ -306,21 +438,23 @@
 
         case PHASE.COMPLETE:
         default:
-          b.status = 'done';
-          // buildStage bleibt 1 → fertiges Gebäude
+          b.status        = 'done';
+          b.buildStage    = 3;   // fertiges Gebäude
+          b.buildSubStage = 2;
+          // Bauarbeiter sollten schon entfernt sein
           break;
       }
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Rendering: Drops + Baufortschrittsbalken
+  // Rendering: Drops + Fortschrittsbalken + Bauarbeiter
   // ---------------------------------------------------------------------------
+
   function worldToScreen(Game, wx, wy){
     const tileSize = Game.tileSize || 64;
     const cam      = Game.camera || {};
 
-    // Kamera-Helper bevorzugen
     if (typeof cam.worldToScreen === 'function'){
       return cam.worldToScreen(wx, wy);
     }
@@ -358,7 +492,9 @@
       const sz     = camPos.size || (Game.tileSize || 64);
       const zoom   = camPos.zoom || 1;
 
-      // 1) Drops (Boden-Ressourcen)
+      // ---------------------------------------------------------------
+      // 1) Boden-Drops (Ressourcenkugeln)
+      // ---------------------------------------------------------------
       if (Array.isArray(b.drops) && b.drops.length){
         for (const drop of b.drops){
           const dPos = worldToScreen(Game, drop.x, drop.y);
@@ -383,7 +519,45 @@
         }
       }
 
-      // 2) Baufortschrittsbalken
+      // ---------------------------------------------------------------
+      // 2) Bauarbeiter-Kreise (nur während BUILD)
+      // ---------------------------------------------------------------
+      if (b.buildPhase === PHASE.BUILD &&
+          Array.isArray(b.builders) &&
+          b.builders.length){
+        for (const w of b.builders){
+          const wPos = worldToScreen(Game, w.x, w.y);
+          const r    = sz * 0.12;
+
+          // Körper
+          ctx.beginPath();
+          ctx.arc(wPos.x, wPos.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(220,180,120,0.95)';
+          ctx.fill();
+
+          ctx.lineWidth   = 1.5 * zoom;
+          ctx.strokeStyle = 'rgba(60,30,0,0.7)';
+          ctx.stroke();
+
+          // Kopf
+          ctx.beginPath();
+          ctx.arc(wPos.x, wPos.y - r * 0.9, r * 0.6, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,230,200,0.95)';
+          ctx.fill();
+
+          // ggf. „Material“ auf den Schultern
+          if (w.carryPhase){
+            ctx.beginPath();
+            ctx.arc(wPos.x + r * 0.8, wPos.y - r * 0.4, r * 0.35, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------
+      // 3) Baufortschrittsbalken (für SITE + BUILD)
+      // ---------------------------------------------------------------
       if (b.buildPhase !== PHASE.COMPLETE){
         const progress = (b.buildPhase === PHASE.BUILD)
           ? b.buildProgress
@@ -394,17 +568,14 @@
         const barX      = camPos.x - barWidth / 2;
         const barY      = camPos.y - bh * sz * 0.6 - barHeight;
 
-        // Hintergrund
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(barX, barY, barWidth, barHeight);
 
-        // Füllung
         if (progress > 0){
           ctx.fillStyle = 'rgba(80,200,80,0.9)';
           ctx.fillRect(barX+1, barY+1, (barWidth-2) * progress, barHeight-2);
         }
 
-        // Rahmen
         ctx.lineWidth   = 1.5;
         ctx.strokeStyle = 'rgba(0,0,0,0.85)';
         ctx.strokeRect(barX, barY, barWidth, barHeight);
@@ -421,6 +592,6 @@
     tick,
     render
   };
-  LOG('Construction-Modul aktiv (buildstep3)');
+  LOG('Construction-Modul aktiv (buildstep4-multiphasic)');
 
 })();
