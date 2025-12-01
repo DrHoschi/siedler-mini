@@ -75,6 +75,11 @@
 
     btnClose?.addEventListener('click', closeMenu);
 
+        // Verhindern, dass Klicks im Panel "durchfallen"
+    root.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+    });
+    
     btnWorkArea?.addEventListener('click', ()=>{
       if (!current) return;
       if (!window.ProductionWood || typeof window.ProductionWood.setWorkArea !== 'function'){
