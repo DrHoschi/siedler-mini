@@ -1,28 +1,36 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.01-wood-lumberjack
+ * Version : v25.12.01-wood-lumberjack-workarea
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
  *     - Reagiert auf cb:build:complete für b.lumberjack
  *     - Legt pro Holzfäller ein eigenes State-Objekt an
- *     - Simpler Zyklus:
+ *     - Zyklus:
  *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
  *     - Erzeugt Holz über Production.addResource('wood', ...)
- *     - Zeichnet Bäume vor dem Gebäude:
- *         * wenn Atlas geladen → Baum-Sprites aus trees_mega_atlas
- *         * sonst Fallback: einfache Kreise
+ *     - Zeichnet Bäume + Arbeitsbereich (Kreis) als Overlay
  *
- *   Anbindung:
- *     - Registriert sich bei Production.registerModule({ id:'wood', ... })
+ * Ereignisse:
+ *   IN  :
+ *     - cb:build:complete { id, uid?, x,y,w,h, ... }
  *
- * Struktur:
- *   IMPORTS → KONSTANTEN → STATE → HILFSFUNKTIONEN → TICK → OVERLAY → EXPORT
+ *   OUT :
+ *     - cb:prod:start  { bId, kind }
+ *     - cb:prod:output { bId, kind, item:'wood', qty }
+ *
+ *   API / Debug:
+ *     - window.ProductionWood.setWorkArea(uid, {cx,cy,radiusTiles})
+ *       → Arbeitskreis verschieben / Radius ändern
  * ========================================================================== */
 
 (function(){
   'use strict';
+
+  // =========================
+  // LOGGING / META
+  // =========================
 
   const TAG  = '[prod-wood]';
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
@@ -47,18 +55,18 @@
     PLANT : 2000,  // 2 s Setzling pflanzen
     GROW  : 8000,  // 8 s wachsen
     CUT   : 2000,  // 2 s fällen
-    REST  : 1000   // (noch nicht genutzt, Reserve)
+    REST  : 1000   // Reserve / später nutzbar
   };
 
-  // Baum-Atlas-Konfiguration (wie besprochen)
+  // Baum-Atlas-Konfiguration (optional; falls Assets bereit)
   const TREE_ATLAS_CFG = {
-    urlJson:  'assets/tex/deco/trees_mega_atlas.json',
-    urlImage: 'assets/tex/deco/trees_mega_atlas.png',
-    frameMap: {
-      PLANT: 'reserved_32',  // Setzling / kleiner Busch
-      GROW : 'reserved_24',  // mittlerer Baum
-      READY: 'reserved_0',   // großer Baum
-      CUT  : 'reserved_40'   // Stumpf / gefällt
+    urlJson : 'assets/tex/deco/trees_multi_atlas.json',
+    urlImage: 'assets/tex/deco/trees_multi_atlas.png',
+    frameIds: {
+      sapling : 'tree_sapling',
+      small   : 'tree_small',
+      medium  : 'tree_medium',
+      big     : 'tree_big'
     }
   };
 
@@ -66,20 +74,17 @@
   // STATE
   // =========================
 
-  /**
-   * Map mit allen Förster-Gebäuden.
-   * key = `${kind}@${x},${y}`
-   */
+  /** Map<uid, LumberjackState> */
   const Lumberjacks = new Map();
 
-  /** Atlas-Daten */
+  /** Atlas-Daten (optional) */
   let treeAtlas        = null;
   let treeAtlasImg     = null;
   let treeAtlasLoaded  = false;
   let treeAtlasLoading = false;
 
   // =========================
-  // HILFSFUNKTIONEN (LOGIK)
+  // HILFSFUNKTIONEN LOGIK
   // =========================
 
   /**
@@ -96,61 +101,63 @@
   /**
    * Förster-Instanz registrieren – wird von onBuildComplete() aufgerufen.
    *
-   * @param {object} detail – { id, x,y,w,h, ... } aus cb:build:complete
+   * @param {object} detail – { id, x,y,w,h, uid?, ... } aus cb:build:complete
    */
   function registerLumberjackFromBuild(detail){
-  if (!detail) return;
-  const kind = detail.id || detail.buildingId || detail.kind;
-  if (kind !== LUMBERJACK_ID) return;
+    if (!detail) return;
 
-  const x = detail.x|0;
-  const y = detail.y|0;
-  const w = (detail.w|0) || 3;
-  const h = (detail.h|0) || 3;
+    const kind = detail.id || detail.buildingId || detail.kind;
+    if (kind !== LUMBERJACK_ID) return;
 
-  const uid = `${kind}@${x},${y}`;
-  if (Lumberjacks.has(uid)) {
-    // Doppelte Events ignorieren
-    return;
-  }
+    const x = detail.x | 0;
+    const y = detail.y | 0;
+    const w = (detail.w | 0) || 3;
+    const h = (detail.h | 0) || 3;
 
-  const centerX = x + w / 2;
-  const centerY = y + h / 2;
-
-  const state = {
-    uid,
-    kind,
-    x, y, w, h,
-    phase    : LJ_PHASE.PLANT,
-    timer    : 0,
-    cycle    : 0,
-    treeProg : 0,
-
-    // 🔵 Standard-Arbeitsbereich (ca. 5×5 Tiles als Kreis)
-    workArea : {
-      cx         : centerX,   // Mittelpunkt in Tile-Koordinaten
-      cy         : centerY,
-      radiusTiles: 2.5        // ~ Durchmesser 5 Tiles
+    const uid = detail.uid || `${kind}@${x},${y}`;
+    if (Lumberjacks.has(uid)){
+      // Doppeltes Event (z.B. Reload) ignorieren
+      return;
     }
-  };
 
-  Lumberjacks.set(uid, state);
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
 
-  try {
-    dispatchEvent(new CustomEvent('cb:prod:start', {
-      detail:{ bId:uid, kind }
-    }));
-  } catch(e){
-    WARN('cb:prod:start (wood) dispatch fehlgeschlagen', e);
+    const state = {
+      uid,
+      kind,
+      x, y, w, h,
+
+      phase    : LJ_PHASE.PLANT,
+      timer    : 0,
+      cycle    : 0,
+      treeProg : 0,
+
+      // 🔵 Standard-Arbeitsbereich: ~5×5 Tiles als Kreis
+      workArea : {
+        cx         : centerX, // Mittelpunkt in Tile-Koordinaten
+        cy         : centerY,
+        radiusTiles: 2.5      // ~ Durchmesser 5 Tiles
+      }
+    };
+
+    Lumberjacks.set(uid, state);
+
+    try {
+      dispatchEvent(new CustomEvent('cb:prod:start', {
+        detail:{ bId: uid, kind }
+      }));
+    } catch(e){
+      WARN('cb:prod:start (wood) dispatch fehlgeschlagen', e);
+    }
+
+    LOG('Lumberjack registriert', state);
   }
-
-  LOG('Lumberjack registriert', state);
-}
 
   /**
-   * EINEN Förster einen Schritt weiter ticken.
-   * @param {object} lj – Lumberjack-State
-   * @param {number} dtMs – Tick-Zeit
+   * Einzelnen Förster einen Schritt weiter ticken.
+   * @param {object} lj   – Lumberjack-State
+   * @param {number} dtMs – Tick-Zeit in ms
    */
   function tickLumberjack(lj, dtMs){
     lj.timer += dtMs;
@@ -164,25 +171,32 @@
         }
         break;
       }
+
       case LJ_PHASE.GROW: {
         const p = Math.min(1, lj.timer / LJ_TIMES.GROW);
         lj.treeProg = p;
         if (lj.timer >= LJ_TIMES.GROW){
-          lj.timer = 0;
-          lj.phase = LJ_PHASE.READY;
+          lj.timer    = 0;
+          lj.phase    = LJ_PHASE.READY;
+          lj.treeProg = 1;
         }
         break;
       }
+
       case LJ_PHASE.READY: {
-        // vorerst: sofort in CUT übergehen
-        lj.phase = LJ_PHASE.CUT;
+        // Noch kein expliziter „Warten“-Zustand:
+        // Wir starten direkt mit dem Fällen.
         lj.timer = 0;
+        lj.phase = LJ_PHASE.CUT;
         break;
       }
+
       case LJ_PHASE.CUT: {
         if (lj.timer >= LJ_TIMES.CUT){
           lj.timer = 0;
-          lj.cycle++;
+          lj.phase = LJ_PHASE.PLANT;
+          lj.treeProg = 0;
+          lj.cycle = (lj.cycle || 0) + 1;
 
           const qty = 1; // 1 Holz pro Zyklus – später balancieren
           addResource('wood', qty, 'lumberjack-cycle', lj.uid);
@@ -197,17 +211,15 @@
               }
             }));
           } catch(e){
-            WARN('cb:prod:output (wood) dispatch fehlgeschlagen', e);
+            WARN('cb:prod:output dispatch fehlgeschlagen', e);
           }
-
-          // neuer Zyklus
-          lj.phase    = LJ_PHASE.PLANT;
-          lj.treeProg = 0;
         }
         break;
       }
+
       case LJ_PHASE.IDLE:
       default:
+        // nichts
         break;
     }
   }
@@ -218,18 +230,20 @@
   function tickAllLumberjacks(dtMs){
     if (!Lumberjacks.size) return;
     for (const lj of Lumberjacks.values()){
-      try { tickLumberjack(lj, dtMs); }
-      catch(e){ ERR('Lumberjack-Tick Fehler:', e); }
+      try {
+        tickLumberjack(lj, dtMs);
+      } catch(e){
+        ERR('Fehler in tickLumberjack für', lj.uid, e);
+      }
     }
   }
 
   // =========================
-  // HILFSFUNKTIONEN (ATLAS + RENDER)
+  // BAUM-ATLAS (optional)
   // =========================
 
-  function ensureTreeAtlasReady(){
-    if (treeAtlas && treeAtlasLoaded) return true;
-    if (treeAtlasLoading) return false;
+  function ensureTreeAtlasLoaded(){
+    if (treeAtlasLoaded || treeAtlasLoading) return;
     treeAtlasLoading = true;
 
     // JSON
@@ -260,140 +274,74 @@
     } catch(e){
       WARN('Tree-Atlas Bild-Ladevorgang fehlgeschlagen:', e);
     }
-
-    return false;
   }
 
-  function drawTreeFrame(ctx, frameKey, x, y, size){
-    if (!treeAtlas || !treeAtlasImg || !treeAtlas.frames) return false;
-
-    const frameDef = treeAtlas.frames[frameKey];
-    if (!frameDef) return false;
-
-    let col, row, tileW, tileH;
-
-    // Unser eigenes Format: [col,row]
-    if (Array.isArray(frameDef)) {
-      col   = frameDef[0];
-      row   = frameDef[1];
-      tileW = treeAtlas.tileW || 256;
-      tileH = treeAtlas.tileH || 256;
-    } else if (frameDef.frame) {
-      // Phaser-Atlas-Format (x,y,w,h)
-      tileW = frameDef.frame.w;
-      tileH = frameDef.frame.h;
-      col   = (frameDef.frame.x / tileW)|0;
-      row   = (frameDef.frame.y / tileH)|0;
-    } else {
-      return false;
-    }
-
-    const sx = col * tileW;
-    const sy = row * tileH;
-    const sw = tileW;
-    const sh = tileH;
-
-    ctx.drawImage(
-      treeAtlasImg,
-      sx, sy, sw, sh,
-      x - size / 2,
-      y - size * 0.9,
-      size,
-      size
-    );
-    return true;
+  // Einfacher Fallback zum Zeichnen eines „Baums“
+  function drawSimpleTreeCircle(ctx, xPx, yPx, ts){
+    ctx.beginPath();
+    ctx.fillStyle   = 'rgba(40, 180, 80, 0.85)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.lineWidth   = Math.max(1.5, ts * 0.05);
+    ctx.arc(xPx, yPx, ts * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
 
+  // =========================
+  // OVERLAY-ZEICHNUNG (Bäume + Arbeitskreis)
+  // =========================
+
+  /**
+   * Zeichnet pro Lumberjack:
+   *   - einen einfachen Baum-Fallback (oder später Atlas-Tree)
+   *   - den Arbeitsbereich als gestrichelten Kreis
+   */
   function drawLumberjackOverlay(ctx, cam){
     if (!ctx) return;
-    if (!Lumberjacks.size) return;
 
-    const zoom = cam?.zoom ?? 1;
-    const ox   = cam?.x    ?? 0;
-    const oy   = cam?.y    ?? 0;
+    const Game = window.Game || {};
+    const ts = Game.tileSize || Game.map?.tileSize || 64;
 
-    const ts =
-      (window.Game?.map?.tileSize) ||
-      (window.GameMap?._state?.map?.tileSize) ||
-      64;
-
+    // Kamera anwenden
     ctx.save();
-    ctx.translate(-ox * ts * zoom, -oy * ts * zoom);
-    ctx.scale(zoom, zoom);
+    const z    = cam?.zoom ?? window.GameCamera?.zoom ?? 1;
+    const camX = cam?.x    ?? window.GameCamera?.x    ?? 0;
+    const camY = cam?.y    ?? window.GameCamera?.y    ?? 0;
+    ctx.setTransform(z, 0, 0, z, -camX * z, -camY * z);
 
-    const atlasReady = ensureTreeAtlasReady();
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
 
     for (const lj of Lumberjacks.values()){
-      const bx = lj.x;
-      const by = lj.y;
-      const bw = lj.w || 3;
-      const bh = lj.h || 3;
+      const w = lj.w || 3;
+      const h = lj.h || 3;
 
-      const cx = (bx + bw / 2) * ts;
-      const cy = (by + bh) * ts;
+      // Mittelpunkt des Gebäudes / Arbeitsbereichs in Tiles
+      const area = lj.workArea || {};
+      const cxTiles = (typeof area.cx === 'number') ? area.cx : (lj.x + w / 2);
+      const cyTiles = (typeof area.cy === 'number') ? area.cy : (lj.y + h / 2);
 
-      // 1) Atlas-Sprite, wenn verfügbar
-      if (atlasReady) {
-        let key = null;
-        if (lj.phase === LJ_PHASE.PLANT) key = TREE_ATLAS_CFG.frameMap.PLANT;
-        else if (lj.phase === LJ_PHASE.GROW) key = TREE_ATLAS_CFG.frameMap.GROW;
-        else if (lj.phase === LJ_PHASE.READY) key = TREE_ATLAS_CFG.frameMap.READY;
-        else if (lj.phase === LJ_PHASE.CUT) key = TREE_ATLAS_CFG.frameMap.CUT;
+      const cx = cxTiles * ts;
+      const cy = cyTiles * ts;
 
-        if (key) {
-          const size = ts * 2.0;
-          const ok = drawTreeFrame(ctx, key, cx, cy, size);
-          if (ok) {
-            // Wachstumsring (nur in GROW)
-            if (lj.phase === LJ_PHASE.GROW){
-              ctx.beginPath();
-              ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-              const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
-              const r    = size * 0.35;
-              ctx.arc(cx, cy - size * 0.9, r, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
-              ctx.stroke();
-            }
+      // 🟢 Einfacher Baum-Fallback "vor" dem Gebäude
+      const treeX = (lj.x + w / 2) * ts;
+      const treeY = (lj.y - 0.2)   * ts;
+      drawSimpleTreeCircle(ctx, treeX, treeY, ts);
 
-                // --- Arbeitsbereich-Kreis (Standard ~5x5, später vom UI veränderbar) ---
-    const radiusTiles = (lj.workArea && lj.workArea.radiusTiles) || 2.5;
-    const rWorkPx     = radiusTiles * ts;
-
-    ctx.beginPath();
-    ctx.lineWidth   = Math.max(1.5, ts * 0.06);
-    ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)'; // türkis-blauer Kreis
-    ctx.setLineDash([ts * 0.25, ts * 0.25]);    // gestrichelt wie in vielen Siedler-Teilen
-    ctx.arc(cx, cy, rWorkPx, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-            
-            continue; // kein Fallback nötig
-          }
-        }
-      }
-
-      // 2) Fallback – einfache Kreise
-      let fill = '#228B22';
-      if (lj.phase === LJ_PHASE.PLANT) fill = '#8BC34A';
-      if (lj.phase === LJ_PHASE.GROW)  fill = '#4CAF50';
-      if (lj.phase === LJ_PHASE.READY) fill = '#2E7D32';
-      if (lj.phase === LJ_PHASE.CUT)   fill = '#A0522D';
-
-      const r = ts * 0.45;
+      // 🔵 Arbeitsbereich-Kreis (Standard ~5×5, vom UI änderbar)
+      const radiusTiles = (area.radiusTiles && typeof area.radiusTiles === 'number')
+        ? area.radiusTiles
+        : 2.5;
+      const rWorkPx = radiusTiles * ts;
 
       ctx.beginPath();
-      ctx.fillStyle = fill;
-      ctx.arc(cx, cy - r * 0.2, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (lj.phase === LJ_PHASE.GROW){
-        ctx.beginPath();
-        ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-        const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
-        ctx.arc(cx, cy - r * 0.2, r * 0.8, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
-        ctx.stroke();
-      }
+      ctx.lineWidth   = Math.max(1.5, ts * 0.06);
+      ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';  // türkis-blauer Kreis
+      ctx.setLineDash([ts * 0.25, ts * 0.25]);     // gestrichelt wie Siedler-Arbeitsbereiche
+      ctx.arc(cx, cy, rWorkPx, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     ctx.restore();
@@ -436,47 +384,80 @@
    */
   function onBuildComplete(detail){
     registerLumberjackFromBuild(detail);
+    ensureTreeAtlasLoaded();
   }
 
   /**
-   * Tick-Handler (vom Manager aufgerufen).
-   * @param {number} dtMs
+   * Tick-Funktion (vom Manager mit TICK_MS aufgerufen).
    */
   function tick(dtMs){
-    tickAllLumberjacks(dtMs || 0);
+    tickAllLumberjacks(dtMs);
   }
 
   // =========================
-  // REGISTRIERUNG BEIM MANAGER
+  // Arbeitsbereich-API (für UI-Menü)
   // =========================
 
-  function registerAtManager(){
+  function setWorkArea(uid, cfg){
+    const lj = Lumberjacks.get(uid);
+    if (!lj){
+      WARN('setWorkArea: unbekannte uid', uid);
+      return;
+    }
+
+    const fallbackRadius = (lj.workArea && lj.workArea.radiusTiles) || 2.5;
+
+    lj.workArea = {
+      cx         : (cfg && typeof cfg.cx === 'number') ? cfg.cx : (lj.x + (lj.w || 3) / 2),
+      cy         : (cfg && typeof cfg.cy === 'number') ? cfg.cy : (lj.y + (lj.h || 3) / 2),
+      radiusTiles: (cfg && typeof cfg.radiusTiles === 'number') ? cfg.radiusTiles : fallbackRadius
+    };
+
+    LOG('Arbeitsbereich aktualisiert', uid, lj.workArea);
+  }
+
+  // =========================
+  // REGISTRIERUNG BEIM Production-Manager
+  // =========================
+
+  function registerWithManager(){
     if (!window.Production || typeof window.Production.registerModule !== 'function'){
-      // Manager noch nicht da → später erneut versuchen
       return false;
     }
-    window.Production.registerModule({
-      id: 'wood',
-      tick,
-      onBuildComplete
-    });
-    LOG('Holz-Modul registriert bei Production.');
-    return true;
+    try {
+      window.Production.registerModule({
+        id             : 'wood',
+        onBuildComplete,
+        tick
+      });
+      LOG('Produktionsmodul "wood" registriert.');
+      return true;
+    } catch(e){
+      WARN('Production.registerModule(wood) fehlgeschlagen', e);
+      return true; // nicht noch mal probieren
+    }
   }
 
-  if (!registerAtManager()){
+  if (!registerWithManager()){
     let tries = 0;
     const t = setInterval(()=>{
-      if (registerAtManager() || ++tries > 20) clearInterval(t);
+      if (registerWithManager() || ++tries > 20) clearInterval(t);
     }, 200);
   }
 
-  // Debug-Hilfe
+  // =========================
+  // DEBUG-EXPORT
+  // =========================
+
   window.ProductionWood = {
     Lumberjacks,
     LJ_PHASE,
     LJ_TIMES,
-    TREE_ATLAS_CFG
+    TREE_ATLAS_CFG,
+    setWorkArea,
+    _tickOne: tickLumberjack
   };
+
+  LOG('Holz-Modul geladen v25.12.01-wood-lumberjack-workarea');
 
 })();
