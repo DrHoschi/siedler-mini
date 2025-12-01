@@ -154,6 +154,13 @@
     openForBuilding(d);
   }, { passive:true });
 
+    // ESC schließt das Menü auch
+  window.addEventListener('keydown', (ev)=>{
+    if (ev.key === 'Escape'){
+      closeMenu();
+    }
+  });
+  
   LOG('Gebäude-Menü geladen v25.12.01-building-menu-basic');
 
 })();
