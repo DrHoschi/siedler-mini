@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-30T23:51:01.814Z",
+  "createdAt": "2025-12-01T11:20:48.013Z",
   "root": ".",
-  "count": 537,
+  "count": 525,
   "entries": [
     {
       "type": "dir",
@@ -1279,7 +1279,7 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 17339
+      "size": 17560
     },
     {
       "type": "file",
@@ -1294,7 +1294,12 @@
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 1421
+      "size": 4616
+    },
+    {
+      "type": "file",
+      "path": "core/game.production.wood.js",
+      "size": 13247
     },
     {
       "type": "file",
@@ -2133,78 +2138,8 @@
     },
     {
       "type": "file",
-      "path": "ui/css/ui-build-v10.css",
-      "size": 6346
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v11.css",
-      "size": 6788
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v12.css",
-      "size": 7122
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v13.css",
-      "size": 7640
-    },
-    {
-      "type": "file",
       "path": "ui/css/ui-build-v14.css",
-      "size": 7503
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v2.css",
-      "size": 7514
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v3.css",
-      "size": 7107
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v4.css",
-      "size": 6892
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v5.css",
-      "size": 6759
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v6.css",
-      "size": 7380
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v7.css",
-      "size": 7884
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v8.css",
-      "size": 8013
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build-v9.css",
-      "size": 8518
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build.clean.css",
-      "size": 2292
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-build.css",
-      "size": 5315
+      "size": 8642
     },
     {
       "type": "file",
@@ -2507,6 +2442,11 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-building-menu.js",
+      "size": 5306
+    },
+    {
+      "type": "file",
       "path": "ui/ui-debug-console.js",
       "size": 1749
     },
@@ -2583,12 +2523,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52941
+      "size": 52944
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20128
+      "size": 20131
     },
     {
       "type": "file",
@@ -2603,7 +2543,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16115
+      "size": 15873
     },
     {
       "type": "file",
