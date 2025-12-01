@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-01T14:23:33.304Z",
+  "createdAt": "2025-12-01T16:04:01.779Z",
   "root": ".",
   "count": 523,
   "entries": [
@@ -1294,7 +1294,7 @@
     {
       "type": "file",
       "path": "core/game.renderer.js",
-      "size": 5560
+      "size": 6573
     },
     {
       "type": "file",
@@ -2433,7 +2433,7 @@
     {
       "type": "file",
       "path": "ui/ui-building-menu.js",
-      "size": 5593
+      "size": 6412
     },
     {
       "type": "file",
@@ -2513,12 +2513,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51819
+      "size": 51635
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19750
+      "size": 19690
     },
     {
       "type": "file",
@@ -2533,7 +2533,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 15922
+      "size": 15907
     },
     {
       "type": "file",
