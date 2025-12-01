@@ -175,20 +175,15 @@
   <script src="core/game.production.wood.js"></script>
  
      <!-- LOW-LEVEL (vor Game) -->
-  <script src="core/core.pfglue.js"></script>   <!-- Polyfills/Glue: früh -->
+<!--  <script src="core/core.pfglue.js"></script>  --> <!-- Polyfills/Glue: früh -->
   <script src="core/core.input-v1.js"></script> <!-- Input-Hooks (Keys/Pointer) -->
 
-  <!-- Overlay-System -->
-  <script src="core/path-overlay.js"></script>
-  <!--script src="core/adfinder.js"></script-->
-  <script src="core/overlay-hooks.js"></script>
-  <script src="core/path-traces.overlay.js"></script>
 
-  <!-- NEU: Unit-Overlay zum Zeichnen der Träger (nutzt OverlayHooks + GameUnits) -->
-  <script src="core/unit-overlay.js"></script>
      
   <!-- *** WICHTIG: genau EINE Kamera laden → hier die stabile core/camera.js *** -->
   <script src="core/camera.js"></script>
+       <!-- MAP LOAD + MAP RUNTIME/RENDER -->
+ <script src="core/map-runtime.bridge.js"></script>
   
   <!-- GAME BOOTSTRAP + GAME LOOP -->
   <script src="core/game.buildings.js"></script>
@@ -200,9 +195,15 @@
   <script src="core/game.tick.js"></script>
   <script src="core/game.js"></script>
 
-  <!-- MAP LOAD + MAP RUNTIME/RENDER -->
- <!-- <script src="core/map-runtime.bridge.js"></script>
-  -->
+  <!-- Overlay-System -->
+  <script src="core/path-overlay.js"></script>
+  <!--script src="core/adfinder.js"></script-->
+  <script src="core/overlay-hooks.js"></script>
+  <script src="core/path-traces.overlay.js"></script>
+
+  <!-- NEU: Unit-Overlay zum Zeichnen der Träger (nutzt OverlayHooks + GameUnits) -->
+  <script src="core/unit-overlay.js"></script>
+  
   <!-- START-UI -->
   <script src="ui/ui-start.js?v=25.11.02"></script>
 
