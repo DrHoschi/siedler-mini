@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.01-wood-lumberjack-workarea
+ * Version : v25.12.01-wood-lumberjack-workarea+treesatlas
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -11,6 +11,7 @@
  *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
  *     - Erzeugt Holz über Production.addResource('wood', ...)
  *     - Zeichnet Bäume + Arbeitsbereich (Kreis) als Overlay
+ *     - Nutzt optional den neuen trees_mega_atlas (padded) als Grafikquelle
  *
  * Ereignisse:
  *   IN  :
@@ -58,16 +59,38 @@
     REST  : 1000   // Reserve / später nutzbar
   };
 
-  // Baum-Atlas-Konfiguration (optional; falls Assets bereit)
+  /* ==========================================================================
+   * BAUM-ATLAS-KONFIGURATION (trees_mega_atlas.*)
+   * --------------------------------------------------------------------------
+   * - Nutzt dein neues assets.draw-JSON:
+   *     trees_mega_atlas.json
+   *   mit:
+   *     { image, tileW, tileH, frames:{ name:[cx,cy], ... } }
+   * - Wir verwenden die gepaddete Version des PNG:
+   *     trees_mega_atlas_padded.png
+   *   → weniger Texture-Bleeding beim Zoomen.
+   *
+   * - frameMap mappt unsere Produktions-Phasen auf konkrete Frame-Namen.
+   *   Diese Namen stammen direkt aus der JSON-Datei.
+   * ======================================================================== */
+
   const TREE_ATLAS_CFG = {
-    urlJson : 'assets/tex/deco/trees_multi_atlas.json',
-    urlImage: 'assets/tex/deco/trees_multi_atlas.png',
-    frameIds: {
-      sapling : 'tree_sapling',
-      small   : 'tree_small',
-      medium  : 'tree_medium',
-      big     : 'tree_big'
-    }
+    // Pfade ggf. anpassen, falls du sie woanders abgelegt hast:
+    urlJson  : 'assets/tex/deco/trees_mega_atlas.json',
+    urlImage : 'assets/tex/deco/trees_mega_atlas_padded.png',
+
+    // Phasen → Frame-Namen aus trees_mega_atlas.json
+    frameMap : {
+      // Pflanz-/Wachstums-Zyklus
+      PLANT : 'e1_regrow_sprout',        // kleiner Spross
+      GROW  : 'e1_regrow_tree_medium',   // mittlerer Baum in Wachstum
+      READY : 'e1_oak_big',              // fertige Eiche als „Ernte-Baum“
+      CUT   : 'cut_fall_left'            // Fäll-Frame (Baum kippt)
+    },
+
+    // Wird zur Laufzeit von ensureTreeAtlasReady() gefüllt:
+    // { name: {x,y,w,h}, ... } in Pixel-Koordinaten.
+    resolvedFrames : null
   };
 
   // =========================
@@ -78,10 +101,10 @@
   const Lumberjacks = new Map();
 
   /** Atlas-Daten (optional) */
-  let treeAtlas        = null;
-  let treeAtlasImg     = null;
-  let treeAtlasLoaded  = false;
-  let treeAtlasLoading = false;
+  let treeAtlas        = null;  // Inhalt von trees_mega_atlas.json
+  let treeAtlasImg     = null;  // Image-Objekt für *_padded.png
+  let treeAtlasLoaded  = false; // TRUE, wenn das Bild geladen wurde
+  let treeAtlasLoading = false; // Ladevorgang bereits gestartet?
 
   // =========================
   // HILFSFUNKTIONEN LOGIK
@@ -238,20 +261,27 @@
     }
   }
 
-  // =========================
-  // BAUM-ATLAS (optional)
-  // =========================
+  // ==========================================================================
+  // BAUM-ATLAS-LOADING (trees_mega_atlas.json + *_padded.png)
+  // ==========================================================================
 
+  /**
+   * Startet einmalig den Ladevorgang für JSON + Bild.
+   * Die eigentliche Nutzung prüft später mit ensureTreeAtlasReady().
+   */
   function ensureTreeAtlasLoaded(){
     if (treeAtlasLoaded || treeAtlasLoading) return;
     treeAtlasLoading = true;
 
-    // JSON
+    // --- JSON laden ---------------------------------------------------------
     try {
       fetch(TREE_ATLAS_CFG.urlJson)
         .then(r => r.json())
         .then(data => {
+          // Erwartet assets.draw-Format:
+          // { image, tileW, tileH, frames:{ name:[cx,cy] } }
           treeAtlas = data;
+          LOG('Tree-Atlas JSON geladen:', TREE_ATLAS_CFG.urlJson);
         })
         .catch(err => {
           WARN('Tree-Atlas JSON konnte nicht geladen werden:', err);
@@ -260,12 +290,13 @@
       WARN('Tree-Atlas JSON fetch nicht verfügbar:', e);
     }
 
-    // Bild
+    // --- Bild laden ---------------------------------------------------------
     try {
       const img = new Image();
       img.onload = function(){
         treeAtlasImg    = img;
-        treeAtlasLoaded = true;
+        treeAtlasLoaded = true; // Bild ist da; JSON muss zusätzlich vorhanden sein
+        LOG('Tree-Atlas Bild geladen:', TREE_ATLAS_CFG.urlImage);
       };
       img.onerror = function(err){
         WARN('Tree-Atlas Bild konnte nicht geladen werden:', err);
@@ -276,7 +307,86 @@
     }
   }
 
-  // Einfacher Fallback zum Zeichnen eines „Baums“
+  /**
+   * Prüft, ob Bild + JSON vorhanden sind, und baut eine
+   * Pixel-basierte Frame-Tabelle aus dem assets.draw-Format.
+   *
+   * Rückgabe:
+   *   TRUE  → Atlas kann benutzt werden
+   *   FALSE → Fallback-Zeichnung verwenden
+   */
+  function ensureTreeAtlasReady(){
+    // Bild ODER JSON fehlen → noch nicht bereit
+    if (!treeAtlasLoaded || !treeAtlasImg || !treeAtlas || !treeAtlas.frames){
+      return false;
+    }
+
+    // resolvedFrames nur einmal beim ersten Zugriff erzeugen
+    if (!TREE_ATLAS_CFG.resolvedFrames){
+      const tileW = treeAtlas.tileW || 128;
+      const tileH = treeAtlas.tileH || 128;
+      const resolved = {};
+
+      // frames: { name:[cx,cy], ... }
+      for (const [name, pos] of Object.entries(treeAtlas.frames)){
+        const cx = pos[0] | 0;
+        const cy = pos[1] | 0;
+        resolved[name] = {
+          x: cx * tileW,
+          y: cy * tileH,
+          w: tileW,
+          h: tileH
+        };
+      }
+
+      TREE_ATLAS_CFG.resolvedFrames = resolved;
+      LOG('Tree-Atlas Frames aufgelöst (resolvedFrames).');
+    }
+
+    return true;
+  }
+
+  /**
+   * drawTreeFrame(ctx, key, cx, cy, sizePx)
+   * -------------------------------------------------------------------------
+   * Zeichnet einen Baum-Frame aus dem Atlas:
+   *
+   *   - key    : Name aus trees_mega_atlas.json, z.B. 'e1_oak_big'
+   *   - cx, cy : Mittelpunkt-Position, an der der Baum „steht“
+   *   - sizePx : Zielbreite/-höhe auf dem Canvas
+   *
+   * Rückgabe:
+   *   TRUE  → erfolgreich gezeichnet
+   *   FALSE → Fallback verwenden
+   */
+  function drawTreeFrame(ctx, key, cx, cy, sizePx){
+    if (!ensureTreeAtlasReady()) return false;
+
+    const frames = TREE_ATLAS_CFG.resolvedFrames;
+    const f = frames && frames[key];
+    if (!f || !treeAtlasImg) return false;
+
+    const w = sizePx;
+    const h = sizePx;
+
+    // Wir behandeln cx/cy als Fußpunkt (Mittelpunkt unten am Stamm)
+    const dx = cx - w / 2;
+    const dy = cy - h; // oben hin strecken
+
+    try {
+      ctx.drawImage(
+        treeAtlasImg,
+        f.x, f.y, f.w, f.h,
+        dx, dy, w, h
+      );
+      return true;
+    } catch (e){
+      WARN('drawTreeFrame Fehler:', e);
+      return false;
+    }
+  }
+
+  // Einfacher Fallback zum Zeichnen eines „Baums“, falls Atlas fehlt
   function drawSimpleTreeCircle(ctx, xPx, yPx, ts){
     ctx.beginPath();
     ctx.fillStyle   = 'rgba(40, 180, 80, 0.85)';
@@ -293,118 +403,132 @@
 
   /**
    * Zeichnet pro Lumberjack:
-   *   - einen einfachen Baum-Fallback (oder später Atlas-Tree)
+   *   - einen Atlas-Baum (falls verfügbar) oder Fallback-Kreise
    *   - den Arbeitsbereich als gestrichelten Kreis
    */
   function drawLumberjackOverlay(ctx, cam){
-  if (!ctx) return;
-  if (!Lumberjacks.size) return;
+    if (!ctx) return;
+    if (!Lumberjacks.size) return;
 
-  const zoom = cam?.zoom ?? 1;
-  const ox   = cam?.x    ?? 0;
-  const oy   = cam?.y    ?? 0;
+    const zoom = cam?.zoom ?? 1;
+    const ox   = cam?.x    ?? 0;
+    const oy   = cam?.y    ?? 0;
 
-  const ts =
-    (window.Game?.map?.tileSize) ||
-    (window.GameMap?._state?.map?.tileSize) ||
-    64;
+    const ts =
+      (window.Game?.map?.tileSize) ||
+      (window.GameMap?._state?.map?.tileSize) ||
+      64;
 
-  ctx.save();
-  ctx.translate(-ox * ts * zoom, -oy * ts * zoom);
-  ctx.scale(zoom, zoom);
+    ctx.save();
+    ctx.translate(-ox * ts * zoom, -oy * ts * zoom);
+    ctx.scale(zoom, zoom);
 
-  const atlasReady = ensureTreeAtlasReady();
+    // Prüfen, ob der Atlas (Bild+JSON) bereits einsatzbereit ist
+    const atlasReady = ensureTreeAtlasReady();
 
-  for (const lj of Lumberjacks.values()){
-    const bx = lj.x;
-    const by = lj.y;
-    const bw = lj.w || 3;
-    const bh = lj.h || 3;
+    for (const lj of Lumberjacks.values()){
+      const bx = lj.x;
+      const by = lj.y;
+      const bw = lj.w || 3;
+      const bh = lj.h || 3;
 
-    // Mittelpunkt des Gebäudes (für Baum)
-    const cxTree = (bx + bw / 2) * ts;
-    const cyTree = (by + bh) * ts;
+      // Mittelpunkt des Gebäudes (für Baum)
+      const cxTree = (bx + bw / 2) * ts;
+      const cyTree = (by + bh) * ts;
 
-    // Mittelpunkt des Arbeitsbereichs (eigene Mitte erlaubt)
-    const area       = lj.workArea || {};
-    const cxTiles    = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
-    const cyTiles    = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
-    const cxArea     = cxTiles * ts;
-    const cyArea     = cyTiles * ts;
-    const radiusTiles = (typeof area.radiusTiles === 'number') ? area.radiusTiles : 2.5;
-    const rWorkPx     = radiusTiles * ts;
+      // Mittelpunkt des Arbeitsbereichs (eigene Mitte erlaubt)
+      const area        = lj.workArea || {};
+      const cxTiles     = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
+      const cyTiles     = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
+      const cxArea      = cxTiles * ts;
+      const cyArea      = cyTiles * ts;
+      const radiusTiles = (typeof area.radiusTiles === 'number') ? area.radiusTiles : 2.5;
+      const rWorkPx     = radiusTiles * ts;
 
-    // ---------------------------------------------------
-    // 1) Baum – Atlas oder Fallback
-    // ---------------------------------------------------
-    let treeDrawn = false;
+      // ---------------------------------------------------
+      // 1) Baum – Atlas oder Fallback
+      // ---------------------------------------------------
+      let treeDrawn = false;
 
-    if (atlasReady) {
-      let key = null;
-      if (lj.phase === LJ_PHASE.PLANT) key = TREE_ATLAS_CFG.frameMap.PLANT;
-      else if (lj.phase === LJ_PHASE.GROW)  key = TREE_ATLAS_CFG.frameMap.GROW;
-      else if (lj.phase === LJ_PHASE.READY) key = TREE_ATLAS_CFG.frameMap.READY;
-      else if (lj.phase === LJ_PHASE.CUT)   key = TREE_ATLAS_CFG.frameMap.CUT;
+      if (atlasReady){
+        // Phase → Frame-Namen laut TREE_ATLAS_CFG.frameMap
+        let key = null;
+        if (lj.phase === LJ_PHASE.PLANT) key = TREE_ATLAS_CFG.frameMap.PLANT;
+        else if (lj.phase === LJ_PHASE.GROW)  key = TREE_ATLAS_CFG.frameMap.GROW;
+        else if (lj.phase === LJ_PHASE.READY) key = TREE_ATLAS_CFG.frameMap.READY;
+        else if (lj.phase === LJ_PHASE.CUT)   key = TREE_ATLAS_CFG.frameMap.CUT;
 
-      if (key){
-        const size = ts * 2.0;
-        const ok   = drawTreeFrame(ctx, key, cxTree, cyTree, size);
-        if (ok){
-          treeDrawn = true;
+        if (key){
+          const size = ts * 2.0; // Baum etwas größer als Gebäude-Footprint
+          const ok   = drawTreeFrame(ctx, key, cxTree, cyTree, size);
+          if (ok){
+            treeDrawn = true;
 
-          // Wachstumsring (nur in GROW)
-          if (lj.phase === LJ_PHASE.GROW){
-            ctx.beginPath();
-            ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-            const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
-            const r    = size * 0.35;
-            ctx.arc(cxTree, cyTree - size * 0.9, r, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
-            ctx.stroke();
+            // Wachstumsring (nur in GROW) oben auf den Baum legen
+            if (lj.phase === LJ_PHASE.GROW){
+              ctx.beginPath();
+              ctx.lineWidth   = Math.max(1.5, ts * 0.04);
+              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+              const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
+              const r    = size * 0.35;
+              ctx.arc(
+                cxTree,
+                cyTree - size * 0.9,
+                r,
+                -Math.PI/2,
+                -Math.PI/2 + prog * Math.PI*2
+              );
+              ctx.stroke();
+            }
           }
         }
       }
-    }
 
-    if (!treeDrawn){
-      // 2) Fallback – einfache farbige Kreise
-      let fill = '#228B22';
-      if (lj.phase === LJ_PHASE.PLANT) fill = '#8BC34A';
-      if (lj.phase === LJ_PHASE.GROW)  fill = '#4CAF50';
-      if (lj.phase === LJ_PHASE.READY) fill = '#2E7D32';
-      if (lj.phase === LJ_PHASE.CUT)   fill = '#A0522D';
+      if (!treeDrawn){
+        // 2) Fallback – einfache farbige Kreise
+        let fill = '#228B22';
+        if (lj.phase === LJ_PHASE.PLANT) fill = '#8BC34A';
+        if (lj.phase === LJ_PHASE.GROW)  fill = '#4CAF50';
+        if (lj.phase === LJ_PHASE.READY) fill = '#2E7D32';
+        if (lj.phase === LJ_PHASE.CUT)   fill = '#A0522D';
 
-      const r = ts * 0.45;
+        const r = ts * 0.45;
 
-      ctx.beginPath();
-      ctx.fillStyle = fill;
-      ctx.arc(cxTree, cyTree - r * 0.2, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (lj.phase === LJ_PHASE.GROW){
         ctx.beginPath();
-        ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-        const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
-        ctx.arc(cxTree, cyTree - r * 0.2, r * 0.8, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
-        ctx.stroke();
+        ctx.fillStyle = fill;
+        ctx.arc(cxTree, cyTree - r * 0.2, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (lj.phase === LJ_PHASE.GROW){
+          ctx.beginPath();
+          ctx.lineWidth   = Math.max(1.5, ts * 0.04);
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
+          ctx.arc(
+            cxTree,
+            cyTree - r * 0.2,
+            r * 0.8,
+            -Math.PI/2,
+            -Math.PI/2 + prog * Math.PI*2
+          );
+          ctx.stroke();
+        }
       }
+
+      // ---------------------------------------------------
+      // 3) 🔵 Arbeitsbereich-Kreis – IMMER zeichnen
+      // ---------------------------------------------------
+      ctx.beginPath();
+      ctx.lineWidth   = Math.max(1.5, ts * 0.06);
+      ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';
+      ctx.setLineDash([ts * 0.25, ts * 0.25]);
+      ctx.arc(cxArea, cyArea, rWorkPx, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
-    // ---------------------------------------------------
-    // 3) 🔵 Arbeitsbereich-Kreis – IMMER zeichnen
-    // ---------------------------------------------------
-    ctx.beginPath();
-    ctx.lineWidth   = Math.max(1.5, ts * 0.06);
-    ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';
-    ctx.setLineDash([ts * 0.25, ts * 0.25]);
-    ctx.arc(cxArea, cyArea, rWorkPx, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.restore();
   }
-
-  ctx.restore();
-}
 
   // =========================
   // OVERLAY-REGISTRIERUNG
@@ -443,7 +567,7 @@
    */
   function onBuildComplete(detail){
     registerLumberjackFromBuild(detail);
-    ensureTreeAtlasLoaded();
+    ensureTreeAtlasLoaded(); // Atlas-Ladevorgang anstoßen
   }
 
   /**
@@ -453,7 +577,7 @@
     tickAllLumberjacks(dtMs);
   }
 
-    // =========================
+  // =========================
   // DIREKTER LISTENER (Fallback) auf cb:build:complete
   // =========================
   // Falls der Produktions-Manager aus irgendeinem Grund nicht (rechtzeitig)
@@ -466,18 +590,31 @@
       const detail = ev.detail || {};
       try {
         // Kleines Debug-Log, damit du es im Inspector siehst:
-        (window.CBLog?.info || console.info)('[prod-wood]', 'direct cb:build:complete', detail.id, detail);
+        (window.CBLog?.info || console.info)(
+          '[prod-wood]',
+          'direct cb:build:complete',
+          detail.id,
+          detail
+        );
 
         registerLumberjackFromBuild(detail);
         ensureTreeAtlasLoaded();
       } catch (e){
-        (window.CBLog?.warn || console.warn)('[prod-wood]', 'Direkter cb:build:complete-Listener Fehler:', e);
+        (window.CBLog?.warn || console.warn)(
+          '[prod-wood]',
+          'Direkter cb:build:complete-Listener Fehler:',
+          e
+        );
       }
     }, { passive:true });
   } catch(e){
-    (window.CBLog?.warn || console.warn)('[prod-wood]', 'Direkter cb:build:complete-Listener konnte nicht registriert werden:', e);
+    (window.CBLog?.warn || console.warn)(
+      '[prod-wood]',
+      'Direkter cb:build:complete-Listener konnte nicht registriert werden:',
+      e
+    );
   }
-  
+
   // =========================
   // Arbeitsbereich-API (für UI-Menü)
   // =========================
@@ -539,9 +676,11 @@
     LJ_TIMES,
     TREE_ATLAS_CFG,
     setWorkArea,
-    _tickOne: tickLumberjack
+    _tickOne: tickLumberjack,
+    _ensureTreeAtlasReady : ensureTreeAtlasReady,
+    _drawTreeFrame        : drawTreeFrame
   };
 
-  LOG('Holz-Modul geladen v25.12.01-wood-lumberjack-workarea');
+  LOG('Holz-Modul geladen v25.12.01-wood-lumberjack-workarea+treesatlas');
 
 })();
