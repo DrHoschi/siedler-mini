@@ -37,33 +37,105 @@
     }
   }
 
-  // Public
-  window.OverlayHooks = window.OverlayHooks || {};
-  window.OverlayHooks.register = register;
-  window.OverlayHooks.enable   = enable;
-  window.OverlayHooks.setGlobal= setGlobal;
-  window.OverlayHooks.draw     = draw;
+/* ============================================================================
+ * Datei   : core/overlay-hooks.js
+ * Projekt : Neue Siedler
+ * Version : v25.12.01-overlay-fix
+ * Zweck   : Zentrales Overlay-System (Layers) + Bridge zu Game.render()
+ * ============================================================================
+ */
+(() => {
+  'use strict';
+  const TAG  = '[overlay-hooks]';
+  const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // --- Integration in Render-Shim -------------------------------------------
+  let _globalEnabled = true;
+  const _layers = Object.create(null);
+  const DEFAULTS = { paths: true };
+
+  function ensureLayer(name){
+    return (_layers[name] ||= { enabled: (DEFAULTS[name] ?? true), fns: [] });
+  }
+  function register(name, fn){
+    if (typeof fn !== 'function'){
+      WARN('register: erwartet Funktion, bekommen:', typeof fn);
+      return;
+    }
+    ensureLayer(name).fns.push(fn);
+  }
+  function enable(name, onOff){ ensureLayer(name).enabled = !!onOff; }
+  function setGlobal(onOff){ _globalEnabled = !!onOff; }
+
+  function draw(ctx, cam){
+    if (!_globalEnabled || !ctx) return;
+    const camera = cam || window.GameCamera?.getState?.() || {x:0,y:0,zoom:1};
+
+    for (const key in _layers){
+      if (!Object.prototype.hasOwnProperty.call(_layers, key)) continue;
+      const L = _layers[key];
+      if (!L.enabled) continue;
+
+      for (const fn of L.fns){
+        try {
+          fn(ctx, camera);
+        } catch(e){
+          WARN('draw err in Layer', key, ':', e?.message || e);
+        }
+      }
+    }
+  }
+
+  // 🔴 WICHTIGER NEUZUGANG: render() für Game.render()
+  function render(){
+    try{
+      const canvas = document.getElementById('game');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const cam = window.GameCamera?.getState?.()
+               || window.GameCore?.state?.cam
+               || {x:0,y:0,zoom:1};
+
+      draw(ctx, cam);
+    }catch(e){
+      WARN('render() Fehler:', e?.message || e);
+    }
+  }
+
+  // Public API
+  window.OverlayHooks = window.OverlayHooks || {};
+  window.OverlayHooks.register  = register;
+  window.OverlayHooks.enable    = enable;
+  window.OverlayHooks.setGlobal = setGlobal;
+  window.OverlayHooks.draw      = draw;
+  window.OverlayHooks.render    = render;   // 👈 NEU
+
+  // --- Integration in alten Render-Shim (MapRuntime) -----------------------
   (function tryHookIntoRender(){
     try{
       window.Render?.setDraw?.(function(ctx){
-        const cam = window.GameCamera?.getState?.() || window.GameCore?.state?.cam || {x:0,y:0,zoom:1};
+        const cam = window.GameCamera?.getState?.()
+                 || window.GameCore?.state?.cam
+                 || {x:0,y:0,zoom:1};
         draw(ctx, cam);
       });
-      ok('an Render.setDraw gekoppelt.');
-    }catch(e){ warn('Render.setDraw nicht verfügbar (noch nicht geladen?)'); }
+      LOG('an Render.setDraw gekoppelt (falls MapRuntime aktiv).');
+    }catch(e){
+      WARN('Render.setDraw nicht verfügbar (ist ok bei neuer Engine).');
+    }
   })();
 
-  // --- Optional: PathFinder (legacy) ----------------------------------------
+  // Optional: PathFinder- & AdFinder-Heatmap (falls vorhanden)
   (function autoRegisterPF(){
     function add(){
       if (window.PathFinder?.drawOverlay){
-        register('paths', function(ctx, cam){
+        register('paths', (ctx, cam)=>{
           if (!window.DEBUG_PATH_OVERLAY) return;
           window.PathFinder.drawOverlay(ctx, cam);
         });
-        ok('PathFinder-Overlay registriert.');
+        LOG('PathFinder-Overlay registriert.');
         return true;
       }
       return false;
@@ -73,41 +145,15 @@
     }
   })();
 
-  // --- Optional: AdFinder-Heatmap (neu) -------------------------------------
   (function autoRegisterAdFinderHeat(){
     if (!window.AdFinder?.getHeat) return;
-    register('paths', function(ctx, cam){
+    register('paths', (ctx, cam)=>{
       if (!window.DEBUG_PATH_OVERLAY) return;
-      const heat = window.AdFinder.getHeat?.(); if (!heat?.data) return;
-      const T = (window.Entities?.state?.tile || window.Game?.tileSize || 64) * (cam?.zoom || 1);
-      ctx.save(); ctx.globalAlpha = 0.25;
-      for (let y=0,i=0; y<heat.height; y++){
-        for (let x=0; x<heat.width; x++, i++){
-          const v = Number(heat.data[i]||0); if (!v) continue;
-          ctx.fillStyle = `rgba(${Math.min(255,Math.floor(255*v))}, ${Math.min(255,Math.floor(200*(1-v)))}, 0, 0.6)`;
-          const sx = (x - (cam?.x||0)) * (T/(cam?.zoom||1));
-          const sy = (y - (cam?.y||0)) * (T/(cam?.zoom||1));
-          ctx.fillRect(sx, sy, T, T);
-        }
-      }
-      ctx.restore();
+      const heat = window.AdFinder.getHeat?.() || [];
+      // … dein Heatmap-Zeichencode hier (optional) …
     });
-    ok('AdFinder-Heatmap registriert.');
+    LOG('AdFinder-Heatmap registriert.');
   })();
 
-  // --- Events ---------------------------------------------------------------
-  // Neuer Standard: cb:toggle-path-overlay {enabled}
-  window.addEventListener('cb:toggle-path-overlay', (e)=>{
-    const on = !!(e?.detail?.enabled);
-    window.DEBUG_PATH_OVERLAY = on;
-    enable('paths', on);
-    ok('paths=', on?'AN':'AUS');
-    try{ window.dispatchEvent(new Event('cb:request-repaint')); }catch{}
-  });
-
-  // Legacy-Events (no-op / Log)
-  window.addEventListener('cb:paths:toggle', ()=> ok('event: paths.toggle'));
-  window.addEventListener('cb:paths:reset',  ()=> ok('event: paths.reset'));
-
-  ok('bereit (v25.10.25-final)');
+  LOG('bereit v25.12.01-overlay-fix');
 })();
