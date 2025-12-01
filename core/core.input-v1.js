@@ -221,6 +221,30 @@
 
   function canPlaceAt(){ return true; }
 
+    // -------------------------------------------------------------------------
+  // Gebäude an einer Tile-Position finden
+  // -------------------------------------------------------------------------
+  function findBuildingAt(tx, ty){
+    const list = (window.Game && Array.isArray(window.Game.buildings))
+      ? window.Game.buildings
+      : [];
+
+    for (const b of list){
+      if (!b) continue;
+
+      const bx = (b.x | 0);
+      const by = (b.y | 0);
+      const bw = (b.w | 0) || 1;
+      const bh = (b.h | 0) || 1;
+
+      const inX = tx >= bx && tx < bx + bw;
+      const inY = ty >= by && ty < by + bh;
+
+      if (inX && inY) return b;
+    }
+    return null;
+  }
+  
   // ==========================================================================
   //  RESET / PLACE
   // ==========================================================================
