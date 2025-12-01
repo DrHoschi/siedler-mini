@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-01T16:04:01.779Z",
+  "createdAt": "2025-12-01T19:03:03.307Z",
   "root": ".",
   "count": 523,
   "entries": [
@@ -1289,7 +1289,7 @@
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 14652
+      "size": 15732
     },
     {
       "type": "file",
