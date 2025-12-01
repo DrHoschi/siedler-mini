@@ -310,3 +310,63 @@
   place-items:center;
   z-index:2147483602;
 }
+
+/* ==========================================================================
+   Gebäude-Menü
+   ========================================================================== */
+#ui-building-menu.ui-panel {
+  position: absolute;
+  right: 0.5rem;
+  top: 4rem;
+  max-width: 260px;
+  background: rgba(30, 20, 10, 0.95);
+  border: 2px solid #3a2a15;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+  color: #f2e5d0;
+  font-size: 0.9rem;
+  z-index: 40;
+}
+
+#ui-building-menu.hidden {
+  display: none;
+}
+
+#ui-building-menu .ui-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+#ui-building-title {
+  flex: 1;
+  font-weight: 700;
+}
+
+#ui-building-subtitle {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+#ui-building-body {
+  padding: 0.4rem 0.6rem;
+}
+
+.ui-building-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.ui-building-info-row span:first-child {
+  opacity: 0.8;
+}
+
+#ui-building-footer {
+  padding: 0.3rem 0.6rem 0.45rem;
+  display: flex;
+  justify-content: flex-end;
+}
