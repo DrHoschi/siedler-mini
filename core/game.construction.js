@@ -283,45 +283,50 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Bau fertig
-  // ---------------------------------------------------------------------------
+// Bau fertig
+// ---------------------------------------------------------------------------
 
-  function completeBuilding(b){
-    ensureConstructionState(b);
+function completeBuilding(b){
+  ensureConstructionState(b);
 
-    b.buildPhase    = PHASE.COMPLETE;
-    b.buildElapsed  = b.buildTime;
-    b.buildProgress = 1;
-    b.status        = 'done';
+  b.buildPhase    = PHASE.COMPLETE;
+  b.buildElapsed  = b.buildTime;
+  b.buildProgress = 1;
+  b.status        = 'done';
 
-    // fertiges Gebäude anzeigen
-    b.buildSubStage = 2;
-    b.buildStage    = 3;
+  // fertiges Gebäude anzeigen
+  b.buildSubStage = 2;
+  b.buildStage    = 3;
 
-    // Drops & Bauarbeiter entfernen
-    b.drops    = [];
-    b.builders = [];
+  // Drops & Bauarbeiter entfernen
+  b.drops    = [];
+  b.builders = [];
 
-    try{
-      window.dispatchEvent(new CustomEvent('cb:build:complete', {
-        detail:{
-          id : b.id,
-          x  : b.x,
-          y  : b.y,
-          w  : b.w,
-          h  : b.h
-        }
-      }));
-    }catch(e){
-      WARN('cb:build:complete dispatch fehlgeschlagen', e);
-    }
-
-    LOG('Gebäude fertig', {
-      id       : b.id,
-      needs    : b.needs,
-      delivered: b.delivered
-    });
+  // 🔔 Wichtig für Production-Module (Holz, Fisch, Stein, …)
+  try{
+    window.dispatchEvent(new CustomEvent('cb:build:complete', {
+      detail:{
+        // Gebäudetyp aus Registry (z.B. 'b.lumberjack')
+        id          : b.id,
+        // optionale interne Kennung (falls vorhanden)
+        uid         : b.uid || null,
+        // Tile-Rechteck
+        x           : b.x,
+        y           : b.y,
+        w           : b.w,
+        h           : b.h
+      }
+    }));
+  }catch(e){
+    WARN('cb:build:complete dispatch fehlgeschlagen', e);
   }
+
+  LOG('Gebäude fertig', {
+    id       : b.id,
+    needs    : b.needs,
+    delivered: b.delivered
+  });
+}
 
   // ---------------------------------------------------------------------------
   // Event: Material geliefert – cb:build:deliver
