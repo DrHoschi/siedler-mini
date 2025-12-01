@@ -36,6 +36,29 @@
   let current = null; // aktuell ausgewähltes Gebäude (Detail-Objekt)
 
   // ---------------------------------------------------------------------------
+  // Globale Close-Handler (Klick außerhalb + ESC-Taste)
+  // ---------------------------------------------------------------------------
+  function setupGlobalCloseHandlers(){
+    // Klick irgendwo außerhalb des Panels schließt das Menü
+    window.addEventListener('pointerdown', (ev)=>{
+      if (!root || root.classList.contains('hidden')) return;
+      const t = ev.target;
+      if (!t) return;
+      if (root.contains(t)) return; // Klick INS Panel → ignorieren
+      closeMenu();
+    }, true); // Capture, damit wir den Klick früh sehen
+
+    // ESC schließt das Menü
+    window.addEventListener('keydown', (ev)=>{
+      if (ev.key === 'Escape') {
+        closeMenu();
+      }
+    });
+  }
+
+  setupGlobalCloseHandlers();
+  
+  // ---------------------------------------------------------------------------
   // DOM-Aufbau
   // ---------------------------------------------------------------------------
 
