@@ -125,7 +125,12 @@
     { sel:'#hud-root',    label:'HUD Root' },
     { sel:'#build-dock',  label:'BuildDock' },
     { sel:'#btn-build',   label:'Build Button' },
-    { sel:'#inspector',   label:'Inspector' }
+    { sel:'#inspector',         label:'Inspector' },
+    { sel:'#paths-overlay', label:'PathOverlay (Canvas)' },
+    { sel:'#overlay-hocks', label:'OverlayHocks (Canvas)' },
+    { sel:'#paths-traces.overlay', label:'Path-tracesOverlay (Canvas)' },
+  // falls du für Kreise einen eigenen Layer benutzt:
+  // { sel:'#workarea-overlay',  label:'Arbeitsbereich' },
   ];
 
   /* ================================= MOUNT ================================= */
