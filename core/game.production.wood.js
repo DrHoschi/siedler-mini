@@ -354,6 +354,19 @@
               ctx.arc(cx, cy - size * 0.9, r, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
               ctx.stroke();
             }
+
+                // --- Arbeitsbereich-Kreis (Standard ~5x5, später vom UI veränderbar) ---
+    const radiusTiles = (lj.workArea && lj.workArea.radiusTiles) || 2.5;
+    const rWorkPx     = radiusTiles * ts;
+
+    ctx.beginPath();
+    ctx.lineWidth   = Math.max(1.5, ts * 0.06);
+    ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)'; // türkis-blauer Kreis
+    ctx.setLineDash([ts * 0.25, ts * 0.25]);    // gestrichelt wie in vielen Siedler-Teilen
+    ctx.arc(cx, cy, rWorkPx, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+            
             continue; // kein Fallback nötig
           }
         }
