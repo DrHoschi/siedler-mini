@@ -297,55 +297,114 @@
    *   - den Arbeitsbereich als gestrichelten Kreis
    */
   function drawLumberjackOverlay(ctx, cam){
-    if (!ctx) return;
+  if (!ctx) return;
+  if (!Lumberjacks.size) return;
 
-    const Game = window.Game || {};
-    const ts = Game.tileSize || Game.map?.tileSize || 64;
+  const zoom = cam?.zoom ?? 1;
+  const ox   = cam?.x    ?? 0;
+  const oy   = cam?.y    ?? 0;
 
-    // Kamera anwenden
-    ctx.save();
-    const z    = cam?.zoom ?? window.GameCamera?.zoom ?? 1;
-    const camX = cam?.x    ?? window.GameCamera?.x    ?? 0;
-    const camY = cam?.y    ?? window.GameCamera?.y    ?? 0;
-    ctx.setTransform(z, 0, 0, z, -camX * z, -camY * z);
+  const ts =
+    (window.Game?.map?.tileSize) ||
+    (window.GameMap?._state?.map?.tileSize) ||
+    64;
 
-    ctx.lineJoin = 'round';
-    ctx.lineCap  = 'round';
+  ctx.save();
+  ctx.translate(-ox * ts * zoom, -oy * ts * zoom);
+  ctx.scale(zoom, zoom);
 
-    for (const lj of Lumberjacks.values()){
-      const w = lj.w || 3;
-      const h = lj.h || 3;
+  const atlasReady = ensureTreeAtlasReady();
 
-      // Mittelpunkt des Gebäudes / Arbeitsbereichs in Tiles
-      const area = lj.workArea || {};
-      const cxTiles = (typeof area.cx === 'number') ? area.cx : (lj.x + w / 2);
-      const cyTiles = (typeof area.cy === 'number') ? area.cy : (lj.y + h / 2);
+  for (const lj of Lumberjacks.values()){
+    const bx = lj.x;
+    const by = lj.y;
+    const bw = lj.w || 3;
+    const bh = lj.h || 3;
 
-      const cx = cxTiles * ts;
-      const cy = cyTiles * ts;
+    // Mittelpunkt des Gebäudes (für Baum)
+    const cxTree = (bx + bw / 2) * ts;
+    const cyTree = (by + bh) * ts;
 
-      // 🟢 Einfacher Baum-Fallback "vor" dem Gebäude
-      const treeX = (lj.x + w / 2) * ts;
-      const treeY = (lj.y - 0.2)   * ts;
-      drawSimpleTreeCircle(ctx, treeX, treeY, ts);
+    // Mittelpunkt des Arbeitsbereichs (eigene Mitte erlaubt)
+    const area       = lj.workArea || {};
+    const cxTiles    = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
+    const cyTiles    = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
+    const cxArea     = cxTiles * ts;
+    const cyArea     = cyTiles * ts;
+    const radiusTiles = (typeof area.radiusTiles === 'number') ? area.radiusTiles : 2.5;
+    const rWorkPx     = radiusTiles * ts;
 
-      // 🔵 Arbeitsbereich-Kreis (Standard ~5×5, vom UI änderbar)
-      const radiusTiles = (area.radiusTiles && typeof area.radiusTiles === 'number')
-        ? area.radiusTiles
-        : 2.5;
-      const rWorkPx = radiusTiles * ts;
+    // ---------------------------------------------------
+    // 1) Baum – Atlas oder Fallback
+    // ---------------------------------------------------
+    let treeDrawn = false;
 
-      ctx.beginPath();
-      ctx.lineWidth   = Math.max(1.5, ts * 0.06);
-      ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';  // türkis-blauer Kreis
-      ctx.setLineDash([ts * 0.25, ts * 0.25]);     // gestrichelt wie Siedler-Arbeitsbereiche
-      ctx.arc(cx, cy, rWorkPx, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    if (atlasReady) {
+      let key = null;
+      if (lj.phase === LJ_PHASE.PLANT) key = TREE_ATLAS_CFG.frameMap.PLANT;
+      else if (lj.phase === LJ_PHASE.GROW)  key = TREE_ATLAS_CFG.frameMap.GROW;
+      else if (lj.phase === LJ_PHASE.READY) key = TREE_ATLAS_CFG.frameMap.READY;
+      else if (lj.phase === LJ_PHASE.CUT)   key = TREE_ATLAS_CFG.frameMap.CUT;
+
+      if (key){
+        const size = ts * 2.0;
+        const ok   = drawTreeFrame(ctx, key, cxTree, cyTree, size);
+        if (ok){
+          treeDrawn = true;
+
+          // Wachstumsring (nur in GROW)
+          if (lj.phase === LJ_PHASE.GROW){
+            ctx.beginPath();
+            ctx.lineWidth   = Math.max(1.5, ts * 0.04);
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
+            const r    = size * 0.35;
+            ctx.arc(cxTree, cyTree - size * 0.9, r, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
+            ctx.stroke();
+          }
+        }
+      }
     }
 
-    ctx.restore();
+    if (!treeDrawn){
+      // 2) Fallback – einfache farbige Kreise
+      let fill = '#228B22';
+      if (lj.phase === LJ_PHASE.PLANT) fill = '#8BC34A';
+      if (lj.phase === LJ_PHASE.GROW)  fill = '#4CAF50';
+      if (lj.phase === LJ_PHASE.READY) fill = '#2E7D32';
+      if (lj.phase === LJ_PHASE.CUT)   fill = '#A0522D';
+
+      const r = ts * 0.45;
+
+      ctx.beginPath();
+      ctx.fillStyle = fill;
+      ctx.arc(cxTree, cyTree - r * 0.2, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (lj.phase === LJ_PHASE.GROW){
+        ctx.beginPath();
+        ctx.lineWidth   = Math.max(1.5, ts * 0.04);
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
+        ctx.arc(cxTree, cyTree - r * 0.2, r * 0.8, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
+        ctx.stroke();
+      }
+    }
+
+    // ---------------------------------------------------
+    // 3) 🔵 Arbeitsbereich-Kreis – IMMER zeichnen
+    // ---------------------------------------------------
+    ctx.beginPath();
+    ctx.lineWidth   = Math.max(1.5, ts * 0.06);
+    ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';
+    ctx.setLineDash([ts * 0.25, ts * 0.25]);
+    ctx.arc(cxArea, cyArea, rWorkPx, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
+
+  ctx.restore();
+}
 
   // =========================
   // OVERLAY-REGISTRIERUNG
