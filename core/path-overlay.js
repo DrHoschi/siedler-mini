@@ -9,12 +9,12 @@
  *
  * Design-Entscheidungen (konform Bootflow):
  *   • KEIN Autostart mehr auf DOMContentLoaded / assets-ready.
- *   • Init erfolgt ausschließlich nach cb:game-start (vom Boot).
+ *   • Init erfolgt ausschließlich nach cb:game:start (vom Boot).
  *   • Doppel-Init wird über File- und Instance-Guards verhindert.
  *
  * Struktur : Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
- * Abhäng.  : #game-Canvas existiert wenn cb:game-start kommt.
- * Events   : hört  auf:  cb:game-start, cb:path:overlay:on/off, cb:path:heatmap:on/off
+ * Abhäng.  : #game-Canvas existiert wenn cb:game:start kommt.
+ * Events   : hört  auf:  cb:game:start, cb:path:overlay:on/off, cb:path:heatmap:on/off
  *            sendet:     (keine)
  * API      : window.PathOverlay.{init,toggle,setHeatmap,mark,reset,isEnabled,isHeatmap,_state}
  * ========================================================================== */
@@ -312,8 +312,8 @@ class PathHeatmap {
                        tile:inst.tile, cols:inst.cols, rows:inst.rows, cells:inst.map.length }),
   });
 
-  // ✨ Konformer Start: NUR nach cb:game-start initialisieren
-  window.addEventListener('cb:game-start', () => inst.init({}));
+  // ✨ Konformer Start: NUR nach cb:game:start initialisieren
+  window.addEventListener('cb:game:start', () => inst.init({}));
 
   // Inspector-Brücke
   window.addEventListener('cb:path:overlay:on',  ()=>inst.toggle(true));
