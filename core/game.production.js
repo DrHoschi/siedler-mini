@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.01-lumberjack1
+ * Version : v25.12.01-lumberjack2-atlas
  *
  * Zweck   : Produktionslogik
  *           – Generischer Produktions-Skeleton (für später)
@@ -10,6 +10,8 @@
  *               * Pflanz-/Wachstums-/Fäll-Zyklus
  *               * erzeugt Holz (cb:res:change → HUD)
  *               * cb:prod:output-Events zur Diagnose
+ *               * VISUELL: Bäume über MEGA-Atlas (trees_mega_atlas)
+ *                 + Fallback: einfache Kreise
  *
  * Struktur: IMPORTS → KONSTANTEN → HILFSFUNKTIONEN → KLASSEN → HAUPTLOGIK → EXPORTS
  *
@@ -302,12 +304,124 @@
   }
 
   // ======================================================
-  // GRAFIK: EINFACHES BAUM-OVERLAY (Platzhalter für dein Sprite)
+  // GRAFIK: BAUM-OVERLAY mit MEGA-ATLAS + Fallback
   // ======================================================
 
   /**
-   * Zeichnet einfache Baum-Kreise an den Holzfäller-Gebäuden.
-   * Später können wir hier dein `trees_mega_atlas`-Sprite verwenden.
+   * Atlas-Konfiguration:
+   *  – JSON:  assets/tex/deco/trees_mega_atlas.json  (8x8 Slots à 256x256)
+   *  – Bild:  assets/tex/deco/trees_mega_atlas.png
+   *
+   * Die Zuordnung der Phasen → Slots kannst du bei Bedarf anpassen.
+   * Aktuell sind das nur sinnvolle Default-Schätzungen.
+   */
+  const TREE_ATLAS_CFG = {
+    urlJson:  'assets/tex/deco/trees_mega_atlas.json',
+    urlImage: 'assets/tex/deco/trees_mega_atlas.png',
+    // Phasen → Frame-Schlüssel aus dem JSON ("reserved_X")
+    frameMap: {
+      PLANT: 'reserved_32',  // kleiner Busch / Setzling
+      GROW : 'reserved_24',  // mittlere Wuchs-Stufe
+      READY: 'reserved_0',   // ausgewachsener Baum
+      CUT  : 'reserved_40'   // Stumpf / gefällter Baum
+    }
+  };
+
+  let treeAtlas       = null;   // JSON-Daten
+  let treeAtlasImg    = null;   // Image-Objekt
+  let treeAtlasLoaded = false;  // Bild fertig?
+  let treeAtlasLoading= false;  // Ladeversuch läuft?
+
+  /**
+   * Startet (einmalig) das Laden von JSON + Bild.
+   * Gibt true zurück, wenn beide verfügbar sind, sonst false.
+   */
+  function ensureTreeAtlasReady(){
+    // Schon alles da?
+    if (treeAtlas && treeAtlasLoaded) return true;
+
+    // Lädt bereits im Hintergrund?
+    if (treeAtlasLoading) return false;
+    treeAtlasLoading = true;
+
+    // JSON laden (einfache fetch-Variante)
+    try {
+      fetch(TREE_ATLAS_CFG.urlJson)
+        .then(r => r.json())
+        .then(data => {
+          treeAtlas = data;
+        })
+        .catch(err => {
+          WARN('Tree-Atlas JSON konnte nicht geladen werden:', err);
+        });
+    } catch(e){
+      WARN('fetch für Tree-Atlas JSON nicht verfügbar:', e);
+    }
+
+    // Bild laden
+    try {
+      const img = new Image();
+      img.onload = function(){
+        treeAtlasImg    = img;
+        treeAtlasLoaded = true;
+      };
+      img.onerror = function(err){
+        WARN('Tree-Atlas Bild konnte nicht geladen werden:', err);
+      };
+      img.src = TREE_ATLAS_CFG.urlImage;
+    } catch(e){
+      WARN('Tree-Atlas Bild-Ladevorgang fehlgeschlagen:', e);
+    }
+
+    return false;
+  }
+
+  /**
+   * Draw-Helfer: Einen einzelnen Atlas-Frame zeichnen.
+   */
+  function drawTreeFrame(ctx, frameKey, x, y, size){
+    if (!treeAtlas || !treeAtlasImg || !treeAtlas.frames) return false;
+
+    const frameDef = treeAtlas.frames[frameKey];
+    if (!frameDef) return false;
+
+    // Variante 1: unser JSON mit [col,row]
+    let col, row, tileW, tileH;
+    if (Array.isArray(frameDef)) {
+      col   = frameDef[0];
+      row   = frameDef[1];
+      tileW = treeAtlas.tileW || 256;
+      tileH = treeAtlas.tileH || 256;
+    } else if (frameDef.frame) {
+      // Fallback: Phaser-JSON (x,y,w,h)
+      tileW = frameDef.frame.w;
+      tileH = frameDef.frame.h;
+      col   = (frameDef.frame.x / tileW)|0;
+      row   = (frameDef.frame.y / tileH)|0;
+    } else {
+      return false;
+    }
+
+    const sx = col * (tileW);
+    const sy = row * (tileH);
+    const sw = tileW;
+    const sh = tileH;
+
+    ctx.drawImage(
+      treeAtlasImg,
+      sx, sy, sw, sh,
+      x - size / 2,
+      y - size * 0.9, // etwas nach oben versetzt
+      size,
+      size
+    );
+    return true;
+  }
+
+  /**
+   * Zeichnet Bäume vor den Holzfäller-Gebäuden.
+   * – Wenn Atlas schon geladen → hübsche Sprite-Version.
+   * – Sonst Fallback: einfache Kreise (wie vorher).
    */
   function drawLumberjackOverlay(ctx, cam){
     if (!ctx) return;
@@ -328,6 +442,9 @@
     ctx.translate(-ox * ts * zoom, -oy * ts * zoom);
     ctx.scale(zoom, zoom);
 
+    // Prüfen, ob Atlas verfügbar – wenn nicht, Ladevorgang anstoßen
+    const atlasReady = ensureTreeAtlasReady();
+
     for (const lj of Lumberjacks.values()){
       const bx = lj.x;
       const by = lj.y;
@@ -338,7 +455,39 @@
       const cx = (bx + bw / 2) * ts;
       const cy = (by + bh) * ts;
 
-      // Farbe je nach Phase
+      // ==========================
+      // 1) Versuch: Atlas-Sprite
+      // ==========================
+      if (atlasReady) {
+        let key = null;
+        if (lj.phase === LJ_PHASE.PLANT) key = TREE_ATLAS_CFG.frameMap.PLANT;
+        else if (lj.phase === LJ_PHASE.GROW) key = TREE_ATLAS_CFG.frameMap.GROW;
+        else if (lj.phase === LJ_PHASE.READY) key = TREE_ATLAS_CFG.frameMap.READY;
+        else if (lj.phase === LJ_PHASE.CUT) key = TREE_ATLAS_CFG.frameMap.CUT;
+
+        if (key) {
+          const size = ts * 2.0; // Baum etwas größer als ein Tile
+          const ok = drawTreeFrame(ctx, key, cx, cy, size);
+          if (ok) {
+            // Wachstumsring (nur in GROW-Phase, über dem Baum)
+            if (lj.phase === LJ_PHASE.GROW){
+              ctx.beginPath();
+              ctx.lineWidth   = Math.max(1.5, ts * 0.04);
+              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+              const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
+              const r    = size * 0.35;
+              ctx.arc(cx, cy - size * 0.9, r, -Math.PI/2, -Math.PI/2 + prog * Math.PI*2);
+              ctx.stroke();
+            }
+            // Wir haben erfolgreich gezeichnet → kein Fallback nötig
+            continue;
+          }
+        }
+      }
+
+      // ==========================
+      // 2) Fallback: einfache Kreise
+      // ==========================
       let fill = '#228B22'; // Standard-Grün
       if (lj.phase === LJ_PHASE.PLANT) fill = '#8BC34A';   // hellgrün
       if (lj.phase === LJ_PHASE.GROW)  fill = '#4CAF50';   // sattes Grün
@@ -421,6 +570,11 @@
   // EXPORT / GLOBAL-API
   // =========================
 
+  /**
+   * Zentrale Production-API.
+   * – register(id, io) kannst du später für generische Produktionsgebäude nutzen,
+   *   z.B. Bäckerei, Fischerei, Steinmetz usw.
+   */
   window.Production = window.Production || {};
   window.Production.register = registerGeneric;  // generisch (für spätere Typen)
   window.Production.tick     = tick;
@@ -428,9 +582,10 @@
     Lumberjacks,
     GenericBuildings,
     LJ_PHASE,
-    LJ_TIMES
+    LJ_TIMES,
+    TREE_ATLAS_CFG
   };
 
-  LOG('Modul geladen v25.12.01-lumberjack1');
+  LOG('Modul geladen v25.12.01-lumberjack2-atlas');
 
 })();
