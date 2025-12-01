@@ -453,6 +453,31 @@
     tickAllLumberjacks(dtMs);
   }
 
+    // =========================
+  // DIREKTER LISTENER (Fallback) auf cb:build:complete
+  // =========================
+  // Falls der Produktions-Manager aus irgendeinem Grund nicht (rechtzeitig)
+  // registriert ist, hängen wir uns hier zusätzlich direkt an das Event.
+  // Doppelte Events sind kein Problem, weil registerLumberjackFromBuild()
+  // bei gleicher uid einfach nichts mehr macht.
+
+  try {
+    window.addEventListener('cb:build:complete', (ev)=>{
+      const detail = ev.detail || {};
+      try {
+        // Kleines Debug-Log, damit du es im Inspector siehst:
+        (window.CBLog?.info || console.info)('[prod-wood]', 'direct cb:build:complete', detail.id, detail);
+
+        registerLumberjackFromBuild(detail);
+        ensureTreeAtlasLoaded();
+      } catch (e){
+        (window.CBLog?.warn || console.warn)('[prod-wood]', 'Direkter cb:build:complete-Listener Fehler:', e);
+      }
+    }, { passive:true });
+  } catch(e){
+    (window.CBLog?.warn || console.warn)('[prod-wood]', 'Direkter cb:build:complete-Listener konnte nicht registriert werden:', e);
+  }
+  
   // =========================
   // Arbeitsbereich-API (für UI-Menü)
   // =========================
