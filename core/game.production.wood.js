@@ -99,45 +99,53 @@
    * @param {object} detail – { id, x,y,w,h, ... } aus cb:build:complete
    */
   function registerLumberjackFromBuild(detail){
-    if (!detail) return;
-    const kind = detail.id || detail.buildingId || detail.kind;
-    if (kind !== LUMBERJACK_ID) return;
+  if (!detail) return;
+  const kind = detail.id || detail.buildingId || detail.kind;
+  if (kind !== LUMBERJACK_ID) return;
 
-    const x = detail.x|0;
-    const y = detail.y|0;
-    const w = (detail.w|0) || 3;
-    const h = (detail.h|0) || 3;
+  const x = detail.x|0;
+  const y = detail.y|0;
+  const w = (detail.w|0) || 3;
+  const h = (detail.h|0) || 3;
 
-    const uid = `${kind}@${x},${y}`;
-    if (Lumberjacks.has(uid)) {
-      // Doppelte Events ignorieren
-      return;
-    }
-
-    const state = {
-      uid,
-      kind,
-      x, y, w, h,
-      phase    : LJ_PHASE.PLANT,
-      timer    : 0,
-      cycle    : 0,
-      treeProg : 0,
-      // für später: Arbeitsbereich / Radius usw.
-      workArea : null
-    };
-
-    Lumberjacks.set(uid, state);
-
-    try {
-      dispatchEvent(new CustomEvent('cb:prod:start', {
-        detail:{ bId:uid, kind }
-      }));
-    } catch(e){
-      WARN('cb:prod:start (wood) dispatch fehlgeschlagen', e);
-    }
-
-    LOG('Lumberjack registriert', state);
+  const uid = `${kind}@${x},${y}`;
+  if (Lumberjacks.has(uid)) {
+    // Doppelte Events ignorieren
+    return;
   }
+
+  const centerX = x + w / 2;
+  const centerY = y + h / 2;
+
+  const state = {
+    uid,
+    kind,
+    x, y, w, h,
+    phase    : LJ_PHASE.PLANT,
+    timer    : 0,
+    cycle    : 0,
+    treeProg : 0,
+
+    // 🔵 Standard-Arbeitsbereich (ca. 5×5 Tiles als Kreis)
+    workArea : {
+      cx         : centerX,   // Mittelpunkt in Tile-Koordinaten
+      cy         : centerY,
+      radiusTiles: 2.5        // ~ Durchmesser 5 Tiles
+    }
+  };
+
+  Lumberjacks.set(uid, state);
+
+  try {
+    dispatchEvent(new CustomEvent('cb:prod:start', {
+      detail:{ bId:uid, kind }
+    }));
+  } catch(e){
+    WARN('cb:prod:start (wood) dispatch fehlgeschlagen', e);
+  }
+
+  LOG('Lumberjack registriert', state);
+}
 
   /**
    * EINEN Förster einen Schritt weiter ticken.
