@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.construction.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-buildstep4-multiphasic-fix1
+ * Version : v25.11.30-buildstep4-multiphasic-fix2-workarea-lumberjack
  *
  * Zweck   :
  *   - Mehrstufige Baustellen-Logik:
@@ -15,6 +15,10 @@
  *   - Zeichnet Boden-Ressourcenkugeln + Fortschrittsbalken
  *   - Zeichnet einfache Bauarbeiter-Kreise, die hin- und herlaufen
  *   - Meldet fertige Gebäude per cb:build:complete
+ *
+ *   - NEU:
+ *       - Zeigt für fertige Holzfäller-Hütten (b.lumberjack) den
+ *         Arbeitsbereich als blauen Kreis direkt im Construction-Renderer an.
  * ========================================================================== */
 
 (function(){
@@ -43,6 +47,10 @@
   // Bauarbeiter-Konstanten
   const BUILDER_COUNT         = 2;
   const BUILDER_SPEED_TPS     = 1.2;    // Tiles pro Sekunde
+
+  // NEU: Spezieller Gebäudetyp für Holzfäller-Hütte
+  //      → Für diesen Typ zeichnen wir unten im Renderer einen Arbeitsbereich-Kreis.
+  const LUMBERJACK_ID         = 'b.lumberjack';
 
   // ---------------------------------------------------------------------------
   // Hilfsfunktionen Basis
@@ -283,50 +291,50 @@
   }
 
   // ---------------------------------------------------------------------------
-// Bau fertig
-// ---------------------------------------------------------------------------
+  // Bau fertig
+  // ---------------------------------------------------------------------------
 
-function completeBuilding(b){
-  ensureConstructionState(b);
+  function completeBuilding(b){
+    ensureConstructionState(b);
 
-  b.buildPhase    = PHASE.COMPLETE;
-  b.buildElapsed  = b.buildTime;
-  b.buildProgress = 1;
-  b.status        = 'done';
+    b.buildPhase    = PHASE.COMPLETE;
+    b.buildElapsed  = b.buildTime;
+    b.buildProgress = 1;
+    b.status        = 'done';
 
-  // fertiges Gebäude anzeigen
-  b.buildSubStage = 2;
-  b.buildStage    = 3;
+    // fertiges Gebäude anzeigen
+    b.buildSubStage = 2;
+    b.buildStage    = 3;
 
-  // Drops & Bauarbeiter entfernen
-  b.drops    = [];
-  b.builders = [];
+    // Drops & Bauarbeiter entfernen
+    b.drops    = [];
+    b.builders = [];
 
-  // 🔔 Wichtig für Production-Module (Holz, Fisch, Stein, …)
-  try{
-    window.dispatchEvent(new CustomEvent('cb:build:complete', {
-      detail:{
-        // Gebäudetyp aus Registry (z.B. 'b.lumberjack')
-        id          : b.id,
-        // optionale interne Kennung (falls vorhanden)
-        uid         : b.uid || null,
-        // Tile-Rechteck
-        x           : b.x,
-        y           : b.y,
-        w           : b.w,
-        h           : b.h
-      }
-    }));
-  }catch(e){
-    WARN('cb:build:complete dispatch fehlgeschlagen', e);
+    // 🔔 Wichtig für Production-Module (Holz, Fisch, Stein, …)
+    try{
+      window.dispatchEvent(new CustomEvent('cb:build:complete', {
+        detail:{
+          // Gebäudetyp aus Registry (z.B. 'b.lumberjack')
+          id          : b.id,
+          // optionale interne Kennung (falls vorhanden)
+          uid         : b.uid || null,
+          // Tile-Rechteck
+          x           : b.x,
+          y           : b.y,
+          w           : b.w,
+          h           : b.h
+        }
+      }));
+    }catch(e){
+      WARN('cb:build:complete dispatch fehlgeschlagen', e);
+    }
+
+    LOG('Gebäude fertig', {
+      id       : b.id,
+      needs    : b.needs,
+      delivered: b.delivered
+    });
   }
-
-  LOG('Gebäude fertig', {
-    id       : b.id,
-    needs    : b.needs,
-    delivered: b.delivered
-  });
-}
 
   // ---------------------------------------------------------------------------
   // Event: Material geliefert – cb:build:deliver
@@ -466,7 +474,7 @@ function completeBuilding(b){
   }
 
   // ---------------------------------------------------------------------------
-  // Rendering: Drops + Fortschrittsbalken + Bauarbeiter
+  // Rendering: Drops + Fortschrittsbalken + Bauarbeiter + Arbeitsbereich
   // ---------------------------------------------------------------------------
 
   function worldToScreen(Game, wx, wy){
@@ -509,6 +517,38 @@ function completeBuilding(b){
       const camPos = worldToScreen(Game, cx, cy);
       const sz     = camPos.size || (Game.tileSize || 64);
       const zoom   = camPos.zoom || 1;
+
+      // ---------------------------------------------------------------
+      // 0) NEU: Arbeitsbereich-Anzeige für fertige Holzfäller-Hütten
+      // ---------------------------------------------------------------
+      // Wir zeichnen den Kreis direkt im Construction-Renderer, damit
+      // der Arbeitsbereich sicher sichtbar ist – unabhängig vom Overlay.
+      if (b.id === LUMBERJACK_ID && b.buildPhase === PHASE.COMPLETE){
+        // Standard-Radius: ca. 5x5 Tiles (2.5 Tiles in jede Richtung)
+        const radiusTiles = 2.5;
+        const rPx         = radiusTiles * sz;
+
+        // Kreis-Mittelpunkt = Gebäude-Mitte auf dem Screen
+        const cxPx = camPos.x;
+        const cyPx = camPos.y;
+
+        ctx.save();
+
+        // leichte, transparente Füllung
+        ctx.beginPath();
+        ctx.arc(cxPx, cyPx, rPx, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(60, 120, 220, 0.10)';
+        ctx.fill();
+
+        // deutliche gestrichelte Outline
+        ctx.setLineDash([6 * zoom, 4 * zoom]);
+        ctx.lineWidth   = 2 * zoom;
+        ctx.strokeStyle = 'rgba(60, 120, 220, 0.85)';
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.restore();
+      }
 
       // ---------------------------------------------------------------
       // 1) Boden-Drops (Ressourcenkugeln)
@@ -610,6 +650,6 @@ function completeBuilding(b){
     tick,
     render
   };
-  LOG('Construction-Modul aktiv (buildstep4-multiphasic-fix1)');
+  LOG('Construction-Modul aktiv (buildstep4-multiphasic-fix2-workarea-lumberjack)');
 
 })();
