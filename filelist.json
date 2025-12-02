@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-02T14:44:22.520Z",
+  "createdAt": "2025-12-02T17:53:00.195Z",
   "root": ".",
-  "count": 525,
+  "count": 526,
   "entries": [
     {
       "type": "dir",
@@ -1279,7 +1279,7 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 19237
+      "size": 17638
     },
     {
       "type": "file",
@@ -1299,7 +1299,7 @@
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 21758
+      "size": 15879
     },
     {
       "type": "file",
@@ -1315,6 +1315,11 @@
       "type": "file",
       "path": "core/game.units.js",
       "size": 8912
+    },
+    {
+      "type": "file",
+      "path": "core/game.workarea.js",
+      "size": 12565
     },
     {
       "type": "file",
@@ -1404,7 +1409,7 @@
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 1344
+      "size": 6555
     },
     {
       "type": "file",
@@ -1522,7 +1527,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 2204
+      "size": 2758
     },
     {
       "type": "file",
@@ -2443,7 +2448,7 @@
     {
       "type": "file",
       "path": "ui/ui-building-menu.js",
-      "size": 6412
+      "size": 6924
     },
     {
       "type": "file",
@@ -2543,7 +2548,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16086
+      "size": 16132
     },
     {
       "type": "file",
