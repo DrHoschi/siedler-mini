@@ -521,17 +521,7 @@
       // ---------------------------------------------------
       // 3) 🔵 Arbeitsbereich-Kreis – IMMER zeichnen
       // ---------------------------------------------------
-      ctx.beginPath();
-      ctx.lineWidth   = Math.max(1.5, ts * 0.06);
-      ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';
-      ctx.setLineDash([ts * 0.25, ts * 0.25]);
-      ctx.arc(cxArea, cyArea, rWorkPx, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
 
-    ctx.restore();
-  }
 
   // =========================
   // OVERLAY-REGISTRIERUNG
