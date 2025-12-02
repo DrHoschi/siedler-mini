@@ -1,73 +1,138 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-workarea-v1
+ * Version : v25.12.02-workarea-v2
  *
  * Zweck   :
- *   - Zentrales Arbeitsbereichs-Overlay für Produktionsgebäude
- *   - Legt bei cb:build:complete für bestimmte Gebäude (Holzfäller, Steinbruch,
- *     Fischer) einen Standard-Arbeitsbereich an.
- *   - Zeichnet einen Kreis (Tile-basiert) auf der Map.
- *   - API:
- *       GameWorkArea.startSelectionForBuilding({ id, uid, x,y,w,h, radiusTiles? })
- *         → markiert den entsprechenden Kreis als "selektiert" (dicker Rand).
+ *   - Zentrales Arbeitsbereichs-Modul für Produktionsgebäude
+ *   - Zeichnet Kreise um Gebäude (Holzfäller, Steinbruch, Fischerhütte)
+ *   - Arbeitet unabhängig vom Inspector – immer, sobald Gebäude fertig ist
  *
- *   WICHTIG:
- *     - In dieser v1 wird die Position des Kreises noch nicht verschoben –
- *       sie sitzt mittig auf dem Gebäude. Erstmal geht es darum, dass der
- *       Kreis überhaupt sicher sichtbar ist. Das "Verschieben" hängen wir
- *       danach sauber an.
+ *  Gebäude / IDs:
+ *    - b.lumberjack (Holzfällerhütte)
+ *    - b.quarry     (Steinbruch)
+ *    - b.fisher     (Fischerhütte)
+ *
+ *  Triggers:
+ *    - IN:
+ *        cb:build:complete { id, uid?, x,y,w,h, ... }
+ *        (optional) GameWorkArea.startSelectionForBuilding({id,uid,x,y,w,h})
+ *
+ *    - Overlay:
+ *        OverlayHooks.register('workareas', (ctx,cam)=> drawAreas(ctx,cam))
+ *
+ *  API:
+ *    - window.GameWorkArea = {
+ *        areas: Map<uid, WorkArea>,
+ *        startSelectionForBuilding(cfg)
+ *      }
+ *
+ *  WorkArea-Objekt:
+ *    {
+ *      id          : 'b.lumberjack' | 'b.quarry' | 'b.fisher',
+ *      uid         : string,
+ *      x, y        : Gebäude-Start (Tiles),
+ *      w, h        : Gebäude-Größe (Tiles),
+ *      cx, cy      : Zentrum (Tiles),
+ *      radiusTiles : number,
+ *      selected    : boolean
+ *    }
  * ========================================================================== */
 
 (function(){
   'use strict';
 
   const TAG  = '[workarea]';
-  const LOG  = (window.CBLog?.ok   || console.log ).bind(console, TAG);
-  const WARN = (window.CBLog?.warn || console.warn).bind(console, TAG);
+  const LOG  = (window.CBLog?.info  || console.info ).bind(console, TAG);
+  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
+  const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
 
-  // Für welche Gebäudearten wollen wir überhaupt Arbeitsbereiche?
+  // ---------------------------------------------------------------------------
+  // KONFIGURATION
+  // ---------------------------------------------------------------------------
+
+  // Welche Gebäude bekommen einen Arbeitsbereich?
   const SUPPORTED_IDS = new Set([
     'b.lumberjack',
     'b.quarry',
     'b.fisher'
   ]);
 
-  /**
-   * State-Struktur:
-   *   areas: Map<uid, {
-   *     id, uid,
-   *     x,y,w,h,          // Gebäude-Footprint (Tiles)
-   *     cx,cy,            // Mittelpunkt (Tiles)
-   *     radiusTiles,      // Radius in Tiles
-   *     selected          // true → dicker Rand
-   *   }>
-   */
-  const areas = new Map();
-
-  // aktuell angewähltes Gebäude (für "Arbeitsbereich setzen")
-  let currentSelectionUid = null;
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
+  // Standard-Radien in Tiles, falls nichts aus Daten kommt
+  function getDefaultRadius(id){
+    switch (id){
+      case 'b.lumberjack': return 4.0;
+      case 'b.quarry'    : return 4.0;
+      case 'b.fisher'    : return 4.5;
+      default            : return 4.0;
+    }
+  }
 
   function toNumber(v, fallback){
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
   }
 
-  function getDefaultRadiusForId(id){
-    // später aus Registry.buildings[id].workArea.radiusTiles auslesen
-    if (id === 'b.lumberjack') return 4.0;
-    if (id === 'b.quarry')     return 4.0;
-    if (id === 'b.fisher')     return 4.5;
-    return 3.5;
+  // ---------------------------------------------------------------------------
+  // STATE
+  // ---------------------------------------------------------------------------
+
+  /** Map: uid → WorkArea */
+  const areas = new Map();
+  let currentSelectionUid = null;
+
+  // ---------------------------------------------------------------------------
+  // Hilfen: TileSize + Kamera
+  // ---------------------------------------------------------------------------
+
+  function getTileSize(){
+    try{
+      const Game = window.Game || {};
+      if (typeof Game.tileSize === 'number') return Game.tileSize;
+      if (Game.map && typeof Game.map.tileSize === 'number') return Game.map.tileSize;
+      if (window.GameMap && window.GameMap._state?.map?.tileSize){
+        return Number(window.GameMap._state.map.tileSize) || 64;
+      }
+    } catch(e){
+      WARN('getTileSize() Fehler:', e);
+    }
+    return 64;
   }
 
+  function getCameraState(){
+    try{
+      if (window.GameCamera && typeof window.GameCamera.getState === 'function'){
+        const cam = window.GameCamera.getState();
+        return {
+          x   : toNumber(cam.x,    0),
+          y   : toNumber(cam.y,    0),
+          zoom: toNumber(cam.zoom, 1)
+        };
+      }
+    } catch(e){
+      WARN('getCameraState() (GameCamera) Fehler:', e);
+    }
+
+    const cam = window.Game?.camera || {};
+    return {
+      x   : toNumber(cam.x,    0),
+      y   : toNumber(cam.y,    0),
+      zoom: toNumber(cam.zoom, 1)
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // WorkArea anlegen / aktualisieren
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Legt einen Arbeitsbereich für ein Gebäude an oder aktualisiert ihn.
+   * detail: { id, uid?, x,y,w,h, radiusTiles? }
+   */
   function ensureAreaForBuilding(detail){
-    const id  = detail.id;
-    if (!SUPPORTED_IDS.has(id)) return null;
+    if (!detail) return null;
+    const id = detail.id;
+    if (!id || !SUPPORTED_IDS.has(id)) return null;
 
     const x   = toNumber(detail.x, 0);
     const y   = toNumber(detail.y, 0);
@@ -75,174 +140,189 @@
     const h   = toNumber(detail.h, 3) || 3;
     const uid = detail.uid || `${id}@${x},${y}`;
 
+    // Mittelpunkt des Gebäudes in Tile-Koordinaten
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+
+    // Radius: aus Detail → sonst Standard pro Gebäude
+    const radiusTiles = toNumber(detail.radiusTiles, getDefaultRadius(id));
+
     let area = areas.get(uid);
     if (!area){
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      const radiusTiles = getDefaultRadiusForId(id);
-
       area = {
         id,
         uid,
         x, y, w, h,
-        cx,
-        cy,
+        cx, cy,
         radiusTiles,
         selected: false
       };
       areas.set(uid, area);
-
-      LOG('WorkArea angelegt', area);
+      LOG('Arbeitsbereich angelegt', area);
+    } else {
+      area.id          = id;
+      area.x           = x;
+      area.y           = y;
+      area.w           = w;
+      area.h           = h;
+      area.cx          = cx;
+      area.cy          = cy;
+      area.radiusTiles = radiusTiles;
+      LOG('Arbeitsbereich aktualisiert', area);
     }
+
     return area;
   }
 
   // ---------------------------------------------------------------------------
-  // Events: Gebäude fertig → Arbeitsbereich anlegen
+  // Ereignisse
   // ---------------------------------------------------------------------------
 
+  // Wenn ein unterstütztes Gebäude fertig ist → Arbeitsbereich anlegen
   window.addEventListener('cb:build:complete', (ev)=>{
     const d = ev.detail || {};
-    if (!d.id) return;
-    if (!SUPPORTED_IDS.has(d.id)) return;
+    if (!d.id || !SUPPORTED_IDS.has(d.id)) return;
 
-    ensureAreaForBuilding(d);
+    const area = ensureAreaForBuilding(d);
+    if (area){
+      LOG('Auto-Arbeitsbereich nach cb:build:complete', {
+        id : area.id,
+        uid: area.uid,
+        cx : area.cx,
+        cy : area.cy,
+        r  : area.radiusTiles
+      });
+    }
   }, { passive:true });
 
   // ---------------------------------------------------------------------------
-  // API für UI (Gebäude-Menü)
+  // API für das Gebäude-Menü
   // ---------------------------------------------------------------------------
 
+  /**
+   * Wird vom Gebäude-Menü aufgerufen, wenn der Button
+   * „Arbeitsbereich setzen“ gedrückt wird.
+   *
+   * cfg: { id, uid?, x,y,w,h, radiusTiles? }
+   */
   function startSelectionForBuilding(cfg){
-    if (!cfg || !cfg.id) return;
-    if (!SUPPORTED_IDS.has(cfg.id)) {
-      WARN('startSelectionForBuilding: Gebäude nicht unterstützt', cfg.id);
+    const area = ensureAreaForBuilding(cfg || {});
+    if (!area) {
+      WARN('startSelectionForBuilding: kein gültiger Bereich', cfg);
       return;
     }
 
-    const x   = toNumber(cfg.x, 0);
-    const y   = toNumber(cfg.y, 0);
-    const w   = toNumber(cfg.w, 3) || 3;
-    const h   = toNumber(cfg.h, 3) || 3;
-    const uid = cfg.uid || `${cfg.id}@${x},${y}`;
+    currentSelectionUid = area.uid;
 
-    const area = ensureAreaForBuilding({
-      id : cfg.id,
-      uid,
-      x, y, w, h
-    });
-
-    if (!area) return;
-
-    // Radius optional aus cfg übernehmen
-    if (typeof cfg.radiusTiles === 'number' && cfg.radiusTiles > 0){
-      area.radiusTiles = cfg.radiusTiles;
+    // Markiere nur diesen Bereich als "selected"
+    for (const a of areas.values()){
+      a.selected = (a.uid === currentSelectionUid);
     }
 
-    // Diese WorkArea visuell hervorheben
-    currentSelectionUid = uid;
-    areas.forEach((a, key)=>{
-      a.selected = (key === uid);
+    LOG('Arbeitsbereich selektiert', {
+      id : area.id,
+      uid: area.uid,
+      cx : area.cx,
+      cy : area.cy,
+      r  : area.radiusTiles
     });
 
-    LOG('Arbeitsbereich selektiert', { uid, id: cfg.id });
+    // HINWEIS:
+    // In dieser v2 wird die Position nur markiert, NICHT verschoben.
+    // Die Interaktion (Klick auf Karte → Mittelpunkt verschieben)
+    // binden wir in einem weiteren Schritt an core.core.input-v1.js an.
   }
 
   // ---------------------------------------------------------------------------
-  // Zeichnen des Kreises (Overlay)
+  // Zeichnen des Overlays (Kreise)
   // ---------------------------------------------------------------------------
 
-  function getCameraState(){
-    // bevorzugt GameCamera
-    if (window.GameCamera && typeof window.GameCamera.getState === 'function'){
-      return window.GameCamera.getState();
-    }
-    // einfacher Fallback
-    const cam = window.Game?.camera || {};
-    return {
-      x   : toNumber(cam.x, 0),
-      y   : toNumber(cam.y, 0),
-      zoom: toNumber(cam.zoom, 1)
-    };
-  }
+  /**
+   * Zeichnet alle Arbeitsbereiche auf das Overlay-Canvas.
+   * ctx : 2D-Context des "game"-Canvas (von OverlayHooks)
+   * cam : {x,y,zoom} SCREEN-Kamera (Pixel) – kommt aus OverlayHooks.draw
+   */
+  function drawAreas(ctx, cam){
+    if (!ctx || !areas.size) return;
 
-  function getTileSize(){
-    if (window.Game?.map?.tileSize) return window.Game.map.tileSize;
-    if (window.GameMap?._state?.map?.tileSize) return window.GameMap._state.map.tileSize;
-    return 64;
-  }
+    const camState = cam || getCameraState();
+    const camX = toNumber(camState.x,    0);
+    const camY = toNumber(camState.y,    0);
+    const zoom = toNumber(camState.zoom, 1);
 
-  function drawAreas(ctx){
-    if (!areas.size) return;
-
-    const cam = getCameraState();
-    const ts  = getTileSize();
-
-    const zoom = cam.zoom || 1;
-    const ox   = cam.x   || 0;
-    const oy   = cam.y   || 0;
+    const ts = getTileSize();
 
     ctx.save();
-    ctx.translate(-ox * ts * zoom, -oy * ts * zoom);
-    ctx.scale(zoom, zoom);
 
-    areas.forEach((area)=>{
-      const cxPx = area.cx * ts;
-      const cyPx = area.cy * ts;
-      const rPx  = area.radiusTiles * ts;
+    for (const area of areas.values()){
+      const wx = area.cx * ts; // Welt-Pixel X
+      const wy = area.cy * ts; // Welt-Pixel Y
+      const sx = (wx - camX) * zoom; // Screen-Pixel X
+      const sy = (wy - camY) * zoom; // Screen-Pixel Y
+      const r  = area.radiusTiles * ts * zoom;
 
-      // Fläche
+      // Außenkreis
       ctx.beginPath();
-      ctx.arc(cxPx, cyPx, rPx, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(80, 160, 255, 0.12)';
-      ctx.fill();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
 
-      // Rand
-      ctx.lineWidth   = area.selected ? 4 : 2;
+      // Füllung leicht transparent
+      ctx.fillStyle   = area.selected
+        ? 'rgba(0, 180, 255, 0.15)'
+        : 'rgba(0, 120, 255, 0.10)';
+
       ctx.strokeStyle = area.selected
-        ? 'rgba(80, 200, 255, 0.9)'
-        : 'rgba(80, 160, 255, 0.7)';
-      ctx.setLineDash(area.selected ? [8,4] : [4,4]);
+        ? 'rgba(0, 200, 255, 0.85)'
+        : 'rgba(0, 120, 255, 0.60)';
+
+      ctx.lineWidth   = 2 * zoom;
+      ctx.fill();
       ctx.stroke();
 
-      // Mittelpunkt markieren
-      ctx.setLineDash([]);
+      // Kleiner Punkt im Zentrum
       ctx.beginPath();
-      ctx.arc(cxPx, cyPx, ts * 0.15, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 80, 200, 0.9)';
+      ctx.arc(sx, sy, 3 * zoom, 0, Math.PI * 2);
+      ctx.fillStyle = area.selected ? '#00e0ff' : '#0070ff';
       ctx.fill();
-    });
+    }
 
     ctx.restore();
   }
 
-  // Overlay Registrierung (über OverlayHooks, falls vorhanden)
-  (function registerOverlay(){
-    function tryRegister(){
-      if (!window.OverlayHooks || typeof window.OverlayHooks.register !== 'function'){
-        return false;
-      }
-      try{
-        window.OverlayHooks.register('workareas', (ctx)=>{
-          drawAreas(ctx);
-        });
-        LOG('WorkArea-Overlay registriert (workareas).');
-        return true;
-      }catch(e){
-        WARN('WorkArea-Overlay Registrierung fehlgeschlagen', e);
-        return true;
-      }
+  // ---------------------------------------------------------------------------
+  // OverlayHooks-Integration
+  // ---------------------------------------------------------------------------
+
+  function registerOverlayLayer(){
+    if (!window.OverlayHooks || typeof window.OverlayHooks.register !== 'function'){
+      return false;
     }
 
-    if (tryRegister()) return;
+    try{
+      window.OverlayHooks.register('workareas', (ctx, cam)=>{
+        drawAreas(ctx, cam);
+      });
+      LOG('Overlay-Layer "workareas" registriert');
+      return true;
+    } catch(e){
+      WARN('Overlay-Layer-Registrierung fehlgeschlagen:', e);
+      return true; // nicht neu versuchen
+    }
+  }
+
+  // Direkt versuchen + ggf. ein paar Mal nachschieben
+  if (!registerOverlayLayer()){
     let tries = 0;
-    const t = setInterval(()=>{
-      if (tryRegister() || ++tries > 20) clearInterval(t);
+    const maxTries = 20;
+    const timer = setInterval(()=>{
+      tries++;
+      if (registerOverlayLayer() || tries >= maxTries){
+        clearInterval(timer);
+      }
     }, 200);
-  })();
+  }
 
   // ---------------------------------------------------------------------------
-  // Export
+  // GLOBAL API
   // ---------------------------------------------------------------------------
 
   window.GameWorkArea = {
@@ -250,6 +330,6 @@
     startSelectionForBuilding
   };
 
-  LOG('Modul geladen v25.12.02-workarea-v1');
+  LOG('Modul geladen v25.12.02-workarea-v2');
 
 })();
