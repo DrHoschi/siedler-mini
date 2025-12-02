@@ -4,6 +4,13 @@ Inhalt (wichtigste Dateien):
 	•	assets/resources/stones_mega_phaser.json (Name → FrameIndex)
 	•	assets/resources/stones_mega_phaser.js   (Global für dein Spiel)
 
+	Verwendungsidee (analog Bäume):
+	•	Roh-Vorkommen auf der Karte: e1_rock_big_raw_v01–08
+	•	Erst angeschlagen/mit Rissen: e1_rock_big_cracked_v01–08
+	•	Abbau-Schutt in der Umgebung: e1_rubble_large_* / e1_rubble_small_*
+	•	Fertige Steinblöcke/Resource-Piles: e1_block_rough_*, e1_block_cut_*
+	•	Lagerstapel am HQ/Steinmetz: e1_block_stack_low_*, e1_block_stack_high_*
+
   Bei den Bäumen/Werkzeugen hatten wir zusätzlich:
 	•	eine normale Atlas-JSON (dein assets.draw-Stil) mit x/y/w/h
 	•	plus eine extra Datei im Phaser-Stil, die nur sagt:
