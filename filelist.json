@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-02T17:53:00.195Z",
+  "createdAt": "2025-12-02T20:15:53.203Z",
   "root": ".",
-  "count": 526,
+  "count": 534,
   "entries": [
     {
       "type": "dir",
@@ -652,6 +652,35 @@
     },
     {
       "type": "dir",
+      "path": "assets/resources/"
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/stone.md",
+      "size": 1733
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/stones_mega_atlas.json",
+      "size": 7684
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/stones_mega_atlas.png",
+      "size": 2101998
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/stones_mega_phaser.js",
+      "size": 2482
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/stones_mega_phaser.json",
+      "size": 2236
+    },
+    {
+      "type": "dir",
       "path": "assets/tex/"
     },
     {
@@ -1229,7 +1258,7 @@
     {
       "type": "file",
       "path": "core/core.input-v1.js",
-      "size": 13065
+      "size": 13069
     },
     {
       "type": "file",
@@ -1298,8 +1327,13 @@
     },
     {
       "type": "file",
+      "path": "core/game.production.stone.js",
+      "size": 15501
+    },
+    {
+      "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 15879
+      "size": 15872
     },
     {
       "type": "file",
@@ -1319,7 +1353,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 12565
+      "size": 7462
     },
     {
       "type": "file",
@@ -1527,6 +1561,11 @@
     {
       "type": "file",
       "path": "data/buildings.json",
+      "size": 2690
+    },
+    {
+      "type": "file",
+      "path": "data/buildings.jsonc",
       "size": 2758
     },
     {
@@ -2448,7 +2487,7 @@
     {
       "type": "file",
       "path": "ui/ui-building-menu.js",
-      "size": 6924
+      "size": 7221
     },
     {
       "type": "file",
@@ -2528,12 +2567,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51878
+      "size": 51972
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19809
+      "size": 19841
     },
     {
       "type": "file",
@@ -2548,7 +2587,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16132
+      "size": 16191
     },
     {
       "type": "file",
