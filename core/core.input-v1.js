@@ -302,51 +302,54 @@
       }));
     },{passive:true});
 
-        canvas.addEventListener('pointerdown', (ev)=>{
-      if (ev.button!=null && ev.button!==0) return;
+          canvas.addEventListener('pointerdown', (ev)=>{
+    if (ev.button != null && ev.button !== 0) return;
 
-      // -----------------------------------------------
-      // Kein Build-Tool aktiv → Klick auf Map / Gebäude
-      // -----------------------------------------------
-      if (!buildTool){
-        const p = screenToTile(ev.clientX, ev.clientY);
-        const b = findBuildingAt(p.tx, p.ty);
+    // Immer zuerst prüfen, ob auf ein bestehendes Gebäude geklickt wurde
+    const p = screenToTile(ev.clientX, ev.clientY);
+    const b = findBuildingAt(p.tx, p.ty);
 
-        if (b){
-          const detail = {
-            id      : b.id,
-            uid     : b.uid || null,
-            x       : b.x | 0,
-            y       : b.y | 0,
-            w       : (b.w | 0) || 1,
-            h       : (b.h | 0) || 1,
-            status  : b.status  || '',
-            label   : b.label   || '',
-            category: b.category|| ''
-          };
+    if (b) {
+      const detail = {
+        id      : b.id,
+        uid     : b.uid || null,
+        x       : b.x | 0,
+        y       : b.y | 0,
+        w       : (b.w | 0) || 1,
+        h       : (b.h | 0) || 1,
+        status  : b.status  || '',
+        label   : b.label   || '',
+        category: b.category|| ''
+      };
 
-          try {
-            window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
-          } catch(e){
-            console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
-          }
-        }
-
-        // In „Normal-Modus“ keine Platzier-Logik → fertig.
-        return;
+      try {
+        window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
+      } catch (e) {
+        console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
       }
 
-      // -----------------------------------------------
-      // Platziermodus aktiv → Ghost bestätigen
-      // -----------------------------------------------
-      if (!hoverValid){
-        const p = screenToTile(ev.clientX, ev.clientY);
-        lastHover = p; hoverValid = true;
-      }
-
-      // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
+      // Klick wurde für das Gebäude-Menü verwendet → Platzier-Logik NICHT ausführen
       ev.preventDefault?.();
-    }, { passive:false });
+      return;
+    }
+
+    // ----------------------------------------------------
+    // Kein Gebäude getroffen → ggf. Platziermodus bedienen
+    // ----------------------------------------------------
+    if (!buildTool) {
+      // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
+      return;
+    }
+
+    // Platziermodus aktiv → Position merken (Ghost bleibt über ✓-Button steuerbar)
+    if (!hoverValid) {
+      lastHover = p;
+      hoverValid = true;
+    }
+
+    // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
+    ev.preventDefault?.();
+  }, { passive:false });
 
     canvas.addEventListener('contextmenu', ev=>{
       if (buildTool){
