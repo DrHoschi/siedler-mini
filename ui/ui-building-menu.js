@@ -1,27 +1,30 @@
+### FILE: ui/ui-building-menu.js
+--------------------------------------------------------------------------------
+
 /* ============================================================================
  * Datei   : ui/ui-building-menu.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-building-menu+workarea
+ * Version : v25.12.02-building-menu+workarea-v2
  *
  * Zweck   :
  *   - Generisches Gebäude-Menü, das beim Klick auf ein Gebäude geöffnet wird.
  *   - Zeigt Basis-Infos an (Name, Typ, Status, Position).
  *   - Für Holzfäller (b.lumberjack):
- *       * Button "Arbeitsbereich (Standard 5x5) setzen"
- *       * nutzt zuerst GameWorkArea.startSelectionForBuilding(...)
+ *       * Button "Arbeitsbereich (Standard 5×5) setzen"
+ *       * ruft GameWorkArea.startSelectionForBuilding(...) auf
  *         und hat einen Fallback zu ProductionWood.setWorkArea(...)
  *
  * Ereignisse:
  *   IN :
- *     - cb:building:menu-open { id, uid?, x,y,w,h, label?, category? }
+ *     - cb:building:menu-open { id, uid?, x,y,w,h, label?, category?, status? }
  * ========================================================================== */
 
 (function(){
   'use strict';
 
   const TAG  = '[ui-building]';
-  const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
-  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
+  const LOG  = (window.CBLog?.info || console.info ).bind(console, TAG);
+  const WARN = (window.CBLog?.warn || console.warn).bind(console, TAG);
 
   let root        = null;
   let titleEl     = null;
@@ -36,6 +39,12 @@
   // ---------------------------------------------------------------------------
   // Globale Close-Handler (Klick außerhalb + ESC-Taste)
   // ---------------------------------------------------------------------------
+
+  function closeMenu(){
+    if (!root) return;
+    root.classList.add('hidden');
+  }
+
   function setupGlobalCloseHandlers(){
     // Klick irgendwo außerhalb des Panels schließt das Menü
     window.addEventListener('pointerdown', (ev)=>{
@@ -94,6 +103,7 @@
     btnClose    = root.querySelector('#ui-building-close');
     btnWorkArea = root.querySelector('#ui-building-workarea');
 
+    // Schließen-Button
     btnClose?.addEventListener('click', closeMenu);
 
     // Verhindern, dass Klicks im Panel "durchfallen"
@@ -110,7 +120,7 @@
       const w   = current.w || 3;
       const h   = current.h || 3;
 
-      // Primär: Neues WorkArea-Modul nutzen (interaktive Auswahl)
+      // Primär: Neues WorkArea-Modul nutzen (interaktive Auswahl / Markierung)
       if (window.GameWorkArea &&
           typeof window.GameWorkArea.startSelectionForBuilding === 'function'){
         LOG('Arbeitsbereich → GameWorkArea.startSelectionForBuilding', { id, uid });
@@ -140,13 +150,16 @@
           radiusTiles: 4.0
         });
       } else {
-        WARN('Kein WorkArea-/Holz-Modul verfügbar, Button ohne Wirkung.');
+        WARN('Arbeitsbereich-Button gedrückt, aber kein WorkArea-Modul/Fallback vorhanden.', {
+          id,
+          uid
+        });
       }
     });
   }
 
   // ---------------------------------------------------------------------------
-  // Öffnen / Schließen
+  // Menü für ein Gebäude öffnen
   // ---------------------------------------------------------------------------
 
   function openForBuilding(detail){
@@ -179,30 +192,33 @@
     }
 
     root.classList.remove('hidden');
-  }
 
-  function closeMenu(){
-    if (!root) return;
-    root.classList.add('hidden');
-    current = null;
+    LOG('Gebäude-Menü geöffnet', {
+      id,
+      category,
+      status,
+      pos: posStr
+    });
   }
 
   // ---------------------------------------------------------------------------
-  // Event-Hook: Gebäude-Menü öffnen
+  // Events anbinden
   // ---------------------------------------------------------------------------
 
+  // Menü von außen öffnen
   window.addEventListener('cb:building:menu-open', (ev)=>{
     const d = ev.detail || {};
+    LOG('cb:building:menu-open empfangen', d);
     openForBuilding(d);
   }, { passive:true });
 
-  // ESC schließt das Menü auch (Fallback, falls oben mal nicht greift)
+  // ESC schließt das Menü auch (Fallback)
   window.addEventListener('keydown', (ev)=>{
     if (ev.key === 'Escape'){
       closeMenu();
     }
   });
 
-  LOG('Gebäude-Menü geladen v25.12.02-building-menu+workarea');
+  LOG('Gebäude-Menü geladen v25.12.02-building-menu+workarea-v2');
 
 })();
