@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-02T20:15:53.203Z",
+  "createdAt": "2025-12-02T22:29:49.042Z",
   "root": ".",
   "count": 534,
   "entries": [
@@ -1258,7 +1258,7 @@
     {
       "type": "file",
       "path": "core/core.input-v1.js",
-      "size": 13069
+      "size": 13246
     },
     {
       "type": "file",
@@ -1308,7 +1308,7 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 17638
+      "size": 17504
     },
     {
       "type": "file",
@@ -1328,7 +1328,7 @@
     {
       "type": "file",
       "path": "core/game.production.stone.js",
-      "size": 15501
+      "size": 20078
     },
     {
       "type": "file",
@@ -1353,7 +1353,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 7462
+      "size": 10052
     },
     {
       "type": "file",
@@ -2487,7 +2487,7 @@
     {
       "type": "file",
       "path": "ui/ui-building-menu.js",
-      "size": 7221
+      "size": 7446
     },
     {
       "type": "file",
@@ -2567,12 +2567,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51972
+      "size": 52776
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19841
+      "size": 20161
     },
     {
       "type": "file",
