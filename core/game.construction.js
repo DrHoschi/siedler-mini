@@ -470,24 +470,18 @@
   // ---------------------------------------------------------------------------
 
   function worldToScreen(Game, wx, wy){
-    const tileSize = Game.tileSize || 64;
-    const cam      = Game.camera || {};
+  // Vereinfachte Variante:
+  // - Kamera-Transform ist bereits im ctx gesetzt (Map-Renderer)
+  // - Wir brauchen hier nur "Weltkoordinate → Pixel im Weltkoordinatensystem"
+  const tileSize = Game.tileSize || 64;
 
-    if (typeof cam.worldToScreen === 'function'){
-      return cam.worldToScreen(wx, wy);
-    }
-
-    const cx    = toNumber(cam.x, 0);
-    const cy    = toNumber(cam.y, 0);
-    const zoom  = toNumber(cam.zoom, 1);
-
-    return {
-      x    : (wx - cx) * tileSize * zoom,
-      y    : (wy - cy) * tileSize * zoom,
-      zoom : zoom,
-      size : tileSize * zoom
-    };
-  }
+  return {
+    x    : wx * tileSize,
+    y    : wy * tileSize,
+    zoom : 1,
+    size : tileSize
+  };
+}
 
   function render(Game){
     if (!Game || !Game.ctx) return;
