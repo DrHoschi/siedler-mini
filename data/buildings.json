@@ -21,6 +21,7 @@
       "entrances": [ { "dx": 1, "dy": 3 } ],
       "cost": [ { "id": "wood", "qty": 4 }, { "id": "stone", "qty": 2 } ],
       "enabled": true
+      // HQ hat keinen eigenen Arbeitsbereich → KEIN workArea-Block nötig
     },
     {
       "id": "b.lumberjack",
@@ -32,7 +33,14 @@
       "cost": [ { "id": "wood", "qty": 2 } ],
       "produces": [ { "id": "wood", "qty": 1 } ],
       "cycle": 3000,
-      "enabled": true
+      "enabled": true,
+      "workArea": {
+        "shape": "circle",
+        "radiusTiles": 4.0,
+        "selectable": true
+        // optional z.B.:
+        // "offset": { "dx": 0, "dy": 0 }
+      }
     },
     {
       "id": "b.quarry",
@@ -44,7 +52,12 @@
       "cost": [ { "id": "wood", "qty": 1 }, { "id": "stone", "qty": 1 } ],
       "produces": [ { "id": "stone", "qty": 1 } ],
       "cycle": 3200,
-      "enabled": true
+      "enabled": true,
+      "workArea": {
+        "shape": "circle",
+        "radiusTiles": 4.0,
+        "selectable": true
+      }
     },
     {
       "id": "b.fisher",
@@ -56,7 +69,12 @@
       "cost": [ { "id": "wood", "qty": 2 } ],
       "produces": [ { "id": "fish", "qty": 1 } ],
       "cycle": 3100,
-      "enabled": true
+      "enabled": true,
+      "workArea": {
+        "shape": "circle",
+        "radiusTiles": 4.5,
+        "selectable": true
+      }
     },
     {
       "id": "b.house_small",
@@ -68,6 +86,7 @@
       "cost": [ { "id": "wood", "qty": 3 }, { "id": "stone", "qty": 1 } ],
       "spawns": [ { "unit": "u.villager", "qty": 2 } ],
       "enabled": true
+      // Kein eigener Arbeitsbereich nötig → objekt bleibt ohne workArea
     }
   ]
 }
