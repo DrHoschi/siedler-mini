@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-01T19:03:03.307Z",
+  "createdAt": "2025-12-02T11:20:16.610Z",
   "root": ".",
-  "count": 523,
+  "count": 525,
   "entries": [
     {
       "type": "dir",
@@ -665,13 +665,23 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas_padded.png",
+      "size": 679484
+    },
+    {
+      "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas_phaser.json",
-      "size": 8085
+      "size": 8150
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas_preview_labels.png",
+      "size": 1941575
     },
     {
       "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas.json",
-      "size": 2957
+      "size": 3086
     },
     {
       "type": "file",
@@ -1289,7 +1299,7 @@
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 15732
+      "size": 20867
     },
     {
       "type": "file",
@@ -1354,7 +1364,7 @@
     {
       "type": "file",
       "path": "core/overlay-hooks.js",
-      "size": 4520
+      "size": 5434
     },
     {
       "type": "file",
@@ -1668,7 +1678,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.layer-v1.js",
-      "size": 11733
+      "size": 12049
     },
     {
       "type": "file",
@@ -1678,7 +1688,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.paths-v1.js",
-      "size": 3754
+      "size": 5665
     },
     {
       "type": "file",
@@ -2533,7 +2543,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 15907
+      "size": 16086
     },
     {
       "type": "file",
