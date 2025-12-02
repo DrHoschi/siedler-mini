@@ -407,21 +407,23 @@
    *   - den Arbeitsbereich als gestrichelten Kreis
    */
   function drawLumberjackOverlay(ctx, cam){
-    if (!ctx) return;
-    if (!Lumberjacks.size) return;
+  if (!ctx) return;
+  if (!Lumberjacks.size) return;
 
-    const zoom = cam?.zoom ?? 1;
-    const ox   = cam?.x    ?? 0;
-    const oy   = cam?.y    ?? 0;
+  const zoom = cam?.zoom ?? 1;
+  const oxPx = cam?.x    ?? 0;   // Kamera in PIXEL
+  const oyPx = cam?.y    ?? 0;   // Kamera in PIXEL
 
-    const ts =
-      (window.Game?.map?.tileSize) ||
-      (window.GameMap?._state?.map?.tileSize) ||
-      64;
+  const ts =
+    (window.Game?.map?.tileSize) ||
+    (window.GameMap?._state?.map?.tileSize) ||
+    64;
 
-    ctx.save();
-    ctx.translate(-ox * ts * zoom, -oy * ts * zoom);
-    ctx.scale(zoom, zoom);
+  ctx.save();
+  // ❌ KEIN * ts mehr – Kamera ist schon in Pixeln
+  ctx.translate(-oxPx * zoom, -oyPx * zoom);
+  ctx.scale(zoom, zoom);
+
 
     // Prüfen, ob der Atlas (Bild+JSON) bereits einsatzbereit ist
     const atlasReady = ensureTreeAtlasReady();
