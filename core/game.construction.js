@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.construction.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-buildstep4-multiphasic-fix2-workarea-lumberjack
+ * Version : v25.12.02-buildstep4-multiphasic-clean
  *
  * Zweck   :
  *   - Mehrstufige Baustellen-Logik:
@@ -15,10 +15,6 @@
  *   - Zeichnet Boden-Ressourcenkugeln + Fortschrittsbalken
  *   - Zeichnet einfache Bauarbeiter-Kreise, die hin- und herlaufen
  *   - Meldet fertige Gebäude per cb:build:complete
- *
- *   - NEU:
- *       - Zeigt für fertige Holzfäller-Hütten (b.lumberjack) den
- *         Arbeitsbereich als blauen Kreis direkt im Construction-Renderer an.
  * ========================================================================== */
 
 (function(){
@@ -47,10 +43,6 @@
   // Bauarbeiter-Konstanten
   const BUILDER_COUNT         = 2;
   const BUILDER_SPEED_TPS     = 1.2;    // Tiles pro Sekunde
-
-  // NEU: Spezieller Gebäudetyp für Holzfäller-Hütte
-  //      → Für diesen Typ zeichnen wir unten im Renderer einen Arbeitsbereich-Kreis.
-  const LUMBERJACK_ID         = 'b.lumberjack';
 
   // ---------------------------------------------------------------------------
   // Hilfsfunktionen Basis
@@ -474,7 +466,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Rendering: Drops + Fortschrittsbalken + Bauarbeiter + Arbeitsbereich
+  // Rendering: Drops + Fortschrittsbalken + Bauarbeiter
   // ---------------------------------------------------------------------------
 
   function worldToScreen(Game, wx, wy){
@@ -517,38 +509,6 @@
       const camPos = worldToScreen(Game, cx, cy);
       const sz     = camPos.size || (Game.tileSize || 64);
       const zoom   = camPos.zoom || 1;
-
-      // ---------------------------------------------------------------
-      // 0) NEU: Arbeitsbereich-Anzeige für fertige Holzfäller-Hütten
-      // ---------------------------------------------------------------
-      // Wir zeichnen den Kreis direkt im Construction-Renderer, damit
-      // der Arbeitsbereich sicher sichtbar ist – unabhängig vom Overlay.
-      if (b.id === LUMBERJACK_ID && b.buildPhase === PHASE.COMPLETE){
-        // Standard-Radius: ca. 5x5 Tiles (2.5 Tiles in jede Richtung)
-        const radiusTiles = 2.5;
-        const rPx         = radiusTiles * sz;
-
-        // Kreis-Mittelpunkt = Gebäude-Mitte auf dem Screen
-        const cxPx = camPos.x;
-        const cyPx = camPos.y;
-
-        ctx.save();
-
-        // leichte, transparente Füllung
-        ctx.beginPath();
-        ctx.arc(cxPx, cyPx, rPx, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(60, 120, 220, 0.10)';
-        ctx.fill();
-
-        // deutliche gestrichelte Outline
-        ctx.setLineDash([6 * zoom, 4 * zoom]);
-        ctx.lineWidth   = 2 * zoom;
-        ctx.strokeStyle = 'rgba(60, 120, 220, 0.85)';
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.restore();
-      }
 
       // ---------------------------------------------------------------
       // 1) Boden-Drops (Ressourcenkugeln)
@@ -650,6 +610,6 @@
     tick,
     render
   };
-  LOG('Construction-Modul aktiv (buildstep4-multiphasic-fix2-workarea-lumberjack)');
+  LOG('Construction-Modul aktiv (buildstep4-multiphasic-clean)');
 
 })();
