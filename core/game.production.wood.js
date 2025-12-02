@@ -106,6 +106,35 @@
   let treeAtlasLoaded  = false; // TRUE, wenn das Bild geladen wurde
   let treeAtlasLoading = false; // Ladevorgang bereits gestartet?
 
+    // =========================
+  // DEBUG: Immer einen Test-Holzfäller eintragen
+  // =========================
+  // Das ist nur zum Testen, damit du den Kreis SICHER siehst,
+  // auch wenn cb:build:complete noch nicht richtig durchkommt.
+  if (!window.__LJ_DEBUG_ADDED) {
+    window.__LJ_DEBUG_ADDED = true;
+
+    const uid = 'debug-lumberjack-1';
+    const x   = 10;   // Tile-Koordinate X (kannst du anpassen)
+    const y   = 10;   // Tile-Koordinate Y
+    const w   = 3;
+    const h   = 3;
+
+    Lumberjacks.set(uid, {
+      uid,
+      id   : LUMBERJACK_ID,
+      x, y, w, h,
+      phase : LJ_PHASE.PLANT,
+      timer : 0,
+      workArea : {
+        cx         : x + w / 2,   // Kreismitte = Mitte des Hauses
+        cy         : y + h / 2,
+        radiusTiles: 4           // etwas größerer Kreis
+      }
+    });
+
+    LOG('DEBUG-Holzfäller hinzugefügt', Lumberjacks.get(uid));
+  }
   // =========================
   // HILFSFUNKTIONEN LOGIK
   // =========================
