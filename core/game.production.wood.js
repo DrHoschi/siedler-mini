@@ -65,7 +65,7 @@
 
   const TREE_ATLAS_CFG = {
     urlJson  : 'assets/tex/deco/trees_mega_atlas.json',
-    urlImage : 'assets/tex/deco/trees_mega_atlas_padded.png',
+    urlImage : 'assets/tex/deco/trees_mega_atlas.png',
 
     frameMap : {
       PLANT : 'e1_regrow_sprout',
