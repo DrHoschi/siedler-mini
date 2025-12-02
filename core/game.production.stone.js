@@ -1,129 +1,147 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-stone-quarry-overlay+atlas
+ * Version : v25.12.02-stone-overlay+degrade
  *
  * Zweck   :
- *   - Spezielle Deko-/Produktionslogik für Stein (Steinbruch / Steinmetz)
- *   - Reagiert auf cb:build:complete für Stein-Gebäude (b.quarry, b.steinmetz …)
- *   - Legt pro Gebäude ein "StoneField" mit zufälligen Fels/Haufen-Sprites an
- *   - Zeichnet diese Steine als Overlay über der Map (kein Wachstum wie bei Holz)
- *   - Nutzt den neuen stones_mega_atlas.* als Grafikquelle
+ *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
+ *   - Für jedes Stein-Gebäude wird ein zufälliges "Steinfeld" erzeugt:
+ *       große Felsen, Geröll, kleine Haufen ...
+ *   - Der Renderer zeichnet diese Steine als Overlay um das Gebäude herum.
+ *   - Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
  *
- *   ACHTUNG:
- *   - Aktuell kümmert sich dieses Modul NUR um die optische Darstellung der
- *     Steinfelder. Die eigentliche Ressourcenerzeugung (stone++) bleibt vorerst
- *     im generischen Production-Manager / Registry.
- *   - Wenn wir später eine spezielle Abbau-Logik (Fels → Geröll → leer) wollen,
- *     können wir hierauf aufbauen.
+ *       RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
+ *
+ *   - Datenbasis: stones_mega_atlas.json + stones_mega_atlas.png
  *
  * Ereignisse:
  *   IN  :
  *     - cb:build:complete { id, uid?, x,y,w,h, ... }
+ *         → Steinbruch registrieren + zufälliges Steinfeld anlegen
+ *     - cb:prod:output { bId, kind, item:'stone', qty }
+ *         → pro qty einen Fels im Feld degradieren
  *
  *   OUT :
- *     - (derzeit keine; nur Overlay-Darstellung)
+ *     - keine (nur visuelle Darstellung)
  *
- *   API / Debug:
- *     - window.ProductionStone.redraw()    → Debug-Log, zeigt dass Modul aktiv ist
- *     - window.ProductionStone.fields     → Map mit allen StoneFields
+ * Debug / API:
+ *   - window.ProductionStone.fields        → Map<uid, StoneFieldState>
+ *   - window.ProductionStone._degradeOne  → 1 Stein manuell degradieren
+ *   - window.ProductionStone._degradeField(uid, qty) → mehrere degradieren
  * ========================================================================== */
 (function(){
   'use strict';
 
-  // =========================
-  // LOGGING / META
-  // =========================
+  // ========================================================================
+  // LOGGING
+  // ========================================================================
 
   const TAG  = '[prod-stone]';
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
   const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
 
-  // =========================
+  // ========================================================================
   // KONSTANTEN
-  // =========================
+  // ========================================================================
 
-  // Mögliche Gebäude-IDs, die ein Steinfeld bekommen sollen.
-  // Je nach Registry können 1..n davon tatsächlich vorkommen.
+  // Welche Gebäude-IDs sollen ein Steinfeld bekommen?
   const STONE_BUILDING_IDS = new Set([
-    'b.quarry',       // engl. Steinbruch
+    'b.quarry',
     'quarry',
-    'b.steinmetz',    // deutsch
+    'b.steinmetz',
     'steinmetz',
-    'b.stonecutter',  // ggf. Alternativnamen
+    'b.stonecutter',
     'stonecutter'
   ]);
 
-  // Wie viele Deko-Steine pro Gebäude ungefähr platziert werden.
+  // Wie viele Steine pro Feld ca.?
   const STONES_PER_FIELD = 7;
 
-  // Faktor, wie weit die Steine maximal vom Gebäudezentrum entfernt liegen (in Tiles)
+  // Radius (in Tiles) um die Gebäudemitte, in dem Steine verteilt werden
   const STONE_RADIUS_MIN = 1.2;
   const STONE_RADIUS_MAX = 3.0;
 
-  /* ==========================================================================
-   * STONE-ATLAS-KONFIGURATION (stones_mega_atlas.*)
-   *   → basiert auf stones_mega_atlas.json / stones_mega_phaser.json
-   * ========================================================================== */
+  /**
+   * Abbau-Stufen in Reihenfolge von "voll" → "fast leer".
+   *  Index 0 = RAW_BIG, 3 = RUBBLE_SMALL, danach = entfernt.
+   */
+  const STONE_STAGE = [
+    'RAW_BIG',
+    'CRACKED',
+    'RUBBLE_LARGE',
+    'RUBBLE_SMALL'
+  ];
+
+  /* ------------------------------------------------------------------------
+   * Atlas-Konfiguration
+   *  - stones_mega_atlas.json:
+   *      { frames: { name: { frame:{x,y,w,h}, pivot:{x,y} }, ... } }
+   *  - stones_mega_atlas.png:
+   *      Bild mit allen Sprites
+   *  - groups: logische Gruppen → Namenspräfixe im Atlas
+   * --------------------------------------------------------------------- */
 
   const STONE_ATLAS_CFG = {
-    // Pfad zu DEINER JSON & PNG – falls du beides woanders hinlegst,
-    // hier bitte anpassen.
+    // → Pfade ggf. anpassen!
     urlJson  : 'assets/resources/stones_mega_atlas.json',
     urlImage : 'assets/resources/stones_mega_atlas.png',
 
-    /**
-     * Logische Gruppen – reine Bezeichner, um später unterschiedliche
-     * Varianten zu nutzen (große Felsen, Geröll, Blöcke, Stapel …).
-     * Die Namen leiten sich direkt aus den Frame-IDs in der JSON ab.
-     */
-    groups : {
-      RAW_BIG : Array.from({length:8}, (_,i)=>`e1_rock_big_raw_v0${i+1}`),
-      CRACKED : Array.from({length:8}, (_,i)=>`e1_rock_big_cracked_v0${i+1}`),
-      RUBBLE_LARGE : Array.from({length:8}, (_,i)=>`e1_rubble_large_v0${i+1}`),
-      RUBBLE_SMALL : Array.from({length:8}, (_,i)=>`e1_rubble_small_v0${i+1}`),
-      BLOCK_ROUGH  : Array.from({length:8}, (_,i)=>`e1_block_rough_v0${i+1}`),
-      BLOCK_CUT    : Array.from({length:8}, (_,i)=>`e1_block_cut_v0${i+1}`),
-      STACK_LOW    : Array.from({length:8}, (_,i)=>`e1_block_stack_low_v0${i+1}`),
-      STACK_HIGH   : Array.from({length:8}, (_,i)=>`e1_block_stack_high_v0${i+1}`)
+    // Präfixe zum automatischen Gruppieren der Frames
+    groups   : {
+      RAW_BIG      : 'e1_rock_big_raw_',
+      CRACKED      : 'e1_rock_big_cracked_',
+      RUBBLE_LARGE : 'e1_rubble_large_',
+      RUBBLE_SMALL : 'e1_rubble_small_',
+      // weitere Gruppen für spätere Nutzung
+      BLOCK_ROUGH  : 'e1_block_rough_',
+      BLOCK_CUT    : 'e1_block_cut_',
+      STACK_LOW    : 'e1_block_stack_low_',
+      STACK_HIGH   : 'e1_block_stack_high_'
     },
 
     /**
-     * Für schnelle Zugriffe aufgelöste Frames:
-     *  resolvedFrames[name] = { x,y,w,h,pivotX,pivotY }
+     * resolvedFrames[name] = { x,y,w,h,pivotX,pivotY }
+     * groupFrames[group]   = [frameName1, frameName2, ...]
      */
-    resolvedFrames : null
+    resolvedFrames : null,
+    groupFrames    : null
   };
 
-  // =========================
+  // ========================================================================
   // STATE
-  // =========================
+  // ========================================================================
 
   /**
    * Map<uid, StoneFieldState>
-   *  StoneFieldState:
-   *    {
-   *      uid, kind, x,y,w,h,
-   *      cx, cy,           // Gebäudecenter in Tiles
-   *      stones: [
-   *        { tx, ty, key, scale }
-   *      ]
-   *    }
+   *
+   * StoneFieldState:
+   *   {
+   *     uid, kind, x,y,w,h,
+   *     cx, cy,           // Gebäudecenter (Tiles)
+   *     stones: [
+   *       {
+   *         tx, ty,       // Position in Tiles
+   *         stageIndex,   // 0..3 → STONE_STAGE, <0 = entfernt
+   *         variant,      // 0..N → Index in Frame-Liste (für Varianz)
+   *         scale         // Größenfaktor
+   *       }
+   *     ]
+   *   }
    */
   const StoneFields = new Map();
 
-  /** Atlas-Daten */
-  let stoneAtlas        = null;  // Inhalt von stones_mega_atlas.json
-  let stoneAtlasImg     = null;  // Image-Objekt
+  /** Atlas-Rohdaten + Bild */
+  let stoneAtlas        = null;
+  let stoneAtlasImg     = null;
   let stoneAtlasLoaded  = false;
   let stoneAtlasLoading = false;
 
-  // =========================
+  // ========================================================================
   // HILFSFUNKTIONEN – GENERELL
-  // =========================
+  // ========================================================================
 
-  /** einfacher Seed-PRNG, damit ein Steinbruch bei jedem Laden gleich aussieht */
+  /** kleiner deterministischer RNG, damit Layout stabil bleibt */
   function makeRng(seedStr){
     let s = 0;
     for (let i=0; i<seedStr.length; i++){
@@ -131,7 +149,6 @@
     }
     if (!s) s = 1;
     return function rng(){
-      // LCG wie in vielen Game-Engines
       s = (s * 1664525 + 1013904223) >>> 0;
       return s / 0xFFFFFFFF;
     };
@@ -148,21 +165,20 @@
     if (!kind) return false;
     const k = String(kind).toLowerCase();
     if (STONE_BUILDING_IDS.has(k)) return true;
-    // Registry-IDs kommen oft als "b.quarry" – daher beim Aufrufer schon
-    // möglichst die richtige ID übergeben. Hier noch ein kleiner Fallback:
+    // Fallback: "steinmetz" → "b.steinmetz"
     if (!k.startsWith('b.')) return STONE_BUILDING_IDS.has('b.'+k);
     return false;
   }
 
-  // =========================
-  // ATLAS-LOADING
-  // =========================
+  // ========================================================================
+  // ATLAS-LADEN + AUFBEREITEN
+  // ========================================================================
 
   function ensureStoneAtlasLoaded(){
     if (stoneAtlasLoaded || stoneAtlasLoading) return;
     stoneAtlasLoading = true;
 
-    // JSON laden (Frame + Pivot-Daten)
+    // JSON laden
     try {
       fetch(STONE_ATLAS_CFG.urlJson)
         .then(r => r.json())
@@ -194,17 +210,24 @@
     }
   }
 
+  /**
+   * Prüft, ob Bild + JSON da sind, berechnet:
+   *   - resolvedFrames (Pixel)
+   *   - groupFrames (Liste aller Frames pro Gruppe)
+   */
   function ensureStoneAtlasReady(){
     if (!stoneAtlasLoaded || !stoneAtlasImg || !stoneAtlas || !stoneAtlas.frames){
       return false;
     }
 
+    // 1) Frames in Pixel-Koordinaten auflösen
     if (!STONE_ATLAS_CFG.resolvedFrames){
       const resolved = {};
       const frames = stoneAtlas.frames || {};
 
-      // stones_mega_atlas.json nutzt pro Frame:
-      //   { frame:{x,y,w,h}, pivot:{x,y} }
+      // stones_mega_atlas.json:
+      //   frames[name].frame {x,y,w,h}
+      //   frames[name].pivot {x,y}
       for (const [name, info] of Object.entries(frames)){
         const f = info.frame || {};
         const p = info.pivot || {};
@@ -222,13 +245,34 @@
       LOG('Stone-Atlas Frames aufgelöst (resolvedFrames).');
     }
 
+    // 2) Namens-Gruppen anhand der Präfixe aufbauen
+    if (!STONE_ATLAS_CFG.groupFrames){
+      const groupFrames = {};
+      const frames = stoneAtlas.frames || {};
+      const groupDefs = STONE_ATLAS_CFG.groups || {};
+
+      for (const name of Object.keys(frames)){
+        for (const [gName, prefix] of Object.entries(groupDefs)){
+          if (name.startsWith(prefix)){
+            if (!groupFrames[gName]) groupFrames[gName] = [];
+            groupFrames[gName].push(name);
+            break;
+          }
+        }
+      }
+
+      STONE_ATLAS_CFG.groupFrames = groupFrames;
+      LOG('Stone-Atlas Gruppen aufgelöst (groupFrames).');
+    }
+
     return true;
   }
 
   /**
-   * Einen einzelnen Stein-Sprite zeichnen.
-   *  cx,cy = Weltkoordinate in Pixeln, an der der Pivot landen soll
-   *  scale  = optionaler Skalierungsfaktor (1 = Originalgröße)
+   * Einen konkreten Frame zeichnen.
+   *
+   *  cx,cy  = Pivot-Position in Weltpixeln
+   *  scale  = Skalierungsfaktor (1 = Originalgröße)
    */
   function drawStoneFrame(ctx, key, cx, cy, scale){
     if (!ensureStoneAtlasReady()) return false;
@@ -257,14 +301,10 @@
     }
   }
 
-  // =========================
-  // STEINFELDER ERZEUGEN
-  // =========================
+  // ========================================================================
+  // STEINFELDER ERZEUGEN (ZUFÄLLIGES DEKO-LAYOUT)
+  // ========================================================================
 
-  /**
-   * Aus einem cb:build:complete-Detail einen neuen StoneField-State erzeugen.
-   * Wird nur aufgerufen, wenn isStoneBuildingId(kind) bereits true ist.
-   */
   function registerStoneFieldFromBuild(detail){
     if (!detail) return;
 
@@ -293,7 +333,7 @@
       stones : []
     };
 
-    // Steine um das Gebäude herum zufällig platzieren
+    // zufälliges Layout generieren
     createRandomLayoutForField(field);
 
     StoneFields.set(uid, field);
@@ -302,46 +342,53 @@
     ensureStoneAtlasLoaded();
   }
 
+  /**
+   * Legt STONES_PER_FIELD Steine um das Gebäude herum an.
+   * Jeder Stein bekommt:
+   *   - Position (tx,ty)
+   *   - Start-Stufe (meist RAW/CRACKED)
+   *   - Variant-Index für das Sprite
+   */
   function createRandomLayoutForField(field){
     const rng = makeRng(field.uid);
     field.stones.length = 0;
 
-    // Kombinierte Liste „natürlicher“ Felsen/Haufen
-    const basePool = [
-      ...STONE_ATLAS_CFG.groups.RAW_BIG,
-      ...STONE_ATLAS_CFG.groups.CRACKED,
-      ...STONE_ATLAS_CFG.groups.RUBBLE_LARGE,
-      ...STONE_ATLAS_CFG.groups.RUBBLE_SMALL
-    ];
-
     const count = STONES_PER_FIELD;
 
     for (let i=0; i<count; i++){
-      const angle = rng() * Math.PI * 2;
+      const angle  = rng() * Math.PI * 2;
       const radius = STONE_RADIUS_MIN + (STONE_RADIUS_MAX - STONE_RADIUS_MIN) * rng();
 
-      // Position in Tiles relativ zur Gebäudemitte
       const tx = field.cx + Math.cos(angle) * radius;
       const ty = field.cy + Math.sin(angle) * radius;
 
-      // Kleine zufällige Skalierung (±15 %)
+      // leichte Größen-Variation
       const scale = 0.85 + 0.3 * rng();
 
-      const key = pickRandom(basePool, rng);
-      if (!key) continue;
+      // Start-Stufe: mehr große Felsen als kleine Haufen
+      let stageIndex;
+      const rStage = rng();
+      if (rStage < 0.5)      stageIndex = 0; // RAW_BIG
+      else if (rStage < 0.8) stageIndex = 1; // CRACKED
+      else if (rStage < 0.95)stageIndex = 2; // RUBBLE_LARGE
+      else                   stageIndex = 3; // RUBBLE_SMALL
+
+      // Variant-Index → später in drawStoneOverlay mit Frame-Liste verknüpft
+      const variant = Math.floor(rng() * 16) & 0xFF;
 
       field.stones.push({
         tx,
         ty,
-        key,
+        stageIndex,
+        variant,
         scale
       });
     }
   }
 
-  // =========================
-  // OVERLAY-ZEICHNUNG
-  // =========================
+  // ========================================================================
+  // OVERLAY-ZEICHNUNG (Steine)
+  // ========================================================================
 
   function drawStoneOverlay(ctx, cam){
     if (!ctx) return;
@@ -367,22 +414,32 @@
       if (!stones.length) continue;
 
       for (const s of stones){
+        // entfernt?
+        if (s.stageIndex == null || s.stageIndex < 0) continue;
+
         const tx = s.tx;
         const ty = s.ty;
 
-        // Weltkoordinate in Pixeln:
-        //  - x: Mitte der Tile
-        //  - y: „Bodenlinie“ der Tile (wir nutzen ty+1, ähnlich wie bei Gebäuden)
+        // Pivot in Weltpixeln
         const cxPx = (tx + 0.5) * ts;
         const cyPx = (ty + 1.0) * ts;
 
         let drawn = false;
-        if (atlasReady && s.key){
-          drawn = drawStoneFrame(ctx, s.key, cxPx, cyPx, s.scale);
+
+        if (atlasReady){
+          const stageName = STONE_STAGE[s.stageIndex] || null;
+          const groupFrames = stageName &&
+                              STONE_ATLAS_CFG.groupFrames &&
+                              STONE_ATLAS_CFG.groupFrames[stageName];
+
+          if (groupFrames && groupFrames.length){
+            const frameName = groupFrames[s.variant % groupFrames.length];
+            drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale);
+          }
         }
 
         if (!drawn){
-          // Fallback: einfacher grauer Kreis als Platzhalter
+          // Fallback: einfache graue Kugel
           const r = ts * 0.35;
           ctx.beginPath();
           ctx.fillStyle   = '#888888';
@@ -398,9 +455,94 @@
     ctx.restore();
   }
 
-  // =========================
+  // ========================================================================
+  // ABBAU-LOGIK: pro stone-Ressource einen Fels degradieren
+  // ========================================================================
+
+  /**
+   * Sucht im Feld einen Kandidaten zum Degradieren:
+   *   - geht die STONE_STAGE von "voll" → "leer" durch
+   *   - wählt innerhalb der Stufe einen zufälligen Stein
+   */
+  function pickStoneForDegrade(field){
+    const stones = field.stones || [];
+    if (!stones.length) return null;
+
+    for (let stageIndex=0; stageIndex<STONE_STAGE.length; stageIndex++){
+      const candidatesIdx = [];
+      for (let i=0; i<stones.length; i++){
+        const s = stones[i];
+        if (s.stageIndex === stageIndex){
+          candidatesIdx.push(i);
+        }
+      }
+      if (candidatesIdx.length){
+        const idx = candidatesIdx[Math.floor(Math.random() * candidatesIdx.length)];
+        return { index: idx, stone: stones[idx] };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Einen Stein im Feld um 1 Stufe degradieren.
+   * Rückgabe:
+   *   TRUE  → es wurde ein Stein gefunden und angepasst
+   *   FALSE → kein degradierbarer Stein mehr vorhanden
+   */
+  function degradeSingleStone(field){
+    const sel = pickStoneForDegrade(field);
+    if (!sel) return false;
+
+    const stone = sel.stone;
+    if (stone.stageIndex == null || stone.stageIndex < 0) return false;
+
+    stone.stageIndex += 1;
+    // key wird bei Bedarf neu aus der Gruppenliste gewählt
+    stone.key = null;
+
+    // über letzte Stufe hinaus → entfernt
+    if (stone.stageIndex >= STONE_STAGE.length){
+      stone.stageIndex = -1;
+    }
+
+    return true;
+  }
+
+  /**
+   * Mehrere Steine im Feld degradieren (z.B. bei qty > 1).
+   */
+  function degradeFieldByStone(field, qty){
+    let remaining = (qty|0) || 1;
+    if (remaining < 1) remaining = 1;
+
+    while (remaining-- > 0){
+      if (!degradeSingleStone(field)) break;
+    }
+  }
+
+  /**
+   * Reagiert auf cb:prod:output.
+   * Sobald ein Gebäude "stone" ausgibt, wird sein Steinfeld abgebaut.
+   */
+  function onStoneProduced(detail){
+    if (!detail) return;
+    const item = detail.item || detail.resource || detail.resId;
+    if (item !== 'stone') return;
+
+    const uid = detail.bId || detail.buildingUid || detail.uid;
+    if (!uid) return;
+
+    const field = StoneFields.get(uid);
+    if (!field) return;
+
+    const qty = detail.qty || detail.amount || 1;
+    degradeFieldByStone(field, qty);
+  }
+
+  // ========================================================================
   // OVERLAY-REGISTRIERUNG
-  // =========================
+  // ========================================================================
 
   (function registerStoneOverlay(){
     function tryRegister(){
@@ -425,9 +567,9 @@
     }, 200);
   })();
 
-  // =========================
+  // ========================================================================
   // EVENT-BINDING
-  // =========================
+  // ========================================================================
 
   function onBuildComplete(detail){
     try {
@@ -437,8 +579,8 @@
     }
   }
 
-  // Direkter cb:build:complete Listener als Fallback
   try {
+    // Baustellen-Fertigmeldung → Feld registrieren
     window.addEventListener('cb:build:complete', (ev)=>{
       const detail = ev.detail || {};
       try {
@@ -457,27 +599,40 @@
         );
       }
     }, { passive:true });
+
+    // Produktions-Event → Abbau-Stufe aktualisieren
+    window.addEventListener('cb:prod:output', (ev)=>{
+      const detail = ev.detail || {};
+      try {
+        onStoneProduced(detail);
+      } catch(e){
+        (window.CBLog?.warn || console.warn)(
+          TAG,
+          'cb:prod:output-Listener Fehler:',
+          e
+        );
+      }
+    }, { passive:true });
   } catch(e){
     (window.CBLog?.warn || console.warn)(
       TAG,
-      'Direkter cb:build:complete-Listener konnte nicht registriert werden:',
+      'Event-Listener konnten nicht registriert werden:',
       e
     );
   }
 
-  // =========================
-  // STUB-TICK (für spätere Erweiterung)
-  // =========================
+  // ========================================================================
+  // STUB-TICK (für spätere Erweiterungen)
+  // ========================================================================
 
   function tick(dtMs){
-    // Aktuell keine zeitabhängige Logik notwendig.
-    // Platzhalter, falls wir später Stein-Abbau-Animationen ergänzen.
+    // aktuell keine zeitgesteuerte Logik notwendig
     void dtMs;
   }
 
-  // =========================
+  // ========================================================================
   // REGISTRIERUNG BEIM Production-Manager (optional)
-  // =========================
+  // ========================================================================
 
   function registerWithManager(){
     if (!window.Production || typeof window.Production.registerModule !== 'function'){
@@ -504,25 +659,19 @@
     }, 200);
   }
 
-  // =========================
+  // ========================================================================
   // DEBUG-EXPORT
-  // =========================
+  // ========================================================================
 
   window.ProductionStone = {
-    fields      : StoneFields,
+    fields          : StoneFields,
     STONE_ATLAS_CFG,
-    ensureAtlas : ensureStoneAtlasReady,
-    /**
-     * Debug-Helfer:
-     *  - OverlayHooks ruft unsere Zeichenfunktion regulär im Renderloop auf.
-     *  - redraw() existiert nur, damit du im Inspector schnell prüfen kannst,
-     *    ob das Modul geladen ist – beim Aufruf gibt es ein Log.
-     */
-    redraw(){
-      LOG('redraw(): Stone-Overlay wird vom OverlayManager beim nächsten Frame gezeichnet.');
-    }
+    STONE_STAGE,
+    ensureAtlas     : ensureStoneAtlasReady,
+    _degradeOne     : degradeSingleStone,
+    _degradeField   : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.02-stone-quarry-overlay+atlas');
+  LOG('Stein-Modul geladen v25.12.02-stone-overlay+degrade');
 
 })();
