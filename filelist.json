@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-02T11:20:16.610Z",
+  "createdAt": "2025-12-02T14:44:22.520Z",
   "root": ".",
   "count": 525,
   "entries": [
@@ -1279,7 +1279,7 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 17560
+      "size": 19237
     },
     {
       "type": "file",
@@ -1299,7 +1299,7 @@
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 20867
+      "size": 21758
     },
     {
       "type": "file",
@@ -1364,7 +1364,7 @@
     {
       "type": "file",
       "path": "core/overlay-hooks.js",
-      "size": 5434
+      "size": 5427
     },
     {
       "type": "file",
@@ -2523,12 +2523,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51635
+      "size": 51878
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19690
+      "size": 19809
     },
     {
       "type": "file",
