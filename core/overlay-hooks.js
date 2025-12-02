@@ -1,5 +1,5 @@
 /* ============================================================================
- * Datei    : assets/core/overlay-hooks.js
+ * Datei    : core/overlay-hooks.js
  * Projekt  : Neue Siedler
  * Version  : v25.10.25-final
  * Zweck    : Zentrale Overlay-Registry (draw(ctx, cam)) – ohne eigene Loop
