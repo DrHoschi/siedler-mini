@@ -103,28 +103,43 @@
       ev.stopPropagation();
     });
     
-    btnWorkArea?.addEventListener('click', ()=>{
+        btnWorkArea?.addEventListener('click', ()=>{
       if (!current) return;
-      if (!window.ProductionWood || typeof window.ProductionWood.setWorkArea !== 'function'){
-        WARN('ProductionWood.setWorkArea nicht verfügbar.');
-        return;
-      }
 
       const id  = current.id;
       const uid = current.uid || `${id}@${current.x},${current.y}`;
+      const w   = current.w || 3;
+      const h   = current.h || 3;
 
-      const w = current.w || 3;
-      const h = current.h || 3;
-      const cx = current.x + w / 2;
-      const cy = current.y + h / 2;
+      // Primär: Neues WorkArea-Modul nutzen (interaktive Auswahl)
+      if (window.GameWorkArea && typeof window.GameWorkArea.startSelectionForBuilding === 'function'){
+        window.GameWorkArea.startSelectionForBuilding({
+          id,
+          uid,
+          x: current.x | 0,
+          y: current.y | 0,
+          w,
+          h
+        });
+        return;
+      }
 
-      window.ProductionWood.setWorkArea(uid, {
-        cx,
-        cy,
-        radiusTiles: 2.5
-      });
+      // Fallback (falls WorkArea-Modul mal nicht geladen ist)
+      if (id === 'b.lumberjack' &&
+          window.ProductionWood &&
+          typeof window.ProductionWood.setWorkArea === 'function'){
+        const cx = current.x + w / 2;
+        const cy = current.y + h / 2;
+
+        window.ProductionWood.setWorkArea(uid, {
+          cx,
+          cy,
+          radiusTiles: 4.0
+        });
+      } else {
+        WARN('Kein WorkArea-/Holz-Modul verfügbar, Button ohne Wirkung.');
+      }
     });
-  }
 
   // ---------------------------------------------------------------------------
   // Öffnen / Schließen
