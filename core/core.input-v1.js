@@ -309,6 +309,9 @@
     const p = screenToTile(ev.clientX, ev.clientY);
     const b = findBuildingAt(p.tx, p.ty);
 
+      // 🔍 Debug:
+      INFO('pointerdown → tile', p.tx, p.ty, 'building:', b && b.id);
+            
     if (b) {
       const detail = {
         id      : b.id,
@@ -322,6 +325,8 @@
         category: b.category|| ''
       };
 
+      INFO('cb:building:menu-open →', detail);  // 🔍 Debug
+      
       try {
         window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
       } catch (e) {
