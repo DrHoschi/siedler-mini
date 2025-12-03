@@ -1,17 +1,17 @@
 /* ============================================================================
  * Datei   : core/game.production.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.01-core-manager
+ * Version : v25.12.03-core-manager+workarea
  *
  * Zweck   :
  *   Zentrale Produktions-Verwaltung (Manager):
  *     - Hält eine Liste von Produktions-Modulen (wood, fish, stone, …)
- *     - Verteilt Events (z.B. cb:build:complete) an die Module
+ *     - Verteilt Events (z.B. cb:build:complete, cb:workarea:set) an die Module
  *     - Ruft pro Tick alle Module auf
  *     - Stellt eine gemeinsame Ressourcenschreib-API bereit (addResource)
  *
  *   WICHTIG:
- *     - KEINE spezifische Gebäudel ogik hier drin (kein Holzfäller-Code)
+ *     - KEINE spezifische Gebäude-Logik hier drin (kein Holzfäller-Code)
  *     - Das kommt in core/game.production.wood.js usw.
  *
  * Struktur:
@@ -45,7 +45,7 @@
    *     id: 'wood',
    *     tick?: (dtMs) => void,
    *     onBuildComplete?: (detail) => void,
-   *     // optional weitere Hooks in Zukunft
+   *     onWorkAreaSet?: (detail) => void
    *   }
    */
   const MODULES = [];
@@ -95,6 +95,7 @@
    *   - id: string (Pflicht)
    *   - tick?: (dtMs:number) => void
    *   - onBuildComplete?: (detail:object) => void
+   *   - onWorkAreaSet?: (detail:object) => void
    */
   function registerModule(mod){
     if (!mod || !mod.id) {
@@ -125,6 +126,28 @@
   }
 
   /**
+   * Event-Verteiler für cb:workarea:set.
+   * Hier werden ALLE Produktions-Module informert, die onWorkAreaSet haben.
+   *
+   * detail:
+   *   { id, uid, cx, cy, radiusTiles, x, y, w, h }
+   */
+  function handleWorkAreaSet(ev){
+    const d = ev?.detail || {};
+    if (!d) return;
+
+    for (const mod of MODULES){
+      if (typeof mod.onWorkAreaSet === 'function'){
+        try {
+          mod.onWorkAreaSet(d);
+        } catch(e){
+          ERR('Fehler in Modul.onWorkAreaSet:', mod.id, e);
+        }
+      }
+    }
+  }
+
+  /**
    * Zentraler Tick – wird von core/game.tick.js aufgerufen.
    */
   function tick(){
@@ -146,6 +169,9 @@
   // Fertiggestelltes Gebäude → an Produktions-Module verteilen
   window.addEventListener('cb:build:complete', handleBuildComplete, { passive:true });
 
+  // Arbeitsbereich geändert → an Produktions-Module verteilen
+  window.addEventListener('cb:workarea:set', handleWorkAreaSet, { passive:true });
+
   // =========================
   // EXPORT / GLOBAL-API
   // =========================
@@ -159,6 +185,6 @@
     RES_STORE
   };
 
-  LOG('Manager geladen v25.12.01-core-manager');
+  LOG('Manager geladen v25.12.03-core-manager+workarea');
 
 })();
