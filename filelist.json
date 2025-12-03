@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-03T20:59:23.838Z",
+  "createdAt": "2025-12-03T22:12:16.132Z",
   "root": ".",
   "count": 528,
   "entries": [
@@ -1353,7 +1353,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 11476
+      "size": 15989
     },
     {
       "type": "file",
