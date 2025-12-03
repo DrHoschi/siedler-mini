@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.03-workarea-v4 (Selection+Click+Event+FallbackSync)
+ * Version : v25.12.03-workarea-v5 (Selection+Click+Event+FallbackSync)
  *
  * Zweck   :
  *   - Zentrales Arbeitsbereichs-Modul für Produktionsgebäude
@@ -24,7 +24,8 @@
  *  API:
  *    - window.GameWorkArea = {
  *        areas: Map<uid, WorkArea>,
- *        startSelectionForBuilding(cfg),
+ *        ensureDefaultForBuilding(detail),
+ *        startSelectionForBuilding(detail),
  *        applySelectionTile(tx,ty),
  *        isSelecting()
  *      }
@@ -53,12 +54,17 @@
   // KONFIG / SUPPORT
   // -------------------------------------------------------------------------
 
+  /** Unterstützte Gebäude-Typen für Arbeitsbereiche */
   const SUPPORTED_IDS = new Set([
     'b.lumberjack',
     'b.quarry',
     'b.fisher'
   ]);
 
+  /**
+   * Baut die Building-Config aus Registry / GameRegistry.
+   * Erwartet ein Objekt mit u. a. workArea: { radiusTiles, ... }.
+   */
   function getBuildingConfig(id){
     try{
       const all = window.GameRegistry?.buildings || window.Registry?.buildings;
@@ -70,6 +76,9 @@
     }
   }
 
+  /**
+   * Fallback-Radius, falls in der Registry nichts definiert ist.
+   */
   function getDefaultRadius(id){
     switch(id){
       case 'b.lumberjack': return 5.0;
@@ -79,6 +88,7 @@
     }
   }
 
+  /** Hilfsfunktion: Zahl mit Fallback konvertieren */
   function toNumber(v, fallback){
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
@@ -90,7 +100,11 @@
 
   /** Map: uid → WorkArea */
   const areas = new Map();
+
+  /** UID des aktuell im Selektionsmodus befindlichen Bereichs */
   let currentSelectionUid = null;
+
+  /** Flag: Ist gerade der Arbeitsbereich-Auswahlmodus aktiv? */
   let selectionActive     = false;
 
   // -------------------------------------------------------------------------
@@ -135,6 +149,11 @@
    * ensureAreaForBuilding(detail)
    *  - detail: { id, uid?, x,y,w,h, workArea? }
    *  - sorgt dafür, dass zu einem Gebäude genau ein WorkArea-Eintrag existiert
+   *  - wird von:
+   *      - ensureDefaultForBuilding()
+   *      - syncAreasFromGameBuildings()
+   *      - cb:build:complete Listener
+   *    benutzt.
    */
   function ensureAreaForBuilding(detail){
     if (!detail) return null;
@@ -142,29 +161,40 @@
     const id   = detail.id || detail.buildingId || detail.type || detail.kind;
     if (!id){ return null; }
 
+    // Nur unsere Produktionsgebäude – alles andere ignorieren
     if (!SUPPORTED_IDS.has(id)){
-      // Andere Gebäude ignorieren wir bewusst
       return null;
     }
 
+    // Gebäudekoordinaten aus detail
     const x  = (detail.x | 0);
     const y  = (detail.y | 0);
     const w  = (detail.w | 0) || 1;
     const h  = (detail.h | 0) || 1;
 
-    // UID – möglichst stabil
+    // UID – möglichst stabil (überall gleiche Bildung)
     const uid =
       detail.uid ||
       detail.instanceId ||
       detail.buildingUid ||
       (id + ':' + x + ',' + y);
 
+    // WorkArea-Konfiguration aus:
+    //  - detail.workArea
+    //  - Registry-Eintrag
+    //  - Default
     const cfg = detail.workArea || getBuildingConfig(id)?.workArea || {};
+
+    // WICHTIG:
+    //  - bevorzugt cfg.radiusTiles (unser aktueller Standard)
+    //  - fällt zurück auf cfg.radius (ältere Versionen)
+    //  - sonst getDefaultRadius(id)
     const radiusTiles = toNumber(
-  (cfg.radiusTiles ?? cfg.radius),
-  getDefaultRadius(id)
-);
-    
+      (cfg.radiusTiles ?? cfg.radius),
+      getDefaultRadius(id)
+    );
+
+    // Zentrum des Gebäudes in Tile-Koordinaten
     const cx = x + (w / 2);
     const cy = y + (h / 2);
 
@@ -196,6 +226,28 @@
   }
 
   /**
+   * ensureDefaultForBuilding(detail)
+   *  - Öffentliche API, die vom Gebäude-Menü benutzt wird.
+   *  - Stellt sicher, dass für dieses Gebäude ein Arbeitsbereich vorhanden ist.
+   *  - Markiert den Bereich NICHT automatisch als selected (das macht erst
+   *    startSelectionForBuilding).
+   */
+  function ensureDefaultForBuilding(detail){
+    const area = ensureAreaForBuilding(detail);
+    if (!area) return null;
+
+    LOG('Default-Arbeitsbereich sichergestellt', {
+      id : area.id,
+      uid: area.uid,
+      cx : area.cx,
+      cy : area.cy,
+      r  : area.radiusTiles
+    });
+
+    return area;
+  }
+
+  /**
    * syncAreasFromGameBuildings()
    * Fallback-Sync:
    *  - Läuft beim Zeichnen und sorgt dafür, dass für alle fertigen
@@ -210,7 +262,6 @@
     for (const b of Game.buildings){
       if (!b) continue;
 
-      // Nur unterstützte Produktionsgebäude
       const id = b.id || b.type || b.kind;
       if (!id || !SUPPORTED_IDS.has(id)) continue;
 
@@ -220,7 +271,7 @@
 
       const detail = {
         id,
-        uid: b.uid || b.instanceId || (id + ':' + (b.x|0) + ',' + (b.y|0)),
+        uid: b.uid || b.instanceId || (id + ':' + ((b.x|0)) + ',' + ((b.y|0))),
         x  : b.x | 0,
         y  : b.y | 0,
         w  : b.w || 1,
@@ -235,6 +286,15 @@
   // Hilfsfunktionen für Selektion / Klick
   // -------------------------------------------------------------------------
 
+  /**
+   * startSelectionForBuilding(detail)
+   *  - wird vom Gebäude-Menü aufgerufen, wenn der User auf den
+   *    „Arbeitsbereich“-Button klickt.
+   *  - sorgt dafür, dass:
+   *      - ein WorkArea existiert (Default)
+   *      - dieser Bereich als selected markiert wird
+   *      - der Selection-Modus aktiv ist
+   */
   function startSelectionForBuilding(detail){
     const area = ensureAreaForBuilding(detail);
     if (!area){
@@ -259,12 +319,21 @@
     });
   }
 
+  /**
+   * applySelectionTile(tx, ty)
+   *  - wird vom Input-System aufgerufen, wenn im Selection-Modus auf
+   *    eine Tile-Position geklickt wird.
+   *  - verschiebt NUR das Zentrum (cx,cy), Radius bleibt gleich.
+   *  - sendet cb:workarea:set mit einem Payload, der exakt zum
+   *    Production-Manager + Wood/Stone-Modulen passt:
+   *
+   *    { id, uid, cx, cy, radiusTiles, x, y, w, h }
+   */
   function applySelectionTile(tx, ty){
     if (!selectionActive || currentSelectionUid == null) return;
     const area = areas.get(currentSelectionUid);
     if (!area) return;
 
-    const TILE = getTileSize();
     const dx   = (tx + 0.5) - area.cx;
     const dy   = (ty + 0.5) - area.cy;
     const dist = Math.sqrt(dx*dx + dy*dy);
@@ -282,22 +351,29 @@
       dist
     });
 
+    // WICHTIG:
+    //  - Feldnamen cx/cy/radiusTiles passen exakt zu:
+    //      - ProductionManager.handleWorkAreaSet()
+    //      - ProductionWood.onWorkAreaSet()
+    //      - ProductionStone.onWorkAreaSet()
+    //  - x,y,w,h werden mitgegeben, damit Module notfalls noch
+    //    auf Gebäudekoordinaten zurückgreifen können.
     window.dispatchEvent(new CustomEvent('cb:workarea:set', {
-  detail: {
-    id          : area.id,
-    uid         : area.uid,
-    cx          : area.cx,          // statt cxTile
-    cy          : area.cy,          // statt cyTile
-    radiusTiles : area.radiusTiles, // statt radius
-    // optional, aber sinnvoll:
-    x           : area.x,
-    y           : area.y,
-    w           : area.w,
-    h           : area.h
-  }
-}));
+      detail: {
+        id          : area.id,
+        uid         : area.uid,
+        cx          : area.cx,
+        cy          : area.cy,
+        radiusTiles : area.radiusTiles,
+        x           : area.x,
+        y           : area.y,
+        w           : area.w,
+        h           : area.h
+      }
+    }));
   }
 
+  /** Einfacher Getter für das Input-System (renderer/input): */
   function isSelecting(){
     return selectionActive;
   }
@@ -306,6 +382,13 @@
   // Zeichnen des Overlays (Kreise)
   // -------------------------------------------------------------------------
 
+  /**
+   * drawAreas(ctx, cam)
+   *  - zeichnet alle Arbeitsbereiche als Kreise in den SCREEN-Space.
+   *  - erwartet einen Canvas-Kontext ohne aktive Welt-Transform:
+   *      → GameRenderer setzt vorher setTransform(1,0,0,1,0,0)
+   *  - cam: { x, y, zoom } im Welt-Space
+   */
   function drawAreas(ctx, cam){
     if (!ctx) return;
 
@@ -320,8 +403,7 @@
     const camY = toNumber(camState.y,    0);
     const zoom = toNumber(camState.zoom, 1);
 
-    const TILE   = getTileSize();
-    const baseR  = TILE * 0.5;
+    const TILE = getTileSize();
 
     ctx.save();
 
@@ -394,16 +476,50 @@
   }
 
   // -------------------------------------------------------------------------
+  // EVENT-BINDINGS (für cb:build:complete)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Fallback/Komfort:
+   *  - Sobald ein Produktionsgebäude fertig gebaut ist, legen wir
+   *    automatisch einen Default-Arbeitsbereich an.
+   *  - Das UI (Gebäude-Menü) kann dann später noch in den Selection-
+   *    Modus schalten und den Bereich verschieben.
+   */
+  try{
+    window.addEventListener('cb:build:complete', (ev)=>{
+      const d = ev?.detail || {};
+      const b = d.building || d;
+      if (!b) return;
+
+      const id = b.id || b.buildingId || b.type || b.kind;
+      if (!id || !SUPPORTED_IDS.has(id)) return;
+
+      ensureDefaultForBuilding({
+        id,
+        uid: b.uid || b.instanceId || b.buildingUid || (id + ':' + ((b.x|0)) + ',' + ((b.y|0))),
+        x  : b.x | 0,
+        y  : b.y | 0,
+        w  : b.w || 1,
+        h  : b.h || 1
+      });
+    }, { passive:true });
+  } catch(e){
+    WARN('cb:build:complete-Listener konnte nicht registriert werden:', e);
+  }
+
+  // -------------------------------------------------------------------------
   // GLOBAL API
   // -------------------------------------------------------------------------
 
   window.GameWorkArea = {
     areas,
+    ensureDefaultForBuilding,
     startSelectionForBuilding,
     applySelectionTile,
     isSelecting
   };
 
-  LOG('Modul geladen v25.12.03-workarea-v4 (Selection+Click+Event+FallbackSync)');
+  LOG('Modul geladen v25.12.03-workarea-v5 (Selection+Click+Event+FallbackSync)');
 
 })();
