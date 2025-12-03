@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.11.18-FINAL (Ghost mit Gebäude-Sprite + Zoom-Skalierung)
+ * Version : v25.12.03-workarea-integrated (Ghost+Sprite+ZoomScaling+WorkArea-Click)
  * Zweck   : Eingabe + Platzier-Ghost + OK/Cancel direkt am Ghost
  *
  * Lauscht : cb:set-build-tool(kind)
@@ -17,6 +17,7 @@
  *  ✔ OK/Cancel-Buttons skalieren mit Zoom mit
  *  ✔ Tint bleibt wie bisher (rot/grün)
  *  ✔ Voll kompatibel zu Kamera-Blockierung (__SIEDLER_PLACE_ACTIVE)
+ *  ✔ NEU: Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
  * ========================================================================== */
 (() => {
   'use strict';
@@ -221,7 +222,7 @@
 
   function canPlaceAt(){ return true; }
 
-    // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Gebäude an einer Tile-Position finden
   // -------------------------------------------------------------------------
   function findBuildingAt(tx, ty){
@@ -244,7 +245,7 @@
     }
     return null;
   }
-  
+
   // ==========================================================================
   //  RESET / PLACE
   // ==========================================================================
@@ -263,20 +264,43 @@
   }
 
   function placeAt(tx,ty,w=lastSize.w,h=lastSize.h){
-  const detail = {
-    // WICHTIG: alter Tag, den dein Game-Listener akzeptiert
-    __src: 'input-v25.11.14',
-    buildingId: buildTool,
-    x: tx|0,
-    y: ty|0,
-    w: w|0,
-    h: h|0
-  };
-  OK('cb:build:place', detail);
-  window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
-  hideOverlay();
-  resetTool();
-}
+    const detail = {
+      // WICHTIG: alter Tag, den dein Game-Listener akzeptiert
+      __src: 'input-v25.11.14',
+      buildingId: buildTool,
+      x: tx|0,
+      y: ty|0,
+      w: w|0,
+      h: h|0
+    };
+    OK('cb:build:place', detail);
+    window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
+    hideOverlay();
+    resetTool();
+  }
+
+  // ==========================================================================
+  //  WORKAREA-UNTERSTÜTZUNG
+  //  - Klick auf Karte kann Arbeitsbereich-Mittelpunkt verschieben
+  //  - Hat Vorrang vor Gebäude-Auswahl und Platziermodus
+  // ==========================================================================
+
+  function handleWorkAreaClick(p, ev){
+    try{
+      const gw = window.GameWorkArea;
+      if (!gw) return false;
+      if (typeof gw.isSelecting !== 'function' || !gw.isSelecting()) return false;
+      if (typeof gw.applySelectionTile === 'function'){
+        gw.applySelectionTile(p.tx, p.ty);
+        INFO('WorkArea-Klick angewendet auf', p.tx, p.ty);
+      }
+      ev?.preventDefault?.();
+      return true;
+    } catch(e){
+      WARN('handleWorkAreaClick Fehler', e);
+      return false;
+    }
+  }
 
   // ==========================================================================
   //  POINTER HANDLING
@@ -302,59 +326,66 @@
       }));
     },{passive:true});
 
-          canvas.addEventListener('pointerdown', (ev)=>{
-    if (ev.button != null && ev.button !== 0) return;
+    canvas.addEventListener('pointerdown', (ev)=>{
+      if (ev.button != null && ev.button !== 0) return;
 
-    // Immer zuerst prüfen, ob auf ein bestehendes Gebäude geklickt wurde
-    const p = screenToTile(ev.clientX, ev.clientY);
-    const b = findBuildingAt(p.tx, p.ty);
+      // ZUERST: Prüfen, ob gerade ein Arbeitsbereich gesetzt werden soll
+      const p = screenToTile(ev.clientX, ev.clientY);
+
+      if (handleWorkAreaClick(p, ev)) {
+        // Klick wurde zum Verschieben des Arbeitsbereichs benutzt
+        return;
+      }
+
+      // Danach: prüfen, ob auf ein bestehendes Gebäude geklickt wurde
+      const b = findBuildingAt(p.tx, p.ty);
 
       // 🔍 Debug:
       INFO('pointerdown → tile', p.tx, p.ty, 'building:', b && b.id);
-            
-    if (b) {
-      const detail = {
-        id      : b.id,
-        uid     : b.uid || null,
-        x       : b.x | 0,
-        y       : b.y | 0,
-        w       : (b.w | 0) || 1,
-        h       : (b.h | 0) || 1,
-        status  : b.status  || '',
-        label   : b.label   || '',
-        category: b.category|| ''
-      };
 
-      INFO('cb:building:menu-open →', detail);  // 🔍 Debug
-      
-      try {
-        window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
-      } catch (e) {
-        console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
+      if (b) {
+        const detail = {
+          id      : b.id,
+          uid     : b.uid || null,
+          x       : b.x | 0,
+          y       : b.y | 0,
+          w       : (b.w | 0) || 1,
+          h       : (b.h | 0) || 1,
+          status  : b.status  || '',
+          label   : b.label   || '',
+          category: b.category|| ''
+        };
+
+        INFO('cb:building:menu-open →', detail);  // 🔍 Debug
+
+        try {
+          window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
+        } catch (e) {
+          console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
+        }
+
+        // Klick wurde für das Gebäude-Menü verwendet → Platzier-Logik NICHT ausführen
+        ev.preventDefault?.();
+        return;
       }
 
-      // Klick wurde für das Gebäude-Menü verwendet → Platzier-Logik NICHT ausführen
+      // ----------------------------------------------------
+      // Kein Gebäude getroffen → ggf. Platziermodus bedienen
+      // ----------------------------------------------------
+      if (!buildTool) {
+        // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
+        return;
+      }
+
+      // Platziermodus aktiv → Position merken (Ghost bleibt über ✓-Button steuerbar)
+      if (!hoverValid) {
+        lastHover = p;
+        hoverValid = true;
+      }
+
+      // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
       ev.preventDefault?.();
-      return;
-    }
-
-    // ----------------------------------------------------
-    // Kein Gebäude getroffen → ggf. Platziermodus bedienen
-    // ----------------------------------------------------
-    if (!buildTool) {
-      // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
-      return;
-    }
-
-    // Platziermodus aktiv → Position merken (Ghost bleibt über ✓-Button steuerbar)
-    if (!hoverValid) {
-      lastHover = p;
-      hoverValid = true;
-    }
-
-    // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
-    ev.preventDefault?.();
-  }, { passive:false });
+    }, { passive:false });
 
     canvas.addEventListener('contextmenu', ev=>{
       if (buildTool){
@@ -429,7 +460,7 @@
     bindPointer();
 
     window.__SIEDLER_PLACE_ACTIVE=false;
-    OK('bereit v25.11.18-FINAL (Ghost+Sprite+ZoomScaling)');
+    OK('bereit v25.12.03-workarea-integrated (Ghost+Sprite+ZoomScaling+WorkArea)');
   }
 
   if (document.readyState==='loading'){
