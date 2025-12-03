@@ -280,14 +280,19 @@
     });
 
     window.dispatchEvent(new CustomEvent('cb:workarea:set', {
-      detail: {
-        id    : area.id,
-        uid   : area.uid,
-        cxTile: area.cx,
-        cyTile: area.cy,
-        radius: area.radiusTiles
-      }
-    }));
+  detail: {
+    id          : area.id,
+    uid         : area.uid,
+    cx          : area.cx,          // statt cxTile
+    cy          : area.cy,          // statt cyTile
+    radiusTiles : area.radiusTiles, // statt radius
+    // optional, aber sinnvoll:
+    x           : area.x,
+    y           : area.y,
+    w           : area.w,
+    h           : area.h
+  }
+}));
   }
 
   function isSelecting(){
