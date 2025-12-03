@@ -358,18 +358,20 @@
     //      - ProductionStone.onWorkAreaSet()
     //  - x,y,w,h werden mitgegeben, damit Module notfalls noch
     //    auf Gebäudekoordinaten zurückgreifen können.
+        // *** WICHTIG: Payload an Production-Manager angleichen ***
     window.dispatchEvent(new CustomEvent('cb:workarea:set', {
       detail: {
         id          : area.id,
         uid         : area.uid,
-        cx          : area.cx,
-        cy          : area.cy,
-        radiusTiles : area.radiusTiles,
+        cx          : area.cx,          // vorher: cxTile
+        cy          : area.cy,          // vorher: cyTile
+        radiusTiles : area.radiusTiles, // vorher: radius
+        // optional, aber nice to have:
         x           : area.x,
         y           : area.y,
         w           : area.w,
         h           : area.h
-      }
+     }
     }));
   }
 
