@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-stone-overlay+degrade
+ * Version : v25.12.03-stone-overlay+degrade+workarea
  *
  * Zweck   :
  *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
@@ -20,6 +20,8 @@
  *         → Steinbruch registrieren + zufälliges Steinfeld anlegen
  *     - cb:prod:output { bId, kind, item:'stone', qty }
  *         → pro qty einen Fels im Feld degradieren
+ *     - cb:workarea:set { id, uid, cx, cy, radiusTiles, x,y,w,h }
+ *         → Arbeitsbereich merken (für spätere Logik)
  *
  *   OUT :
  *     - keine (nur visuelle Darstellung)
@@ -119,6 +121,7 @@
    *   {
    *     uid, kind, x,y,w,h,
    *     cx, cy,           // Gebäudecenter (Tiles)
+   *     workArea?: { cx, cy, radiusTiles },
    *     stones: [
    *       {
    *         tx, ty,       // Position in Tiles
@@ -330,6 +333,7 @@
       x, y, w, h,
       cx : cxTiles,
       cy : cyTiles,
+      workArea : null,
       stones : []
     };
 
@@ -622,6 +626,48 @@
   }
 
   // ========================================================================
+  // WORKAREA-HOOK: cb:workarea:set
+  // ========================================================================
+
+  /**
+   * Wird vom Production-Manager bei cb:workarea:set aufgerufen.
+   *
+   * detail:
+   *   { id, uid, cx, cy, radiusTiles, x, y, w, h }
+   *
+   * Aktuell wird der Arbeitsbereich nur im State gespeichert, damit
+   * der Steinmetz später daran seine Abbau-Logik ausrichten kann.
+   */
+  function onWorkAreaSet(detail){
+    if (!detail) return;
+    const kind = (detail.id || '').toLowerCase();
+    if (!isStoneBuildingId(kind)) return;
+
+    const x   = detail.x | 0;
+    const y   = detail.y | 0;
+    const uid = detail.uid || `${kind}@${x},${y}`;
+
+    const field = StoneFields.get(uid);
+    if (!field){
+      // Falls noch kein Feld existiert, ignorieren wir es einfach –
+      // der nächste cb:build:complete legt das Feld an.
+      return;
+    }
+
+    const radius = (typeof detail.radiusTiles === 'number')
+      ? detail.radiusTiles
+      : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
+
+    field.workArea = {
+      cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
+      cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
+      radiusTiles: radius
+    };
+
+    LOG('WorkArea für Stein-Feld aktualisiert', uid, field.workArea);
+  }
+
+  // ========================================================================
   // STUB-TICK (für spätere Erweiterungen)
   // ========================================================================
 
@@ -642,6 +688,7 @@
       window.Production.registerModule({
         id             : 'stone',
         onBuildComplete,
+        onWorkAreaSet,
         tick
       });
       LOG('Produktionsmodul "stone" registriert.');
@@ -672,6 +719,6 @@
     _degradeField   : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.02-stone-overlay+degrade');
+  LOG('Stein-Modul geladen v25.12.03-stone-overlay+degrade+workarea');
 
 })();
