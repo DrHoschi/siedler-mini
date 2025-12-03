@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-02T22:29:49.042Z",
+  "createdAt": "2025-12-03T14:56:27.990Z",
   "root": ".",
-  "count": 534,
+  "count": 528,
   "entries": [
     {
       "type": "dir",
@@ -1258,7 +1258,7 @@
     {
       "type": "file",
       "path": "core/core.input-v1.js",
-      "size": 13246
+      "size": 14463
     },
     {
       "type": "file",
@@ -1323,17 +1323,17 @@
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 4616
+      "size": 5374
     },
     {
       "type": "file",
       "path": "core/game.production.stone.js",
-      "size": 20078
+      "size": 21696
     },
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 15872
+      "size": 16576
     },
     {
       "type": "file",
@@ -1353,7 +1353,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 10052
+      "size": 12266
     },
     {
       "type": "file",
@@ -2436,36 +2436,6 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-build-testen.js",
-      "size": 12979
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-build-v0.js",
-      "size": 1830
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-build-v1.js",
-      "size": 11518
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-build-v2.js",
-      "size": 13437
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-build-v4.js",
-      "size": 11264
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-build-v5.js",
-      "size": 13939
-    },
-    {
-      "type": "file",
       "path": "ui/ui-build-v6.js",
       "size": 14379
     },
@@ -2567,12 +2537,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52776
+      "size": 52777
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20161
+      "size": 20162
     },
     {
       "type": "file",
