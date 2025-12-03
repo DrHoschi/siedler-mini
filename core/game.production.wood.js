@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-wood-lumberjack-workarea+treesatlas-clean
+ * Version : v25.12.03-wood-lumberjack-workarea-integrated
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -10,12 +10,13 @@
  *     - Zyklus:
  *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
  *     - Erzeugt Holz über Production.addResource('wood', ...)
- *     - Zeichnet Bäume als Overlay (Arbeitskreis kommt aus WorkArea-Modul)
+ *     - Zeichnet Bäume als Overlay (Arbeitskreis selbst kommt aus WorkArea-Modul)
  *     - Nutzt optional den neuen trees_mega_atlas (padded) als Grafikquelle
  *
  * Ereignisse:
  *   IN  :
  *     - cb:build:complete { id, uid?, x,y,w,h, ... }
+ *     - cb:workarea:set   { id, uid, cx,cy,radiusTiles, x,y,w,h }
  *
  *   OUT :
  *     - cb:prod:start  { bId, kind }
@@ -23,7 +24,7 @@
  *
  *   API / Debug:
  *     - window.ProductionWood.setWorkArea(uid, {cx,cy,radiusTiles})
- *       → Arbeitskreis verschieben / Radius ändern
+ *       → Arbeitskreis synchronisieren (z.B. aus WorkArea-Modul)
  * ========================================================================== */
 
 (function(){
@@ -134,8 +135,8 @@
       cycle    : 0,
       treeProg : 0,
 
-      // Standard-Arbeitsbereich: ~5×5 Tiles als Kreis (wird aktuell nur gelesen,
-      // der sichtbare Kreis kommt aus dem WorkArea-Modul)
+      // Standard-Arbeitsbereich: Kreis um das Gebäude-Zentrum.
+      // Wird durch cb:workarea:set überschrieben.
       workArea : {
         cx         : centerX,
         cy         : centerY,
@@ -360,15 +361,17 @@
       const bw = lj.w || 3;
       const bh = lj.h || 3;
 
-      const cxTree = (bx + bw / 2) * ts;
-      const cyTree = (by + bh) * ts;
+      // -----------------------------
+      // Position für den Baum:
+      // → Standard: Gebäudemitte unten
+      // → wenn WorkArea gesetzt: Mitte des Arbeitsbereichs
+      // -----------------------------
+      const area    = lj.workArea || {};
+      const cxTiles = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
+      const cyTiles = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
 
-      const area        = lj.workArea || {};
-      const cxTiles     = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
-      const cyTiles     = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
-      // radiusTiles wird hier nicht mehr gezeichnet, Kreis kommt aus WorkArea-Modul
-      void cxTiles;
-      void cyTiles;
+      const cxTree  = cxTiles * ts;
+      const cyTree  = cyTiles * ts;
 
       // 1) Baum – Atlas oder Fallback
       let treeDrawn = false;
@@ -510,7 +513,7 @@
   }
 
   // =========================
-  // Arbeitsbereich-API (für UI-Menü)
+  // Arbeitsbereich-API (für UI / WorkArea-Modul)
   // =========================
 
   function setWorkArea(uid, cfg){
@@ -531,6 +534,28 @@
     LOG('Arbeitsbereich aktualisiert', uid, lj.workArea);
   }
 
+  /**
+   * Hook für Production-Manager:
+   * Wird von core/game.production.js bei cb:workarea:set aufgerufen.
+   *
+   * detail:
+   *   { id, uid, cx, cy, radiusTiles, x, y, w, h }
+   */
+  function onWorkAreaSet(detail){
+    if (!detail) return;
+    if (detail.id !== LUMBERJACK_ID) return;
+
+    const x   = detail.x | 0;
+    const y   = detail.y | 0;
+    const uid = detail.uid || `${LUMBERJACK_ID}@${x},${y}`;
+
+    setWorkArea(uid, {
+      cx         : detail.cx,
+      cy         : detail.cy,
+      radiusTiles: detail.radiusTiles
+    });
+  }
+
   // =========================
   // REGISTRIERUNG BEIM Production-Manager
   // =========================
@@ -543,6 +568,7 @@
       window.Production.registerModule({
         id             : 'wood',
         onBuildComplete,
+        onWorkAreaSet,
         tick
       });
       LOG('Produktionsmodul "wood" registriert.');
@@ -575,6 +601,6 @@
     _drawTreeFrame        : drawTreeFrame
   };
 
-  LOG('Holz-Modul geladen v25.12.02-wood-lumberjack-workarea+treesatlas-clean');
+  LOG('Holz-Modul geladen v25.12.03-wood-lumberjack-workarea-integrated');
 
 })();
