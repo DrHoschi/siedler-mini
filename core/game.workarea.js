@@ -315,39 +315,52 @@
    * ctx : 2D-Context des "game"-Canvas (von OverlayHooks)
    * cam : {x,y,zoom} SCREEN-Kamera (Pixel) – kommt aus OverlayHooks.draw
    */
+    /**
+   * Zeichnet alle Arbeitsbereiche auf das Overlay-Canvas.
+   * ctx : 2D-Context des "game"-Canvas (von OverlayHooks)
+   * cam : {x,y,zoom} SCREEN-Kamera (Pixel) – kommt aus OverlayHooks.draw
+   */
   function drawAreas(ctx, cam){
+    // Nichts zu tun, wenn kein Context oder keine Bereiche
     if (!ctx || !areas.size) return;
 
+    // Kamera-State übernehmen (entweder übergeben oder aus GameCamera lesen)
     const camState = cam || getCameraState();
     const camX = toNumber(camState.x,    0);
     const camY = toNumber(camState.y,    0);
     const zoom = toNumber(camState.zoom, 1);
 
-    const ts = getTileSize();
+    const ts = getTileSize(); // Tilegröße in Pixel
 
     ctx.save();
 
     for (const area of areas.values()){
-      const wx = area.cx * ts; // Welt-Pixel X
-      const wy = area.cy * ts; // Welt-Pixel Y
-      const sx = (wx - camX) * zoom; // Screen-Pixel X
-      const sy = (wy - camY) * zoom; // Screen-Pixel Y
+      // Weltkoordinaten (Tile-Mittelpunkt → Welt-Pixel)
+      const wx = area.cx * ts;
+      const wy = area.cy * ts;
+
+      // Screen-Koordinaten via Kamera-Offset + Zoom
+      const sx = (wx - camX) * zoom;
+      const sy = (wy - camY) * zoom;
+
+      // Radius in Pixeln (Tiles → Welt → Screen)
       const r  = area.radiusTiles * ts * zoom;
 
       // Außenkreis
       ctx.beginPath();
       ctx.arc(sx, sy, r, 0, Math.PI * 2);
 
-      // Füllung leicht transparent
-      ctx.fillStyle   = area.selected
+      // Füllung leicht transparent (heller, wenn selektiert)
+      ctx.fillStyle = area.selected
         ? 'rgba(0, 180, 255, 0.15)'
         : 'rgba(0, 120, 255, 0.10)';
 
+      // Rand etwas kräftiger
       ctx.strokeStyle = area.selected
         ? 'rgba(0, 200, 255, 0.85)'
         : 'rgba(0, 120, 255, 0.60)';
 
-      ctx.lineWidth   = 2 * zoom;
+      ctx.lineWidth = 2 * zoom;
       ctx.fill();
       ctx.stroke();
 
