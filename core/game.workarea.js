@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-workarea-v2
+ * Version : v25.12.03-workarea-v3 (Selection+Click+Event)
  *
  * Zweck   :
  *   - Zentrales Arbeitsbereichs-Modul für Produktionsgebäude
@@ -24,7 +24,9 @@
  *  API:
  *    - window.GameWorkArea = {
  *        areas: Map<uid, WorkArea>,
- *        startSelectionForBuilding(cfg)
+ *        startSelectionForBuilding(cfg),
+ *        applySelectionTile(tx,ty),
+ *        isSelecting()
  *      }
  *
  *  WorkArea-Objekt:
@@ -80,6 +82,7 @@
   /** Map: uid → WorkArea */
   const areas = new Map();
   let currentSelectionUid = null;
+  let selectionActive     = false;
 
   // ---------------------------------------------------------------------------
   // Hilfen: TileSize + Kamera
@@ -175,6 +178,80 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Hilfsfunktionen für Selektion / Klick
+  // ---------------------------------------------------------------------------
+
+  function clampCenterToMaxDistance(area){
+    if (!area) return;
+
+    const gx = area.x + area.w / 2; // Gebäudemitte X (Tiles)
+    const gy = area.y + area.h / 2; // Gebäudemitte Y (Tiles)
+
+    const dx = area.cx - gx;
+    const dy = area.cy - gy;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 0;
+
+    // Maximalabstand: Außenkreis soll das 3×3-Gebäude "berühren",
+    // darf aber nicht weiter weg driften. Heuristik:
+    const halfSize = Math.max(area.w, area.h) / 2; // bei 3×3 -> 1.5
+    const maxDist  = area.radiusTiles + halfSize;
+
+    if (dist > maxDist && dist > 0){
+      const f = maxDist / dist;
+      area.cx = gx + dx * f;
+      area.cy = gy + dy * f;
+    }
+  }
+
+  function applySelectionTile(tx, ty){
+    if (!selectionActive || !currentSelectionUid) return;
+    const area = areas.get(currentSelectionUid);
+    if (!area) return;
+
+    // Mittelpunkt auf Tile-Zentrum setzen
+    area.cx = (tx|0) + 0.5;
+    area.cy = (ty|0) + 0.5;
+
+    // Begrenzung, damit der Kreis nicht "zu weit weg" liegt
+    clampCenterToMaxDistance(area);
+
+    LOG('Arbeitsbereich verschoben', {
+      id : area.id,
+      uid: area.uid,
+      cx : area.cx,
+      cy : area.cy,
+      r  : area.radiusTiles
+    });
+
+    // Auswahl beenden (ein Klick reicht fürs Setzen)
+    selectionActive     = false;
+    currentSelectionUid = null;
+
+    // Event nach außen schicken, damit Produktions-Module reagieren können
+    try{
+      window.dispatchEvent(new CustomEvent('cb:workarea:set', {
+        detail: {
+          id          : area.id,
+          uid         : area.uid,
+          cx          : area.cx,
+          cy          : area.cy,
+          radiusTiles : area.radiusTiles,
+          x           : area.x,
+          y           : area.y,
+          w           : area.w,
+          h           : area.h
+        }
+      }));
+    } catch(e){
+      WARN('cb:workarea:set dispatch fehlgeschlagen', e);
+    }
+  }
+
+  function isSelecting(){
+    return !!selectionActive && !!currentSelectionUid;
+  }
+
+  // ---------------------------------------------------------------------------
   // Ereignisse
   // ---------------------------------------------------------------------------
 
@@ -213,24 +290,20 @@
     }
 
     currentSelectionUid = area.uid;
+    selectionActive     = true;
 
     // Markiere nur diesen Bereich als "selected"
     for (const a of areas.values()){
       a.selected = (a.uid === currentSelectionUid);
     }
 
-    LOG('Arbeitsbereich selektiert', {
+    LOG('Arbeitsbereich selektiert (Selection-Modus aktiv)', {
       id : area.id,
       uid: area.uid,
       cx : area.cx,
       cy : area.cy,
       r  : area.radiusTiles
     });
-
-    // HINWEIS:
-    // In dieser v2 wird die Position nur markiert, NICHT verschoben.
-    // Die Interaktion (Klick auf Karte → Mittelpunkt verschieben)
-    // binden wir in einem weiteren Schritt an core.core.input-v1.js an.
   }
 
   // ---------------------------------------------------------------------------
@@ -327,9 +400,11 @@
 
   window.GameWorkArea = {
     areas,
-    startSelectionForBuilding
+    startSelectionForBuilding,
+    applySelectionTile,
+    isSelecting
   };
 
-  LOG('Modul geladen v25.12.02-workarea-v2');
+  LOG('Modul geladen v25.12.03-workarea-v3 (Selection+Click+Event)');
 
 })();
