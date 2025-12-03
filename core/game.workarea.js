@@ -160,8 +160,11 @@
       (id + ':' + x + ',' + y);
 
     const cfg = detail.workArea || getBuildingConfig(id)?.workArea || {};
-    const radiusTiles = toNumber(cfg.radius, getDefaultRadius(id));
-
+    const radiusTiles = toNumber(
+  (cfg.radiusTiles ?? cfg.radius),
+  getDefaultRadius(id)
+);
+    
     const cx = x + (w / 2);
     const cy = y + (h / 2);
 
