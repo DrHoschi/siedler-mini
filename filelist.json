@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-04T09:39:10.569Z",
+  "createdAt": "2025-12-04T13:31:13.730Z",
   "root": ".",
   "count": 528,
   "entries": [
@@ -1338,7 +1338,7 @@
     {
       "type": "file",
       "path": "core/game.renderer.js",
-      "size": 6573
+      "size": 8936
     },
     {
       "type": "file",
@@ -2243,7 +2243,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-layer.patch.css",
-      "size": 754
+      "size": 1377
     },
     {
       "type": "file",
@@ -2283,7 +2283,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 12371
+      "size": 12462
     },
     {
       "type": "dir",
@@ -2557,7 +2557,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16191
+      "size": 16424
     },
     {
       "type": "file",
