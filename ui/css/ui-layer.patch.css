@@ -23,24 +23,64 @@
   background: transparent; /* keine „unsichtbare Wand“ */
 }
 
-/* =====================================================================================
-   CANVAS-LAYER STACK – alle Spiel-Layer exakt übereinander legen
-   ===================================================================================== */
+/* ============================================================================
+ * Datei   : ui/css/ui-layer.patch.css
+ * Projekt : Neue Siedler – Canvas-Layer-Fix
+ * Version : v25.12.04-layer-fix
+ *
+ * Zweck:
+ *   - Alle Canvas-Layer (#game, #overlay, #paths-overlay, #units-overlay)
+ *     sauber übereinander stapeln.
+ *   - Größe NICHT durch CSS verbiegen – die Engine setzt width/height in JS.
+ *   - Input nur auf dem Game-Canvas, Overlays sind "durchklickbar".
+ *
+ * WICHTIG:
+ *   Diese Datei kommt in index.html NACH ui.css, ui-layout-v0.css, ui-hud, usw.
+ *   → ihre Regeln übersteuern alle älteren Canvas-Regeln.
+ * ========================================================================== */
+
+/* --------------------------------------------------------------------------
+ *  Grund-Canvas (Map + Gebäude)
+ * ----------------------------------------------------------------------- */
+
+canvas#game {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10 !important;        /* Basisschicht */
+  pointer-events: none;          /* Input wird von der JS-Engine gehandhabt */
+}
+
+/* --------------------------------------------------------------------------
+ *  Overlay-Canvas:
+ *    - #overlay         → WorkAreas & Debug-Sachen (OverlayHooks)
+ *    - #paths-overlay   → Trampelpfade (PathOverlay)
+ *    - #units-overlay   → Träger-Blasen / Ressourcensymbole
+ * ----------------------------------------------------------------------- */
+
+canvas#overlay,
+canvas#paths-overlay,
+canvas#units-overlay {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  z-index: 11 !important;        /* Über dem Game-Canvas */
+  pointer-events: none !important;
+}
+
+/* --------------------------------------------------------------------------
+ *  Gemeinsame Einstellung:
+ *    - KEIN automatisches Skalieren durch CSS
+ *    - width/height kommen ausschließlich aus JavaScript
+ * ----------------------------------------------------------------------- */
+
 canvas#game,
 canvas#overlay,
 canvas#paths-overlay,
 canvas#units-overlay {
-    position: absolute;
-    inset: 0;
-    width: 100% !important;
-    height: 100% !important;
-    display: block;
-    z-index: 1;
-}
-
-/* Zeichensatz für Overlays */
-canvas#overlay,
-canvas#paths-overlay,
-canvas#units-overlay {
-    pointer-events: none;   /* wichtig, sonst blockieren sie Klicks */
+  max-width: none !important;
+  max-height: none !important;
+  width: auto !important;
+  height: auto !important;
+  display: block;
 }
