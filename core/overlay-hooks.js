@@ -1,159 +1,150 @@
 /* ============================================================================
- * Datei    : core/overlay-hooks.js
- * Projekt  : Neue Siedler
- * Version  : v25.10.25-final
- * Zweck    : Zentrale Overlay-Registry (draw(ctx, cam)) – ohne eigene Loop
- * API      : OverlayHooks.register(name, fn), .enable(name,bool), .setGlobal(bool), .draw(ctx,cam)
- * Integration:
- *   – Render.setDraw((ctx)=> OverlayHooks.draw(ctx, GameCamera?.getState?.()))
- *   – Event: cb:toggle-path-overlay {enabled} schaltet "paths"-Layer & DEBUG_PATH_OVERLAY
- * ============================================================================ */
+ * Datei   : core/overlay-hooks.js
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.12.03-overlayhooks-v2
+ *
+ * Zweck   :
+ *   - Zentrales Overlay-Hooks-System
+ *   - Ermöglicht Layer-Registrierung für zusätzliche Overlays
+ *     (WorkArea-Kreise, Trampelpfade, Debug-Layer, ...)
+ *
+ *   API (global über window.OverlayHooks):
+ *     - OverlayHooks.register(name, fn)
+ *         fn(ctx, cam)   // cam: { x, y, zoom }
+ *
+ *     - OverlayHooks.enable(name, flag=true)
+ *     - OverlayHooks.disable(name)
+ *     - OverlayHooks.setGlobal(flag)
+ *     - OverlayHooks.draw(ctx, camOverride?)
+ *
+ *   Debug:
+ *     - OverlayHooks._layers        (internes Layer-Objekt)
+ *     - OverlayHooks._getState()    → { global, layers }
+ * ========================================================================== */
+
 (function(){
   'use strict';
-  const MOD = '[overlay-hooks]';
-  const ok   = (window.CBLog?.ok   || console.log).bind(console, MOD);
-  const warn = (window.CBLog?.warn || console.warn).bind(console, MOD);
 
-  let _globalEnabled = true;
-  const _layers = Object.create(null);
-  const DEFAULTS = { paths: true };
-
-  function ensureLayer(name){
-    return (_layers[name] ||= { enabled: (DEFAULTS[name] ?? true), fns: [] });
-  }
-  function register(name, fn){
-    if (typeof fn !== 'function'){ warn('register: erwartet Funktion'); return; }
-    ensureLayer(name).fns.push(fn);
-  }
-  function enable(name, onOff){ ensureLayer(name).enabled = !!onOff; }
-  function setGlobal(onOff){ _globalEnabled = !!onOff; }
-
-  function draw(ctx, cam){
-    if (!_globalEnabled) return;
-    for (const k in _layers){
-      if (!Object.prototype.hasOwnProperty.call(_layers,k)) continue;
-      const L = _layers[k]; if (!L.enabled) continue;
-      for (const fn of L.fns){ try{ fn(ctx, cam||{}); }catch(e){ warn('draw err:', e?.message||e); } }
-    }
-  }
-
-/* ============================================================================
- * Datei   : core/overlay-hooks.js
- * Projekt : Neue Siedler
- * Version : v25.12.01-overlay-fix
- * Zweck   : Zentrales Overlay-System (Layers) + Bridge zu Game.render()
- * ============================================================================
- */
-(() => {
-  'use strict';
   const TAG  = '[overlay-hooks]';
-  const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+  const LOG  = (window.CBLog?.info  || console.info ).bind(console, TAG);
+  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
 
+  // -------------------------------------------------------------------------
+  // STATE
+  // -------------------------------------------------------------------------
+
+  /** Globaler Schalter: alle Overlays an/aus */
   let _globalEnabled = true;
+
+  /**
+   * Layer-Registry:
+   *  {
+   *    name: { enabled: true/false, fn: (ctx,cam)=>void }
+   *  }
+   */
   const _layers = Object.create(null);
-  const DEFAULTS = { paths: true };
 
   function ensureLayer(name){
-    return (_layers[name] ||= { enabled: (DEFAULTS[name] ?? true), fns: [] });
+    if (!_layers[name]){
+      _layers[name] = { enabled: true, fn: null };
+    }
+    return _layers[name];
   }
+
+  // -------------------------------------------------------------------------
+  // API-Funktionen
+  // -------------------------------------------------------------------------
+
+  /**
+   * OverlayHooks.register(name, fn)
+   *  - Registriert einen Zeichen-Callback für einen Layer
+   */
   function register(name, fn){
     if (typeof fn !== 'function'){
-      WARN('register: erwartet Funktion, bekommen:', typeof fn);
+      WARN('register: erwartet Funktion für Layer', name);
       return;
     }
-    ensureLayer(name).fns.push(fn);
+    const layer = ensureLayer(name);
+    layer.fn = fn;
+    LOG('Layer registriert:', name);
   }
-  function enable(name, onOff){ ensureLayer(name).enabled = !!onOff; }
-  function setGlobal(onOff){ _globalEnabled = !!onOff; }
 
-  function draw(ctx, cam){
-    if (!_globalEnabled || !ctx) return;
-    const camera = cam || window.GameCamera?.getState?.() || {x:0,y:0,zoom:1};
+  /**
+   * OverlayHooks.enable(name, flag=true)
+   *  - Aktiviert/Deaktiviert einen einzelnen Layer
+   */
+  function enable(name, flag){
+    const layer = ensureLayer(name);
+    layer.enabled = (flag !== false);
+    LOG('Layer', name, 'enabled =', !!layer.enabled);
+  }
 
-    for (const key in _layers){
-      if (!Object.prototype.hasOwnProperty.call(_layers, key)) continue;
-      const L = _layers[key];
-      if (!L.enabled) continue;
+  /**
+   * OverlayHooks.disable(name)
+   *  - Kurzform für enable(name, false)
+   */
+  function disable(name){
+    enable(name, false);
+  }
 
-      for (const fn of L.fns){
-        try {
-          fn(ctx, camera);
-        } catch(e){
-          WARN('draw err in Layer', key, ':', e?.message || e);
-        }
+  /**
+   * OverlayHooks.setGlobal(flag)
+   *  - Aktiviert/Deaktiviert alle Overlays global
+   */
+  function setGlobal(flag){
+    _globalEnabled = !!flag;
+    LOG('Global enabled =', _globalEnabled);
+  }
+
+  /**
+   * OverlayHooks.draw(ctx, camOverride?)
+   *  - Wird vom GameRenderer aufgerufen.
+   *  - Verteilt den Zeichnungsvorgang an alle aktiven Layer.
+   */
+  function draw(ctx, camOverride){
+    if (!ctx) return;
+    if (!_globalEnabled) return;
+
+    const cam =
+      camOverride
+      || (window.GameCamera && typeof window.GameCamera.getState === 'function'
+          ? window.GameCamera.getState()
+          : { x: 0, y: 0, zoom: 1 });
+
+    for (const name in _layers){
+      const layer = _layers[name];
+      if (!layer || !layer.enabled || typeof layer.fn !== 'function') continue;
+
+      try{
+        layer.fn(ctx, cam);
+      }catch(e){
+        WARN('Fehler im Layer', name, ':', e);
       }
     }
   }
 
-  // 🔴 WICHTIGER NEUZUGANG: render() für Game.render()
-  function render(){
-    try{
-      const canvas = document.getElementById('game');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+  // -------------------------------------------------------------------------
+  // GLOBAL EXPORT
+  // -------------------------------------------------------------------------
 
-      const cam = window.GameCamera?.getState?.()
-               || window.GameCore?.state?.cam
-               || {x:0,y:0,zoom:1};
+  // Falls schon etwas existiert, nicht zerstören (z. B. spätere Erweiterungen)
+  const existing = window.OverlayHooks || {};
 
-      draw(ctx, cam);
-    }catch(e){
-      WARN('render() Fehler:', e?.message || e);
+  window.OverlayHooks = Object.assign(existing, {
+    register,
+    enable,
+    disable,
+    setGlobal,
+    draw,
+    _layers,
+    _getState: function(){
+      return {
+        global: _globalEnabled,
+        layers: _layers
+      };
     }
-  }
+  });
 
-  // Public API
-  window.OverlayHooks = window.OverlayHooks || {};
-  window.OverlayHooks.register  = register;
-  window.OverlayHooks.enable    = enable;
-  window.OverlayHooks.setGlobal = setGlobal;
-  window.OverlayHooks.draw      = draw;
-  window.OverlayHooks.render    = render;   // 👈 NEU
+  LOG('Modul geladen – OverlayHooks bereit.');
 
-  // --- Integration in alten Render-Shim (MapRuntime) -----------------------
-  (function tryHookIntoRender(){
-    try{
-      window.Render?.setDraw?.(function(ctx){
-        const cam = window.GameCamera?.getState?.()
-                 || window.GameCore?.state?.cam
-                 || {x:0,y:0,zoom:1};
-        draw(ctx, cam);
-      });
-      LOG('an Render.setDraw gekoppelt (falls MapRuntime aktiv).');
-    }catch(e){
-      WARN('Render.setDraw nicht verfügbar (ist ok bei neuer Engine).');
-    }
-  })();
-
-  // Optional: PathFinder- & AdFinder-Heatmap (falls vorhanden)
-  (function autoRegisterPF(){
-    function add(){
-      if (window.PathFinder?.drawOverlay){
-        register('paths', (ctx, cam)=>{
-          if (!window.DEBUG_PATH_OVERLAY) return;
-          window.PathFinder.drawOverlay(ctx, cam);
-        });
-        LOG('PathFinder-Overlay registriert.');
-        return true;
-      }
-      return false;
-    }
-    if (!add()){
-      let tries=0, t=setInterval(()=>{ if (add() || ++tries>30) clearInterval(t); }, 250);
-    }
-  })();
-
-  (function autoRegisterAdFinderHeat(){
-    if (!window.AdFinder?.getHeat) return;
-    register('paths', (ctx, cam)=>{
-      if (!window.DEBUG_PATH_OVERLAY) return;
-      const heat = window.AdFinder.getHeat?.() || [];
-      // … dein Heatmap-Zeichencode hier (optional) …
-    });
-    LOG('AdFinder-Heatmap registriert.');
-  })();
-
-  LOG('bereit v25.12.01-overlay-fix');
 })();
