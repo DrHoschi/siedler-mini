@@ -342,11 +342,3 @@ body.inspector-open #game-canvas {
 body.inspector-open #inspector-toggle {
   pointer-events: auto;
 }
-
-#overlay {
-  position:absolute;
-  left:0;
-  top:0;
-  z-index:15;
-  pointer-events:none;
-}
