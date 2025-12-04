@@ -23,24 +23,24 @@
   background: transparent; /* keine „unsichtbare Wand“ */
 }
 
-/* ============================================================================
- * Canvas-Layer für Render-Overlays (WorkArea, Paths, Units)
- * ============================================================================
- */
-
+/* =====================================================================================
+   CANVAS-LAYER STACK – alle Spiel-Layer exakt übereinander legen
+   ===================================================================================== */
 canvas#game,
 canvas#overlay,
 canvas#paths-overlay,
 canvas#units-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-  margin: 0;
-  padding: 0;
-  display: block;
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    z-index: 1;
 }
 
-/* Alle Overlays über dem Game, aber unter UI */
-canvas#overlay       { z-index: 11; pointer-events: none; }
-canvas#paths-overlay { z-index: 12; pointer-events: none; }
-canvas#units-overlay { z-index: 13; pointer-events: none; }
+/* Zeichensatz für Overlays */
+canvas#overlay,
+canvas#paths-overlay,
+canvas#units-overlay {
+    pointer-events: none;   /* wichtig, sonst blockieren sie Klicks */
+}
