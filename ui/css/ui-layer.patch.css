@@ -22,3 +22,25 @@
 #build-dock, #hud-root, #inspector {
   background: transparent; /* keine „unsichtbare Wand“ */
 }
+
+/* ============================================================================
+ * Canvas-Layer für Render-Overlays (WorkArea, Paths, Units)
+ * ============================================================================
+ */
+
+canvas#game,
+canvas#overlay,
+canvas#paths-overlay,
+canvas#units-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+
+/* Alle Overlays über dem Game, aber unter UI */
+canvas#overlay       { z-index: 11; pointer-events: none; }
+canvas#paths-overlay { z-index: 12; pointer-events: none; }
+canvas#units-overlay { z-index: 13; pointer-events: none; }
