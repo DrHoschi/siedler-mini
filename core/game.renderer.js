@@ -149,24 +149,27 @@ if (this.canvasOverlay) {
 
        /** Debug-/Produktions-Overlay (optional) */
     drawOverlays() {
-        const ctx = this.ctx;
-        if (!ctx) return;
+        const ctxO = this.ctxOverlay;
+if (!ctxO) return;
 
         // WICHTIG:
         // An dieser Stelle ist bereits die Kamera-Transform aktiv
         // (Map + Gebäude wurden schon mit GameCamera gezeichnet).
         // Die OverlayHooks erwarten aber einen Canvas im SCREEN-Space
         // und kümmern sich selbst um Kamera + Zoom.
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // zurück auf Identity
-
+       ctxO.clearRect(0,0,ctxO.canvas.width,ctxO.canvas.height);
+ctxO.save();
+ctxO.setTransform(1,0,0,1,0,0);
+        
         try {
             if (window.OverlayHooks && typeof window.OverlayHooks.draw === 'function') {
                 // OverlayHooks ruft intern alle registrierten Layer auf:
                 //  - "trees"   (Holzfäller-Arbeitsbereich, Bäume, …)
                 //  - "traces"  (Trampelpfade)
                 //  - evtl. weitere
-                window.OverlayHooks.draw(ctx);
+                window.OverlayHooks.draw(ctxO);
+
+
             }
         } catch (e) {
             (window.CBLog?.warn || console.warn)('[renderer] OverlayHooks.draw Fehler:', e);
@@ -174,5 +177,5 @@ if (this.canvasOverlay) {
 
         // Zurück in den Welt-Transform, damit später noch weitere Dinge
         // (falls nötig) im selben Koordinatensystem gezeichnet werden könnten.
-        ctx.restore();
+        ctxO.restore();
     }
