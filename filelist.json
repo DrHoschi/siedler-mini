@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-03T22:12:16.132Z",
+  "createdAt": "2025-12-04T09:39:10.569Z",
   "root": ".",
   "count": 528,
   "entries": [
@@ -1353,7 +1353,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 15989
+      "size": 14007
     },
     {
       "type": "file",
@@ -1403,7 +1403,7 @@
     {
       "type": "file",
       "path": "core/overlay-hooks.js",
-      "size": 5427
+      "size": 4120
     },
     {
       "type": "file",
