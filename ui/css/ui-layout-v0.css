@@ -97,3 +97,35 @@ html, body {
   height:100%;
   margin:0;
 }
+
+/* ============================================================================
+ * Canvas-Layer: Map + Overlays (Game, WorkArea, Paths, Units)
+ * ========================================================================= */
+
+/* Haupt-Canvas */
+canvas#game {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10;          /* Basis: Map + Gebäude */
+}
+
+/* Overlays: WorkArea-Kreis, Pfade, Träger-Köpfe usw. */
+canvas#overlay,
+canvas#paths-overlay,
+canvas#units-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 11;          /* über dem Game-Canvas, unter der UI */
+  pointer-events: none; /* Klicks gehen weiter ans Spiel */
+}
+
+/* Optional: falls irgendwo width/height kaputt skaliert werden */
+body.is-playing canvas#game,
+body.is-playing canvas#overlay,
+body.is-playing canvas#paths-overlay,
+body.is-playing canvas#units-overlay {
+  margin: 0;
+  /* Breite/Höhe kommen aus JS; kein extra scaling nötig */
+}
