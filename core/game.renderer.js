@@ -21,6 +21,10 @@ export const Renderer = {
     init(game) {
         this.game = game;
         this.ctx  = game.ctx;
+        this.canvasOverlay = document.getElementById("overlay");
+if (this.canvasOverlay) {
+    this.ctxOverlay = this.canvasOverlay.getContext("2d");
+}
         // Fallback: wenn game.map.tileSize nicht existiert, nimm game.tileSize oder 64
         this.tile = (game.map && game.map.tileSize) || game.tileSize || 64;
 
