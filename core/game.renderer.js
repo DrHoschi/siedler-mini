@@ -1,30 +1,54 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
- * Projekt : Neue Siedler
- * Version : v25.11.29-mapfix
- * Zweck   : Rein fürs Zeichnen → Boden (Map), Gebäude, Baustellen, Overlays
- * ============================================================================
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.12.04-map+overlay-workarea
+ *
+ * Zweck   :
+ *   - Zentraler Renderer für:
+ *       • Boden / Map
+ *       • Gebäude / Baustellen
+ *       • Overlay-Layer (Trees, Traces, WorkAreas, …) via OverlayHooks
  *
  * WICHTIG:
- * - Game.map kommt aus game.map.js / map-bridge
- * - Wir rufen pro Frame die Zeichenfunktion der Map auf
- * - Danach zeichnen wir alle Gebäude aus Buildings.list
- * - Kamera-Transform wird einmalig pro Frame gesetzt
- * ========================================================================= */
+ *   - Game.map kommt aus game.map.js / map-bridge
+ *   - Pro Frame:
+ *       1) Kamera-Transform setzen
+ *       2) Map zeichnen
+ *       3) Gebäude / Baustellen zeichnen
+ *       4) Overlay-Canvas leeren + OverlayHooks.draw(...) ausführen
+ * ========================================================================== */
 
 import { Buildings } from "./game.buildings.js";
 
 /** Zentraler Renderer – wird von game.js benutzt */
 export const Renderer = {
 
-    /** Wird aus game.js mit dem Game-Objekt aufgerufen */
+    // ---------------------------------------------------------------------
+    // INIT
+    // ---------------------------------------------------------------------
+    /**
+     * init(game)
+     *  - wird einmalig aus game.js aufgerufen
+     *  - merkt sich:
+     *      • Game-Objekt
+     *      • Haupt-Context (Terrain & Gebäude)
+     *      • Overlay-Canvas + -Context (WorkAreas, Pfade, …)
+     */
     init(game) {
         this.game = game;
-        this.ctx  = game.ctx;
+
+        // Haupt-Canvas / Context (Map + Gebäude)
+        this.ctx = game.ctx;
+        this.canvas = (game.canvas || this.ctx?.canvas || document.getElementById("game"));
+
+        // Overlay-Canvas (für WorkAreas, Traces, Trees, …)
         this.canvasOverlay = document.getElementById("overlay");
-if (this.canvasOverlay) {
-    this.ctxOverlay = this.canvasOverlay.getContext("2d");
-}
+        if (this.canvasOverlay) {
+            this.ctxOverlay = this.canvasOverlay.getContext("2d");
+        } else {
+            this.ctxOverlay = null;
+        }
+
         // Fallback: wenn game.map.tileSize nicht existiert, nimm game.tileSize oder 64
         this.tile = (game.map && game.map.tileSize) || game.tileSize || 64;
 
@@ -32,7 +56,10 @@ if (this.canvasOverlay) {
         LOG("[renderer]", "initialisiert (tileSize=%d)", this.tile);
     },
 
-    /** Haupt-Zeichnen pro Frame */
+    // ---------------------------------------------------------------------
+    // HAUPTZEICHNEN
+    // ---------------------------------------------------------------------
+    /** Haupt-Zeichnen pro Frame (wird von game.tick / game.js aufgerufen) */
     draw() {
         const g   = this.game;
         const ctx = this.ctx;
@@ -46,10 +73,10 @@ if (this.canvasOverlay) {
         // 1. Kamera-Transform setzen (falls vorhanden)
         // -------------------------------------------------------------
         if (cam && typeof cam.applyTransform === "function") {
-            // Neues Kamera-Modul hat eigene applyTransform(...)
+            // Neues Kamera-Modul: eigene applyTransform(...)
             cam.applyTransform(ctx);
         } else if (cam && typeof cam.toScreen === "function") {
-            // Älteres Kamera-Modul: wir setzen eine einfache translate/scale
+            // Älteres Kamera-Modul: einfache translate/scale
             const z = cam.zoom || 1;
             ctx.setTransform(z, 0, 0, z, -cam.x * z, -cam.y * z);
         } else {
@@ -87,17 +114,18 @@ if (this.canvasOverlay) {
             this.drawBuilding(b);
         }
 
+        ctx.restore();
+
         // -------------------------------------------------------------
-        // 4. Debug-/Produktions-Overlays
+        // 4. Overlay-Layer (WorkAreas, Traces, Trees, …) zeichnen
+        //    → eigener Canvas im SCREEN-Space
         // -------------------------------------------------------------
         this.drawOverlays();
-
-        ctx.restore();
     },
 
-    // -----------------------------------------------------------------
-    //  Gebäude ODER Baustelle zeichnen
-    // -----------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // GEBÄUDE / BAUSTELLEN
+    // ---------------------------------------------------------------------
     drawBuilding(b) {
         if (!b) return;
         const ctx = this.ctx;
@@ -106,7 +134,9 @@ if (this.canvasOverlay) {
         const px = b.x * t;
         const py = b.y * t;
 
+        // ------------------------------
         // Baustelle (buildStage 0/undefined)
+        // ------------------------------
         if (b.buildStage === 0 || b.buildStage == null) {
             ctx.fillStyle   = "rgba(255,200,50,0.35)";
             ctx.strokeStyle = "rgba(120,60,0,0.85)";
@@ -121,7 +151,9 @@ if (this.canvasOverlay) {
             return;
         }
 
+        // ------------------------------
         // Fertiges Gebäude – Definition aus Registry holen
+        // ------------------------------
         const reg = window.Registry || {};
         const def = (typeof reg.getBuilding === "function")
             ? reg.getBuilding(b.type || b.id)
@@ -135,7 +167,7 @@ if (this.canvasOverlay) {
         }
 
         const imgKey = def.img || def.sprite || def.icon;
-        const img = window.Assets?.get ? Assets.get(imgKey) : null;
+        const img    = window.Assets?.get ? Assets.get(imgKey) : null;
 
         // Diagnose: falls Sprite fehlt → roter Block
         if (!img) {
@@ -147,35 +179,67 @@ if (this.canvasOverlay) {
         ctx.drawImage(img, px, py, b.w * t, b.h * t);
     },
 
-       /** Debug-/Produktions-Overlay (optional) */
+    // ---------------------------------------------------------------------
+    // OVERLAYS (WorkAreas, Pfade, Trees, …)
+    // ---------------------------------------------------------------------
+    /**
+     * drawOverlays()
+     *
+     * - Zeichnet ALLE über OverlayHooks registrierten Layer auf das
+     *   Canvas #overlay im SCREEN-Space.
+     * - Dazu gehören u. a.:
+     *      • PathOverlay / traces
+     *      • Trees-/Stones-Overlay
+     *      • WorkArea-Kreise (GameWorkArea / "workareas")
+     */
     drawOverlays() {
         const ctxO = this.ctxOverlay;
-if (!ctxO) return;
+        if (!ctxO) return;
 
-        // WICHTIG:
-        // An dieser Stelle ist bereits die Kamera-Transform aktiv
-        // (Map + Gebäude wurden schon mit GameCamera gezeichnet).
-        // Die OverlayHooks erwarten aber einen Canvas im SCREEN-Space
-        // und kümmern sich selbst um Kamera + Zoom.
-       ctxO.clearRect(0,0,ctxO.canvas.width,ctxO.canvas.height);
-ctxO.save();
-ctxO.setTransform(1,0,0,1,0,0);
-        
-        try {
-            if (window.OverlayHooks && typeof window.OverlayHooks.draw === 'function') {
-                // OverlayHooks ruft intern alle registrierten Layer auf:
-                //  - "trees"   (Holzfäller-Arbeitsbereich, Bäume, …)
-                //  - "traces"  (Trampelpfade)
-                //  - evtl. weitere
-                window.OverlayHooks.draw(ctxO);
+        // 1) Canvas-Größe an Haupt-Canvas anpassen (wichtig für iOS):
+        const mainCanvas = this.canvas || this.ctx?.canvas;
+        if (mainCanvas &&
+            (ctxO.canvas.width  !== mainCanvas.width ||
+             ctxO.canvas.height !== mainCanvas.height)) {
 
-
-            }
-        } catch (e) {
-            (window.CBLog?.warn || console.warn)('[renderer] OverlayHooks.draw Fehler:', e);
+            ctxO.canvas.width  = mainCanvas.width;
+            ctxO.canvas.height = mainCanvas.height;
         }
 
-        // Zurück in den Welt-Transform, damit später noch weitere Dinge
-        // (falls nötig) im selben Koordinatensystem gezeichnet werden könnten.
-        ctxO.restore();
+        // 2) In den SCREEN-Space wechseln (kein Welt-Transform)
+        ctxO.setTransform(1, 0, 0, 1, 0, 0);
+
+        // 3) Komplettes Overlay löschen
+        ctxO.clearRect(0, 0, ctxO.canvas.width, ctxO.canvas.height);
+
+        // 4) Kamera-State für OverlayHooks vorbereiten
+        const g   = this.game || {};
+        const cam = g.camera || window.GameCamera || {};
+        let camState = null;
+
+        if (typeof cam.getState === "function") {
+            camState = cam.getState();
+        } else {
+            camState = {
+                x   : cam.x    || 0,
+                y   : cam.y    || 0,
+                zoom: cam.zoom || 1
+            };
+        }
+
+        // 5) Alle registrierten Overlay-Layer zeichnen lassen
+        try {
+            if (window.OverlayHooks && typeof window.OverlayHooks.draw === "function") {
+                // OverlayHooks kümmert sich intern um:
+                //  - Bäume / Steine
+                //  - Pfad-Traces
+                //  - WorkArea-Kreise (Layer "workareas")
+                window.OverlayHooks.draw(ctxO, camState);
+            }
+        } catch (e) {
+            (window.CBLog?.warn || console.warn)(
+                "[renderer] OverlayHooks.draw Fehler:", e
+            );
+        }
     }
+};
