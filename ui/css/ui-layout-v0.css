@@ -89,7 +89,8 @@ html, body {
 /* ========================================================================== */
 
 /* Vor Spielstart UI ausblenden */
-body:not(.is-playing) #ui-root,
+/* Vor Spielstart nur HUD + BuildDock ausblenden.
+   #ui-root bleibt sichtbar, damit das Startpanel angezeigt wird! */
 body:not(.is-playing) #hud-root,
 body:not(.is-playing) #build-dock {
   display: none !important;
