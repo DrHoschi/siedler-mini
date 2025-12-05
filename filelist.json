@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-04T14:07:48.023Z",
+  "createdAt": "2025-12-05T11:25:59.519Z",
   "root": ".",
-  "count": 528,
+  "count": 521,
   "entries": [
     {
       "type": "dir",
@@ -1338,7 +1338,7 @@
     {
       "type": "file",
       "path": "core/game.renderer.js",
-      "size": 4916
+      "size": 7413
     },
     {
       "type": "file",
@@ -1353,7 +1353,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 14007
+      "size": 10284
     },
     {
       "type": "file",
@@ -2197,33 +2197,8 @@
     },
     {
       "type": "file",
-      "path": "ui/css/ui-hud-v1.css",
-      "size": 4720
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-hud-v3.css",
-      "size": 4450
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-hud-v4.css",
-      "size": 6922
-    },
-    {
-      "type": "file",
       "path": "ui/css/ui-hud-v5.css",
       "size": 5136
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-hud.clean.css",
-      "size": 2257
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-hud.css",
-      "size": 3990
     },
     {
       "type": "file",
@@ -2252,16 +2227,6 @@
     },
     {
       "type": "file",
-      "path": "ui/css/ui-layout-v1.css",
-      "size": 3467
-    },
-    {
-      "type": "file",
-      "path": "ui/css/ui-layout.css",
-      "size": 3126
-    },
-    {
-      "type": "file",
       "path": "ui/css/ui-notify.css",
       "size": 92
     },
@@ -2283,7 +2248,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 12462
+      "size": 12371
     },
     {
       "type": "dir",
