@@ -230,6 +230,10 @@
    * Zeichnet alle Arbeitsbereiche.
    * Wird von OverlayHooks.draw(ctx, cam) aufgerufen.
    */
+    /**
+   * Zeichnet alle Arbeitsbereiche.
+   * Wird von OverlayHooks.draw(ctx, cam) aufgerufen.
+   */
   function drawAreas(ctx, cam) {
     if (!ctx) return;
 
@@ -238,31 +242,41 @@
 
     if (!areas.size) return;
 
-    // Kamera-Infos (Fallbacks, wenn irgendwas fehlt)
-    const camera = cam || window.GameCamera?.getState?.() || { x: 0, y: 0, zoom: 1 };
-    const tile   = getTileSize();
-    const zoom   = camera.zoom || 1;
-    const dpr    = window.devicePixelRatio || 1;
+    // Kamera-Infos (gleiches Schema wie bei Path-/Unit-Overlay!)
+    const camera = cam || (window.GameCamera && GameCamera.getState && GameCamera.getState()) || {
+      x: 0,
+      y: 0,
+      zoom: 1
+    };
 
-    // Weltkoordinaten → Canvas-Pixel (Overlay im Screen-Space)
+    const tile = getTileSize();
+    const zoom = camera.zoom || 1;
+    const camX = camera.x || 0;
+    const camY = camera.y || 0;
+
+    // Weltkoordinaten (Pixel) → Canvas-Pixel
+    // WICHTIG: KEIN devicePixelRatio hier, der Canvas ist schon „richtig“ skaliert.
     function worldToScreen(wx, wy) {
-      const sx = (wx - (camera.x || 0)) * zoom * dpr;
-      const sy = (wy - (camera.y || 0)) * zoom * dpr;
+      const sx = (wx - camX) * zoom;
+      const sy = (wy - camY) * zoom;
       return { x: sx, y: sy };
     }
 
     ctx.save();
-    // Overlay läuft im reinen Pixel-Screen-Space (Transform ist 1:1)
+    // Overlay läuft im reinen Pixel-Screen-Space (1:1)
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     for (const area of areas.values()) {
       if (!area) continue;
 
+      // Zentrum des Bereiches in Welt-Pixeln
       const wx = area.cx * tile;
       const wy = area.cy * tile;
+
       const { x: sx, y: sy } = worldToScreen(wx, wy);
 
-      const radiusPx = (area.radiusTiles || DEFAULT_RADIUS_TILES) * tile * zoom * dpr;
+      // Radius in Pixeln (Tiles → Pixel → Zoom)
+      const radiusPx = (area.radiusTiles || DEFAULT_RADIUS_TILES) * tile * zoom;
 
       // Dünner Hintergrundkreis (immer sichtbar)
       ctx.beginPath();
@@ -271,7 +285,7 @@
       ctx.lineWidth   = 2;
       ctx.stroke();
 
-      // Wenn ausgewählt → kräftiger Rand
+      // Wenn ausgewählt → kräftiger Rand + Punkt
       if (area.selected) {
         ctx.beginPath();
         ctx.arc(sx, sy, radiusPx, 0, Math.PI * 2, false);
@@ -279,9 +293,8 @@
         ctx.lineWidth   = 4;
         ctx.stroke();
 
-        // Kleiner Punkt in der Mitte als Marker
         ctx.beginPath();
-        ctx.arc(sx, sy, 6 * dpr, 0, Math.PI * 2, false);
+        ctx.arc(sx, sy, 6, 0, Math.PI * 2, false);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.fill();
       }
