@@ -200,8 +200,8 @@
 
       // Diagnose: falls Sprite fehlt → roter Block
       if (!img) {
-        ctx.fillStyle = 'red';
-        ctx.fillRect(px, py, b.w * t, b.h * t);
+      //  ctx.fillStyle = 'red';
+       // ctx.fillRect(px, py, b.w * t, b.h * t);
         return;
       }
 
