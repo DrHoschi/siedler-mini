@@ -1,11 +1,11 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.04-workarea-v3
+ * Version : v25.12.05-workarea-v4-center-api
  *
  * Zweck   :
  *   - Verwalten von Arbeitsbereichen (WorkAreas) für Produktionsgebäude
- *   - Aktuell: nur Holzfäller (b.lumberjack)
+ *   - Aktuell: Holzfäller (b.lumberjack), Steinbruch, Fischer
  *
  * Zeichnen:
  *   - Registriert einen Overlay-Layer "workareas" bei OverlayHooks
@@ -13,10 +13,16 @@
  *   - Der aktuell ausgewählte Bereich wird etwas kräftiger dargestellt
  *
  * Interaktion:
- *   - Bei Fertigstellung eines Holzfällers wird automatisch ein
- *     Standard-Arbeitsbereich angelegt.
+ *   - Bei Fertigstellung eines Produktionsgebäudes wird automatisch ein
+ *     Standard-Arbeitsbereich angelegt (Mitte des Gebäudes).
  *   - Über GameWorkArea.startSelectionForBuilding(detail) kann ein
- *     Auswahlmodus gestartet werden (wird aus ui-building-menu.js benutzt).
+ *     Auswahlmodus gestartet werden (z.B. aus ui-building-menu.js).
+ *
+ * Zusatz-API:
+ *   - GameWorkArea.getAreaForBuilding(b/detail)
+ *   - GameWorkArea.getCenterForBuilding(b/detail) → { cx, cy } in Tiles
+ *     → kann von game.production.wood.js etc. genutzt werden, um
+ *       Ressourcen IM Arbeitsbereich zu suchen/spawnen.
  * ========================================================================== */
 
 (() => {
@@ -32,10 +38,11 @@
 
   /** Welche Gebäude unterstützen überhaupt Arbeitsbereiche? */
   const SUPPORTED_IDS = new Set([
-    'b.lumberjack'
-    'b.quarry'
+    'b.lumberjack',
+    'b.quarry',
     'b.fish'
     // Weitere Gebäude (Fischer, Steinbruch, …) später ergänzen
+    // 'b.hq',
   ]);
 
   /** Standard-Radius in Tiles um das Gebäude herum */
@@ -82,7 +89,8 @@
   function buildUid(b) {
     if (b.uid) return String(b.uid);
     const id = b.type || b.id || 'building';
-    return `${id}@${b.x|0},${b.y|0}`;
+    // Annahme: b.x / b.y sind Tile-Koordinaten
+    return `${id}@${b.x | 0},${b.y | 0}`;
   }
 
   /** Area-Objekt sicher in die Map schreiben */
@@ -92,9 +100,9 @@
     const next = {
       uid,
       buildingId : prev.buildingId || partial.buildingId || 'unknown',
-      cx         : Number.isFinite(partial.cx)         ? partial.cx         : (prev.cx ?? 0),
-      cy         : Number.isFinite(partial.cy)         ? partial.cy         : (prev.cy ?? 0),
-      radiusTiles: Number.isFinite(partial.radiusTiles)? partial.radiusTiles: (prev.radiusTiles ?? DEFAULT_RADIUS_TILES),
+      cx         : Number.isFinite(partial.cx)          ? partial.cx          : (prev.cx ?? 0),
+      cy         : Number.isFinite(partial.cy)          ? partial.cy          : (prev.cy ?? 0),
+      radiusTiles: Number.isFinite(partial.radiusTiles) ? partial.radiusTiles : (prev.radiusTiles ?? DEFAULT_RADIUS_TILES),
       selected   : partial.selected ?? prev.selected ?? false
     };
     areas.set(uid, next);
@@ -113,6 +121,7 @@
     if (areas.has(uid)) return;
 
     // Zentrum: Mitte des Gebäude-Rechtecks (in Tile-Koordinaten)
+    // Annahme: b.x / b.y = linke obere Ecke, b.w / b.h = Breite/Höhe in Tiles
     const cx = (build.x || 0) + (build.w || 1) / 2;
     const cy = (build.y || 0) + (build.h || 1) / 2;
 
@@ -125,6 +134,29 @@
     });
 
     LOG('Standard-WorkArea angelegt', area);
+  }
+
+  /** Liefert die Area für ein Gebäude-Detail (oder null) */
+  function getAreaForBuilding(detail) {
+    if (!detail) return null;
+    const id = detail.type || detail.id || detail.buildingId;
+    if (!SUPPORTED_IDS.has(id)) return null;
+
+    const uid = detail.uid || buildUid(detail);
+
+    if (!areas.has(uid)) {
+      // Versuche einen Default anzulegen (z.B. bei Produktion ohne vorheriges Zeichnen)
+      ensureDefaultForBuilding(detail);
+    }
+
+    return areas.get(uid) || null;
+  }
+
+  /** Liefert nur das Zentrum (cx, cy in Tiles) für Produktions-Module */
+  function getCenterForBuilding(detail) {
+    const area = getAreaForBuilding(detail);
+    if (!area) return null;
+    return { cx: area.cx, cy: area.cy, radiusTiles: area.radiusTiles };
   }
 
   /**
@@ -265,7 +297,7 @@
   function registerOverlayLayer() {
     if (!window.OverlayHooks || typeof OverlayHooks.register !== 'function') {
       WARN('OverlayHooks nicht verfügbar – WorkAreas werden nicht gezeichnet');
-      return;
+      return false;
     }
 
     // Layer registrieren (ein drawAreas wird pro Frame vom Renderer aufgerufen)
@@ -277,6 +309,7 @@
     }
 
     LOG('Overlay-Layer "workareas" registriert');
+    return true;
   }
 
   // Direkt versuchen, ansonsten ein paar Mal nachregistrieren
@@ -299,15 +332,17 @@
   });
 
   // ---------------------------------------------------------------------------
-  // DEBUG-API
+  // DEBUG-/PRODUKTIONS-API
   // ---------------------------------------------------------------------------
 
   window.GameWorkArea = {
     areas,
     startSelectionForBuilding,
     applySelectionTile,
-    ensureDefaultForBuilding
+    ensureDefaultForBuilding,
+    getAreaForBuilding,
+    getCenterForBuilding
   };
 
-  LOG('WorkArea-Modul geladen (v25.12.04-workarea-v3)');
+  LOG('WorkArea-Modul geladen (v25.12.05-workarea-v4-center-api)');
 })();
