@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.05-workarea-overlay-final-global
+ * Version : v25.12.05-workarea-overlay-final-global-nored
  *
  * Zweck   :
  *   Zentraler Renderer für:
@@ -198,10 +198,8 @@
       const imgKey = def.img || def.sprite || def.icon;
       const img    = window.Assets?.get ? Assets.get(imgKey) : null;
 
-      // Diagnose: falls Sprite fehlt → roter Block
+      // Falls Sprite fehlt, zeichnen wir NICHTS (kein roter Debug-Block mehr)
       if (!img) {
-      //  ctx.fillStyle = 'red';
-       // ctx.fillRect(px, py, b.w * t, b.h * t);
         return;
       }
 
@@ -245,6 +243,6 @@
   // Global verfügbar machen, damit game.js darauf zugreifen kann
   window.Renderer = Renderer;
 
-  LOG('Modul geladen – Renderer global verfügbar.');
+  LOG('Modul geladen – Renderer global verfügbar (ohne roten Fallback).');
 
 })();
