@@ -33,7 +33,7 @@
   /** Welche Gebäude unterstützen überhaupt Arbeitsbereiche? */
   const SUPPORTED_IDS = new Set([
     'b.lumberjack'
-    'b.querry'
+    'b.quarry'
     'b.fish'
     // Weitere Gebäude (Fischer, Steinbruch, …) später ergänzen
   ]);
