@@ -1,13 +1,13 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.06-workarea-maincanvas-v2
+ * Version : v25.12.06-workarea-maincanvas-v3
  *
  * Zweck   :
  *   - Verwalten von Arbeitsbereichen (WorkAreas) für Produktionsgebäude
  *   - Aktuell: Holzfäller (b.lumberjack), Steinbruch (b.quarry), Fischer (b.fish)
  *
- * Wichtiger Unterschied zu älteren Versionen:
+ * WICHTIG:
  *   - KEIN OverlayHooks / KEIN eigener Overlay-Canvas mehr.
  *   - Die Kreise werden direkt auf dem HAUPT-CANVAS gezeichnet,
  *     also mit genau derselben Kamera-Transform wie die Gebäude.
@@ -15,14 +15,13 @@
  * API (global, wird von anderen Modulen benutzt):
  *   window.GameWorkArea = {
  *     areas,                         // Map<uid, WorkArea>
- *     ensureDefaultForBuilding(b),   // Standard-Bereich für Gebäude anlegen
+ *     ensureDefaultForBuilding(b),   // Standard-Bereich für Gebäude anlegen/aktualisieren
  *     startSelectionForBuilding(d),  // Auswahlmodus starten (Gebäude-Menü)
  *     applySelectionTile(tx, ty),    // Klick auf Karte anwenden (input-core)
  *     isSelecting(),                 // ob wir gerade im Auswahlmodus sind
  *     drawOnMainCanvas(ctx)          // aus game.renderer.js aufgerufen
  *   }
- * ============================================================================
- */
+ * ============================================================================ */
 
 (() => {
   'use strict';
@@ -99,14 +98,15 @@
   /** Erzeugt eine stabile UID für ein Gebäude */
   function getUidForBuilding(b) {
     if (!b) return null;
-    if (b.uid) return String(b.uid);
+    if (b.uid) return String(b.uid);   // falls vorhanden → immer bevorzugen
+
     const id = b.id || b.buildingId || b.type || b.kind || 'building';
     const x  = (b.x ?? b.tx ?? 0) | 0;
     const y  = (b.y ?? b.ty ?? 0) | 0;
     return `${id}@${x},${y}`;
   }
 
-  /** Area-Objekt sicher in die Map schreiben */
+  /** Area-Objekt sicher in die Map schreiben (merge mit bestehenden Werten) */
   function setArea(uid, partial) {
     if (!uid) return null;
     const prev = areas.get(uid) || {};
@@ -119,7 +119,10 @@
       h          : num(partial.h,          prev.h ?? 1),
       cx         : num(partial.cx,         prev.cx ?? 0),
       cy         : num(partial.cy,         prev.cy ?? 0),
-      radiusTiles: num(partial.radiusTiles,prev.radiusTiles ?? DEFAULT_RADIUS_TILES),
+      radiusTiles: num(
+        partial.radiusTiles,
+        prev.radiusTiles ?? DEFAULT_RADIUS_TILES
+      ),
       selected   : partial.selected ?? prev.selected ?? false
     };
     areas.set(uid, next);
@@ -132,8 +135,11 @@
 
   /**
    * Sorgt dafür, dass für dieses Gebäude ein Standard-WorkArea existiert.
-   * Kann sowohl mit "rohen" Gebäudeobjekten als auch mit { detail, building }-
-   * Strukturen aufgerufen werden (siehe normalizeBuilding).
+   * WICHTIG:
+   *   - Wenn es schon eine Area für diese UID gibt, wird sie
+   *     AKTUALISIERT (Koordinaten & Größe werden nachgezogen).
+   *     → verhindert den "0,0"-Bug, falls vorher ein Ghost-/Preview-Build
+   *       mit falschen Koordinaten durchgerutscht ist.
    */
   function ensureDefaultForBuilding(buildInput) {
     const b = normalizeBuilding(buildInput);
@@ -145,9 +151,6 @@
     const uid = getUidForBuilding(b);
     if (!uid) return null;
 
-    // Falls schon vorhanden → nichts tun
-    if (areas.has(uid)) return areas.get(uid);
-
     const x = (b.x ?? b.tx ?? 0) | 0;
     const y = (b.y ?? b.ty ?? 0) | 0;
     const w = (b.w || b.width  || 3) | 0;
@@ -157,16 +160,19 @@
     const cx = x + w / 2;
     const cy = y + h / 2;
 
+    const existing = areas.get(uid);
+
     const area = setArea(uid, {
       buildingId : id,
       x, y, w, h,
       cx,
       cy,
-      radiusTiles: DEFAULT_RADIUS_TILES,
-      selected   : false
+      // Radius & "selected" übernehmen, falls bereits gesetzt
+      radiusTiles: existing?.radiusTiles ?? DEFAULT_RADIUS_TILES,
+      selected   : existing?.selected   ?? false
     });
 
-    LOG('Standard-WorkArea angelegt', area);
+    LOG(existing ? 'WorkArea aktualisiert' : 'Standard-WorkArea angelegt', area);
     return area;
   }
 
@@ -183,7 +189,7 @@
       for (const b of list) {
         const id = b.id || b.buildingId || b.type || b.kind;
         if (!id || !SUPPORTED_IDS.has(id)) continue;
-        ensureDefaultForBuilding(b);
+        ensureDefaultForBuilding(b); // aktualisiert jetzt auch bestehende Areas
       }
     } catch (e) {
       WARN('syncAreasFromGameBuildings Fehler:', e);
@@ -235,8 +241,7 @@
       tileY: ty
     });
 
-    // Hier könnte später ein cb:workarea:set-Event kommen, falls die
-    // Produktionsmodule (Holz/Stein/Fisch) etwas direkt wissen müssen.
+    // Später nutzbar für Holz/Stein/Fisch-Module
     try {
       window.dispatchEvent(new CustomEvent('cb:workarea:set', {
         detail: {
@@ -288,19 +293,13 @@
     for (const area of areas.values()) {
       if (!area) continue;
 
-      const worldCx = area.cx * TILE;
-      const worldCy = area.cy * TILE;
+      const worldCx  = area.cx * TILE;
+      const worldCy  = area.cy * TILE;
       const radiusPx = (area.radiusTiles || DEFAULT_RADIUS_TILES) * TILE;
-
-      // Einfacher Sichtbarkeits-Check (wenn außerhalb vom Canvas, nicht zeichnen)
-      if (worldCx + radiusPx < 0) continue;
-      if (worldCy + radiusPx < 0) continue;
-      if (worldCx - radiusPx > ctx.canvas.width)  continue;
-      if (worldCy - radiusPx > ctx.canvas.height) continue;
 
       const selected = !!area.selected;
 
-      // Hintergrund-Kreis
+      // Hintergrund-Kreis (gestrichelt)
       ctx.beginPath();
       ctx.arc(worldCx, worldCy, radiusPx, 0, Math.PI * 2, false);
       ctx.lineWidth   = 2;
@@ -329,12 +328,13 @@
   }
 
   // ---------------------------------------------------------------------------
-  // EVENTS: Gebäude-Fertigstellung → Default-Bereich anlegen
+  // EVENTS: Gebäude-Fertigstellung → Default-Bereich anlegen/aktualisieren
   // ---------------------------------------------------------------------------
 
   try {
     window.addEventListener('cb:build:complete', (ev) => {
       try {
+        // WICHTIG: aktualisiert jetzt auch schon vorhandene Areas
         ensureDefaultForBuilding(ev && ev.detail);
       } catch (e) {
         WARN('cb:build:complete → ensureDefaultForBuilding Fehler:', e);
@@ -357,5 +357,5 @@
     drawOnMainCanvas
   };
 
-  LOG('WorkArea-Modul geladen (v25.12.06-workarea-maincanvas-v2)');
+  LOG('WorkArea-Modul geladen (v25.12.06-workarea-maincanvas-v3)');
 })();
