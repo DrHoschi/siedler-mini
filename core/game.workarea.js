@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.06-workarea-maincanvas-v3
+ * Version : v25.12.06-workarea-maincanvas-v4
  *
  * Zweck   :
  *   - Verwalten von Arbeitsbereichen (WorkAreas) für Produktionsgebäude
@@ -68,23 +68,40 @@
   // HILFSFUNKTIONEN (Tilegröße, Normalisierung, UID)
   // ---------------------------------------------------------------------------
 
-  /** Liefert die Tilegröße in Pixeln (Fallback 64) */
+  /**
+   * Liefert die Tilegröße in Pixeln.
+   *
+   * Reihenfolge:
+   *   1. GameMap._state.tileSize          (offizielle Map-Quelle)
+   *   2. GameCore/Game.map.tileSize       (falls vorhanden)
+   *   3. GameCore/Game.tileSize           (Fallback)
+   *   4. 64                               (letzter Fallback)
+   */
   function getTileSize() {
-  // Offizielle Quelle: GameMap._state.tileSize
-  try {
-    const ts = window.GameMap?._state?.tileSize;
-    if (Number.isFinite(ts)) return ts;
-  } catch {}
+    // 1) Offizielle Quelle: GameMap._state.tileSize
+    try {
+      const ts = window.GameMap?._state?.tileSize;
+      if (Number.isFinite(ts) && ts > 0) return ts | 0;
+    } catch {
+      /* ignorieren */
+    }
 
-  // Fallback auf GameCore/Game falls gesetzt
-  try {
-    const game = window.GameCore || window.Game;
-    if (Number.isFinite(game?.map?.tileSize)) return game.map.tileSize | 0;
-    if (Number.isFinite(game?.tileSize)) return game.tileSize | 0;
-  } catch {}
+    // 2) Fallback auf GameCore/Game.map.tileSize
+    try {
+      const game = window.GameCore || window.Game;
+      if (Number.isFinite(game?.map?.tileSize) && game.map.tileSize > 0) {
+        return game.map.tileSize | 0;
+      }
+      if (Number.isFinite(game?.tileSize) && game.tileSize > 0) {
+        return game.tileSize | 0;
+      }
+    } catch {
+      /* ignorieren */
+    }
 
-  return 64; // endgültiger Fallback
-}
+    // 3) Letzter Fallback → 64px
+    return 64;
+  }
 
   /** Kleinere Helper, um ein Zahl-Fallback zu bekommen */
   function num(v, fallback) {
@@ -363,5 +380,5 @@
     drawOnMainCanvas
   };
 
-  LOG('WorkArea-Modul geladen (v25.12.06-workarea-maincanvas-v3)');
+  LOG('WorkArea-Modul geladen (v25.12.06-workarea-maincanvas-v4) – tileSize=', getTileSize());
 })();
