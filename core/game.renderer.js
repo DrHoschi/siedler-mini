@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.05-workarea-overlay-final-global-nored
+ * Version : v25.12.06-workarea-maincanvas-nored
  *
  * Zweck   :
  *   Zentraler Renderer für:
@@ -68,7 +68,7 @@
       this.game = game;
       this.ctx  = game.ctx;
 
-      // Overlay-Canvas (für WorkAreas, Pfade, Unit-Overlay etc.)
+      // Overlay-Canvas (für Pfade, Unit-Overlay etc.)
       this.canvasOverlay = document.getElementById('overlay');
       this.ctxOverlay    = this.canvasOverlay
         ? this.canvasOverlay.getContext('2d')
@@ -151,10 +151,19 @@
         this.drawBuilding(b);
       }
 
+      // -----------------------------------------------------------
+      // 3b. Arbeitsbereiche (WorkAreas) direkt auf dem Haupt-Canvas
+      //     zeichnen – mit derselben Kamera-Transform wie die Gebäude.
+      //     (Kein eigenes Overlay, damit Position & Rundung exakt passen.)
+      // -----------------------------------------------------------
+      if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'function') {
+        window.GameWorkArea.drawOnMainCanvas(ctx, cam);
+      }
+
       ctx.restore();
 
       // -----------------------------------------------------------
-      // 4. Overlays (WorkArea, Pfade, Units)
+      // 4. Overlays (Pfade, Units etc.) auf eigenem Overlay-Canvas
       // -----------------------------------------------------------
       this.drawOverlays();
     },
@@ -231,7 +240,7 @@
       try {
         if (window.OverlayHooks && typeof window.OverlayHooks.draw === 'function') {
           // OverlayHooks verteilt den Zeichenvorgang auf alle Layer,
-          // z.B. 'workareas', 'paths', 'unit-overlay', 'test-workarea-debug'
+          // z.B. 'paths', 'unit-overlay', 'test-workarea-debug'
           window.OverlayHooks.draw(ctxO);
         }
       } catch (e) {
