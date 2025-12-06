@@ -70,15 +70,21 @@
 
   /** Liefert die Tilegröße in Pixeln (Fallback 64) */
   function getTileSize() {
-    try {
-      const game = window.GameCore || window.Game;
-      if (game?.map?.tileSize) return game.map.tileSize | 0;
-      if (game?.tileSize)      return game.tileSize     | 0;
-    } catch {
-      /* ignorieren */
-    }
-    return 64;
-  }
+  // Offizielle Quelle: GameMap._state.tileSize
+  try {
+    const ts = window.GameMap?._state?.tileSize;
+    if (Number.isFinite(ts)) return ts;
+  } catch {}
+
+  // Fallback auf GameCore/Game falls gesetzt
+  try {
+    const game = window.GameCore || window.Game;
+    if (Number.isFinite(game?.map?.tileSize)) return game.map.tileSize | 0;
+    if (Number.isFinite(game?.tileSize)) return game.tileSize | 0;
+  } catch {}
+
+  return 64; // endgültiger Fallback
+}
 
   /** Kleinere Helper, um ein Zahl-Fallback zu bekommen */
   function num(v, fallback) {
