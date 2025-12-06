@@ -349,6 +349,17 @@
     }
 
     // ---------------------------------------------------------------------
+    // Arbeitsbereiche (WorkAreas) zeichnen – direkt im Weltkoordinatensystem
+    // ---------------------------------------------------------------------
+    if (window.GameWorkArea && typeof window.GameWorkArea.drawWorld === 'function') {
+      try {
+        window.GameWorkArea.drawWorld(ctx, { tileSize: ts });
+      } catch (e) {
+        WARN('WorkArea-Draw Fehler:', e);
+      }
+    }
+    
+    // ---------------------------------------------------------------------
     // Einheiten-Fallback: Carrier als weiße Punkte
     // ---------------------------------------------------------------------
     const units = getUnitsForDraw();
