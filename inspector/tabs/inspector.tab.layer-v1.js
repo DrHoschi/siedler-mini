@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.layer-v1.js
  * Projekt : Neue Siedler
- * Version : v1.0.1 (2025-11-04, final)
+ * Version : v1.0.2 (2025-12-06)
  * Zweck   : Inspector-Tab "Layer" – UI-/Layer-Diagnose (Hit-Test, z-Boost, PE),
  *           Startpanel sichtbar machen OHNE Events zu emittieren.
  *
@@ -109,7 +109,17 @@
     const list = (document.elementsFromPoint?.(x,y) || []);
     return list.map(el=>{
       const c = css(el);
-      return { el, tag: el.tagName.toLowerCase() + (el.id?('#'+el.id):'') + (el.className?('.'+String(el.className).replace(/\s+/g,'.')):''), z:z(el,c), disp:c.display, vis:c.visibility, op:c.opacity, pe:c.pointerEvents };
+      return {
+        el,
+        tag: el.tagName.toLowerCase()
+             + (el.id?('#'+el.id):'')
+             + (el.className?('.'+String(el.className).replace(/\s+/g,'.')):''),
+        z:   z(el,c),
+        disp:c.display,
+        vis: c.visibility,
+        op:  c.opacity,
+        pe:  c.pointerEvents
+      };
     });
   }
   function formatStackText(x,y, items){
@@ -118,19 +128,27 @@
   }
 
   /* ============================ Beobachtete Layer =========================== */
+  // Hier alle relevanten Ebenen auflisten, die wir überwachen wollen.
+  // Wichtig: Selektoren korrigiert und erweitert.
   const LAYERS = [
-    { sel:'#game',        label:'Canvas (#game)' },
-    { sel:'#game-canvas', label:'Canvas (#game-canvas)' },
-    { sel:'#ui-root',     label:'UI Root' },
-    { sel:'#hud-root',    label:'HUD Root' },
-    { sel:'#build-dock',  label:'BuildDock' },
-    { sel:'#btn-build',   label:'Build Button' },
-    { sel:'#inspector',         label:'Inspector' },
-    { sel:'#paths-overlay', label:'PathOverlay (Canvas)' },
-    { sel:'#overlay-hocks', label:'OverlayHocks (Canvas)' },
-    { sel:'#paths-traces.overlay', label:'Path-tracesOverlay (Canvas)' },
-  // falls du für Kreise einen eigenen Layer benutzt:
-  // { sel:'#workarea-overlay',  label:'Arbeitsbereich' },
+    // Game / Canvas
+    { sel:'#game',               label:'Game Root (#game)' },
+    { sel:'#game-canvas',        label:'Game Canvas (#game-canvas)' },
+    { sel:'#overlay',            label:'Overlay Canvas (#overlay)' },
+    { sel:'#paths-overlay',      label:'PathOverlay Canvas (#paths-overlay)' },
+    { sel:'#paths-traces-overlay', label:'Path Traces Canvas (#paths-traces-overlay)' },
+
+    // UI / HUD / Build-Menü
+    { sel:'#ui-root',            label:'UI Root (#ui-root)' },
+    { sel:'#hud-root',           label:'HUD Root (#hud-root)' },
+    { sel:'#build-dock',         label:'BuildDock (#build-dock)' },
+    { sel:'#btn-build',          label:'Build Button (#btn-build)' },
+    { sel:'#start-panel',        label:'Startpanel (#start-panel)' },
+
+    // Inspector
+    { sel:'#inspector',          label:'Inspector (#inspector)' },
+    { sel:'#inspector .insp-tabs',    label:'Inspector Tabs (.insp-tabs)' },
+    { sel:'#inspector .insp-content', label:'Inspector Content (.insp-content)' }
   ];
 
   /* ================================= MOUNT ================================= */
@@ -149,8 +167,12 @@
     const mkBtn = (txt, fn)=>{ const b=document.createElement('button'); b.className='layer-btn'; b.textContent=txt; b.addEventListener('click', fn); return b; };
 
     const bFit = mkBtn('Canvas: Fit Window', ()=>{
-      const c = $('#game') || $('#game-canvas');
-      if (c){ c.width = innerWidth; c.height = innerHeight; c.style.display='block'; }
+      const c = $('#game-canvas') || $('#game');
+      if (c){
+        c.width  = innerWidth;
+        c.height = innerHeight;
+        c.style.display='block';
+      }
     });
 
     const bPeek = mkBtn('Peek (halten)', ()=>{});
@@ -196,6 +218,16 @@
       return tr;
     }
 
+    const mkBtnSmall = (txt, fn)=>{
+      const b=document.createElement('button');
+      b.className='layer-btn';
+      b.style.padding='.15rem .4rem';
+      b.style.fontSize='11px';
+      b.textContent=txt;
+      b.addEventListener('click', fn);
+      return b;
+    };
+
     function render(){
       tbody.innerHTML='';
       LAYERS.forEach(def=>{
@@ -205,24 +237,33 @@
         const actions = document.createElement('div'); actions.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
 
         // Mark / Unmark
-        const bHl = mkBtn('Mark', ()=>{
+        const bHl = mkBtnSmall('Mark', ()=>{
           if(!el) return;
           const marked = (el.style.outline && el.style.outline.includes('#ffcc00'));
-          if (marked){ el.style.outline=''; el.style.outlineOffset=''; el.style.boxShadow=''; }
-          else { setAndRemember(el,'outline','2px dashed #ffcc00'); setAndRemember(el,'outlineOffset','-2px'); setAndRemember(el,'boxShadow','0 0 0 2px rgba(255,204,0,.2) inset'); }
+          if (marked){
+            restore(el,'outline'); restore(el,'outlineOffset'); restore(el,'boxShadow');
+          } else {
+            setAndRemember(el,'outline','2px dashed #ffcc00');
+            setAndRemember(el,'outlineOffset','-2px');
+            setAndRemember(el,'boxShadow','0 0 0 2px rgba(255,204,0,.2) inset');
+          }
         });
 
         // z-Boost
-        const bZ = mkBtn('z+', ()=>{ if(!el) return; setAndRemember(el,'zIndex', String(2147483000)); });
+        const bZ = mkBtnSmall('z+', ()=>{
+          if(!el) return;
+          setAndRemember(el,'zIndex', String(2147483000));
+        });
 
         // pointer-events toggle
-        const bPE = mkBtn((c.pointerEvents==='none')?'PE on':'PE off', ()=>{
+        const bPE = mkBtnSmall((c.pointerEvents==='none')?'PE on':'PE off', ()=>{
           if(!el) return;
-          if (css(el).pointerEvents==='none') restore(el,'pointerEvents'); else setAndRemember(el,'pointerEvents','none');
+          if (css(el).pointerEvents==='none') restore(el,'pointerEvents');
+          else setAndRemember(el,'pointerEvents','none');
         });
 
         // Stack @ center
-        const bHit = mkBtn('Stack @ center', ()=>{
+        const bHit = mkBtnSmall('Stack @ center', ()=>{
           const b = el?.getBoundingClientRect?.(); if(!b) return;
           const x = Math.max(0, b.left + Math.min(5, b.width/2));
           const y = Math.max(0, b.top  + Math.min(5, b.height/2));
@@ -246,9 +287,12 @@
     render();
     sectionEl._layer_timer && clearInterval(sectionEl._layer_timer);
     sectionEl._layer_timer = setInterval(render, 1000);
-    window.addEventListener('cb:insp:close', ()=>{ try{ clearInterval(sectionEl._layer_timer); }catch(_){} }, { once:true });
+    window.addEventListener('cb:insp:close', ()=>{
+      try{ clearInterval(sectionEl._layer_timer); }catch(_){}
+      restoreAll();
+    }, { once:true });
 
-    (window.CBLog?.info||console.info)('ℹ️ Layer-Tab bereit (v1.0.1)');
+    (window.CBLog?.info||console.info)('ℹ️ Layer-Tab bereit (v1.0.2)');
   }
 
   /* ============================= Registrierung ============================= */
