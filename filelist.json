@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-06T12:09:57.770Z",
+  "createdAt": "2025-12-06T16:45:54.649Z",
   "root": ".",
-  "count": 521,
+  "count": 516,
   "entries": [
     {
       "type": "dir",
@@ -1202,26 +1202,6 @@
     },
     {
       "type": "file",
-      "path": "core/camera.glue-v1.js",
-      "size": 5198
-    },
-    {
-      "type": "file",
-      "path": "core/camera.glue-v3.js",
-      "size": 6038
-    },
-    {
-      "type": "file",
-      "path": "core/camera.glue-v4.js",
-      "size": 7020
-    },
-    {
-      "type": "file",
-      "path": "core/camera.glue.js",
-      "size": 3397
-    },
-    {
-      "type": "file",
       "path": "core/camera.js",
       "size": 14547
     },
@@ -1353,7 +1333,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 13152
+      "size": 12035
     },
     {
       "type": "file",
@@ -1434,11 +1414,6 @@
       "type": "file",
       "path": "core/Readme_core_final.md",
       "size": 7636
-    },
-    {
-      "type": "file",
-      "path": "core/registry-v1.js",
-      "size": 1311
     },
     {
       "type": "file",
@@ -2522,7 +2497,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16424
+      "size": 16374
     },
     {
       "type": "file",
