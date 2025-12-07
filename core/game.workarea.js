@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.07-workarea-core-v1
+ * Version : v25.12.07-workarea-core-v2
  *
  * Zweck   :
  *   Zentrale Verwaltung der ARBEITSBEREICHE (WorkAreas) für Gebäude:
@@ -17,6 +17,8 @@
  *       GameWorkArea.applySelectionTile(tx,ty)
  *         → wird von core.input.js beim Kartenklick aufgerufen
  *       GameWorkArea.cancelSelection()
+ *       GameWorkArea.getAreaFor(detailOrUid)
+ *         → liefert (und erstellt bei Bedarf) den Bereich für ein Gebäude
  *
  *   - Ereignisse:
  *       IN :
@@ -34,7 +36,7 @@
  *
  *   - Overlay:
  *       Zeichnet einfache Kreise um die Arbeitsbereiche (Option „workarea“
- *       über OverlayHooks).
+ *       über OverlayHooks ODER direkt über Renderer.drawOnMainCanvas).
  * ========================================================================== */
 
 (function(){
@@ -55,10 +57,10 @@
   let currentBuilding = null;
 
   /** Aktive Auswahl (wenn der Benutzer gerade einen Bereich setzen will) */
-  let selecting   = false;
+  let selecting    = false;
   let selectingUid = null;
 
-  /** Letzte Hover-Tile (für spätere Erweiterungen, z.B. Live-Vorschau) */
+  /** Letzte Hover-Tile (nur Diagnose / spätere Features) */
   let lastHoverTile = null;
 
   const DEFAULT_RADIUS = 3; // in Tiles
@@ -67,11 +69,21 @@
   // HILFSFUNKTIONEN
   // --------------------------------------------------------------------------
 
+  /**
+   * Einheitliche UID-Erzeugung für Gebäude.
+   *
+   * WICHTIG:
+   *   - Wenn detail.uid vorhanden ist → NUR das benutzen
+   *   - Sonst: "<id>@<x>,<y>"
+   */
   function makeUid(detail){
+    if (!detail) return null;
+    if (detail.uid) return String(detail.uid);
+
     const id = detail.id || detail.buildingId || detail.kind || 'building';
     const x  = detail.x | 0;
     const y  = detail.y | 0;
-    return detail.uid || `${id}@${x},${y}`;
+    return `${id}@${x},${y}`;
   }
 
   function computeDefaultCenter(detail){
@@ -85,10 +97,14 @@
     };
   }
 
+  /**
+   * Inneres Helper: Sorgt dafür, dass es für dieses Gebäude einen Eintrag gibt.
+   */
   function getOrCreateAreaFor(detail){
     const uid = makeUid(detail);
-    let area  = areasByUid.get(uid);
+    if (!uid) return null;
 
+    let area = areasByUid.get(uid);
     if (!area){
       const center = computeDefaultCenter(detail);
       area = {
@@ -104,8 +120,23 @@
       };
       areasByUid.set(uid, area);
     }
-
     return area;
+  }
+
+  /**
+   * Öffentliche Variante: Akzeptiert entweder eine uid (string)
+   * oder ein detail-Objekt ({id,x,y,w,h,uid?}).
+   *
+   * Wird u. a. vom Holz-/Stein-Modul genutzt, um den gleichen
+   * Arbeitsbereich zu sehen.
+   */
+  function getAreaFor(detailOrUid){
+    if (!detailOrUid) return null;
+
+    if (typeof detailOrUid === 'string'){
+      return areasByUid.get(detailOrUid) || null;
+    }
+    return getOrCreateAreaFor(detailOrUid);
   }
 
   function dispatchWorkAreaSet(area){
@@ -152,15 +183,26 @@
     }
 
     const area = getOrCreateAreaFor(d);
+    if (!area){
+      WARN('beginSelection: konnte Area nicht erzeugen', d);
+      return;
+    }
 
-    selecting    = true;
-    selectingUid = area.uid;
-    currentBuilding = d;
+    selecting     = true;
+    selectingUid  = area.uid;
+    currentBuilding = {
+      id : area.id,
+      uid: area.uid,
+      x  : area.x,
+      y  : area.y,
+      w  : area.w,
+      h  : area.h
+    };
 
     LOG('Selection gestartet für', area.uid, area);
 
     // Beim Start sofort einmal den aktuellen Bereich rausfeuern,
-    // damit Holz/Stein etc. einen gültigen Default haben.
+    // damit Produktionsmodule einen gültigen Default haben.
     dispatchWorkAreaSet(area);
   }
 
@@ -186,9 +228,7 @@
     // Sofort an alle interessierten Module melden (Holz, Stein, etc.)
     dispatchWorkAreaSet(area);
 
-    // Optional: Auswahl direkt beenden (ein Klick = setzen & fertig)
-    // Wenn du lieber mehrere Klicks erlauben willst, Kommentar entfernen
-    // und cancelSelection() NICHT aufrufen.
+    // Ein Klick = setzen & fertig
     cancelSelection();
   }
 
@@ -213,6 +253,11 @@
     ctx.stroke();
   }
 
+  /**
+   * Gemeinsame Zeichnen-Funktion:
+   *   - ctx: Canvas-Context (Haupt-Canvas oder Overlay)
+   *   - cam: {x,y,zoom} – i. d. R. GameCamera.getState()
+   */
   function drawWorkAreas(ctx, cam){
     if (!ctx) return;
     if (!areasByUid.size) return;
@@ -253,6 +298,11 @@
     ctx.restore();
   }
 
+  // Diese Funktion wird vom Renderer direkt auf dem Haupt-Canvas verwendet.
+  function drawOnMainCanvas(ctx, cam){
+    drawWorkAreas(ctx, cam);
+  }
+
   // Registrierung beim Overlay-System (falls vorhanden)
   (function registerOverlay(){
     function tryRegister(){
@@ -287,7 +337,7 @@
       const d = ev.detail || {};
       currentBuilding = {
         id      : d.id,
-        uid     : d.uid,
+        uid     : d.uid || null,
         x       : d.x | 0,
         y       : d.y | 0,
         w       : (d.w | 0) || 3,
@@ -317,11 +367,13 @@
     applySelectionTile,
     cancelSelection,
     isSelecting,
+    getAreaFor,
     getAreaForUid(uid){ return areasByUid.get(uid) || null; },
+    drawOnMainCanvas,          // für Renderer.draw(...)
     _areas: areasByUid,
     _lastHoverTile: () => lastHoverTile
   };
 
-  LOG('GameWorkArea bereit v25.12.07-workarea-core-v1');
+  LOG('GameWorkArea bereit v25.12.07-workarea-core-v2');
 
 })();
