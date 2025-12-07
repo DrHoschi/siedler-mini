@@ -1,18 +1,15 @@
 /* ============================================================================
  * Datei   : ui/ui-building-menu.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.07-workarea-bridge-v2
+ * Version : v25.12.07-workarea-bridge-v3-clickonly
  *
  * Zweck   :
  *   - Gebäude-Menü (Anzeige von Name, Status, Kategorie, Position)
  *   - WorkArea-Button → Übergabe an GameWorkArea.beginSelection(...)
- *   - Fallback: Menü öffnet sich auch bei cb:build:complete,
- *               falls cb:building:menu-open (Klick) gerade nicht feuert.
  *
  * Wichtige Schnittstellen:
  *   IN :
- *     - cb:building:menu-open(detail)
- *     - cb:build:complete(detail)
+ *     - cb:building:menu-open(detail)   (KLICK auf Gebäude)
  *
  *   OUT (indirekt):
  *     - GameWorkArea.beginSelection(currentBuilding)
@@ -142,8 +139,6 @@
 
     LOG('WorkArea-Button → GameWorkArea.beginSelection', currentBuilding);
 
-    // Neuer, einheitlicher Weg:
-    // GameWorkArea.beginSelection(detail)
     try {
       if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function'){
         GameWorkArea.beginSelection(currentBuilding);
@@ -156,39 +151,15 @@
   });
 
   // --------------------------------------------------------------------------
-  // Listener 1: Klick auf Gebäude → cb:building:menu-open
-  // (Standardweg über core.input.js)
+  // Listener: Klick auf Gebäude → cb:building:menu-open
+  //   → EINZIGER Trigger fürs Menü (kein Fallback mehr).
   // --------------------------------------------------------------------------
   window.addEventListener('cb:building:menu-open', ev=>{
     const detail = ev?.detail || {};
     LOG('cb:building:menu-open empfangen', detail);
     fillFromBuilding(detail);
     showPanel();
-
-    // Optional: hier könnte man später einen Default-Arbeitsbereich anlegen,
-    // momentan NICHT notwendig – das macht der Nutzer über den Button.
   });
 
-  // --------------------------------------------------------------------------
-  // Listener 2 (Fallback): cb:build:complete
-  //
-  // Falls der Klick-Event gerade NICHT funktioniert, öffnen wir das Menü
-  // automatisch, wenn ein Gebäude fertig gebaut wird.
-  // --------------------------------------------------------------------------
-  window.addEventListener('cb:build:complete', ev=>{
-    const d = ev?.detail || {};
-    const b = d.building || d;
-
-    if (!b || !b.id) return;
-
-    // Nur Produktionsgebäude (oder alle, wenn du willst)
-    const prodIds = ['b.lumberjack', 'b.quarry', 'b.fisher'];
-    if (!prodIds.includes(b.id)) return;
-
-    LOG('cb:build:complete → öffne Menü (Fallback)', b);
-    fillFromBuilding(b);
-    showPanel();
-  });
-
-  LOG('Modul geladen – Gebäude-Menü bereit.');
+  LOG('Modul geladen – Gebäude-Menü bereit (nur via Klick).');
 })();
