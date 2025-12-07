@@ -306,25 +306,61 @@
   //  POINTER HANDLING
   // ==========================================================================
 
-  function bindPointer(){
-    if (!canvas) return;
+  canvas.addEventListener('pointermove', ev=>{
+  const p = screenToTile(ev.clientX, ev.clientY);
+  lastHover  = p;
+  hoverValid = true;
 
-    canvas.addEventListener('pointermove', ev=>{
-      const p = screenToTile(ev.clientX, ev.clientY);
-      lastHover = p;
-      hoverValid=true;
+  // -----------------------------------------
+  // Prüfen, ob gerade ein Arbeitsbereich gesetzt wird
+  // -----------------------------------------
+  let selecting = false;
+  try {
+    const gw = window.GameWorkArea;
+    if (gw && typeof gw.isSelecting === 'function') {
+      selecting = !!gw.isSelecting();
+    }
+  } catch(e){
+    selecting = false;
+  }
 
-      const step = tileSize * cam.zoom;
-      const gx = p.sx - (p.sx % step);
-      const gy = p.sy - (p.sy % step);
+  // -----------------------------------------
+  // Cursor-Logik:
+  // - Platziermodus (buildTool) ODER WorkArea-Selection → Kreuz
+  // - sonst Standard-Cursor
+  // -----------------------------------------
+  if (canvas) {
+    canvas.style.cursor = (buildTool || selecting) ? 'crosshair' : 'default';
+  }
 
-      setGhostScreenPos(gx,gy);
-      setGhostBuildable(canPlaceAt(p.tx,p.ty));
+  // -----------------------------------------
+  // Hover-Event immer schicken (für Inspector / HUD)
+  // -----------------------------------------
+  window.dispatchEvent(new CustomEvent('cb:hover-tile',{
+    detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
+  }));
 
-      window.dispatchEvent(new CustomEvent('cb:hover-tile',{
-        detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
-      }));
-    },{passive:true});
+  // -----------------------------------------
+  // Wenn Arbeitsbereich gerade gesetzt wird:
+  // → keinen Ghost bewegen, keine Platzier-Logik
+  // -----------------------------------------
+  if (selecting) {
+    return;
+  }
+
+  // Kein Platzier-Tool aktiv → nur Hover, kein Ghost
+  if (!buildTool) {
+    return;
+  }
+
+  // Platziermodus aktiv → Ghost ausrichten
+  const step = tileSize * cam.zoom;
+  const gx   = p.sx - (p.sx % step);
+  const gy   = p.sy - (p.sy % step);
+
+  setGhostScreenPos(gx, gy);
+  setGhostBuildable(canPlaceAt(p.tx, p.ty));
+},{passive:true});
 
     canvas.addEventListener('pointerdown', (ev)=>{
       if (ev.button != null && ev.button !== 0) return;
