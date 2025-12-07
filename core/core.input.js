@@ -280,29 +280,32 @@
     resetTool();
   }
 
-  // ==========================================================================
-  //  WORKAREA-UNTERSTÜTZUNG
-  //  - Klick auf Karte kann Arbeitsbereich-Mittelpunkt verschieben
-  //  - Hat Vorrang vor Gebäude-Auswahl und Platziermodus
-  // ==========================================================================
+// ---------------------------------------------------------------------------
+// WorkArea: Klick auf die Karte im "Arbeitsbereich setzen"-Modus
+// ---------------------------------------------------------------------------
+function handleWorkAreaClick(p, ev){
+  // Nur aktiv, wenn das WorkArea-Modul überhaupt da ist
+  // und wir gerade im Selektionsmodus sind
+  if (!GameWorkArea || !GameWorkArea.isSelecting()) return false;
 
-  function handleWorkAreaClick(p, ev){
-    try{
-      const gw = window.GameWorkArea;
-      if (!gw) return false;
-      if (typeof gw.isSelecting !== 'function' || !gw.isSelecting()) return false;
-      if (typeof gw.applySelectionTile === 'function'){
-        gw.applySelectionTile(p.tx, p.ty);
-        INFO('WorkArea-Klick angewendet auf', p.tx, p.ty);
-      }
-      ev?.preventDefault?.();
-      return true;
-    } catch(e){
-      WARN('handleWorkAreaClick Fehler', e);
-      return false;
-    }
+  // Ab jetzt: JEDER Klick auf die Karte im Selektionsmodus
+  // versucht den Arbeitsbereich auf diese Tile zu setzen.
+  // Die eigentliche Validierung (Abstand zum Gebäude, Max-Radius, usw.)
+  // macht GameWorkArea.applySelectionTile() selbst.
+  try {
+    ev.preventDefault();
+    GameWorkArea.applySelectionTile(p.tx, p.ty);
+  } catch (e){
+    (window.CBLog?.warn || console.warn)(
+      '[input]',
+      'WorkArea-Klick-Fehler',
+      e
+    );
   }
 
+  // Wir haben das Event verarbeitet → nicht mehr weiterreichen
+  return true;
+}
   // ==========================================================================
   //  POINTER HANDLING
   // ==========================================================================
