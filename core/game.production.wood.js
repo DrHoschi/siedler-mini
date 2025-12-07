@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.06-wood-workarea-bridge-v2a
+ * Version : v25.12.07-wood-workarea-bridge-v3
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -104,6 +104,20 @@
   }
 
   /**
+   * Einheitliche UID-Erzeugung für Holzfäller-Gebäude
+   * (gleiche Logik wie im WorkArea-Modul).
+   */
+  function makeUidFromDetail(detail){
+    if (!detail) return null;
+    if (detail.uid) return String(detail.uid);
+
+    const id = detail.id || detail.buildingId || detail.kind || LUMBERJACK_ID;
+    const x  = detail.x | 0;
+    const y  = detail.y | 0;
+    return `${id}@${x},${y}`;
+  }
+
+  /**
    * Förster-Instanz registrieren – wird von onBuildComplete() aufgerufen.
    */
   function registerLumberjackFromBuild(detail){
@@ -117,8 +131,11 @@
     const w = (detail.w | 0) || 3;
     const h = (detail.h | 0) || 3;
 
-    const uid = detail.uid || `${kind}@${x},${y}`;
+    const uid = makeUidFromDetail(detail);
+    if (!uid) return;
+
     if (Lumberjacks.has(uid)){
+      // bereits registriert → nichts tun
       return;
     }
 
@@ -136,13 +153,33 @@
       treeProg : 0,
 
       // Standard-Arbeitsbereich: Kreis um das Gebäude-Zentrum.
-      // Wird durch cb:workarea:set überschrieben.
+      // Wird – falls vorhanden – direkt mit dem WorkArea-Modul synchronisiert.
       workArea : {
         cx         : centerX,
         cy         : centerY,
         radiusTiles: 2.5
       }
     };
+
+    // Versuchen, eine bereits existierende WorkArea vom WorkArea-Modul zu holen
+    try {
+      if (window.GameWorkArea && typeof GameWorkArea.getAreaFor === 'function'){
+        const area = GameWorkArea.getAreaFor({
+          id  : kind,
+          uid : uid,
+          x, y, w, h
+        });
+        if (area){
+          state.workArea = {
+            cx         : area.cx,
+            cy         : area.cy,
+            radiusTiles: area.radiusTiles
+          };
+        }
+      }
+    } catch(e){
+      WARN('Konnte WorkArea für Lumberjack nicht übernehmen:', e);
+    }
 
     Lumberjacks.set(uid, state);
 
@@ -548,9 +585,9 @@
       return; // anderes Gebäude -> ignorieren
     }
 
-    const x   = (detail.x != null) ? (detail.x | 0) : 0;
-    const y   = (detail.y != null) ? (detail.y | 0) : 0;
-    const uid = detail.uid || `${LUMBERJACK_ID}@${x},${y}`;
+    // UID so erzeugen wie beim Registrieren
+    const uid = makeUidFromDetail(detail);
+    if (!uid) return;
 
     setWorkArea(uid, {
       cx         : (typeof detail.cx === 'number') ? detail.cx : undefined,
@@ -626,6 +663,6 @@
     _drawTreeFrame        : drawTreeFrame
   };
 
-  LOG('Holz-Modul geladen v25.12.06-wood-workarea-bridge-v2a');
+  LOG('Holz-Modul geladen v25.12.07-wood-workarea-bridge-v3');
 
 })();
