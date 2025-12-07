@@ -283,7 +283,7 @@
 // ---------------------------------------------------------------------------
 // WorkArea: Klick auf die Karte im "Arbeitsbereich setzen"-Modus
 // ---------------------------------------------------------------------------
-function handleWorkAreaClick(p, ev){
+/* function handleWorkAreaClick(p, ev){
   // Nur aktiv, wenn das WorkArea-Modul überhaupt da ist
   // und wir gerade im Selektionsmodus sind
   if (!GameWorkArea || !GameWorkArea.isSelecting()) return false;
@@ -304,6 +304,13 @@ function handleWorkAreaClick(p, ev){
   }
 
   // Wir haben das Event verarbeitet → nicht mehr weiterreichen
+  return true;
+} */
+  function handleWorkAreaClick(p, ev){
+  if(!GameWorkArea || !GameWorkArea.isSelecting()) return false;
+
+  ev.preventDefault();
+  GameWorkArea.applySelectionTile(p.tx, p.ty);
   return true;
 }
   // ==========================================================================
