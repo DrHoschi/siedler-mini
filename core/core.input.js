@@ -18,6 +18,7 @@
  *  ✔ Tint bleibt wie bisher (rot/grün)
  *  ✔ Voll kompatibel zu Kamera-Blockierung (__SIEDLER_PLACE_ACTIVE)
  *  ✔ NEU: Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
+ *  ✔ NEU: Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
  * ========================================================================== */
 (() => {
   'use strict';
@@ -313,6 +314,21 @@
       const p = screenToTile(ev.clientX, ev.clientY);
       lastHover = p;
       hoverValid=true;
+
+      // NEU: Cursor-Logik auch für WorkArea-Auswahl
+      try {
+        const gw = window.GameWorkArea;
+        const selecting =
+          gw && typeof gw.isSelecting === 'function'
+            ? !!gw.isSelecting()
+            : false;
+
+        if (canvas) {
+          canvas.style.cursor = (buildTool || selecting) ? 'crosshair' : 'default';
+        }
+      } catch(e){
+        // Wenn irgendwas schiefgeht, Cursor lieber nicht verändern
+      }
 
       const step = tileSize * cam.zoom;
       const gx = p.sx - (p.sx % step);
