@@ -306,61 +306,124 @@
   //  POINTER HANDLING
   // ==========================================================================
 
-  canvas.addEventListener('pointermove', ev=>{
-  const p = screenToTile(ev.clientX, ev.clientY);
-  lastHover  = p;
-  hoverValid = true;
+  // ==========================================================================
+  //  POINTER HANDLING
+  // ==========================================================================
+  function bindPointer(){
+    if (!canvas) return;
 
-  // -----------------------------------------
-  // Prüfen, ob gerade ein Arbeitsbereich gesetzt wird
-  // -----------------------------------------
-  let selecting = false;
-  try {
-    const gw = window.GameWorkArea;
-    if (gw && typeof gw.isSelecting === 'function') {
-      selecting = !!gw.isSelecting();
-    }
-  } catch(e){
-    selecting = false;
+    // ------------------------------
+    // MOVE: Hover + Ghost + Cursor
+    // ------------------------------
+    canvas.addEventListener('pointermove', ev=>{
+      const p = screenToTile(ev.clientX, ev.clientY);
+      lastHover  = p;
+      hoverValid = true;
+
+      // Prüfen, ob gerade ein Arbeitsbereich gesetzt wird
+      let selecting = false;
+      try {
+        const gw = window.GameWorkArea;
+        if (gw && typeof gw.isSelecting === 'function') {
+          selecting = !!gw.isSelecting();
+        }
+      } catch(e){
+        selecting = false;
+      }
+
+      // Cursor:
+      // - Kreuz bei aktivem Bau-Tool ODER WorkArea-Selection
+      // - sonst Default
+      if (canvas) {
+        canvas.style.cursor = (buildTool || selecting) ? 'crosshair' : 'default';
+      }
+
+      // Ghost nur bewegen, wenn wir wirklich im Platziermodus sind
+      if (buildTool) {
+        const step = tileSize * cam.zoom;
+        const gx   = p.sx - (p.sx % step);
+        const gy   = p.sy - (p.sy % step);
+
+        setGhostScreenPos(gx, gy);
+        setGhostBuildable(canPlaceAt(p.tx, p.ty));
+      }
+
+      // Hover-Event immer für Inspector / WorkArea-Modul feuern
+      window.dispatchEvent(new CustomEvent('cb:hover-tile', {
+        detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
+      }));
+    }, { passive:true });
+
+    // ------------------------------
+    // DOWN: WorkArea → Gebäude-Menü → Platzieren
+    // ------------------------------
+    canvas.addEventListener('pointerdown', (ev)=>{
+      if (ev.button != null && ev.button !== 0) return;
+
+      const p = screenToTile(ev.clientX, ev.clientY);
+
+      // 1) Zuerst: Arbeitsbereich-Click abfangen
+      if (handleWorkAreaClick(p, ev)) {
+        // Klick wurde zum Verschieben des Arbeitsbereichs benutzt
+        return;
+      }
+
+      // 2) Danach: Gebäude unter dem Klick suchen
+      const b = findBuildingAt(p.tx, p.ty);
+
+      INFO('pointerdown → tile', p.tx, p.ty, 'building:', b && b.id);
+
+      if (b) {
+        const detail = {
+          id      : b.id,
+          uid     : b.uid || null,
+          x       : b.x | 0,
+          y       : b.y | 0,
+          w       : (b.w | 0) || 1,
+          h       : (b.h | 0) || 1,
+          status  : b.status  || '',
+          label   : b.label   || '',
+          category: b.category|| ''
+        };
+
+        INFO('cb:building:menu-open →', detail);
+
+        try {
+          window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
+        } catch (e) {
+          console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
+        }
+
+        // Klick wurde für das Gebäude-Menü verwendet → Platzier-Logik NICHT ausführen
+        ev.preventDefault?.();
+        return;
+      }
+
+      // 3) Kein Gebäude → ggf. Platziermodus bedienen
+      if (!buildTool) {
+        // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
+        return;
+      }
+
+      // Platziermodus aktiv → Position merken (Ghost bleibt über ✓-Button steuerbar)
+      if (!hoverValid) {
+        lastHover  = p;
+        hoverValid = true;
+      }
+
+      // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
+      ev.preventDefault?.();
+    }, { passive:false });
+
+    // Rechtsklick = Platziermodus abbrechen
+    canvas.addEventListener('contextmenu', ev=>{
+      if (buildTool){
+        ev.preventDefault();
+        hideOverlay();
+        resetTool();
+      }
+    });
   }
-
-  // -----------------------------------------
-  // Cursor-Logik:
-  // - Platziermodus (buildTool) ODER WorkArea-Selection → Kreuz
-  // - sonst Standard-Cursor
-  // -----------------------------------------
-  if (canvas) {
-    canvas.style.cursor = (buildTool || selecting) ? 'crosshair' : 'default';
-  }
-
-  // -----------------------------------------
-  // Hover-Event immer schicken (für Inspector / HUD)
-  // -----------------------------------------
-  window.dispatchEvent(new CustomEvent('cb:hover-tile',{
-    detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
-  }));
-
-  // -----------------------------------------
-  // Wenn Arbeitsbereich gerade gesetzt wird:
-  // → keinen Ghost bewegen, keine Platzier-Logik
-  // -----------------------------------------
-  if (selecting) {
-    return;
-  }
-
-  // Kein Platzier-Tool aktiv → nur Hover, kein Ghost
-  if (!buildTool) {
-    return;
-  }
-
-  // Platziermodus aktiv → Ghost ausrichten
-  const step = tileSize * cam.zoom;
-  const gx   = p.sx - (p.sx % step);
-  const gy   = p.sy - (p.sy % step);
-
-  setGhostScreenPos(gx, gy);
-  setGhostBuildable(canPlaceAt(p.tx, p.ty));
-},{passive:true});
 
     canvas.addEventListener('pointerdown', (ev)=>{
       if (ev.button != null && ev.button !== 0) return;
