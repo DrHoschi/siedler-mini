@@ -1,13 +1,22 @@
 /* ============================================================================
  * Datei   : ui/ui-building-menu.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-workarea-bridge
+ * Version : v25.12.07-workarea-bridge-v2
  *
  * Zweck   :
  *   - Gebäude-Menü (Anzeige von Name, Status, Kategorie, Position)
- *   - WorkArea-Button → Übergabe an GameWorkArea
+ *   - WorkArea-Button → Übergabe an GameWorkArea.beginSelection(...)
  *   - Fallback: Menü öffnet sich auch bei cb:build:complete,
  *               falls cb:building:menu-open (Klick) gerade nicht feuert.
+ *
+ * Wichtige Schnittstellen:
+ *   IN :
+ *     - cb:building:menu-open(detail)
+ *     - cb:build:complete(detail)
+ *
+ *   OUT (indirekt):
+ *     - GameWorkArea.beginSelection(currentBuilding)
+ *       → GameWorkArea kümmert sich dann um cb:workarea:set etc.
  * ========================================================================== */
 
 (function(){
@@ -85,7 +94,7 @@
   function fillFromBuilding(b){
     if (!b) return;
 
-    // Default-Werte
+    // Default-Werte aus dem Event-Detail herausziehen
     const id       = b.id       || b.buildingId || '—';
     const uid      = b.uid      || '—';
     const label    = b.label    || id;
@@ -131,26 +140,24 @@
       return;
     }
 
-    LOG('WorkArea-Button → StartSelection', currentBuilding);
+    LOG('WorkArea-Button → GameWorkArea.beginSelection', currentBuilding);
 
-    // Sicherer Aufruf von GameWorkArea
+    // Neuer, einheitlicher Weg:
+    // GameWorkArea.beginSelection(detail)
     try {
-      if (window.GameWorkArea && typeof GameWorkArea.startSelectionForBuilding === 'function'){
-        GameWorkArea.startSelectionForBuilding(currentBuilding);
-      } else if (window.GameWorkArea && typeof GameWorkArea.ensureDefaultForBuilding === 'function'){
-        // Fallback: wenigstens Default-Bereich setzen
-        GameWorkArea.ensureDefaultForBuilding(currentBuilding);
+      if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function'){
+        GameWorkArea.beginSelection(currentBuilding);
       } else {
-        WARN('GameWorkArea.* nicht verfügbar – WorkArea kann noch nicht gesetzt werden.');
+        WARN('GameWorkArea.beginSelection nicht verfügbar – WorkArea kann noch nicht gesetzt werden.');
       }
     } catch (e){
-      WARN('Fehler bei GameWorkArea-Aufruf:', e);
+      WARN('Fehler bei GameWorkArea.beginSelection:', e);
     }
   });
 
   // --------------------------------------------------------------------------
   // Listener 1: Klick auf Gebäude → cb:building:menu-open
-  // (Standardweg über core.input-v1.js)
+  // (Standardweg über core.input.js)
   // --------------------------------------------------------------------------
   window.addEventListener('cb:building:menu-open', ev=>{
     const detail = ev?.detail || {};
@@ -158,14 +165,8 @@
     fillFromBuilding(detail);
     showPanel();
 
-    // Optional: hier schon Default-Arbeitsbereich anlegen
-    try {
-      if (window.GameWorkArea && typeof GameWorkArea.ensureDefaultForBuilding === 'function'){
-        GameWorkArea.ensureDefaultForBuilding(detail);
-      }
-    } catch (e){
-      WARN('Fehler bei ensureDefaultForBuilding (cb:building:menu-open):', e);
-    }
+    // Optional: hier könnte man später einen Default-Arbeitsbereich anlegen,
+    // momentan NICHT notwendig – das macht der Nutzer über den Button.
   });
 
   // --------------------------------------------------------------------------
@@ -181,22 +182,12 @@
     if (!b || !b.id) return;
 
     // Nur Produktionsgebäude (oder alle, wenn du willst)
-    // Hier kannst du später erweitern: b.fisher, b.quarry, ...
     const prodIds = ['b.lumberjack', 'b.quarry', 'b.fisher'];
     if (!prodIds.includes(b.id)) return;
 
     LOG('cb:build:complete → öffne Menü (Fallback)', b);
     fillFromBuilding(b);
     showPanel();
-
-    // Default-Arbeitsbereich direkt erzeugen
-    try {
-      if (window.GameWorkArea && typeof GameWorkArea.ensureDefaultForBuilding === 'function'){
-        GameWorkArea.ensureDefaultForBuilding(b);
-      }
-    } catch (e){
-      WARN('Fehler bei ensureDefaultForBuilding (cb:build:complete):', e);
-    }
   });
 
   LOG('Modul geladen – Gebäude-Menü bereit.');
