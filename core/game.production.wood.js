@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.03-wood-lumberjack-workarea-integrated
+ * Version : v25.12.06-wood-workarea-bridge-v2
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -11,7 +11,7 @@
  *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
  *     - Erzeugt Holz über Production.addResource('wood', ...)
  *     - Zeichnet Bäume als Overlay (Arbeitskreis selbst kommt aus WorkArea-Modul)
- *     - Nutzt optional den neuen trees_mega_atlas (padded) als Grafikquelle
+ *     - Nutzt optional den trees_mega_atlas als Grafikquelle
  *
  * Ereignisse:
  *   IN  :
@@ -87,7 +87,7 @@
 
   /** Atlas-Daten (optional) */
   let treeAtlas        = null;  // Inhalt von trees_mega_atlas.json
-  let treeAtlasImg     = null;  // Image-Objekt für *_padded.png
+  let treeAtlasImg     = null;  // Image-Objekt
   let treeAtlasLoaded  = false; // TRUE, wenn das Bild geladen wurde
   let treeAtlasLoading = false; // Ladevorgang bereits gestartet?
 
@@ -361,11 +361,9 @@
       const bw = lj.w || 3;
       const bh = lj.h || 3;
 
-      // -----------------------------
       // Position für den Baum:
       // → Standard: Gebäudemitte unten
       // → wenn WorkArea gesetzt: Mitte des Arbeitsbereichs
-      // -----------------------------
       const area    = lj.workArea || {};
       const cxTiles = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
       const cyTiles = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
@@ -535,8 +533,8 @@
   }
 
   /**
-   * Hook für Production-Manager:
-   * Wird von core/game.production.js bei cb:workarea:set aufgerufen.
+   * Hook für WorkArea-Events:
+   * Wird bei cb:workarea:set aufgerufen.
    *
    * detail:
    *   { id, uid, cx, cy, radiusTiles, x, y, w, h }
@@ -554,6 +552,28 @@
       cy         : detail.cy,
       radiusTiles: detail.radiusTiles
     });
+  }
+
+  // Direktes Event-Binding für cb:workarea:set
+  try {
+    window.addEventListener('cb:workarea:set', (ev)=>{
+      const detail = ev.detail || {};
+      try {
+        onWorkAreaSet(detail);
+      } catch(e){
+        (window.CBLog?.warn || console.warn)(
+          '[prod-wood]',
+          'cb:workarea:set-Listener Fehler:',
+          e
+        );
+      }
+    }, { passive:true });
+  } catch(e){
+    (window.CBLog?.warn || console.warn)(
+      '[prod-wood]',
+      'cb:workarea:set-Listener konnte nicht registriert werden:',
+      e
+    );
   }
 
   // =========================
@@ -601,6 +621,6 @@
     _drawTreeFrame        : drawTreeFrame
   };
 
-  LOG('Holz-Modul geladen v25.12.03-wood-lumberjack-workarea-integrated');
+  LOG('Holz-Modul geladen v25.12.06-wood-workarea-bridge-v2');
 
 })();
