@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.06-wood-workarea-bridge-v2
+ * Version : v25.12.06-wood-workarea-bridge-v2a
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -16,7 +16,7 @@
  * Ereignisse:
  *   IN  :
  *     - cb:build:complete { id, uid?, x,y,w,h, ... }
- *     - cb:workarea:set   { id, uid, cx,cy,radiusTiles, x,y,w,h }
+ *     - cb:workarea:set   { id|buildingId|kind, uid, cx,cy,radiusTiles, x,y,w,h }
  *
  *   OUT :
  *     - cb:prod:start  { bId, kind }
@@ -537,20 +537,25 @@
    * Wird bei cb:workarea:set aufgerufen.
    *
    * detail:
-   *   { id, uid, cx, cy, radiusTiles, x, y, w, h }
+   *   { id|buildingId|kind, uid, cx, cy, radiusTiles, x, y, w, h }
    */
   function onWorkAreaSet(detail){
     if (!detail) return;
-    if (detail.id !== LUMBERJACK_ID) return;
 
-    const x   = detail.x | 0;
-    const y   = detail.y | 0;
+    // Robuster Abgleich der Gebäude-ID:
+    const bId = detail.id || detail.buildingId || detail.kind;
+    if (bId !== LUMBERJACK_ID) {
+      return; // anderes Gebäude -> ignorieren
+    }
+
+    const x   = (detail.x != null) ? (detail.x | 0) : 0;
+    const y   = (detail.y != null) ? (detail.y | 0) : 0;
     const uid = detail.uid || `${LUMBERJACK_ID}@${x},${y}`;
 
     setWorkArea(uid, {
-      cx         : detail.cx,
-      cy         : detail.cy,
-      radiusTiles: detail.radiusTiles
+      cx         : (typeof detail.cx === 'number') ? detail.cx : undefined,
+      cy         : (typeof detail.cy === 'number') ? detail.cy : undefined,
+      radiusTiles: (typeof detail.radiusTiles === 'number') ? detail.radiusTiles : undefined
     });
   }
 
@@ -621,6 +626,6 @@
     _drawTreeFrame        : drawTreeFrame
   };
 
-  LOG('Holz-Modul geladen v25.12.06-wood-workarea-bridge-v2');
+  LOG('Holz-Modul geladen v25.12.06-wood-workarea-bridge-v2a');
 
 })();
