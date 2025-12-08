@@ -11,14 +11,11 @@
  *
  *   - API:
  *       GameWorkArea.beginSelection(buildingDetail)
- *         → wird vom Gebäude-Menü aufgerufen ("Arbeitsbereich setzen")
  *       GameWorkArea.isSelecting()
- *         → wird von core.input.js abgefragt
  *       GameWorkArea.applySelectionTile(tx,ty)
- *         → wird von core.input.js bei Klick auf die Karte aufgerufen
  *       GameWorkArea.cancelSelection()
  *       GameWorkArea.getAreaFor(detailOrUid)
- *         → liefert aktuellen Bereich für Holz-/Stein-Module
+ *       GameWorkArea.getOrCreateAreaFor(detailOrUid)
  *
  *   - Events:
  *       cb:workarea:set(detail)
@@ -268,7 +265,7 @@
     const ts =
       (window.Game?.map?.tileSize) ||
       (window.Game?.tileSize) ||
-      (window.GameMap?._state?.tileSize) || // <— wichtig: _state.tileSize
+      (window.GameMap?._state?.tileSize) || // <— korrigiert
       64;
 
     ctx.save();
