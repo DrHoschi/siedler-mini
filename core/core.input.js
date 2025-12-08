@@ -174,19 +174,22 @@
         // Wenn irgendwas schiefgeht, Cursor lieber nicht verändern
       }
 
-      const step = tileSize * cam.zoom;
-      const gx = p.sx - (p.sx % step);
-      const gy = p.sy - (p.sy % step);
-
-      // NEU: Info auch an GamePlace weiterreichen (wenn vorhanden)
+            // Ghost-Bewegung komplett an GamePlace delegieren (wenn vorhanden)
       if (buildTool && window.GamePlace?.onHoverTile){
-        try { GamePlace.onHoverTile(p); } catch(e){ WARN('GamePlace.onHoverTile Fehler', e); }
+        try {
+          GamePlace.onHoverTile(p);
+        } catch(e){
+          WARN('GamePlace.onHoverTile Fehler', e);
+        }
+      } else {
+        // Fallback: alte Logik (falls GamePlace nicht geladen ist)
+        const step = tileSize * cam.zoom;
+        const gx = p.sx - (p.sx % step);
+        const gy = p.sy - (p.sy % step);
+        setGhostScreenPos(gx,gy);
+        setGhostBuildable(canPlaceAt(p.tx,p.ty));
       }
-
-      // Bestehende Ghost-Logik bleibt aktiv (Fallback)
-      setGhostScreenPos(gx,gy);
-      setGhostBuildable(canPlaceAt(p.tx,p.ty));
-
+      
       window.dispatchEvent(new CustomEvent('cb:hover-tile',{
         detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
       }));
