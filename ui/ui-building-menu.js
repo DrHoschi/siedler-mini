@@ -1,25 +1,22 @@
 /* ============================================================================
  * Datei   : ui/ui-building-menu.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.07-workarea-bridge-v3-clickonly
+ * Version : v25.12.08-workarea-bridge-v4-close-cancels
  *
  * Zweck   :
  *   - Gebäude-Menü (Anzeige von Name, Status, Kategorie, Position)
  *   - WorkArea-Button → Übergabe an GameWorkArea.beginSelection(...)
  *
- * Wichtige Schnittstellen:
- *   IN :
- *     - cb:building:menu-open(detail)   (KLICK auf Gebäude)
- *
- *   OUT (indirekt):
- *     - GameWorkArea.beginSelection(currentBuilding)
- *       → GameWorkArea kümmert sich dann um cb:workarea:set etc.
+ *   Spezial:
+ *   - Beim Schließen des Menüs wird GameWorkArea.cancelSelection() aufgerufen,
+ *     damit der Kreis verschwindet.
+ *   - Klick außerhalb des Panels schließt das Menü (außer im aktiven
+ *     WorkArea-Setzmodus).
  * ========================================================================== */
 
 (function(){
   const TAG = '[ui-building]';
 
-  // kleiner Helper fürs Logging
   function LOG(...args){
     if (window.CBLog && CBLog.info) CBLog.info(TAG, ...args);
     else console.log(TAG, ...args);
@@ -38,10 +35,9 @@
     return;
   }
 
-  // Panel erstellen (wird per CSS rechts oben angezeigt)
   const panel = document.createElement('div');
   panel.id = 'ui-building-menu';
-  panel.className = 'ui-panel hidden'; // hidden = display:none !important (siehe CSS)
+  panel.className = 'ui-panel hidden';
   panel.innerHTML = `
     <div class="ui-panel__header">
       <div>
@@ -72,7 +68,6 @@
   `;
   UI_ROOT.appendChild(panel);
 
-  // DOM-Referenzen
   const elTitle    = panel.querySelector('#ui-building-title');
   const elSubTitle = panel.querySelector('#ui-building-subtitle');
   const elId       = panel.querySelector('#ui-building-id');
@@ -82,7 +77,6 @@
   const btnClose   = panel.querySelector('#ui-building-close');
   const btnWork    = panel.querySelector('#btn-building-workarea');
 
-  // aktuelles Gebäude, das im Menü angezeigt wird
   let currentBuilding = null;
 
   // --------------------------------------------------------------------------
@@ -91,7 +85,6 @@
   function fillFromBuilding(b){
     if (!b) return;
 
-    // Default-Werte aus dem Event-Detail herausziehen
     const id       = b.id       || b.buildingId || '—';
     const uid      = b.uid      || '—';
     const label    = b.label    || id;
@@ -122,10 +115,19 @@
   function hidePanel(){
     panel.classList.add('hidden');
     currentBuilding = null;
+
+    // Beim Schließen WorkArea-Selection beenden → Kreis ausblenden
+    try {
+      if (window.GameWorkArea && typeof GameWorkArea.cancelSelection === 'function') {
+        GameWorkArea.cancelSelection();
+      }
+    } catch (e) {
+      WARN('Fehler beim Abbrechen der WorkArea-Selektion beim Schließen des Menüs:', e);
+    }
   }
 
   // --------------------------------------------------------------------------
-  // Event-Bindings: Close-Button + WorkArea-Button
+  // Event-Bindings
   // --------------------------------------------------------------------------
   btnClose?.addEventListener('click', ()=>{
     hidePanel();
@@ -150,9 +152,26 @@
     }
   });
 
+  // Klick außerhalb des Panels → Menü schließen (außer im WorkArea-Setzmodus)
+  document.addEventListener('click', (ev)=>{
+    if (panel.classList.contains('hidden')) return;
+
+    const target = ev.target;
+    if (!target) return;
+
+    if (panel.contains(target)) return; // Klick im Panel → ignorieren
+
+    try {
+      if (window.GameWorkArea && typeof GameWorkArea.isSelecting === 'function') {
+        if (GameWorkArea.isSelecting()) return; // beim Setzen nicht automatisch schließen
+      }
+    } catch(e){}
+
+    hidePanel();
+  });
+
   // --------------------------------------------------------------------------
   // Listener: Klick auf Gebäude → cb:building:menu-open
-  //   → EINZIGER Trigger fürs Menü (kein Fallback mehr).
   // --------------------------------------------------------------------------
   window.addEventListener('cb:building:menu-open', ev=>{
     const detail = ev?.detail || {};
