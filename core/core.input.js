@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.12.08-workarea-integrated-v2 (Ghost+Sprite+ZoomScaling+WorkArea-Click+OptionA)
+ * Version : v25.12.08-workarea-integrated-v3 (Ghost+Sprite+ZoomScaling+WorkArea-Click+OptionA+AutoPlace)
  * Zweck   : Eingabe + Platzier-Ghost + OK/Cancel direkt am Ghost
  *
  * Lauscht : cb:set-build-tool(kind)
@@ -18,6 +18,7 @@
  *  ✔ Tint bleibt wie bisher (rot/grün)
  *  ✔ NEU: Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
  *  ✔ NEU: Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
+ *  ✔ NEU: Auto-Place beim Linksklick (wie früher) + ✓-Button nutzt dieselbe Logik
  *
  * WICHTIG (Struktur):
  *  - ALLE Pointer-Events bleiben HIER (Input-Modul).
@@ -96,6 +97,32 @@
     return true;
   }
 
+  /**
+   * Zentrale Platzier-Funktion:
+   *  - wird von Auto-Place (Linksklick) UND vom ✓-Button verwendet
+   *  - sendet cb:build:place
+   *  - schließt Overlay & resetTool
+   */
+  function placeAt(tx, ty){
+    if (!buildTool) return;
+
+    const w = 3, h = 3; // Standardgröße – TODO: später aus Registry holen
+
+    const detail = {
+      kind      : buildTool,
+      buildingId: buildTool,
+      x         : tx|0,
+      y         : ty|0,
+      w         : w|0,
+      h         : h|0
+    };
+
+    INFO('cb:build:place', detail);
+    window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
+    hideOverlay();
+    resetTool();
+  }
+
   function getBuildingMeta(id){
     if (!id) return null;
     let b = null;
@@ -158,23 +185,11 @@
       ghost.appendChild(btnCancel);
     }
 
+    // ✓-Button: nutzt dieselbe placeAt-Logik
     btnOk.addEventListener('click', ()=>{
       if (!buildTool || !hoverValid || !lastHover) return;
       const { tx,ty } = lastHover;
-      const w = 3, h = 3; // Standardgröße – später aus Registry
-
-      const detail = {
-        kind     : buildTool,
-        buildingId: buildTool,
-        x        : tx|0,
-        y        : ty|0,
-        w        : w|0,
-        h        : h|0
-      };
-      OK('cb:build:place', detail);
-      window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
-      hideOverlay();
-      resetTool();
+      placeAt(tx, ty);
     });
 
     btnCancel.addEventListener('click', ()=>{
@@ -274,9 +289,9 @@
       }
 
       const cam = camState;
-      const ts  = tileSize * cam.zoom;
+      const ts  = tileSize * camState.zoom;
 
-      const step = tileSize * cam.zoom;
+      const step = tileSize * camState.zoom;
       const gx = p.sx - (p.sx % step);
       const gy = p.sy - (p.sy % step);
 
@@ -348,8 +363,14 @@
         hoverValid = true;
       }
 
-      // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
-      ev.preventDefault?.();
+      // ⬇⬇⬇ NEU: Auto-Place beim Linksklick (wie früher)
+      if (canPlaceAt(p.tx, p.ty)) {
+        ev.preventDefault?.();
+        placeAt(p.tx, p.ty);
+      } else {
+        ev.preventDefault?.();
+        WARN('Platzierung nicht erlaubt bei', p.tx, p.ty);
+      }
     }, { passive:false });
 
     canvas.addEventListener('contextmenu', ev=>{
@@ -381,7 +402,7 @@
       };
     });
 
-    INFO('bereit v25.12.08-workarea-integrated-v2 (Ghost+Sprite+ZoomScaling+WorkArea-Click+OptionA)');
+    INFO('bereit v25.12.08-workarea-integrated-v3 (Ghost+Sprite+ZoomScaling+WorkArea-Click+OptionA+AutoPlace)');
   }
 
   // Externes Interface (z. B. aus boot.js):
