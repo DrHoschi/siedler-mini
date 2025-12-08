@@ -1,21 +1,22 @@
 /* ============================================================================
  * Datei   : core/game.place.js
  * Projekt : Neue Siedler
- * Version : v25.12.08-place-controller-step3
- * Zweck   : Platzier-/Ghost-Controller (erste echte Logik)
+ * Version : v25.12.08-place-controller-step4
+ * Zweck   : Platzier-/Ghost-Controller (Overlay, Buttons, Icons, Scaling)
  *
- * In diesem Schritt:
- *  - GamePlace bekommt alle Infos vom Input:
- *      onSetBuildTool, onPlaceBegin, onCameraChange,
- *      onHoverTile, onMapClick, onKeyEnter, onKeyEscape
- *  - GamePlace kümmert sich bereits um die GHOST-POSITION + Tint:
- *      → sx/sy setzen (CSS-Variablen)
- *      → is-valid / is-invalid Klasse + OK-Button enabled/disabled
+ * Lauscht (indirekt, via core.input.js):
+ *  - GamePlace.onSetBuildTool(kind)
+ *  - GamePlace.onPlaceBegin({w,h})
+ *  - GamePlace.onCameraChange({x,y,zoom})
+ *  - GamePlace.onHoverTile({tx,ty,sx,sy})
+ *  - GamePlace.onMapClick({tx,ty,sx,sy})
+ *  - GamePlace.onKeyEnter()
+ *  - GamePlace.onKeyEscape()
  *
- * WICHTIG:
- *  - Overlay / Ghost / Buttons werden weiterhin von core.input.js angelegt.
- *    Wir greifen nur auf bestehende DOM-Elemente zu (KEIN neues HTML).
- *  - Bauen (cb:build:place) übernimmt vorerst weiter core.input.js.
+ * Nutzt:
+ *  - window.CoreInput.placeAt(tx,ty,w,h)
+ *  - window.CoreInput.resetTool()
+ *  - Registry.get('buildings', id) / Registry.buildings
  * ========================================================================== */
 
 (function(){
@@ -27,7 +28,7 @@
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn )(TAG, ...a);
 
   // ==========================================================================
-  // Interner State
+  // State
   // ==========================================================================
 
   let currentTool = null;             // z.B. 'b.hq'
@@ -36,42 +37,16 @@
   let cam         = { x:0, y:0, zoom:1 };
   let tileSize    = 64;
 
-  // DOM-Referenzen – werden NICHT erzeugt, nur aus bestehendem HTML geholt
+  // Overlay / Ghost / Buttons
   let overlay = null;
   let ghost   = null;
   let tint    = null;
   let btnOk   = null;
+  let btnCancel = null;
 
   // ==========================================================================
-  // Hilfen: DOM & TileSize
+  // Hilfen: TileSize & Kamera
   // ==========================================================================
-
-  function ensureDom(){
-    if (overlay && ghost && tint && btnOk) return;
-
-    overlay = document.querySelector('#place-overlay');
-    if (!overlay){
-      WARN('ensureDom: #place-overlay nicht gefunden (Overlay noch nicht initialisiert?)');
-      return;
-    }
-
-    ghost =
-      overlay.querySelector('#place-ghost') ||
-      overlay.querySelector('.ghost-sprite');
-    if (!ghost){
-      WARN('ensureDom: #place-ghost / .ghost-sprite nicht gefunden');
-      return;
-    }
-
-    tint = ghost.querySelector('.ghost-tint');
-    if (!tint){
-      WARN('ensureDom: .ghost-tint nicht gefunden');
-      // kein harter Fehler – wir können den Ghost auch ohne Tint bewegen
-    }
-
-    btnOk = ghost.querySelector('.place-btn.ok');
-    // btnOk ist optional – wenn nicht da, können wir halt disable nicht setzen
-  }
 
   function ensureTileSize(){
     try{
@@ -83,26 +58,176 @@
   }
 
   function updateTileScale(){
-    ensureDom();
+    ensureTileSize();
     if (!overlay) return;
-
     const tilePx = tileSize * (cam.zoom || 1);
     overlay.style.setProperty('--tilePx', `${tilePx}px`);
+    updateGhostButtonsScale(tilePx);
   }
 
   // ==========================================================================
-  // Hilfen: Ghost steuern (Position + Buildable-Tint)
+  // Hilfen: Registry / Building-Meta
   // ==========================================================================
 
+  function getBuildingMeta(id){
+    if (!id) return null;
+    let b=null;
+
+    try{
+      if (window.Registry && typeof window.Registry.get === 'function'){
+        b = window.Registry.get('buildings', id);
+      } else if (window.Registry?.buildings){
+        b = window.Registry.buildings.find(x => x.id === id);
+      }
+    }catch(e){}
+
+    return b || { id, icon:null };
+  }
+
+  function resolveBuildingIcon(meta){
+    if (!meta) return '';
+    if (meta.icon) return meta.icon;
+
+    return `assets/icons/buildings/${meta.id}.png`;
+  }
+
+  // ==========================================================================
+  // Overlay / Ghost / Buttons – DOM erzeugen + steuern
+  // ==========================================================================
+
+  function ensureOverlay(){
+    if (overlay && ghost && tint && btnOk && btnCancel) return;
+
+    overlay = document.querySelector('#place-overlay') || overlay;
+    if (!overlay){
+      overlay = document.createElement('div');
+      overlay.id='place-overlay';
+      overlay.className='place-overlay';
+      overlay.hidden=true;
+      document.body.appendChild(overlay);
+    }
+
+    ghost = overlay.querySelector('#place-ghost') || overlay.querySelector('.ghost-sprite');
+    if (!ghost){
+      ghost=document.createElement('div');
+      ghost.id='place-ghost';
+      ghost.className='ghost-sprite';
+      overlay.appendChild(ghost);
+    }
+
+    tint = ghost.querySelector('.ghost-tint');
+    if (!tint){
+      tint = document.createElement('div');
+      tint.className='ghost-tint';
+      ghost.appendChild(tint);
+    }
+
+    // Alte Buttons im Overlay direkt entfernen (falls falsch platziert)
+    Array.from(overlay.querySelectorAll(':scope > .place-btn')).forEach(b=>b.remove());
+
+    btnOk = ghost.querySelector('.place-btn.ok');
+    if (!btnOk){
+      btnOk=document.createElement('button');
+      btnOk.className='place-btn ok';
+      btnOk.textContent='✓';
+      ghost.appendChild(btnOk);
+    }
+
+    btnCancel = ghost.querySelector('.place-btn.cancel');
+    if (!btnCancel){
+      btnCancel=document.createElement('button');
+      btnCancel.className='place-btn cancel';
+      btnCancel.textContent='✕';
+      ghost.appendChild(btnCancel);
+    }
+
+    // Button-Events → CoreInput nutzen
+    btnOk.onclick = () => {
+      if (!currentTool) {
+        WARN('Bestätigen ignoriert – kein aktives Tool');
+        return;
+      }
+      const ci = window.CoreInput;
+      if (!ci || typeof ci.placeAt!=='function'){
+        WARN('CoreInput.placeAt nicht verfügbar');
+        return;
+      }
+      ci.placeAt(lastHover.tx, lastHover.ty, lastSize.w, lastSize.h);
+    };
+
+    btnCancel.onclick = () => {
+      const ci = window.CoreInput;
+      if (!ci || typeof ci.resetTool!=='function'){
+        WARN('CoreInput.resetTool nicht verfügbar');
+        return;
+      }
+      ci.resetTool();
+    };
+
+    ensureTileSize();
+    updateTileScale();
+    updateGhostSprite();
+  }
+
+  function showOverlay(){
+    ensureOverlay();
+    if (overlay) overlay.hidden = false;
+  }
+
+  function hideOverlay(){
+    if (overlay) overlay.hidden = true;
+  }
+
+  function updateGhostSprite(){
+    ensureOverlay();
+    if (!ghost) return;
+
+    if (!currentTool) {
+      ghost.style.backgroundImage='';
+      return;
+    }
+
+    const meta = getBuildingMeta(currentTool);
+    const url  = resolveBuildingIcon(meta);
+
+    ghost.style.backgroundImage    = `url(${url})`;
+    ghost.style.backgroundRepeat   = 'no-repeat';
+    ghost.style.backgroundPosition = 'center center';
+    ghost.style.backgroundSize     = 'cover';
+  }
+
+  function updateGhostButtonsScale(tilePx){
+    if (!btnOk || !btnCancel) return;
+
+    const size = Math.max(24, Math.min(72, tilePx * 0.6));
+    const font = Math.round(size * 0.45);
+
+    [btnOk, btnCancel].forEach(btn => {
+      btn.style.width      = size+'px';
+      btn.style.height     = size+'px';
+      btn.style.minWidth   = size+'px';
+      btn.style.minHeight  = size+'px';
+      btn.style.fontSize   = font+'px';
+      btn.style.lineHeight = size+'px';
+    });
+  }
+
+  function setGhostSizeTiles(w,h){
+    ensureOverlay();
+    if (!ghost) return;
+    ghost.style.setProperty('--wTiles', `${w}`);
+    ghost.style.setProperty('--hTiles', `${h}`);
+  }
+
   function setGhostScreenPos(sx, sy){
-    ensureDom();
+    ensureOverlay();
     if (!ghost) return;
     ghost.style.setProperty('--sx', `${sx}px`);
     ghost.style.setProperty('--sy', `${sy}px`);
   }
 
   function setGhostBuildable(can){
-    ensureDom();
+    ensureOverlay();
     if (tint){
       tint.classList.toggle('is-valid',  !!can);
       tint.classList.toggle('is-invalid', !can);
@@ -111,6 +236,10 @@
       btnOk.disabled = !can;
     }
   }
+
+  // ==========================================================================
+  // Hilfen: Raster-Snap & Platzier-Regeln
+  // ==========================================================================
 
   function snapToGrid(p){
     ensureTileSize();
@@ -122,38 +251,42 @@
     return { gx, gy };
   }
 
+  function canPlaceAt(/* tx,ty */){
+    // TODO: Echte Kollisionsprüfung (Map, andere Gebäude etc.)
+    return true;
+  }
+
   // ==========================================================================
-  // Externes API – wird von core.input.js aufgerufen
+  // Externes API – Aufrufe aus core.input.js
   // ==========================================================================
 
   const GamePlace = {
 
-    /**
-     * Build-Tool wurde gesetzt oder gelöscht.
-     * kind: string oder null (z.B. 'b.hq', 'b.lumberjack', null)
-     *
-     * In diesem Schritt:
-     *  - Wir merken uns nur das Tool.
-     *  - Overlay anzeigen/ausblenden macht weiterhin core.input.js.
-     */
     onSetBuildTool(kind){
       currentTool = kind || null;
       INFO('onSetBuildTool', currentTool);
+
+      if (currentTool){
+        showOverlay();
+        setGhostSizeTiles(lastSize.w, lastSize.h);
+        updateGhostSprite();
+        updateTileScale();
+      } else {
+        hideOverlay();
+      }
     },
 
-    /**
-     * req:place:begin({w,h}) – Standardgebäudegröße.
-     */
     onPlaceBegin(cfg){
       if (!cfg) return;
       if (typeof cfg.w === 'number') lastSize.w = cfg.w|0;
       if (typeof cfg.h === 'number') lastSize.h = cfg.h|0;
       INFO('onPlaceBegin', lastSize);
+
+      if (currentTool){
+        setGhostSizeTiles(lastSize.w, lastSize.h);
+      }
     },
 
-    /**
-     * cb:camera-change({x,y,zoom}) – für Zoom-basiertes Scaling.
-     */
     onCameraChange(camState){
       if (!camState) return;
       cam.x    = camState.x    ?? cam.x;
@@ -163,35 +296,19 @@
       updateTileScale();
     },
 
-    /**
-     * Hover über die Map im Platziermodus.
-     * p: {tx,ty,sx,sy}
-     *
-     * Aufgabe:
-     *  - Ghost auf Tile-Raster schnappen (sx/sy → gx/gy)
-     *  - Valid-Tint setzen (aktuell: immer gültig, wie im Input)
-     */
     onHoverTile(p){
       if (!p) return;
       lastHover = p;
 
-      if (!currentTool) return; // kein aktives Build-Tool → Ghost interessiert uns nicht
+      if (!currentTool) return;
 
       const { gx, gy } = snapToGrid(p);
       setGhostScreenPos(gx, gy);
 
-      // Später: echte Kollisionsprüfung; aktuell wie vorher: immer gültig
-      setGhostBuildable(true);
+      const ok = canPlaceAt(p.tx,p.ty);
+      setGhostBuildable(ok);
     },
 
-    /**
-     * Klick auf freie Map im Platziermodus.
-     * p: {tx,ty,sx,sy}
-     *
-     * Aufgabe in diesem Schritt:
-     *  - Sicherstellen, dass ein TAP ohne vorherige Bewegung den Ghost
-     *    ebenfalls auf diese Tile setzt.
-     */
     onMapClick(p){
       if (!p) return;
       lastHover = p;
@@ -200,36 +317,27 @@
 
       const { gx, gy } = snapToGrid(p);
       setGhostScreenPos(gx, gy);
-      setGhostBuildable(true);
+
+      const ok = canPlaceAt(p.tx,p.ty);
+      setGhostBuildable(ok);
 
       INFO('onMapClick (Ghost reposition)', p);
-      // Bauen selbst passiert weiterhin über:
-      //  - ✓-Button in core.input.js (placeAt)
-      //  - Enter-Taste → placeAt in core.input.js
     },
 
-    /**
-     * ENTER im Platziermodus.
-     * In einem späteren Schritt können wir hier zentral placen.
-     */
     onKeyEnter(){
       INFO('onKeyEnter');
-      // aktuell: core.input.js ruft weiterhin placeAt(lastHover.tx, lastHover.ty)
+      // Platzieren übernimmt weiterhin CoreInput.placeAt()
+      // (wird von core.input.js nach diesem Call ausgelöst)
     },
 
-    /**
-     * ESC im Platziermodus.
-     * Später können wir hier Ghost/Overlay schließen, Tool resetten usw.
-     */
     onKeyEscape(){
       INFO('onKeyEscape');
-      // aktuell: core.input.js macht noch resetTool() + hideOverlay().
+      // Overlay wird über cb:set-build-tool(null) versteckt,
+      // wenn CoreInput.resetTool() aufgerufen wird.
     }
   };
 
-  // Global verfügbar machen
   window.GamePlace = GamePlace;
-
-  OK('bereit v25.12.08-place-controller-step3');
+  OK('bereit v25.12.08-place-controller-step4');
 
 })();
