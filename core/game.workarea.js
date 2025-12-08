@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.08-workarea-core-v4-optionA
+ * Version : v25.12.08-workarea-core-v4-selectmode-circle
  *
  * Zweck   :
  *   Zentrale Verwaltung der ARBEITSBEREICHE (WorkAreas) für Gebäude:
@@ -16,43 +16,29 @@
  *         → wird von core.input.js abgefragt
  *       GameWorkArea.applySelectionTile(tx,ty)
  *         → wird von core.input.js bei Klick auf die Karte aufgerufen
+ *       GameWorkArea.cancelSelection()
  *       GameWorkArea.getAreaFor(detailOrUid)
  *         → liefert aktuellen Bereich für Holz-/Stein-Module
  *
  *   - Events:
- *       IN :
- *         cb:building:menu-open(detail)
- *           → aktuelles Gebäude merken (für Button-Aufrufe)
+ *       cb:workarea:set(detail)
+ *         detail: {
+ *           id, buildingId, uid,
+ *           x,y,w,h,
+ *           cx,cy,
+ *           radiusTiles
+ *         }
  *
- *         cb:build:complete(detail)
- *           → automatisch Default-Arbeitsbereich für fertige Gebäude anlegen
- *              und einmalig cb:workarea:set auslösen
- *
- *       OUT:
- *         cb:workarea:set(detail)
- *           detail: {
- *             id, buildingId, uid,
- *             x,y,w,h,
- *             cx,cy,
- *             radiusTiles,
- *             reason? // 'build-complete' | 'user-change' | undefined
- *           }
- *
- * Hinweise:
- *   - Diese Datei enthält KEINE generelle Input-Logik.
- *     Maus / Pointer wird ausschließlich in core.input.js behandelt.
- *   - Hier geht es nur um:
- *       → Verwalten der WorkArea-Daten
- *       → Default-Position (Option A)
- *       → Dispatch von cb:workarea:set
- *       → Zeichnen auf dem Main-Canvas (Renderer-Hook)
+ *   - Zeichnen:
+ *       → Renderer ruft GameWorkArea.drawOnMainCanvas(ctx, cam) auf.
+ *       → Kreis wird NUR gezeichnet, solange isSelecting() === true ist.
  * ========================================================================== */
 
 (function(){
   'use strict';
 
   // --------------------------------------------------------------------------
-  //  KURZ-HILFSFUNKTIONEN (LOGGING)
+  //  LOGGING
   // --------------------------------------------------------------------------
 
   const PREFIX = '[game.workarea]';
@@ -81,16 +67,9 @@
   const DEFAULT_RADIUS = 3; // in Tiles
 
   // --------------------------------------------------------------------------
-  // HILFSFUNKTIONEN
+  //  HILFSFUNKTIONEN (UID, Defaults)
   // --------------------------------------------------------------------------
 
-  /**
-   * Einheitliche UID-Erzeugung für Gebäude.
-   *
-   * WICHTIG:
-   *   - Wenn detail.uid vorhanden ist → NUR das benutzen
-   *   - Sonst: "<id>@<x>,<y>"
-   */
   function makeUid(detail){
     if (!detail) return null;
     if (detail.uid) return String(detail.uid);
@@ -101,94 +80,56 @@
     return `${id}@${x},${y}`;
   }
 
-  /**
-   * Standard-Startposition für den Arbeitsbereich (Option A):
-   *
-   *  - Mittelpunkt liegt UNTER dem Gebäude
-   *  - Horizontal mittig (bei 3×3 also x+1)
-   *  - Vertikal genau eine Tile unter der Gebäude-Unterkante
-   *
-   * Beispiel:
-   *   Gebäude 3×3 bei (x=10,y=5)
-   *   → center.cx = 10 + 1
-   *   → center.cy = 5 + 3
-   */
+  function pickRadius(detail){
+    if (!detail) return DEFAULT_RADIUS;
+    if (detail.radiusTiles != null) return detail.radiusTiles | 0;
+
+    // Später pro Gebäudetyp anpassbar (Holzfäller vs. Steinbruch etc.)
+    return DEFAULT_RADIUS;
+  }
+
   function computeDefaultCenter(detail){
     const x = detail.x | 0;
     const y = detail.y | 0;
     const w = (detail.w | 0) || 3;
     const h = (detail.h | 0) || 3;
 
+    const cx = x + Math.floor(w / 2);
+    const cy = y + Math.floor(h / 2);
+
+    return { cx, cy };
+  }
+
+  function toWorkArea(detail){
+    if (!detail) return null;
+    const uid = makeUid(detail);
+    if (!uid) return null;
+
+    const x  = detail.x | 0;
+    const y  = detail.y | 0;
+    const w  = (detail.w | 0) || 3;
+    const h  = (detail.h | 0) || 3;
+
+    const center = computeDefaultCenter({x,y,w,h});
+    const radius = pickRadius(detail);
+
     return {
-      cx: x + Math.floor(w / 2),
-      cy: y + h
+      id   : detail.id || detail.buildingId || detail.kind || 'building',
+      buildingId: detail.buildingId || detail.id || detail.kind || 'building',
+      uid,
+      x, y, w, h,
+      cx   : center.cx,
+      cy   : center.cy,
+      radiusTiles: radius
     };
   }
 
-  /**
-   * Inneres Helper: Sorgt dafür, dass es für dieses Gebäude einen Eintrag gibt.
-   */
-  function getOrCreateAreaFor(detail){
-    const uid = makeUid(detail);
-    if (!uid){
-      WARN('getOrCreateAreaFor: keine uid aus detail ableitbar', detail);
-      return null;
-    }
-
-    let area = areasByUid.get(uid);
-    if (!area){
-      const center = computeDefaultCenter(detail);
-      area = {
-        id   : detail.id || detail.buildingId || detail.kind || 'building',
-        uid,
-        x    : detail.x | 0,
-        y    : detail.y | 0,
-        w    : (detail.w | 0) || 3,
-        h    : (detail.h | 0) || 3,
-        cx   : center.cx,
-        cy   : center.cy,
-        radiusTiles: DEFAULT_RADIUS
-      };
-      areasByUid.set(uid, area);
-      INFO('Neue WorkArea angelegt', uid, area);
-    }
-    return area;
-  }
-
-  /**
-   * Öffentliche Variante: Akzeptiert entweder eine uid (string)
-   * oder ein detail-Objekt ({id,x,y,w,h,uid?}).
-   *
-   * Wird u. a. vom Holz-/Stein-Modul genutzt, um den gleichen
-   * Arbeitsbereich zu sehen.
-   */
-  function getAreaFor(detailOrUid){
-    if (!detailOrUid) return null;
-
-    if (typeof detailOrUid === 'string'){
-      return areasByUid.get(detailOrUid) || null;
-    }
-    return getOrCreateAreaFor(detailOrUid);
-  }
-
-  /**
-   * cb:workarea:set Event feuern.
-   *
-   * Wird immer dann aufgerufen, wenn sich der Bereich ändert
-   * (z. B. bei applySelectionTile oder beim ersten beginSelection
-   *  oder beim ersten cb:build:complete).
-   *
-   * reason (optional):
-   *   - 'build-complete' → Default-Bereich nach Fertigstellung
-   *   - 'user-change'    → Benutzer hat den Bereich verschoben
-   *   - undefined        → allgemeiner Fall
-   */
-  function dispatchWorkAreaSet(area, reason){
+  function dispatchWorkAreaSet(area){
     if (!area) return;
 
     const detail = {
       id         : area.id,
-      buildingId : area.id,
+      buildingId : area.buildingId || area.id,
       uid        : area.uid,
       x          : area.x,
       y          : area.y,
@@ -199,33 +140,62 @@
       radiusTiles: area.radiusTiles
     };
 
-    if (reason){
-      detail.reason = reason;
-    }
+    INFO('cb:workarea:set →', detail);
 
     try{
-      INFO('cb:workarea:set →', detail);
       window.dispatchEvent(new CustomEvent('cb:workarea:set', { detail }));
     } catch(e){
-      WARN('cb:workarea:set dispatch fehlgeschlagen', e);
+      WARN('dispatchWorkAreaSet Fehler', e);
     }
   }
 
   // --------------------------------------------------------------------------
-  //  API: Auswahl starten / anwenden / abbrechen
+  //  KERN-API: Bereiche verwalten
   // --------------------------------------------------------------------------
 
-  /**
-   * Wird vom Gebäude-Menü aufgerufen, wenn der Benutzer auf
-   * "Arbeitsbereich setzen" klickt.
-   *
-   * Erwartet detail aus cb:building:menu-open:
-   *   { id, uid?, x, y, w, h, ... }
-   */
+  function getOrCreateAreaFor(detailOrUid){
+    if (!detailOrUid) return null;
+
+    if (typeof detailOrUid === 'string'){
+      const existing = areasByUid.get(detailOrUid);
+      return existing || null;
+    }
+
+    const uid = makeUid(detailOrUid);
+    if (!uid) return null;
+
+    const existing = areasByUid.get(uid);
+    if (existing) return existing;
+
+    const area = toWorkArea(detailOrUid);
+    if (!area) return null;
+
+    areasByUid.set(uid, area);
+    LOG('Neue WorkArea angelegt', uid, area);
+
+    // Standard-Arbeitsbereich sofort melden
+    dispatchWorkAreaSet(area);
+    return area;
+  }
+
+  function getAreaFor(detailOrUid){
+    if (!detailOrUid) return null;
+    if (typeof detailOrUid === 'string'){
+      return areasByUid.get(detailOrUid) || null;
+    }
+    const uid = makeUid(detailOrUid);
+    if (!uid) return null;
+    return areasByUid.get(uid) || null;
+  }
+
+  // --------------------------------------------------------------------------
+  //  SELECTION-LOGIK (Begin/Apply/Cancel)
+  // --------------------------------------------------------------------------
+
   function beginSelection(detail){
     const d = detail || currentBuilding;
     if (!d){
-      WARN('beginSelection ohne gültiges Building-Detail aufgerufen');
+      WARN('beginSelection ohne gültiges Gebäude aufgerufen');
       return;
     }
 
@@ -248,17 +218,10 @@
 
     LOG('Selection gestartet für', area.uid, area);
 
-    // Beim Start sofort einmal den aktuellen Bereich rausfeuern,
-    // damit Produktionsmodule einen gültigen Default haben.
-    dispatchWorkAreaSet(area, 'user-change');
+    // Beim Start sofort den aktuellen Bereich rausfeuern
+    dispatchWorkAreaSet(area);
   }
 
-  /**
-   * Wird von core.input.js aufgerufen, wenn auf die Karte geklickt wird
-   * und GameWorkArea.isSelecting() === true ist.
-   *
-   * tx,ty: Tile-Koordinaten der Karte.
-   */
   function applySelectionTile(tx, ty){
     if (!selecting || !selectingUid) return;
 
@@ -275,9 +238,9 @@
     LOG('Arbeitsbereich verschoben', selectingUid, '→', tx, ty);
 
     // Sofort an alle interessierten Module melden (Holz, Stein, etc.)
-    dispatchWorkAreaSet(area, 'user-change');
+    dispatchWorkAreaSet(area);
 
-    // Ein Klick = setzen & fertig
+    // Ein Klick = setzen & fertig → Selektionsmodus beenden
     cancelSelection();
   }
 
@@ -293,7 +256,7 @@
   }
 
   // --------------------------------------------------------------------------
-  //  OVERLAY-ZEICHNUNG (KREISE)
+  //  ZEICHNEN DES KREISES (NUR WÄHREND SELECTION)
   // --------------------------------------------------------------------------
 
   function drawCircle(ctx, xPx, yPx, rPx){
@@ -303,49 +266,60 @@
   }
 
   /**
-   * Gemeinsame Zeichnen-Funktion:
-   *   - ctx: Canvas-Context (Haupt-Canvas oder Overlay)
-   *   - cam: {x,y,zoom} – i. d. R. GameCamera.getState()
+   * Zeichnet den Arbeitsbereich-Kreis auf dem Haupt-Canvas.
+   * WICHTIG:
+   *   - Der Renderer hat die Kamera-Transform bereits gesetzt.
+   *   - Wir arbeiten hier in "Weltkoordinaten" (Tile * tileSize).
+   *   - Der Kreis wird NUR gezeichnet, solange selecting === true ist.
    */
-  function drawAreas(ctx, cam, tileSize){
-    if (!ctx || !cam || !tileSize) return;
+  function drawWorkAreas(ctx, cam){
+    if (!ctx) return;
+    if (!areasByUid.size) return;
+    if (!selecting) return;   // <— Kreis nur im Setz-Modus sichtbar
+
+    const zoom = cam?.zoom ?? 1;
+
+    const ts =
+      (window.Game?.map?.tileSize) ||
+      (window.Game?.tileSize) ||
+      (window.GameMap?._state?.map?.tileSize) ||
+      64;
 
     ctx.save();
-    try{
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(0, 150, 255, 0.8)';
 
-      for (const area of areasByUid.values()){
-        const ts   = tileSize * cam.zoom;
-        const cxPx = (area.cx - cam.x) * ts + ts / 2;
-        const cyPx = (area.cy - cam.y) * ts + ts / 2;
-        const rPx  = (area.radiusTiles || DEFAULT_RADIUS) * ts;
+    for (const area of areasByUid.values()){
+      const active = (area.uid === selectingUid);
+      if (!active) continue;  // Nur der aktuell gesetzte Bereich ist sichtbar
 
-        drawCircle(ctx, cxPx, cyPx, rPx);
-      }
-    } finally {
+      const cxPx = (area.cx + 0.5) * ts;
+      const cyPx = (area.cy + 0.5) * ts;
+      const rPx  = (area.radiusTiles || DEFAULT_RADIUS) * ts;
+
+      ctx.save();
+
+      // Strichstärke an Zoom anpassen (optisch konstant)
+      const baseLW = ts * 0.06;
+      ctx.lineWidth   = Math.max(1, baseLW / zoom);
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)';
+      ctx.setLineDash([ts * 0.6, ts * 0.3]);
+
+      drawCircle(ctx, cxPx, cyPx, rPx);
+
       ctx.restore();
     }
+
+    ctx.restore();
   }
 
-  /**
-   * Convenience für den Renderer:
-   *   Kann z. B. aus game.renderer.js aufgerufen werden:
-   *
-   *     GameWorkArea.drawOnMainCanvas(mainCtx, GameCamera.getState(), tileSize);
-   */
-  function drawOnMainCanvas(ctx, cam, tileSize){
-    drawAreas(ctx, cam, tileSize);
+  // Renderer-Hook
+  function drawOnMainCanvas(ctx, cam){
+    drawWorkAreas(ctx, cam);
   }
 
   // --------------------------------------------------------------------------
-  //  EVENTS VOM SPIEL (z. B. Gebäude-Menü öffnen / Build fertig)
+  //  EVENTS VOM SPIEL (z. B. Gebäude-Menü öffnen)
   // --------------------------------------------------------------------------
 
-  /**
-   * Gebäude-Menü wurde geöffnet → aktuelle Gebäude-Infos merken,
-   * damit beginSelection() auch ohne Detail-Parameter funktioniert.
-   */
   function handleBuildingMenuOpen(ev){
     const d = ev && ev.detail;
     if (!d) return;
@@ -361,51 +335,15 @@
     };
     INFO('cb:building:menu-open → currentBuilding =', currentBuilding);
 
-    // Sicherstellen, dass es für dieses Gebäude auch eine WorkArea gibt
+    // Sicherstellen, dass es für dieses Gebäude eine WorkArea gibt
     getOrCreateAreaFor(currentBuilding);
   }
-
-  /**
-   * Wenn ein Gebäude fertig gebaut ist, legen wir automatisch
-   * einen Default-WorkArea an (falls noch nicht vorhanden)
-   * und feuern einmal cb:workarea:set(reason='build-complete').
-   *
-   * Erwartetes detail (Standard aus deiner Construction-Logik):
-   *   { id, buildingId?, uid?, x, y, w, h, ... }
-   */
-  function handleBuildComplete(ev){
-    const d = ev?.detail || {};
-    if (!d || !d.id){
-      WARN('cb:build:complete ohne gültiges detail empfangen:', d);
-      return;
-    }
-
-    const area = getOrCreateAreaFor(d);
-    if (!area){
-      WARN('cb:build:complete → kein Area erzeugt für', d);
-      return;
-    }
-
-    LOG('cb:build:complete → Default-WorkArea gesetzt für', area.uid, area);
-    dispatchWorkAreaSet(area, 'build-complete');
-  }
-
-  // --------------------------------------------------------------------------
-  //  INITIALISIERUNG / EVENT-VERKABELUNG
-  // --------------------------------------------------------------------------
 
   try {
     window.addEventListener('cb:building:menu-open', handleBuildingMenuOpen);
     INFO('Event-Listener cb:building:menu-open registriert');
   } catch(e){
     WARN('Event-Listener cb:building:menu-open konnte nicht registriert werden:', e);
-  }
-
-  try {
-    window.addEventListener('cb:build:complete', handleBuildComplete);
-    INFO('Event-Listener cb:build:complete registriert');
-  } catch(e){
-    WARN('Event-Listener cb:build:complete konnte nicht registriert werden:', e);
   }
 
   // --------------------------------------------------------------------------
@@ -418,12 +356,10 @@
     cancelSelection,
     isSelecting,
     getAreaFor,
-    getAreaForUid(uid){ return areasByUid.get(uid) || null; },
-    drawOnMainCanvas,          // für Renderer.draw(...)
-    _areas: areasByUid,
-    _lastHoverTile: () => lastHoverTile
+    getOrCreateAreaFor,
+    drawOnMainCanvas
   };
 
-  LOG('GameWorkArea bereit v25.12.08-workarea-core-v4-optionA');
+  INFO('bereit v25.12.08-workarea-core-v4-selectmode-circle');
 
 })();
