@@ -578,6 +578,33 @@
     );
   }
 
+  // ============================================================================
+// WORKAREA-SUPPORT
+// ============================================================================
+
+function applyWorkAreaToQuarry(detail) {
+  const uid = detail.uid;
+  const q = StoneFields[uid];
+  if (!q) return;
+
+  q.center = {
+    cx         : detail.cx,
+    cy         : detail.cy,
+    radiusTiles: detail.radiusTiles || 3
+  };
+
+  LOG('[prod-stone] Arbeitsbereich aktualisiert:', uid, q.center);
+}
+
+// Listener für das WorkArea-Event
+window.addEventListener('cb:workarea:set', (ev)=>{
+  const d = ev.detail;
+  if (!d) return;
+  if (d.id !== 'b.quarry') return;
+
+  applyWorkAreaToQuarry(d);
+});
+  
   // ========================================================================
   // STUB-TICK (für spätere Erweiterungen)
   // ========================================================================
