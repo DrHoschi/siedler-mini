@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-07T22:44:00.899Z",
+  "createdAt": "2025-12-08T11:11:02.661Z",
   "root": ".",
   "count": 516,
   "entries": [
@@ -1333,7 +1333,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 10924
+      "size": 11256
     },
     {
       "type": "file",
@@ -2477,12 +2477,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51124
+      "size": 51121
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19625
+      "size": 19622
     },
     {
       "type": "file",
