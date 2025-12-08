@@ -152,13 +152,14 @@
       }
 
       // -----------------------------------------------------------
-      // 3b. Arbeitsbereiche (WorkAreas) direkt auf dem Haupt-Canvas
-      //     zeichnen – mit derselben Kamera-Transform wie die Gebäude.
-      //     (Kein eigenes Overlay, damit Position & Rundung exakt passen.)
-      // -----------------------------------------------------------
-      if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'function') {
-        window.GameWorkArea.drawOnMainCanvas(ctx, cam);
-      }
+// 3b. Arbeitsbereiche (WorkAreas) direkt auf dem Haupt-Canvas
+//     zeichnen – mit derselben Kamera-Transform wie die Gebäude.
+//     (Kein eigenes Overlay, damit Position & Rundung exakt passen.)
+// -----------------------------------------------------------
+if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'function') {
+  // WICHTIG: tileSize mitgeben, sonst zeichnet game.workarea.js nichts
+  window.GameWorkArea.drawOnMainCanvas(ctx, cam, this.tile);
+}
 
       ctx.restore();
 
