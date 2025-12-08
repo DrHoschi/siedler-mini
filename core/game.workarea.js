@@ -276,6 +276,33 @@
     ctx.restore();
   }
 
+  // ============================================================================
+// WORKAREA-SUPPORT
+// ============================================================================
+
+function applyWorkAreaToLumberjack(detail) {
+  const uid = detail.uid;
+  const lj = Lumberjacks[uid];
+  if (!lj) return;
+
+  lj.workArea = {
+    cx         : detail.cx,
+    cy         : detail.cy,
+    radiusTiles: detail.radiusTiles || 3
+  };
+
+  LOG('[prod-wood] Arbeitsbereich aktualisiert:', uid, lj.workArea);
+}
+
+// Listener für das WorkArea-Event
+window.addEventListener('cb:workarea:set', (ev)=>{
+  const d = ev.detail;
+  if (!d) return;
+  if (d.id !== 'b.lumberjack') return;
+
+  applyWorkAreaToLumberjack(d);
+});
+  
   // -------------------------------------------------------------------------
   // EXPORT
   // -------------------------------------------------------------------------
