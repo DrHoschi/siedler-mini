@@ -1,13 +1,13 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.08-workarea-core-v4-selectmode-circle
+ * Version : v25.12.08-workarea-core-v5-drawworld
  *
  * Zweck   :
  *   Zentrale Verwaltung der ARBEITSBEREICHE (WorkAreas) für Gebäude:
  *
  *   - Pro Gebäude (uid) wird ein Arbeitskreis verwaltet:
- *       { id, uid, x, y, w, h, cx, cy, radiusTiles }
+ *       { id, buildingId, uid, x, y, w, h, cx, cy, radiusTiles }
  *
  *   - API:
  *       GameWorkArea.beginSelection(buildingDetail)
@@ -22,15 +22,10 @@
  *
  *   - Events:
  *       cb:workarea:set(detail)
- *         detail: {
- *           id, buildingId, uid,
- *           x,y,w,h,
- *           cx,cy,
- *           radiusTiles
- *         }
  *
  *   - Zeichnen:
- *       → Renderer ruft GameWorkArea.drawOnMainCanvas(ctx, cam) auf.
+ *       → Renderer ruft GameWorkArea.drawWorld(ctx, camOrOpts) ODER
+ *         GameWorkArea.drawOnMainCanvas(ctx, cam) auf.
  *       → Kreis wird NUR gezeichnet, solange isSelecting() === true ist.
  * ========================================================================== */
 
@@ -83,8 +78,6 @@
   function pickRadius(detail){
     if (!detail) return DEFAULT_RADIUS;
     if (detail.radiusTiles != null) return detail.radiusTiles | 0;
-
-    // Später pro Gebäudetyp anpassbar (Holzfäller vs. Steinbruch etc.)
     return DEFAULT_RADIUS;
   }
 
@@ -114,12 +107,12 @@
     const radius = pickRadius(detail);
 
     return {
-      id   : detail.id || detail.buildingId || detail.kind || 'building',
+      id        : detail.id || detail.buildingId || detail.kind || 'building',
       buildingId: detail.buildingId || detail.id || detail.kind || 'building',
       uid,
       x, y, w, h,
-      cx   : center.cx,
-      cy   : center.cy,
+      cx   : detail.cx ?? center.cx,
+      cy   : detail.cy ?? center.cy,
       radiusTiles: radius
     };
   }
@@ -265,13 +258,6 @@
     ctx.stroke();
   }
 
-  /**
-   * Zeichnet den Arbeitsbereich-Kreis auf dem Haupt-Canvas.
-   * WICHTIG:
-   *   - Der Renderer hat die Kamera-Transform bereits gesetzt.
-   *   - Wir arbeiten hier in "Weltkoordinaten" (Tile * tileSize).
-   *   - Der Kreis wird NUR gezeichnet, solange selecting === true ist.
-   */
   function drawWorkAreas(ctx, cam){
     if (!ctx) return;
     if (!areasByUid.size) return;
@@ -282,14 +268,14 @@
     const ts =
       (window.Game?.map?.tileSize) ||
       (window.Game?.tileSize) ||
-      (window.GameMap?._state?.map?.tileSize) ||
+      (window.GameMap?._state?.tileSize) || // <— wichtig: _state.tileSize
       64;
 
     ctx.save();
 
     for (const area of areasByUid.values()){
       const active = (area.uid === selectingUid);
-      if (!active) continue;  // Nur der aktuell gesetzte Bereich ist sichtbar
+      if (!active) continue;  // nur aktueller Bereich
 
       const cxPx = (area.cx + 0.5) * ts;
       const cyPx = (area.cy + 0.5) * ts;
@@ -297,7 +283,6 @@
 
       ctx.save();
 
-      // Strichstärke an Zoom anpassen (optisch konstant)
       const baseLW = ts * 0.06;
       ctx.lineWidth   = Math.max(1, baseLW / zoom);
       ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)';
@@ -311,9 +296,20 @@
     ctx.restore();
   }
 
-  // Renderer-Hook
+  // Renderer-Hooks
   function drawOnMainCanvas(ctx, cam){
     drawWorkAreas(ctx, cam);
+  }
+
+  function drawWorld(ctx, camOrOpts){
+    const zoom =
+      (window.GameCamera && typeof window.GameCamera.zoom === 'number')
+        ? window.GameCamera.zoom
+        : (camOrOpts && typeof camOrOpts.zoom === 'number'
+            ? camOrOpts.zoom
+            : 1);
+
+    drawWorkAreas(ctx, { zoom });
   }
 
   // --------------------------------------------------------------------------
@@ -357,9 +353,10 @@
     isSelecting,
     getAreaFor,
     getOrCreateAreaFor,
-    drawOnMainCanvas
+    drawOnMainCanvas,
+    drawWorld
   };
 
-  INFO('bereit v25.12.08-workarea-core-v4-selectmode-circle');
+  INFO('bereit v25.12.08-workarea-core-v5-drawworld');
 
 })();
