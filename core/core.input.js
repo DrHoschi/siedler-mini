@@ -1,32 +1,32 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.12.03-workarea-integrated-phase1
- * Zweck   : Zentrale Eingabe + Platzier-Ghost + WorkArea-Click-Weiterleitung
+ * Version : v25.12.03-workarea-integrated-phase2-step1
+ * Zweck   : Eingabe + Platzier-Ghost + OK/Cancel direkt am Ghost
  *
  * Lauscht : cb:set-build-tool(kind)
- *           req:place:begin({w,h})
+ *           req:place-begin({w,h})
  *           cb:camera-change({x,y,zoom})
  *
  * Sendet  : cb:hover-tile(...)
  *           cb:build:place(...)
  *
- * Erweiterungen:
+ * Erweiterungen in dieser Final-Version:
  *  ✔ Ghost zeigt JE NACH Gebäude das echte Building-Icon
  *  ✔ Ghost skaliert korrekt mit Zoom
  *  ✔ OK/Cancel-Buttons skalieren mit Zoom mit
  *  ✔ Tint bleibt wie bisher (rot/grün)
  *  ✔ Voll kompatibel zu Kamera-Blockierung (__SIEDLER_PLACE_ACTIVE)
- *  ✔ Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
- *  ✔ Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
+ *  ✔ NEU: Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
+ *  ✔ NEU: Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
  *
- * Phase 1 – Aufteilung in logische Blöcke:
- *   TEIL 1: Input-Basis (State, Koordinaten, Pointer/Keyboard)
- *   TEIL 2: Platzier-/Ghost-Controller (Overlay, Buttons, cb:build:place)
- *   TEIL 3: WorkArea-Integration (Weiterreichen an GameWorkArea)
- *
- *  WICHTIG: Verhält sich identisch zu v25.12.03-workarea-integrated,
- *           nur strukturierter kommentiert.
+ * Phase 2 – Schritt 1:
+ *  - Struktur in drei Blöcke kommentiert:
+ *      TEIL 1: Input-Basis (State, Koordinaten, Pointer/Keyboard)
+ *      TEIL 2: Platzier-/Ghost-Controller
+ *      TEIL 3: WorkArea-Hook
+ *  - TODO-Kommentare eingefügt, wo später GamePlace.on... hinkommt.
+ *  - KEINE Verhaltensänderung.
  * ========================================================================== */
 (() => {
   'use strict';
@@ -36,51 +36,42 @@
   const INFO = (...a)=> (window.CBLog?.info ?? console.info )(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn )(TAG, ...a);
 
+  // kleine DOM-Hilfen
   const q   = (s, r=document)=> r.querySelector(s);
   const qa  = (s, r=document)=> Array.from(r.querySelectorAll(s));
   const rect = el => el?.getBoundingClientRect?.() ?? {left:0, top:0, width:0, height:0};
 
-  // ========================================================================
+  // ==========================================================================
   // TEIL 1: INPUT-BASIS
-  //   - Gemeinsamer State (Canvas, Kamera, aktives Build-Tool)
+  //   - State (Canvas, Kamera, aktives Build-Tool)
   //   - Koordinaten-Umrechnung (screen → tile)
-  //   - Gebäude-Erkennung unter der Maus
-  //   - Pointer- und Keyboard-Events
-  // ========================================================================
+  //   - Pointer/Keyboard-Handling
+  //   - Gebäude unter der Maus finden
+  // ==========================================================================
 
-  // ------------------------------------------------------------------------
-  // 1.1 Gemeinsamer State (wird von TEIL 1 + 2 + 3 benutzt)
-  // ------------------------------------------------------------------------
-  let canvas   = null;           // Ziel-Canvas für Pointer-Events
-  let tileSize = 64;             // Basis-Tilegröße (wird aus Game geholt)
-  const cam = { x:0, y:0, zoom:1 }; // Kamera-Offset + Zoom
+  // ------------------------------ State -------------------------------------
+  let canvas   = null;
+  let tileSize = 64;
+  const cam = { x:0, y:0, zoom:1 };
 
-  let buildTool  = null;         // z. B. "b.hq", "b.lumberjack"
-  let lastHover  = { tx:0, ty:0, sx:0, sy:0 }; // letzte Hover-Position
-  let lastSize   = { w:3, h:3 }; // Standardgebäudegröße (Tiles)
-  let hoverValid = false;        // ob lastHover eine gültige Position enthält
+  let buildTool  = null;
+  let lastHover  = { tx:0, ty:0, sx:0, sy:0 };
+  let lastSize   = { w:3, h:3 };
+  let hoverValid = false;
 
-  // DOM-Referenzen für TEIL 2 (Platzier-/Ghost-Controller)
+  // ------------------------------ DOM refs (für TEIL 2) ---------------------
   let overlay, ghost, tint, btnOk, btnCancel;
 
-  // ------------------------------------------------------------------------
-  // 1.2 Koordinaten / TileSize / Gebäude-Erkennung
-  // ------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 1.1 Koordinaten & TileSize
+  // --------------------------------------------------------------------------
 
   function getTileSize(){
-    try{
-      return Number(window.Game?.tileSize) || 64;
-    }catch{
-      return 64;
-    }
+    try{return Number(window.Game?.tileSize)||64;}catch{return 64;}
   }
 
-  /**
-   * Rechnet Bildschirmkoordinaten → Tile-Koordinaten
-   * (unter Berücksichtigung von Kamera-Offset und Zoom).
-   */
   function screenToTile(clientX,clientY){
-    const r  = rect(canvas);
+    const r = rect(canvas);
     const sx = clientX - r.left;
     const sy = clientY - r.top;
 
@@ -96,13 +87,12 @@
     return {tx,ty,sx,sy};
   }
 
-  // Platzhalter – hier später echte Kollisionsprüfung einbauen
   function canPlaceAt(){ return true; }
 
-  /**
-   * Sucht in Game.buildings ein vorhandenes Gebäude auf dieser Tile.
-   * Wird für "Gebäude-Menü öffnen" verwendet.
-   */
+  // --------------------------------------------------------------------------
+  // 1.2 Gebäude an der aktuellen Tile finden (für Klick aufs Gebäude)
+  // --------------------------------------------------------------------------
+
   function findBuildingAt(tx, ty){
     const list = (window.Game && Array.isArray(window.Game.buildings))
       ? window.Game.buildings
@@ -124,45 +114,32 @@
     return null;
   }
 
-  // ------------------------------------------------------------------------
-  // 1.3 Reset & Keyboard (ESC / ENTER)
-  // ------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 1.3 Reset & Place – aktuell noch hier, später nach GamePlace
+  // --------------------------------------------------------------------------
 
-  /**
-   * Beendet den Platziermodus:
-   *  - Build-Tool löschen
-   *  - Overlay ausblenden
-   *  - __SIEDLER_PLACE_ACTIVE zurücksetzen
-   *  - cb:set-build-tool(kind:null) senden
-   */
   function resetTool(){
-    buildTool  = null;
-    hoverValid = false;
+    buildTool=null;
+    hoverValid=false;
     hideOverlay();
 
-    window.__SIEDLER_PLACE_ACTIVE = false;
+    window.__SIEDLER_PLACE_ACTIVE=false;
 
     try{
-      if (canvas) canvas.style.cursor = 'default';
-      window.dispatchEvent(
-        new CustomEvent('cb:set-build-tool',{detail:{kind:null}})
-      );
+      if (canvas) canvas.style.cursor='default';
+      window.dispatchEvent(new CustomEvent('cb:set-build-tool',{detail:{kind:null}}));
     }catch{}
   }
 
-  /**
-   * Zentrale Place-Funktion:
-   *  - sendet cb:build:place im etablierten Format
-   *  - wird von ✓-Button UND Enter-Taste genutzt
-   */
   function placeAt(tx,ty,w=lastSize.w,h=lastSize.h){
     const detail = {
-      __src     : 'input-v25.11.14',   // Tag für das Game-Baumodul
+      // WICHTIG: alter Tag, den dein Game-Listener akzeptiert
+      __src: 'input-v25.11.14',
       buildingId: buildTool,
-      x         : tx|0,
-      y         : ty|0,
-      w         : w|0,
-      h         : h|0
+      x: tx|0,
+      y: ty|0,
+      w: w|0,
+      h: h|0
     };
     OK('cb:build:place', detail);
     window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
@@ -170,23 +147,20 @@
     resetTool();
   }
 
-  // Keyboard-Logik (ESC/ENTER) wird in bindGlobal() registriert (s.u.).
-
-  // ------------------------------------------------------------------------
-  // 1.4 Pointer-Handling (Mouse/Touch auf der Map-Canvas)
-  //   - nutzt TEIL 2 (Ghost) und TEIL 3 (WorkArea-Hook)
-  // ------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 1.4 POINTER HANDLING
+  //   - nutzt TEIL 2 (Ghost) & TEIL 3 (WorkArea-Hook)
+  // --------------------------------------------------------------------------
 
   function bindPointer(){
     if (!canvas) return;
 
-    // --------------------- Hover-Bewegung ---------------------
     canvas.addEventListener('pointermove', ev=>{
       const p = screenToTile(ev.clientX, ev.clientY);
-      lastHover  = p;
-      hoverValid = true;
+      lastHover = p;
+      hoverValid=true;
 
-      // Cursor-Logik inkl. WorkArea-Selektionsmodus
+      // NEU: Cursor-Logik auch für WorkArea-Auswahl
       try {
         const gw = window.GameWorkArea;
         const selecting =
@@ -202,34 +176,34 @@
       }
 
       const step = tileSize * cam.zoom;
-      const gx   = p.sx - (p.sx % step);
-      const gy   = p.sy - (p.sy % step);
+      const gx = p.sx - (p.sx % step);
+      const gy = p.sy - (p.sy % step);
 
-      // Ghost-Position & Tint nur wenn ein Build-Tool aktiv ist
-      if (buildTool){
-        setGhostScreenPos(gx,gy);
-        setGhostBuildable(canPlaceAt(p.tx,p.ty));
-      }
+      // TODO (Phase 2): Hier später GamePlace.onHoverTile(p) aufrufen
+      // und setGhostScreenPos/setGhostBuildable in game.place.js verschieben.
+      setGhostScreenPos(gx,gy);
+      setGhostBuildable(canPlaceAt(p.tx,p.ty));
 
       window.dispatchEvent(new CustomEvent('cb:hover-tile',{
         detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
       }));
     },{passive:true});
 
-    // --------------------- Klick/Tap --------------------------
     canvas.addEventListener('pointerdown', (ev)=>{
-      if (ev.button != null && ev.button !== 0) return; // nur Linksklick
+      if (ev.button != null && ev.button !== 0) return;
 
+      // ZUERST: Prüfen, ob gerade ein Arbeitsbereich gesetzt werden soll
       const p = screenToTile(ev.clientX, ev.clientY);
 
-      // 1) WorkArea hat Vorrang (wenn Selektionsmodus aktiv)
       if (handleWorkAreaClick(p, ev)) {
         // Klick wurde zum Verschieben des Arbeitsbereichs benutzt
         return;
       }
 
-      // 2) Gebäude getroffen? → Gebäude-Menü öffnen
+      // Danach: prüfen, ob auf ein bestehendes Gebäude geklickt wurde
       const b = findBuildingAt(p.tx, p.ty);
+
+      // 🔍 Debug:
       INFO('pointerdown → tile', p.tx, p.ty, 'building:', b && b.id);
 
       if (b) {
@@ -245,41 +219,40 @@
           category: b.category|| ''
         };
 
-        INFO('cb:building:menu-open →', detail);
+        INFO('cb:building:menu-open →', detail);  // 🔍 Debug
 
         try {
-          window.dispatchEvent(
-            new CustomEvent('cb:building:menu-open', { detail })
-          );
+          window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
         } catch (e) {
           console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
         }
 
-        // Klick wurde für das Gebäude-Menü verwendet → KEINE Platzierlogik
+        // Klick wurde für das Gebäude-Menü verwendet → Platzier-Logik NICHT ausführen
         ev.preventDefault?.();
         return;
       }
 
-      // 3) Kein Gebäude getroffen → ggf. aktiven Platziermodus bedienen
+      // ----------------------------------------------------
+      // Kein Gebäude getroffen → ggf. Platziermodus bedienen
+      // ----------------------------------------------------
       if (!buildTool) {
         // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
         return;
       }
 
+      // TODO (Phase 2): Hier später GamePlace.onMapClick(p) aufrufen
+      // und das reine „Position merken“ ins Place-Modul verlagern.
+
       // Platziermodus aktiv → Position merken (Ghost bleibt über ✓-Button steuerbar)
       if (!hoverValid) {
-        lastHover  = p;
+        lastHover = p;
         hoverValid = true;
       }
 
-      // WICHTIG: Es wird NICHT automatisch gebaut.
-      // Bauen nur über:
-      //   - ✓-Button (btnOk.onclick → placeAt)
-      //   - Enter-Taste (keydown → placeAt)
+      // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
       ev.preventDefault?.();
     }, { passive:false });
 
-    // Rechtsklick → Platziermodus abbrechen
     canvas.addEventListener('contextmenu', ev=>{
       if (buildTool){
         ev.preventDefault();
@@ -289,77 +262,83 @@
     });
   }
 
-  // ------------------------------------------------------------------------
-  // 1.5 Globale Events (Build-Tool setzen, Kamera, Keyboard)
-  // ------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 1.5 GLOBAL BINDINGS (cb:set-build-tool, req:place:begin, Kamera, Keyboard)
+  // --------------------------------------------------------------------------
 
   function bindGlobal(){
 
-    // Aus dem Build-Menü: Tool aktivieren/deaktivieren
     addEventListener('cb:set-build-tool', ev=>{
-      const d = ev?.detail || {};
+      const d = ev?.detail||{};
       buildTool = d.kind ?? d.type ?? null;
 
       window.__SIEDLER_PLACE_ACTIVE = !!buildTool;
 
-      if (canvas) canvas.style.cursor = buildTool ? 'crosshair' : 'default';
+      if (canvas){
+        canvas.style.cursor = buildTool ? 'crosshair' : 'default';
+      }
+
+      // TODO (Phase 2): GamePlace.onSetBuildTool(buildTool) aufrufen
+      // und Overlay/Icons im Place-Modul initialisieren lassen.
 
       if (buildTool){
         showOverlay();
         setGhostSizeTiles(lastSize.w,lastSize.h);
         updateGhostSprite();
         updateGhostButtonsScale(tileSize * cam.zoom);
-      } else {
-        hideOverlay();
-      }
+      } else hideOverlay();
     });
 
-    // Bau-Logik teilt uns mit, welche Standardgröße das Gebäude hat
     addEventListener('req:place:begin', ev=>{
-      const d = ev?.detail || {};
-      if (d.w) lastSize.w = d.w|0;
-      if (d.h) lastSize.h = d.h|0;
+      const d = ev?.detail||{};
+      if (d.w) lastSize.w=d.w|0;
+      if (d.h) lastSize.h=d.h|0;
       setGhostSizeTiles(lastSize.w,lastSize.h);
       hoverValid=false;
+
+      // TODO (Phase 2): GamePlace.onPlaceBegin({w,h}) informieren.
     });
 
-    // Kamera-Änderungen (Panning/Zoom)
     addEventListener('cb:camera-change', ev=>{
-      const d = ev?.detail || {};
-      if (d.x != null)  cam.x   = d.x;
-      if (d.y != null)  cam.y   = d.y;
-      if (d.zoom != null) cam.zoom = d.zoom;
+      const d = ev?.detail||{};
+      if (d.x!=null) cam.x=d.x;
+      if (d.y!=null) cam.y=d.y;
+      if (d.zoom!=null) cam.zoom=d.zoom;
       updateTilePxByCamera();
+
+      // TODO (Phase 2): GamePlace.onCameraChange({x,y,zoom}) weiterreichen.
     });
 
-    // Keyboard: ESC / ENTER
     addEventListener('keydown', e=>{
       if (!buildTool) return;
-      if (e.key === 'Escape'){
+
+      if (e.key==='Escape'){
+        // TODO (Phase 2): GamePlace.onKeyEscape() informieren (falls nötig).
         hideOverlay();
         resetTool();
       }
-      if (e.key === 'Enter' && hoverValid){
+
+      if (e.key==='Enter' && hoverValid){
+        // TODO (Phase 2): GamePlace.onKeyEnter() benutzen.
         placeAt(lastHover.tx,lastHover.ty);
       }
     });
   }
 
-  // ========================================================================
+  // ==========================================================================
   // TEIL 2: PLATZIER- / GHOST-CONTROLLER
   //   - Registry/Meta (Icons)
-  //   - Ghost-Overlay (DOM, CSS-Variablen)
-  //   - Buttons ✓ / ✕
-  //   - sendet cb:build:place über placeAt()
-  // ========================================================================
+  //   - Overlay/Ghost (DOM, CSS)
+  //   - OK/Cancel-Buttons
+  //   - benutzt placeAt()/resetTool aus TEIL 1
+  //   - wird später nach core/game.place.js verschoben
+  // ==========================================================================
 
-  // ------------------------------------------------------------------------
-  // 2.1 Building-Meta / Icon
-  // ------------------------------------------------------------------------
+  // BUILDING META / ICONS ----------------------------------------------------
 
   function getBuildingMeta(id){
     if (!id) return null;
-    let b = null;
+    let b=null;
 
     try{
       if (window.Registry && typeof window.Registry.get === 'function'){
@@ -373,7 +352,7 @@
   }
 
   function resolveBuildingIcon(meta){
-    if (!meta)   return '';
+    if (!meta) return '';
     if (meta.icon) return meta.icon;
 
     return `assets/icons/buildings/${meta.id}.png`;
@@ -382,7 +361,7 @@
   function updateGhostSprite(){
     ensureOverlay();
     if (!buildTool) {
-      ghost.style.backgroundImage = '';
+      ghost.style.backgroundImage='';
       return;
     }
 
@@ -411,66 +390,57 @@
     });
   }
 
-  // ------------------------------------------------------------------------
-  // 2.2 Overlay & Ghost Initialisierung
-  // ------------------------------------------------------------------------
+  // OVERLAY & GHOST INITIALISIERUNG -----------------------------------------
 
-  /**
-   * Sorgt dafür, dass Overlay/Ghost/Buttons existieren.
-   * Falls das HTML sie noch nicht enthält, werden sie einmalig erzeugt.
-   */
   function ensureOverlay(){
     if (overlay && ghost && tint && btnOk && btnCancel) return;
 
     overlay = q('#place-overlay') || overlay;
     if (!overlay){
       overlay = document.createElement('div');
-      overlay.id        = 'place-overlay';
-      overlay.className = 'place-overlay';
-      overlay.hidden    = true;
+      overlay.id='place-overlay';
+      overlay.className='place-overlay';
+      overlay.hidden=true;
       document.body.appendChild(overlay);
     }
 
     ghost = q('#place-ghost', overlay) || q('.ghost-sprite', overlay);
     if (!ghost){
-      ghost = document.createElement('div');
-      ghost.id        = 'place-ghost';
-      ghost.className = 'ghost-sprite';
+      ghost=document.createElement('div');
+      ghost.id='place-ghost';
+      ghost.className='ghost-sprite';
       overlay.appendChild(ghost);
     }
 
     tint = q('.ghost-tint', ghost);
     if (!tint){
       tint = document.createElement('div');
-      tint.className = 'ghost-tint';
+      tint.className='ghost-tint';
       ghost.appendChild(tint);
     }
 
-    // Buttons innen im Ghost – alte Varianten außerhalb entfernen
-    qa(':scope > .place-btn', overlay).forEach(b => b.remove());
+    // Buttons innen im Ghost
+    qa(':scope > .place-btn', overlay).forEach(b=>b.remove());
 
     btnOk = q('.place-btn.ok', ghost);
     if (!btnOk){
-      btnOk = document.createElement('button');
-      btnOk.className   = 'place-btn ok';
-      btnOk.textContent = '✓';
+      btnOk=document.createElement('button');
+      btnOk.className='place-btn ok';
+      btnOk.textContent='✓';
       ghost.appendChild(btnOk);
     }
 
     btnCancel = q('.place-btn.cancel', ghost);
     if (!btnCancel){
-      btnCancel = document.createElement('button');
-      btnCancel.className   = 'place-btn cancel';
-      btnCancel.textContent = '✕';
+      btnCancel=document.createElement('button');
+      btnCancel.className='place-btn cancel';
+      btnCancel.textContent='✕';
       ghost.appendChild(btnCancel);
     }
 
-    // Button-Handler (nutzen placeAt()/resetTool aus TEIL 1)
+    // Button-Handler
     btnOk.onclick = () => {
-      if (!buildTool || !hoverValid) {
-        WARN('Bestätigen ignoriert (kein Tool oder keine gültige Position)');
-        return;
-      }
+      if (!buildTool || !hoverValid) { WARN('Bestätigen ignoriert'); return; }
       placeAt(lastHover.tx, lastHover.ty);
     };
     btnCancel.onclick = () => { hideOverlay(); resetTool(); };
@@ -479,18 +449,10 @@
     updateGhostButtonsScale(tileSize * cam.zoom);
   }
 
-  function showOverlay(){
-    ensureOverlay();
-    overlay.hidden = false;
-  }
+  function showOverlay(){ ensureOverlay(); overlay.hidden=false; }
+  function hideOverlay(){ if (overlay) overlay.hidden=true; }
 
-  function hideOverlay(){
-    if (overlay) overlay.hidden = true;
-  }
-
-  // ------------------------------------------------------------------------
-  // 2.3 Ghost / Kamera-Sync (CSS-Variablen)
-  // ------------------------------------------------------------------------
+  // GHOST / CAMERA-SYNC ------------------------------------------------------
 
   function setGhostSizeTiles(w,h){
     ensureOverlay();
@@ -517,55 +479,43 @@
     updateGhostButtonsScale(tilePx);
   }
 
-  // ========================================================================
+  // ==========================================================================
   // TEIL 3: WORKAREA-INTEGRATION
-  //   - Reicht Klicks im Selektionsmodus an GameWorkArea weiter.
-  //   - Die eigentliche Logik (Abstand, Radius, etc.) liegt in game.workarea.js
-  // ========================================================================
+  //   - Input → GameWorkArea weiterreichen, wenn Selektionsmodus aktiv
+  // ==========================================================================
 
-  /**
-   * Wird aus pointerdown() aufgerufen:
-   *  - Wenn GameWorkArea existiert UND isSelecting() true liefert,
-   *    wird der Klick an GameWorkArea.applySelectionTile(tx,ty) weitergegeben.
-   *  - Gibt true zurück, wenn das Event verbraucht wurde.
-   */
   function handleWorkAreaClick(p, ev){
-    if (!GameWorkArea || !GameWorkArea.isSelecting()) return false;
+    if(!GameWorkArea || !GameWorkArea.isSelecting()) return false;
 
     ev.preventDefault();
     GameWorkArea.applySelectionTile(p.tx, p.ty);
     return true;
   }
 
-  // ========================================================================
-  // INIT: Canvas finden, Overlay vorbereiten, Events binden
-  // ========================================================================
+  // ==========================================================================
+  // INIT
+  // ==========================================================================
 
   function init(){
     canvas = document.getElementById('game')
       || document.querySelector('canvas[data-role="map"]')
       || document.querySelector('canvas');
 
-    if (!canvas){
-      WARN('Canvas #game nicht gefunden');
-      return;
-    }
+    if (!canvas){ WARN('Canvas #game nicht gefunden'); return; }
 
     ensureOverlay();
-    tileSize = getTileSize();
+    tileSize=getTileSize();
     updateTilePxByCamera();
 
     bindGlobal();
     bindPointer();
 
-    window.__SIEDLER_PLACE_ACTIVE = false;
-    OK('bereit v25.12.03-workarea-integrated-phase1');
+    window.__SIEDLER_PLACE_ACTIVE=false;
+    OK('bereit v25.12.03-workarea-integrated-phase2-step1');
   }
 
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', init, {once:true});
-  } else {
-    init();
-  }
+  if (document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', init,{once:true});
+  } else init();
 
 })();
