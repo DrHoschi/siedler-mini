@@ -211,16 +211,37 @@
   // ----------------------------------------------------------------------------
   // EXPORT
   // ----------------------------------------------------------------------------
+  // ----------------------------------------------------------
+  // NEU: Einfacher Zugriff aus Produktionsmodulen
+  // ----------------------------------------------------------
+  function getCenterForBuilding(building){
+    if (!building) return null;
+    const uid = building.uid || (building.id + '@' + building.x + ',' + building.y);
+    const area = AREAS[uid];
+    if (area && typeof area.cx === 'number' && typeof area.cy === 'number') {
+      return {
+        cx: area.cx,
+        cy: area.cy,
+        radiusTiles: area.radiusTiles || DEFAULT_RADIUS
+      };
+    }
 
+    // Fallback: Mittelpunkt des Gebäudes, Radius Standard
+    const cx = building.x + Math.floor((building.w || 1) / 2);
+    const cy = building.y + Math.floor((building.h || 1) / 2);
+    return { cx, cy, radiusTiles: DEFAULT_RADIUS };
+  
   window.GameWorkArea = {
+    init,
     beginSelection,
     applySelectionTile,
     cancelSelection,
     isSelecting,
-    getAreaFor,
-    getOrCreateAreaFor,
+    getAreaForUid,
+    getAreaForBuilding,
     drawOnMainCanvas,
-    drawWorld
+    drawWorld,
+    getCenterForBuilding
   };
 
   INFO('bereit v25.12.09-workarea-core-final');
