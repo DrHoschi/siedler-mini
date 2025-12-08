@@ -1,25 +1,26 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.12.08-workarea-integrated-v3
+ * Version : v25.12.08-workarea-integrated-v6
  * Zweck   : Eingabe + Platzier-Ghost + OK/Cancel direkt am Ghost
  *
  * Lauscht : cb:set-build-tool(kind)
  *           req:place:begin({w,h})
  *           cb:camera-change({x,y,zoom})
  *
- * Sendet  : cb:hover-tile(.)
- *           cb:build:place(.)
+ * Sendet  : cb:hover-tile(...)
+ *           cb:build:place(...)
  *
- * Erweiterungen in dieser Final-Version:
- *  ✔ Ghost zeigt JE NACH Gebäude das echte Building-Icon
- *  ✔ Ghost skaliert korrekt mit Zoom
- *  ✔ OK/Cancel-Buttons skalieren mit Zoom mit
- *  ✔ Tint bleibt wie bisher (rot/grün)
- *  ✔ Voll kompatibel zu Kamera-Blockierung (__SIEDLER_PLACE_ACTIVE)
- *  ✔ NEU: Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
- *  ✔ NEU: Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
- *  ✔ FIX v3: Erster Tap setzt Ghost-Position (auch ohne pointermove)
+ * WICHTIG:
+ *  - Verwendet DEINE bestehenden Ghost-/Button-Elemente aus dem HTML:
+ *      #place-overlay
+ *      .place-ghost  /  #place-ghost
+ *      .place-ghost-tint
+ *      .place-ghost-ok
+ *      .place-ghost-cancel
+ *  - Es wird NICHTS Neues mehr erzeugt, nur Event-Handler angehängt.
+ *  - Platzieren NUR über ✓ oder Enter, kein Auto-Place.
+ *  - WorkArea-Clicks laufen über GameWorkArea.handleSelection.
  * ========================================================================== */
 (() => {
   'use strict';
@@ -42,8 +43,7 @@
   // ------------------------------ DOM refs ----------------------------------
   let overlay, ghost, tint, btnOk, btnCancel;
 
-  const q  = (s, r=document)=> r.querySelector(s);
-  const qa = (s, r=document)=> Array.from(r.querySelectorAll(s));
+  const q    = (s, r=document)=> r.querySelector(s);
   const rect = el => el?.getBoundingClientRect?.() ?? {left:0, top:0, width:0, height:0};
 
   // ==========================================================================
@@ -73,7 +73,7 @@
   }
 
   function updateGhostSprite(){
-    ensureOverlay();
+    if (!ghost) return;
     if (!buildTool) {
       ghost.style.backgroundImage='';
       return;
@@ -85,82 +85,78 @@
     ghost.style.backgroundImage    = `url(${url})`;
     ghost.style.backgroundRepeat   = 'no-repeat';
     ghost.style.backgroundPosition = 'center center';
-    ghost.style.backgroundSize     = 'cover'; // Gebäude vollflächig im Ghost
+    ghost.style.backgroundSize     = 'cover';
   }
 
   // ==========================================================================
   //  OVERLAY / GHOST
   // ==========================================================================
 
+  /**
+   * Wichtig:
+   *  - Holt nur vorhandene Elemente aus dem DOM.
+   *  - Erzeugt KEINE neuen Buttons / Ghosts mehr.
+   */
   function ensureOverlay(){
     if (overlay && ghost && tint && btnOk && btnCancel) return;
 
     overlay = q('#place-overlay');
     if (!overlay){
-      overlay = document.createElement('div');
-      overlay.id = 'place-overlay';
-      overlay.className = 'place-overlay';
-      document.body.appendChild(overlay);
+      WARN('Overlay #place-overlay nicht gefunden – Ghost/Buttons nicht verfügbar');
+      return;
     }
 
-    ghost = q('#place-ghost', overlay) || q('.ghost-sprite', overlay);
+    ghost = q('.place-ghost', overlay) || q('#place-ghost', overlay);
     if (!ghost){
-      ghost = document.createElement('div');
-      ghost.id = 'place-ghost';
-      ghost.className = 'place-ghost ghost-sprite';
-      overlay.appendChild(ghost);
+      WARN('Ghost (.place-ghost / #place-ghost) nicht gefunden');
+      return;
     }
 
     tint = q('.place-ghost-tint', ghost);
     if (!tint){
-      tint = document.createElement('div');
-      tint.className = 'place-ghost-tint';
-      ghost.appendChild(tint);
+      WARN('Tint .place-ghost-tint nicht gefunden');
     }
 
     btnOk = q('.place-ghost-ok', ghost);
     if (!btnOk){
-      btnOk = document.createElement('button');
-      btnOk.className = 'place-ghost-ok';
-      btnOk.textContent = '✓';
-      ghost.appendChild(btnOk);
+      WARN('OK-Button .place-ghost-ok nicht gefunden');
     }
 
     btnCancel = q('.place-ghost-cancel', ghost);
     if (!btnCancel){
-      btnCancel = document.createElement('button');
-      btnCancel.className = 'place-ghost-cancel';
-      btnCancel.textContent = '✕';
-      ghost.appendChild(btnCancel);
+      WARN('Cancel-Button .place-ghost-cancel nicht gefunden');
     }
 
-    btnOk.addEventListener('click', ()=>{
-      if (!buildTool || !hoverValid) return;
-      placeAt(lastHover.tx,lastHover.ty);
-    });
+    // Event-Handler NUR EINMAL anhängen
+    if (btnOk){
+      btnOk.addEventListener('click', ()=>{
+        if (!buildTool || !hoverValid) { WARN('✓ ignoriert (kein Tool / keine Position)'); return; }
+        placeAt(lastHover.tx,lastHover.ty);
+      });
+    }
 
-    btnCancel.addEventListener('click', ()=>{
-      hideOverlay();
-      resetTool();
-    });
+    if (btnCancel){
+      btnCancel.addEventListener('click', ()=>{
+        hideOverlay();
+        resetTool();
+      });
+    }
+
+    updateGhostSprite();
+    updateGhostButtonsScale(tileSize * cam.zoom);
   }
 
   function showOverlay(){
-    if (!overlay) ensureOverlay();
+    ensureOverlay();
+    if (!overlay || !ghost) return;
     overlay.style.display = 'block';
     ghost.style.display   = 'block';
   }
 
   function hideOverlay(){
-    if (!overlay) return;
+    if (!overlay || !ghost) return;
     overlay.style.display = 'none';
     ghost.style.display   = 'none';
-  }
-
-  function setGhostScreenPos(sx,sy){
-    if (!ghost) return;
-    ghost.style.setProperty('--sx', `${sx}px`);
-    ghost.style.setProperty('--sy', `${sy}px`);
   }
 
   function setGhostSizeTiles(w,h){
@@ -169,11 +165,23 @@
     ghost.style.setProperty('--h-tiles', h);
   }
 
+  function setGhostScreenPos(sx,sy){
+    if (!ghost) return;
+    ghost.style.setProperty('--sx', `${sx}px`);
+    ghost.style.setProperty('--sy', `${sy}px`);
+  }
+
+  function setGhostBuildable(can){
+    if (!tint) return;
+    tint.classList.toggle('ok', !!can);
+    tint.classList.toggle('bad', !can);
+    if (btnOk) btnOk.disabled = !can;
+  }
+
   function updateGhostButtonsScale(tilePx){
     if (!ghost) return;
-    const base = tilePx;
-    const size = Math.max(24, Math.min(72, base * 0.75));
-    ghost.style.setProperty('--button-size', `${size}px`);
+    const scale = Math.min(1.4, Math.max(0.6, tilePx / 64));
+    ghost.style.setProperty('--btnScale', `${scale}`);
   }
 
   function updateTilePxByCamera(){
@@ -182,14 +190,8 @@
     updateGhostButtonsScale(tilePx);
   }
 
-  function setGhostBuildable(ok){
-    if (!tint) return;
-    tint.classList.toggle('ok', !!ok);
-    tint.classList.toggle('bad', !ok);
-  }
-
   // ==========================================================================
-  //  KOORDS / BUILDINGS
+  //  KOORDINATEN / BUILDINGS
   // ==========================================================================
 
   function getTileSize(){
@@ -217,9 +219,11 @@
     return {tx,ty,sx,sy};
   }
 
-  function canPlaceAt(){ return true; }
+  function canPlaceAt(/*tx,ty*/){
+    // TODO: echte Kollisionsprüfung einbauen
+    return true;
+  }
 
-  // Gebäude an einer Tile-Position finden
   function findBuildingAt(tx, ty){
     const list = (window.Game && Array.isArray(window.Game.buildings))
       ? window.Game.buildings
@@ -258,15 +262,19 @@
     }catch{}
   }
 
+  /**
+   * Zentrale Place-Funktion:
+   *  - sendet cb:build:place im alten Format (__src + buildingId,...)
+   *  - wird von ✓-Button UND von Enter genutzt
+   */
   function placeAt(tx,ty,w=lastSize.w,h=lastSize.h){
     const detail = {
-      // WICHTIG: alter Tag, den dein Game-Listener akzeptiert
-      __src: 'input-v25.11.14',
+      __src     : 'input-v25.11.14',
       buildingId: buildTool,
-      x: tx|0,
-      y: ty|0,
-      w: w|0,
-      h: h|0
+      x         : tx|0,
+      y         : ty|0,
+      w         : w|0,
+      h         : h|0
     };
     OK('cb:build:place', detail);
     window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
@@ -281,13 +289,17 @@
     const gw = window.GameWorkArea;
     if (!gw || typeof gw.isSelecting !== 'function' || !gw.isSelecting()) return false;
 
-    try{
+    try {
       ev.preventDefault?.();
       gw.applySelectionTile(p.tx, p.ty);
-    }catch(e){
-      (window.CBLog?.warn ?? console.warn)(TAG, 'WorkArea-Klick-Fehler', e);
-      return false;
+    } catch (e){
+      (window.CBLog?.warn || console.warn)(
+        '[input]',
+        'WorkArea-Klick-Fehler',
+        e
+      );
     }
+
     return true;
   }
 
@@ -303,7 +315,7 @@
       lastHover = p;
       hoverValid=true;
 
-      // NEU: Cursor-Logik auch für WorkArea-Auswahl
+      // Cursor-Logik auch für WorkArea-Auswahl
       try {
         const gw = window.GameWorkArea;
         const selecting =
@@ -315,15 +327,16 @@
           canvas.style.cursor = (buildTool || selecting) ? 'crosshair' : 'default';
         }
       } catch(e){
-        // Wenn irgendwas schiefgeht, Cursor lieber nicht verändern
+        // im Zweifel Cursor nicht verändern
       }
 
-      const step = tileSize * cam.zoom;
-      const gx = p.sx - (p.sx % step);
-      const gy = p.sy - (p.sy % step);
-
-      setGhostScreenPos(gx,gy);
-      setGhostBuildable(canPlaceAt(p.tx,p.ty));
+      if (buildTool){
+        const step = tileSize * cam.zoom;
+        const gx = p.sx - (p.sx % step);
+        const gy = p.sy - (p.sy % step);
+        setGhostScreenPos(gx,gy);
+        setGhostBuildable(canPlaceAt(p.tx,p.ty));
+      }
 
       window.dispatchEvent(new CustomEvent('cb:hover-tile',{
         detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
@@ -333,21 +346,23 @@
     canvas.addEventListener('pointerdown', (ev)=>{
       if (ev.button != null && ev.button !== 0) return;
 
-      // ZUERST: Prüfen, ob gerade ein Arbeitsbereich gesetzt werden soll
       const p = screenToTile(ev.clientX, ev.clientY);
+      lastHover = p;
+      hoverValid = true;
 
+      // 1) WorkArea-Modus hat Vorrang
       if (handleWorkAreaClick(p, ev)) {
-        // Klick wurde zum Verschieben des Arbeitsbereichs benutzt
         return;
       }
 
-      // Danach: prüfen, ob auf ein bestehendes Gebäude geklickt wurde
+      // 2) Prüfen, ob auf ein bestehendes Gebäude geklickt wurde
       const b = findBuildingAt(p.tx, p.ty);
 
-      // 🔍 Debug:
       INFO('pointerdown → tile', p.tx, p.ty, 'building:', b && b.id);
 
       if (b) {
+        const meta = getBuildingMeta(b.id);
+
         const detail = {
           id      : b.id,
           uid     : b.uid || null,
@@ -356,11 +371,11 @@
           w       : (b.w | 0) || 1,
           h       : (b.h | 0) || 1,
           status  : b.status  || '',
-          label   : b.label   || '',
-          category: b.category|| ''
+          label   : meta?.label   || b.label   || '',
+          category: meta?.category|| b.category|| ''
         };
 
-        INFO('cb:building:menu-open →', detail);  // 🔍 Debug
+        INFO('cb:building:menu-open →', detail);
 
         try {
           window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
@@ -368,30 +383,28 @@
           console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
         }
 
-        // Klick wurde für das Gebäude-Menü verwendet → Platzier-Logik NICHT ausführen
         ev.preventDefault?.();
         return;
       }
 
-      // ----------------------------------------------------
-      // Kein Gebäude getroffen → ggf. Platziermodus bedienen
-      // ----------------------------------------------------
+      // 3) Kein Gebäude getroffen → nur Ghost verschieben, NICHT auto-placen
       if (!buildTool) {
-        // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
         return;
       }
 
-      // *** NEU v3: Erster Tap setzt Ghost-Position ***
+      if (!canPlaceAt(p.tx, p.ty)){
+        ev.preventDefault?.();
+        WARN('Platzierung nicht erlaubt bei', p.tx, p.ty);
+        setGhostBuildable(false);
+        return;
+      }
+
       const step = tileSize * cam.zoom;
       const gx = p.sx - (p.sx % step);
       const gy = p.sy - (p.sy % step);
-      setGhostScreenPos(gx, gy);
-      setGhostBuildable(canPlaceAt(p.tx, p.ty));
+      setGhostScreenPos(gx,gy);
+      setGhostBuildable(true);
 
-      lastHover  = p;
-      hoverValid = true;
-
-      // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
       ev.preventDefault?.();
     }, { passive:false });
 
@@ -468,7 +481,7 @@
     bindPointer();
 
     window.__SIEDLER_PLACE_ACTIVE=false;
-    OK('bereit v25.12.08-workarea-integrated-v3');
+    OK('bereit v25.12.08-workarea-integrated-v6');
   }
 
   if (document.readyState==='loading'){
