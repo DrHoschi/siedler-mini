@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.12.08-workarea-integrated-v3 (Ghost+Sprite+ZoomScaling+WorkArea-Click+OptionA+AutoPlace)
+ * Version : v25.12.08-workarea-integrated-v4
  * Zweck   : Eingabe + Platzier-Ghost + OK/Cancel direkt am Ghost
  *
  * Lauscht : cb:set-build-tool(kind)
@@ -11,121 +11,49 @@
  * Sendet  : cb:hover-tile(...)
  *           cb:build:place(...)
  *
- * Erweiterungen in dieser Final-Version:
+ * Erweiterungen:
  *  ✔ Ghost zeigt JE NACH Gebäude das echte Building-Icon
  *  ✔ Ghost skaliert korrekt mit Zoom
  *  ✔ OK/Cancel-Buttons skalieren mit Zoom mit
  *  ✔ Tint bleibt wie bisher (rot/grün)
- *  ✔ NEU: Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
- *  ✔ NEU: Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
- *  ✔ NEU: Auto-Place beim Linksklick (wie früher) + ✓-Button nutzt dieselbe Logik
- *
- * WICHTIG (Struktur):
- *  - ALLE Pointer-Events bleiben HIER (Input-Modul).
- *  - GameWorkArea wird NUR über eine kleine Hook-Funktion bedient:
- *      handleWorkAreaClick(...)
- *  - Die eigentliche WorkArea-Logik (cx,cy,radius, Defaults, Events)
- *    liegt komplett in core/game.workarea.js.
+ *  ✔ Kompatibel zu Kamera-Blockierung (__SIEDLER_PLACE_ACTIVE)
+ *  ✔ Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
+ *  ✔ Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
+ *  ✔ Auto-Place beim Linksklick (wie vorher) + ✓ nutzt dieselbe placeAt-Logik
  * ========================================================================== */
-
-(function(){
+(() => {
   'use strict';
 
-  // ==========================================================================
-  //  IMPORTS / KURZ-HILFSFUNKTIONEN
-  // ==========================================================================
+  const TAG  = '[input]';
+  const OK   = (...a)=> (window.CBLog?.ok   ?? console.log  )(TAG, ...a);
+  const INFO = (...a)=> (window.CBLog?.info ?? console.info )(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn )(TAG, ...a);
 
-  const PREFIX = '[core.input]';
+  // ------------------------------ State -------------------------------------
+  let canvas   = null;
+  let tileSize = 64;
+  const cam = { x:0, y:0, zoom:1 };
 
-  function LOG(...args){ console.log(PREFIX, ...args); }
-  function INFO(...args){ console.info(PREFIX, ...args); }
-  function WARN(...args){ console.warn(PREFIX, ...args); }
+  let buildTool  = null;
+  let lastHover  = { tx:0, ty:0, sx:0, sy:0 };
+  let lastSize   = { w:3, h:3 };
+  let hoverValid = false;
 
-  function q(sel){ return document.querySelector(sel); }
+  // ------------------------------ DOM refs ----------------------------------
+  let overlay, ghost, tint, btnOk, btnCancel;
 
-  // ==========================================================================
-  //  STATE / KONSTANTEN
-  // ==========================================================================
-
-  let canvas      = null;
-  let overlay     = null;
-  let ghost       = null;
-  let tint        = null;
-  let btnOk       = null;
-  let btnCancel   = null;
-
-  let buildTool   = null; // z. B. 'b.hq', 'b.lumberjack'
-  let tileSize    = 64;
-
-  let lastHover   = null;
-  let hoverValid  = false;
-
-  let camState    = { x:0, y:0, zoom:1 };
+  const q  = (s, r=document)=> r.querySelector(s);
+  const qa = (s, r=document)=> Array.from(r.querySelectorAll(s));
+  const rect = el => el?.getBoundingClientRect?.() ?? {left:0, top:0, width:0, height:0};
 
   // ==========================================================================
-  //  HILFSFUNKTIONEN
+  //  BUILDING META / ICONS
   // ==========================================================================
-
-  function ensureCanvas(){
-    if (canvas) return;
-    canvas = document.getElementById('game-canvas');
-    if (!canvas){
-      WARN('Kein #game-canvas gefunden – Input kann nicht binden');
-    }
-  }
-
-  function screenToTile(sx, sy){
-    const rect = canvas.getBoundingClientRect();
-    const xInCanvas = sx - rect.left;
-    const yInCanvas = sy - rect.top;
-
-    const ts = tileSize * camState.zoom;
-    const tx = Math.floor(xInCanvas / ts) + camState.x;
-    const ty = Math.floor(yInCanvas / ts) + camState.y;
-
-    return {
-      sx: xInCanvas,
-      sy: yInCanvas,
-      tx,
-      ty
-    };
-  }
-
-  function canPlaceAt(tx,ty){
-    // Platzhalter – hier später Kollisionsprüfung etc.
-    if (tx < 0 || ty < 0) return false;
-    return true;
-  }
-
-  /**
-   * Zentrale Platzier-Funktion:
-   *  - wird von Auto-Place (Linksklick) UND vom ✓-Button verwendet
-   *  - sendet cb:build:place
-   *  - schließt Overlay & resetTool
-   */
-  function placeAt(tx, ty){
-    if (!buildTool) return;
-
-    const w = 3, h = 3; // Standardgröße – TODO: später aus Registry holen
-
-    const detail = {
-      kind      : buildTool,
-      buildingId: buildTool,
-      x         : tx|0,
-      y         : ty|0,
-      w         : w|0,
-      h         : h|0
-    };
-
-    INFO('cb:build:place', detail);
-    window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
-    hideOverlay();
-    resetTool();
-  }
 
   function getBuildingMeta(id){
     if (!id) return null;
-    let b = null;
+    let b=null;
+
     try{
       if (window.Registry && typeof window.Registry.get === 'function'){
         b = window.Registry.get('buildings', id);
@@ -141,119 +69,229 @@
     if (!meta) return '';
     if (meta.icon) return meta.icon;
 
-    return `assets/icons/buildings/${meta.id || 'building'}.png`;
+    return `assets/icons/buildings/${meta.id}.png`;
+  }
+
+  function updateGhostSprite(){
+    ensureOverlay();
+    if (!buildTool) {
+      ghost.style.backgroundImage='';
+      return;
+    }
+
+    const meta = getBuildingMeta(buildTool);
+    const url  = resolveBuildingIcon(meta);
+
+    ghost.style.backgroundImage    = `url(${url})`;
+    ghost.style.backgroundRepeat   = 'no-repeat';
+    ghost.style.backgroundPosition = 'center center';
+    ghost.style.backgroundSize     = 'cover'; // Gebäude vollflächig im Ghost
   }
 
   // ==========================================================================
-  //  OVERLAY & GHOST INITIALISIERUNG
+  //  OVERLAY / GHOST
   // ==========================================================================
 
   function ensureOverlay(){
     if (overlay && ghost && tint && btnOk && btnCancel) return;
 
-    overlay = q('#place-overlay') || overlay;
+    overlay = q('#place-overlay');
     if (!overlay){
       overlay = document.createElement('div');
-      overlay.id   = 'place-overlay';
-      overlay.className = 'place-overlay';
+      overlay.id='place-overlay';
+      overlay.className='place-overlay';
       document.body.appendChild(overlay);
     }
 
+    ghost = q('.place-ghost', overlay);
     if (!ghost){
-      ghost = document.createElement('div');
-      ghost.className = 'place-ghost';
+      ghost=document.createElement('div');
+      ghost.className='place-ghost';
       overlay.appendChild(ghost);
     }
 
+    tint = q('.place-ghost-tint', ghost);
     if (!tint){
-      tint = document.createElement('div');
-      tint.className = 'place-ghost-tint';
+      tint=document.createElement('div');
+      tint.className='place-ghost-tint';
       ghost.appendChild(tint);
     }
 
+    btnOk = q('.place-btn.ok', ghost);
     if (!btnOk){
-      btnOk = document.createElement('button');
-      btnOk.className = 'place-ghost-ok';
-      btnOk.textContent = '✓';
+      btnOk=document.createElement('button');
+      btnOk.className='place-btn ok';
+      btnOk.textContent='✓';
       ghost.appendChild(btnOk);
     }
 
+    btnCancel = q('.place-btn.cancel', ghost);
     if (!btnCancel){
-      btnCancel = document.createElement('button');
-      btnCancel.className = 'place-ghost-cancel';
-      btnCancel.textContent = '✕';
+      btnCancel=document.createElement('button');
+      btnCancel.className='place-btn cancel';
+      btnCancel.textContent='✕';
       ghost.appendChild(btnCancel);
     }
 
-    // ✓-Button: nutzt dieselbe placeAt-Logik
-    btnOk.addEventListener('click', ()=>{
-      if (!buildTool || !hoverValid || !lastHover) return;
-      const { tx,ty } = lastHover;
-      placeAt(tx, ty);
-    });
+    // Button-Handler
+    btnOk.onclick = () => {
+      if (!buildTool || !hoverValid) { WARN('Bestätigen ignoriert'); return; }
+      placeAt(lastHover.tx, lastHover.ty);
+    };
+    btnCancel.onclick = () => { hideOverlay(); resetTool(); };
 
-    btnCancel.addEventListener('click', ()=>{
-      hideOverlay();
-      resetTool();
-    });
+    updateGhostSprite();
+    updateGhostButtonsScale(tileSize * cam.zoom);
   }
 
-  function showOverlay(){
+  function showOverlay(){ ensureOverlay(); overlay.hidden=false; }
+  function hideOverlay(){ if (overlay) overlay.hidden=true; }
+
+  // ==========================================================================
+  //  GHOST / CAMERA-SYNC
+  // ==========================================================================
+
+  function setGhostSizeTiles(w,h){
     ensureOverlay();
-    if (overlay) overlay.style.display = 'block';
-    if (ghost)   ghost.style.display   = 'block';
+    ghost.style.setProperty('--wTiles', `${w}`);
+    ghost.style.setProperty('--hTiles', `${h}`);
   }
 
-  function hideOverlay(){
-    if (overlay) overlay.style.display = 'none';
-    if (ghost)   ghost.style.display   = 'none';
+  function setGhostScreenPos(sx,sy){
+    ensureOverlay();
+    ghost.style.setProperty('--sx', `${sx}px`);
+    ghost.style.setProperty('--sy', `${sy}px`);
   }
 
-  function setGhostScreenPos(sx, sy){
-    if (!ghost) return;
-    ghost.style.transform = `translate(${sx}px, ${sy}px)`;
+  function setGhostBuildable(can){
+    tint.classList.toggle('is-valid', !!can);
+    tint.classList.toggle('is-invalid', !can);
+    btnOk.disabled = !can;
   }
 
-  function setGhostBuildable(isOk){
-    if (!tint) return;
-    tint.classList.toggle('ok', !!isOk);
-    tint.classList.toggle('bad', !isOk);
+  function updateGhostButtonsScale(tilePx){
+    const scale = Math.min(1.4, Math.max(0.6, tilePx / 64));
+    ghost.style.setProperty('--btnScale', `${scale}`);
   }
+
+  function updateTilePxByCamera(){
+    const tilePx = tileSize * cam.zoom;
+    (overlay||document.documentElement)
+      .style.setProperty('--tilePx', `${tilePx}px`);
+    updateGhostButtonsScale(tilePx);
+  }
+
+  // ==========================================================================
+  //  KOORDINATEN
+  // ==========================================================================
+
+  function getTileSize(){
+    try{return Number(window.Game?.tileSize)||64;}catch{return 64;}
+  }
+
+  function screenToTile(clientX,clientY){
+    const r = rect(canvas);
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+
+    const worldX = cam.x + (sx / cam.zoom);
+    const worldY = cam.y + (sy / cam.zoom);
+
+    let tx = Math.floor(worldX / tileSize);
+    let ty = Math.floor(worldY / tileSize);
+
+    if (tx<0) tx=0;
+    if (ty<0) ty=0;
+
+    return {tx,ty,sx,sy};
+  }
+
+  function canPlaceAt(/*tx,ty*/){ 
+    // TODO: echte Kollisionsprüfung aus Map / Registry einhängen
+    return true; 
+  }
+
+  // -------------------------------------------------------------------------
+  // Gebäude an einer Tile-Position finden (für Klick aufs fertige Gebäude)
+  // -------------------------------------------------------------------------
+  function findBuildingAt(tx, ty){
+    const list = (window.Game && Array.isArray(window.Game.buildings))
+      ? window.Game.buildings
+      : [];
+
+    for (const b of list){
+      if (!b) continue;
+
+      const bx = (b.x | 0);
+      const by = (b.y | 0);
+      const bw = (b.w | 0) || 1;
+      const bh = (b.h | 0) || 1;
+
+      const inX = tx >= bx && tx < bx + bw;
+      const inY = ty >= by && ty < by + bh;
+
+      if (inX && inY) return b;
+    }
+    return null;
+  }
+
+  // ==========================================================================
+  //  RESET / PLACE
+  // ==========================================================================
 
   function resetTool(){
-    buildTool  = null;
-    hoverValid = false;
-    lastHover  = null;
+    buildTool=null;
+    hoverValid=false;
+    hideOverlay();
 
-    if (canvas){
-      canvas.style.cursor = 'default';
-    }
+    window.__SIEDLER_PLACE_ACTIVE=false;
+
+    try{
+      if (canvas) canvas.style.cursor='default';
+      window.dispatchEvent(new CustomEvent('cb:set-build-tool',{detail:{kind:null}}));
+    }catch{}
   }
 
-  // ==========================================================================
-  //  WorkArea-Integration (Option A – nur kleiner Hook)
-  // ==========================================================================
+  /**
+   * Zentrale Place-Funktion:
+   *  - sendet cb:build:place im alten Format (__src + buildingId,...)
+   *  - wird von Auto-Place (Klick) UND vom ✓-Button UND von Enter genutzt
+   */
+  function placeAt(tx,ty,w=lastSize.w,h=lastSize.h){
+    const detail = {
+      // WICHTIG: alter Tag, den dein Game-Listener akzeptiert
+      __src: 'input-v25.11.14',
+      buildingId: buildTool,
+      x: tx|0,
+      y: ty|0,
+      w: w|0,
+      h: h|0
+    };
+    OK('cb:build:place', detail);
+    window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
+    hideOverlay();
+    resetTool();
+  }
 
   // ---------------------------------------------------------------------------
   // WorkArea: Klick auf die Karte im "Arbeitsbereich setzen"-Modus
   // ---------------------------------------------------------------------------
-  /* function handleWorkAreaClick(p, ev){
-   *   // Alte Version zu Dokumentationszwecken belassen
-   * } */
-
   function handleWorkAreaClick(p, ev){
-    // Nur aktiv, wenn das WorkArea-Modul überhaupt da ist
-    // und wir gerade im Selektionsmodus sind
     const gw = window.GameWorkArea;
     if (!gw || typeof gw.isSelecting !== 'function' || !gw.isSelecting()) return false;
 
-    try{
+    try {
       ev.preventDefault?.();
       gw.applySelectionTile(p.tx, p.ty);
-    }catch(e){
-      console.warn('[core.input] WorkArea-Klick-Fehler', e);
-      return false;
+    } catch (e){
+      (window.CBLog?.warn || console.warn)(
+        '[input]',
+        'WorkArea-Klick-Fehler',
+        e
+      );
     }
+
+    // Wir haben das Event verarbeitet → nicht mehr weiterreichen
     return true;
   }
 
@@ -269,7 +307,7 @@
       lastHover = p;
       hoverValid=true;
 
-      // NEU: Cursor-Logik auch für WorkArea-Auswahl
+      // Cursor-Logik auch für WorkArea-Auswahl
       try {
         const gw = window.GameWorkArea;
         const selecting =
@@ -284,19 +322,15 @@
         // Wenn irgendwas schiefgeht, Cursor lieber nicht verändern
       }
 
-      if (!buildTool){
-        return;
-      }
-
-      const cam = camState;
-      const ts  = tileSize * camState.zoom;
-
-      const step = tileSize * camState.zoom;
+      const step = tileSize * cam.zoom;
       const gx = p.sx - (p.sx % step);
       const gy = p.sy - (p.sy % step);
 
-      setGhostScreenPos(gx,gy);
-      setGhostBuildable(canPlaceAt(p.tx,p.ty));
+      // Ghost nur relevant, wenn tatsächlich ein Build-Tool aktiv ist
+      if (buildTool){
+        setGhostScreenPos(gx,gy);
+        setGhostBuildable(canPlaceAt(p.tx,p.ty));
+      }
 
       window.dispatchEvent(new CustomEvent('cb:hover-tile',{
         detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
@@ -306,37 +340,37 @@
     canvas.addEventListener('pointerdown', (ev)=>{
       if (ev.button != null && ev.button !== 0) return;
 
-      // ZUERST: Prüfen, ob gerade ein Arbeitsbereich gesetzt werden soll
       const p = screenToTile(ev.clientX, ev.clientY);
+      lastHover = p;
+      hoverValid = true;
 
+      // 1) WorkArea-Modus hat Vorrang
       if (handleWorkAreaClick(p, ev)) {
         // Klick wurde zum Verschieben des Arbeitsbereichs benutzt
         return;
       }
 
-      // Danach: prüfen, ob auf ein bestehendes Gebäude geklickt wurde
+      // 2) Prüfen, ob auf ein bestehendes Gebäude geklickt wurde
       const b = findBuildingAt(p.tx, p.ty);
 
-      // 🔍 Debug:
       INFO('pointerdown → tile', p.tx, p.ty, 'building:', b && b.id);
 
-      if (b){
-        // Gebäude getroffen → Gebäude-Menü öffnen
+      if (b) {
         const meta = getBuildingMeta(b.id);
 
         const detail = {
           id      : b.id,
-          uid     : b.uid,
-          x       : b.x,
-          y       : b.y,
-          w       : b.w,
-          h       : b.h,
-          icon    : resolveBuildingIcon(meta),
-          label   : meta.label   || '',
-          category: meta.category|| ''
+          uid     : b.uid || null,
+          x       : b.x | 0,
+          y       : b.y | 0,
+          w       : (b.w | 0) || 1,
+          h       : (b.h | 0) || 1,
+          status  : b.status  || '',
+          label   : meta?.label   || b.label   || '',
+          category: meta?.category|| b.category|| ''
         };
 
-        INFO('cb:building:menu-open →', detail);  // 🔍 Debug
+        INFO('cb:building:menu-open →', detail);
 
         try {
           window.dispatchEvent(new CustomEvent('cb:building:menu-open', { detail }));
@@ -349,28 +383,21 @@
         return;
       }
 
-      // ----------------------------------------------------
-      // Kein Gebäude getroffen → ggf. Platziermodus bedienen
-      // ----------------------------------------------------
+      // 3) Kein Gebäude getroffen → ggf. Platziermodus bedienen
       if (!buildTool) {
         // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
         return;
       }
 
-      // Platziermodus aktiv → Position merken (Ghost bleibt über ✓-Button steuerbar)
-      if (!hoverValid) {
-        lastHover = p;
-        hoverValid = true;
-      }
-
-      // ⬇⬇⬇ NEU: Auto-Place beim Linksklick (wie früher)
-      if (canPlaceAt(p.tx, p.ty)) {
-        ev.preventDefault?.();
-        placeAt(p.tx, p.ty);
-      } else {
+      // Auto-Place wie früher:
+      if (!canPlaceAt(p.tx, p.ty)){
         ev.preventDefault?.();
         WARN('Platzierung nicht erlaubt bei', p.tx, p.ty);
+        return;
       }
+
+      ev.preventDefault?.();
+      placeAt(p.tx, p.ty);
     }, { passive:false });
 
     canvas.addEventListener('contextmenu', ev=>{
@@ -383,31 +410,75 @@
   }
 
   // ==========================================================================
-  //  EXPORT / INITIALISIERUNG
+  //  GLOBAL BINDINGS
+  // ==========================================================================
+
+  function bindGlobal(){
+
+    addEventListener('cb:set-build-tool', ev=>{
+      const d = ev?.detail||{};
+      buildTool = d.kind ?? d.type ?? null;
+
+      window.__SIEDLER_PLACE_ACTIVE = !!buildTool;
+
+      if (canvas) canvas.style.cursor = buildTool ? 'crosshair' : 'default';
+
+      if (buildTool){
+        showOverlay();
+        setGhostSizeTiles(lastSize.w,lastSize.h);
+        updateGhostSprite();
+        updateGhostButtonsScale(tileSize * cam.zoom);
+      } else hideOverlay();
+    });
+
+    addEventListener('req:place:begin', ev=>{
+      const d = ev?.detail||{};
+      if (d.w) lastSize.w=d.w|0;
+      if (d.h) lastSize.h=d.h|0;
+      setGhostSizeTiles(lastSize.w,lastSize.h);
+      hoverValid=false;
+    });
+
+    addEventListener('cb:camera-change', ev=>{
+      const d = ev?.detail||{};
+      if (d.x!=null) cam.x=d.x;
+      if (d.y!=null) cam.y=d.y;
+      if (d.zoom!=null) cam.zoom=d.zoom;
+      updateTilePxByCamera();
+    });
+
+    addEventListener('keydown', e=>{
+      if (!buildTool) return;
+      if (e.key==='Escape'){ hideOverlay(); resetTool(); }
+      if (e.key==='Enter' && hoverValid){ placeAt(lastHover.tx,lastHover.ty); }
+    });
+  }
+
+  // ==========================================================================
+  //  INIT
   // ==========================================================================
 
   function init(){
-    ensureCanvas();
+    // WICHTIG: wieder wie im alten System → robustes Canvas-Finden
+    canvas = document.getElementById('game')
+      || document.querySelector('canvas[data-role="map"]')
+      || document.querySelector('canvas');
+
+    if (!canvas){ WARN('Canvas #game nicht gefunden'); return; }
+
     ensureOverlay();
+    tileSize=getTileSize();
+    updateTilePxByCamera();
+
+    bindGlobal();
     bindPointer();
 
-    // Kamera-Änderungen abonnieren (für screenToTile & Ghost-Scaling)
-    window.addEventListener('cb:camera-change', ev=>{
-      const d = ev && ev.detail;
-      if (!d) return;
-      camState = {
-        x   : d.x|0,
-        y   : d.y|0,
-        zoom: d.zoom||1
-      };
-    });
-
-    INFO('bereit v25.12.08-workarea-integrated-v3 (Ghost+Sprite+ZoomScaling+WorkArea-Click+OptionA+AutoPlace)');
+    window.__SIEDLER_PLACE_ACTIVE=false;
+    OK('bereit v25.12.08-workarea-integrated-v4');
   }
 
-  // Externes Interface (z. B. aus boot.js):
-  window.CoreInput = {
-    init
-  };
+  if (document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', init,{once:true});
+  } else init();
 
 })();
