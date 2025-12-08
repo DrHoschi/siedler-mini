@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.place.js
  * Projekt : Neue Siedler
- * Version : v25.12.08-place-controller-step4
+ * Version : v25.12.08-place-controller-step5
  * Zweck   : Platzier-/Ghost-Controller (Overlay, Buttons, Icons, Scaling)
  *
  * Lauscht (indirekt, via core.input.js):
@@ -17,6 +17,10 @@
  *  - window.CoreInput.placeAt(tx,ty,w,h)
  *  - window.CoreInput.resetTool()
  *  - Registry.get('buildings', id) / Registry.buildings
+ *
+ * NEU in step5:
+ *  - canPlaceAt(tx,ty) nutzt optional Game.canPlaceBuildingAt(kind, tx, ty, w, h)
+ *    → zentrale Platzier-Regeln im Game-Modul möglich
  * ========================================================================== */
 
 (function(){
@@ -38,10 +42,10 @@
   let tileSize    = 64;
 
   // Overlay / Ghost / Buttons
-  let overlay = null;
-  let ghost   = null;
-  let tint    = null;
-  let btnOk   = null;
+  let overlay   = null;
+  let ghost     = null;
+  let tint      = null;
+  let btnOk     = null;
   let btnCancel = null;
 
   // ==========================================================================
@@ -251,8 +255,26 @@
     return { gx, gy };
   }
 
-  function canPlaceAt(/* tx,ty */){
-    // TODO: Echte Kollisionsprüfung (Map, andere Gebäude etc.)
+  /**
+   * Platzier-Regeln:
+   *  - Wenn Game.canPlaceBuildingAt(kind, tx, ty, w, h) existiert:
+   *      → diese Funktion entscheidet (true/false)
+   *  - Sonst: immer true (aktuelles Verhalten)
+   */
+  function canPlaceAt(tx,ty){
+    try{
+      const g = window.Game;
+      if (g && typeof g.canPlaceBuildingAt === 'function'){
+        return !!g.canPlaceBuildingAt(
+          currentTool,
+          tx, ty,
+          lastSize.w, lastSize.h
+        );
+      }
+    }catch(e){
+      WARN('canPlaceAt Fehler', e);
+    }
+    // Fallback: wie bisher – immer gültig
     return true;
   }
 
@@ -338,6 +360,6 @@
   };
 
   window.GamePlace = GamePlace;
-  OK('bereit v25.12.08-place-controller-step4');
+  OK('bereit v25.12.08-place-controller-step5');
 
 })();
