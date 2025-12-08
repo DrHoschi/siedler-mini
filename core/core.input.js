@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.12.03-workarea-integrated-phase2-step2
+ * Version : v25.12.03-workarea-integrated-phase2-step3
  * Zweck   : Eingabe + Platzier-Ghost + OK/Cancel direkt am Ghost
  *
  * Lauscht : cb:set-build-tool(kind)
@@ -20,12 +20,11 @@
  *  ✔ Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
  *  ✔ Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
  *
- * Phase 2 – Schritt 2:
- *  - Wie Step1, aber:
- *    → ruft zusätzlich window.GamePlace.* auf (falls vorhanden):
- *       onSetBuildTool, onPlaceBegin, onCameraChange,
- *       onHoverTile, onMapClick, onKeyEnter, onKeyEscape
- *  - Alte Ghost-/Place-Logik bleibt vollständig aktiv (Fallback).
+ * Phase 2 – Schritt 3:
+ *  - Ghost-Bewegung an GamePlace.onHoverTile(p) delegiert (falls vorhanden),
+ *    inkl. Fallback auf alte Logik.
+ *  - Klick im Platziermodus an GamePlace.onMapClick(p) delegiert (falls vorhanden),
+ *    inkl. Fallback für lastHover.
  * ========================================================================== */
 (() => {
   'use strict';
@@ -174,7 +173,7 @@
         // Wenn irgendwas schiefgeht, Cursor lieber nicht verändern
       }
 
-            // Ghost-Bewegung komplett an GamePlace delegieren (wenn vorhanden)
+      // Ghost-Bewegung bevorzugt an GamePlace delegieren (wenn vorhanden)
       if (buildTool && window.GamePlace?.onHoverTile){
         try {
           GamePlace.onHoverTile(p);
@@ -189,7 +188,7 @@
         setGhostScreenPos(gx,gy);
         setGhostBuildable(canPlaceAt(p.tx,p.ty));
       }
-      
+
       window.dispatchEvent(new CustomEvent('cb:hover-tile',{
         detail:{ tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy }
       }));
@@ -246,15 +245,19 @@
         return;
       }
 
-      // NEU: Klick-Info an GamePlace weiterreichen (wenn vorhanden)
+      // Klick-Info an GamePlace weiterreichen (wenn vorhanden)
       if (window.GamePlace?.onMapClick){
-        try { GamePlace.onMapClick(p); } catch(e){ WARN('GamePlace.onMapClick Fehler', e); }
-      }
-
-      // Platziermodus aktiv → Position merken (Ghost bleibt über ✓-Button steuerbar)
-      if (!hoverValid) {
-        lastHover = p;
-        hoverValid = true;
+        try {
+          GamePlace.onMapClick(p);
+        } catch(e){
+          WARN('GamePlace.onMapClick Fehler', e);
+        }
+      } else {
+        // Fallback: falls GamePlace fehlt, wenigstens lastHover setzen
+        if (!hoverValid) {
+          lastHover = p;
+          hoverValid = true;
+        }
       }
 
       // Bestätigen geschieht NUR über ✓-Button (kein Auto-Place hier)
@@ -284,7 +287,7 @@
 
       if (canvas) canvas.style.cursor = buildTool ? 'crosshair' : 'default';
 
-      // NEU: GamePlace über Tool-Wechsel informieren
+      // GamePlace über Tool-Wechsel informieren
       if (window.GamePlace?.onSetBuildTool){
         try { GamePlace.onSetBuildTool(buildTool); } catch(e){ WARN('GamePlace.onSetBuildTool Fehler', e); }
       }
@@ -305,7 +308,7 @@
       setGhostSizeTiles(lastSize.w,lastSize.h);
       hoverValid=false;
 
-      // NEU: GamePlace über Place-Begin informieren
+      // GamePlace über Place-Begin informieren
       if (window.GamePlace?.onPlaceBegin){
         try { GamePlace.onPlaceBegin({w:lastSize.w, h:lastSize.h}); } catch(e){ WARN('GamePlace.onPlaceBegin Fehler', e); }
       }
@@ -318,7 +321,7 @@
       if (d.zoom!=null) cam.zoom=d.zoom;
       updateTilePxByCamera();
 
-      // NEU: GamePlace über Kamera-Änderung informieren
+      // GamePlace über Kamera-Änderung informieren
       if (window.GamePlace?.onCameraChange){
         try { GamePlace.onCameraChange({x:cam.x, y:cam.y, zoom:cam.zoom}); } catch(e){ WARN('GamePlace.onCameraChange Fehler', e); }
       }
@@ -328,7 +331,7 @@
       if (!buildTool) return;
 
       if (e.key==='Escape'){
-        // NEU: GamePlace über ESC informieren
+        // GamePlace über ESC informieren
         if (window.GamePlace?.onKeyEscape){
           try { GamePlace.onKeyEscape(); } catch(err){ WARN('GamePlace.onKeyEscape Fehler', err); }
         }
@@ -337,7 +340,7 @@
       }
 
       if (e.key==='Enter' && hoverValid){
-        // NEU: GamePlace über Enter informieren
+        // GamePlace über Enter informieren
         if (window.GamePlace?.onKeyEnter){
           try { GamePlace.onKeyEnter(); } catch(err){ WARN('GamePlace.onKeyEnter Fehler', err); }
         }
@@ -533,7 +536,7 @@
     bindPointer();
 
     window.__SIEDLER_PLACE_ACTIVE=false;
-    OK('bereit v25.12.03-workarea-integrated-phase2-step2');
+    OK('bereit v25.12.03-workarea-integrated-phase2-step3');
   }
 
   if (document.readyState==='loading'){
