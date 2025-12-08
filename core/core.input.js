@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.12.08-workarea-integrated-v4
+ * Version : v25.12.08-workarea-integrated-v5
  * Zweck   : Eingabe + Platzier-Ghost + OK/Cancel direkt am Ghost
  *
  * Lauscht : cb:set-build-tool(kind)
@@ -19,7 +19,7 @@
  *  ✔ Kompatibel zu Kamera-Blockierung (__SIEDLER_PLACE_ACTIVE)
  *  ✔ Klick-Unterstützung für GameWorkArea (Arbeitsbereich setzen)
  *  ✔ Cursor-Kreuz auch bei aktiver WorkArea-Auswahl
- *  ✔ Auto-Place beim Linksklick (wie vorher) + ✓ nutzt dieselbe placeAt-Logik
+ *  ✔ KEIN Auto-Place beim Klick → Platzieren NUR über ✓ oder Enter
  * ========================================================================== */
 (() => {
   'use strict';
@@ -43,7 +43,6 @@
   let overlay, ghost, tint, btnOk, btnCancel;
 
   const q  = (s, r=document)=> r.querySelector(s);
-  const qa = (s, r=document)=> Array.from(r.querySelectorAll(s));
   const rect = el => el?.getBoundingClientRect?.() ?? {left:0, top:0, width:0, height:0};
 
   // ==========================================================================
@@ -85,7 +84,7 @@
     ghost.style.backgroundImage    = `url(${url})`;
     ghost.style.backgroundRepeat   = 'no-repeat';
     ghost.style.backgroundPosition = 'center center';
-    ghost.style.backgroundSize     = 'cover'; // Gebäude vollflächig im Ghost
+    ghost.style.backgroundSize     = 'cover';
   }
 
   // ==========================================================================
@@ -133,7 +132,7 @@
       ghost.appendChild(btnCancel);
     }
 
-    // Button-Handler
+    // ✓-Button: nutzt dieselbe placeAt-Logik
     btnOk.onclick = () => {
       if (!buildTool || !hoverValid) { WARN('Bestätigen ignoriert'); return; }
       placeAt(lastHover.tx, lastHover.ty);
@@ -146,10 +145,6 @@
 
   function showOverlay(){ ensureOverlay(); overlay.hidden=false; }
   function hideOverlay(){ if (overlay) overlay.hidden=true; }
-
-  // ==========================================================================
-  //  GHOST / CAMERA-SYNC
-  // ==========================================================================
 
   function setGhostSizeTiles(w,h){
     ensureOverlay();
@@ -206,14 +201,11 @@
     return {tx,ty,sx,sy};
   }
 
-  function canPlaceAt(/*tx,ty*/){ 
-    // TODO: echte Kollisionsprüfung aus Map / Registry einhängen
-    return true; 
+  function canPlaceAt(/*tx,ty*/){
+    // TODO: Echte Kollisionsprüfung einhängen
+    return true;
   }
 
-  // -------------------------------------------------------------------------
-  // Gebäude an einer Tile-Position finden (für Klick aufs fertige Gebäude)
-  // -------------------------------------------------------------------------
   function findBuildingAt(tx, ty){
     const list = (window.Game && Array.isArray(window.Game.buildings))
       ? window.Game.buildings
@@ -255,17 +247,16 @@
   /**
    * Zentrale Place-Funktion:
    *  - sendet cb:build:place im alten Format (__src + buildingId,...)
-   *  - wird von Auto-Place (Klick) UND vom ✓-Button UND von Enter genutzt
+   *  - wird von ✓-Button UND von Enter genutzt
    */
   function placeAt(tx,ty,w=lastSize.w,h=lastSize.h){
     const detail = {
-      // WICHTIG: alter Tag, den dein Game-Listener akzeptiert
-      __src: 'input-v25.11.14',
+      __src     : 'input-v25.11.14',
       buildingId: buildTool,
-      x: tx|0,
-      y: ty|0,
-      w: w|0,
-      h: h|0
+      x         : tx|0,
+      y         : ty|0,
+      w         : w|0,
+      h         : h|0
     };
     OK('cb:build:place', detail);
     window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
@@ -291,7 +282,6 @@
       );
     }
 
-    // Wir haben das Event verarbeitet → nicht mehr weiterreichen
     return true;
   }
 
@@ -319,14 +309,13 @@
           canvas.style.cursor = (buildTool || selecting) ? 'crosshair' : 'default';
         }
       } catch(e){
-        // Wenn irgendwas schiefgeht, Cursor lieber nicht verändern
+        // im Zweifel Cursor nicht verändern
       }
 
       const step = tileSize * cam.zoom;
       const gx = p.sx - (p.sx % step);
       const gy = p.sy - (p.sy % step);
 
-      // Ghost nur relevant, wenn tatsächlich ein Build-Tool aktiv ist
       if (buildTool){
         setGhostScreenPos(gx,gy);
         setGhostBuildable(canPlaceAt(p.tx,p.ty));
@@ -346,7 +335,6 @@
 
       // 1) WorkArea-Modus hat Vorrang
       if (handleWorkAreaClick(p, ev)) {
-        // Klick wurde zum Verschieben des Arbeitsbereichs benutzt
         return;
       }
 
@@ -378,26 +366,32 @@
           console.warn('[core.input] cb:building:menu-open dispatch fehlgeschlagen', e);
         }
 
-        // Klick wurde für das Gebäude-Menü verwendet → Platzier-Logik NICHT ausführen
         ev.preventDefault?.();
         return;
       }
 
-      // 3) Kein Gebäude getroffen → ggf. Platziermodus bedienen
+      // 3) Kein Gebäude getroffen → nur Ghost verschieben, NICHT auto-placen
       if (!buildTool) {
-        // Normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
+        // normaler Map-Klick ohne Tool: aktuell keine Extra-Logik
         return;
       }
 
-      // Auto-Place wie früher:
+      // Ggf. Ungültigkeit anzeigen, aber nicht bauen
       if (!canPlaceAt(p.tx, p.ty)){
         ev.preventDefault?.();
         WARN('Platzierung nicht erlaubt bei', p.tx, p.ty);
+        setGhostBuildable(false);
         return;
       }
 
+      // Gültige Position → Ghost dort parken, Benutzer muss ✓ oder Enter drücken
+      const step = tileSize * cam.zoom;
+      const gx = p.sx - (p.sx % step);
+      const gy = p.sy - (p.sy % step);
+      setGhostScreenPos(gx,gy);
+      setGhostBuildable(true);
+
       ev.preventDefault?.();
-      placeAt(p.tx, p.ty);
     }, { passive:false });
 
     canvas.addEventListener('contextmenu', ev=>{
@@ -459,7 +453,6 @@
   // ==========================================================================
 
   function init(){
-    // WICHTIG: wieder wie im alten System → robustes Canvas-Finden
     canvas = document.getElementById('game')
       || document.querySelector('canvas[data-role="map"]')
       || document.querySelector('canvas');
@@ -474,7 +467,7 @@
     bindPointer();
 
     window.__SIEDLER_PLACE_ACTIVE=false;
-    OK('bereit v25.12.08-workarea-integrated-v4');
+    OK('bereit v25.12.08-workarea-integrated-v5');
   }
 
   if (document.readyState==='loading'){
