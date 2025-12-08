@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.08-workarea-core-v3-optionA
+ * Version : v25.12.08-workarea-core-v4-optionA
  *
  * Zweck   :
  *   Zentrale Verwaltung der ARBEITSBEREICHE (WorkAreas) für Gebäude:
@@ -20,13 +20,23 @@
  *         → liefert aktuellen Bereich für Holz-/Stein-Module
  *
  *   - Events:
- *       cb:workarea:set(detail)
- *         detail: {
- *           id, buildingId, uid,
- *           x,y,w,h,
- *           cx,cy,
- *           radiusTiles
- *         }
+ *       IN :
+ *         cb:building:menu-open(detail)
+ *           → aktuelles Gebäude merken (für Button-Aufrufe)
+ *
+ *         cb:build:complete(detail)
+ *           → automatisch Default-Arbeitsbereich für fertige Gebäude anlegen
+ *              und einmalig cb:workarea:set auslösen
+ *
+ *       OUT:
+ *         cb:workarea:set(detail)
+ *           detail: {
+ *             id, buildingId, uid,
+ *             x,y,w,h,
+ *             cx,cy,
+ *             radiusTiles,
+ *             reason? // 'build-complete' | 'user-change' | undefined
+ *           }
  *
  * Hinweise:
  *   - Diese Datei enthält KEINE generelle Input-Logik.
@@ -165,9 +175,15 @@
    * cb:workarea:set Event feuern.
    *
    * Wird immer dann aufgerufen, wenn sich der Bereich ändert
-   * (z. B. bei applySelectionTile oder beim ersten beginSelection).
+   * (z. B. bei applySelectionTile oder beim ersten beginSelection
+   *  oder beim ersten cb:build:complete).
+   *
+   * reason (optional):
+   *   - 'build-complete' → Default-Bereich nach Fertigstellung
+   *   - 'user-change'    → Benutzer hat den Bereich verschoben
+   *   - undefined        → allgemeiner Fall
    */
-  function dispatchWorkAreaSet(area){
+  function dispatchWorkAreaSet(area, reason){
     if (!area) return;
 
     const detail = {
@@ -182,6 +198,10 @@
       cy         : area.cy,
       radiusTiles: area.radiusTiles
     };
+
+    if (reason){
+      detail.reason = reason;
+    }
 
     try{
       INFO('cb:workarea:set →', detail);
@@ -230,7 +250,7 @@
 
     // Beim Start sofort einmal den aktuellen Bereich rausfeuern,
     // damit Produktionsmodule einen gültigen Default haben.
-    dispatchWorkAreaSet(area);
+    dispatchWorkAreaSet(area, 'user-change');
   }
 
   /**
@@ -255,7 +275,7 @@
     LOG('Arbeitsbereich verschoben', selectingUid, '→', tx, ty);
 
     // Sofort an alle interessierten Module melden (Holz, Stein, etc.)
-    dispatchWorkAreaSet(area);
+    dispatchWorkAreaSet(area, 'user-change');
 
     // Ein Klick = setzen & fertig
     cancelSelection();
@@ -319,7 +339,7 @@
   }
 
   // --------------------------------------------------------------------------
-  //  EVENTS VOM SPIEL (z. B. Gebäude-Menü öffnen)
+  //  EVENTS VOM SPIEL (z. B. Gebäude-Menü öffnen / Build fertig)
   // --------------------------------------------------------------------------
 
   /**
@@ -345,8 +365,30 @@
     getOrCreateAreaFor(currentBuilding);
   }
 
-  // Bei Bedarf könnte man hier noch auf cb:build:complete etc. hören,
-  // um WorkAreas automatisch anzulegen. Aktuell reicht das Menü-Ereignis.
+  /**
+   * Wenn ein Gebäude fertig gebaut ist, legen wir automatisch
+   * einen Default-WorkArea an (falls noch nicht vorhanden)
+   * und feuern einmal cb:workarea:set(reason='build-complete').
+   *
+   * Erwartetes detail (Standard aus deiner Construction-Logik):
+   *   { id, buildingId?, uid?, x, y, w, h, ... }
+   */
+  function handleBuildComplete(ev){
+    const d = ev?.detail || {};
+    if (!d || !d.id){
+      WARN('cb:build:complete ohne gültiges detail empfangen:', d);
+      return;
+    }
+
+    const area = getOrCreateAreaFor(d);
+    if (!area){
+      WARN('cb:build:complete → kein Area erzeugt für', d);
+      return;
+    }
+
+    LOG('cb:build:complete → Default-WorkArea gesetzt für', area.uid, area);
+    dispatchWorkAreaSet(area, 'build-complete');
+  }
 
   // --------------------------------------------------------------------------
   //  INITIALISIERUNG / EVENT-VERKABELUNG
@@ -357,6 +399,13 @@
     INFO('Event-Listener cb:building:menu-open registriert');
   } catch(e){
     WARN('Event-Listener cb:building:menu-open konnte nicht registriert werden:', e);
+  }
+
+  try {
+    window.addEventListener('cb:build:complete', handleBuildComplete);
+    INFO('Event-Listener cb:build:complete registriert');
+  } catch(e){
+    WARN('Event-Listener cb:build:complete konnte nicht registriert werden:', e);
   }
 
   // --------------------------------------------------------------------------
@@ -375,6 +424,6 @@
     _lastHoverTile: () => lastHoverTile
   };
 
-  LOG('GameWorkArea bereit v25.12.08-workarea-core-v3-optionA');
+  LOG('GameWorkArea bereit v25.12.08-workarea-core-v4-optionA');
 
 })();
