@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.07-workarea-core-v2
+ * Version : v25.12.08-workarea-core-v3-optionA
  *
  * Zweck   :
  *   Zentrale Verwaltung der ARBEITSBEREICHE (WorkAreas) für Gebäude:
@@ -15,39 +15,44 @@
  *       GameWorkArea.isSelecting()
  *         → wird von core.input.js abgefragt
  *       GameWorkArea.applySelectionTile(tx,ty)
- *         → wird von core.input.js beim Kartenklick aufgerufen
- *       GameWorkArea.cancelSelection()
+ *         → wird von core.input.js bei Klick auf die Karte aufgerufen
  *       GameWorkArea.getAreaFor(detailOrUid)
- *         → liefert (und erstellt bei Bedarf) den Bereich für ein Gebäude
+ *         → liefert aktuellen Bereich für Holz-/Stein-Module
  *
- *   - Ereignisse:
- *       IN :
- *         cb:building:menu-open(detail)
- *           → aktuelles Gebäude merken (für Button-Aufrufe)
+ *   - Events:
+ *       cb:workarea:set(detail)
+ *         detail: {
+ *           id, buildingId, uid,
+ *           x,y,w,h,
+ *           cx,cy,
+ *           radiusTiles
+ *         }
  *
- *       OUT:
- *         cb:workarea:set(detail)
- *           detail = {
- *             id, buildingId, uid,
- *             x, y, w, h,
- *             cx, cy,
- *             radiusTiles
- *           }
- *
- *   - Overlay:
- *       Zeichnet einfache Kreise um die Arbeitsbereiche (Option „workarea“
- *       über OverlayHooks ODER direkt über Renderer.drawOnMainCanvas).
+ * Hinweise:
+ *   - Diese Datei enthält KEINE generelle Input-Logik.
+ *     Maus / Pointer wird ausschließlich in core.input.js behandelt.
+ *   - Hier geht es nur um:
+ *       → Verwalten der WorkArea-Daten
+ *       → Default-Position (Option A)
+ *       → Dispatch von cb:workarea:set
+ *       → Zeichnen auf dem Main-Canvas (Renderer-Hook)
  * ========================================================================== */
 
 (function(){
   'use strict';
 
-  const TAG  = '[workarea]';
-  const LOG  = (window.CBLog?.ok   || console.log ).bind(console, TAG);
-  const WARN = (window.CBLog?.warn || console.warn).bind(console, TAG);
+  // --------------------------------------------------------------------------
+  //  KURZ-HILFSFUNKTIONEN (LOGGING)
+  // --------------------------------------------------------------------------
+
+  const PREFIX = '[game.workarea]';
+
+  function LOG(...args){ console.log(PREFIX, ...args); }
+  function INFO(...args){ console.info(PREFIX, ...args); }
+  function WARN(...args){ console.warn(PREFIX, ...args); }
 
   // --------------------------------------------------------------------------
-  // STATE
+  //  STATE
   // --------------------------------------------------------------------------
 
   /** Map<uid, WorkAreaState> */
@@ -86,14 +91,27 @@
     return `${id}@${x},${y}`;
   }
 
+  /**
+   * Standard-Startposition für den Arbeitsbereich (Option A):
+   *
+   *  - Mittelpunkt liegt UNTER dem Gebäude
+   *  - Horizontal mittig (bei 3×3 also x+1)
+   *  - Vertikal genau eine Tile unter der Gebäude-Unterkante
+   *
+   * Beispiel:
+   *   Gebäude 3×3 bei (x=10,y=5)
+   *   → center.cx = 10 + 1
+   *   → center.cy = 5 + 3
+   */
   function computeDefaultCenter(detail){
     const x = detail.x | 0;
     const y = detail.y | 0;
     const w = (detail.w | 0) || 3;
     const h = (detail.h | 0) || 3;
+
     return {
-      cx: x + w / 2,
-      cy: y + h / 2
+      cx: x + Math.floor(w / 2),
+      cy: y + h
     };
   }
 
@@ -102,7 +120,10 @@
    */
   function getOrCreateAreaFor(detail){
     const uid = makeUid(detail);
-    if (!uid) return null;
+    if (!uid){
+      WARN('getOrCreateAreaFor: keine uid aus detail ableitbar', detail);
+      return null;
+    }
 
     let area = areasByUid.get(uid);
     if (!area){
@@ -119,6 +140,7 @@
         radiusTiles: DEFAULT_RADIUS
       };
       areasByUid.set(uid, area);
+      INFO('Neue WorkArea angelegt', uid, area);
     }
     return area;
   }
@@ -139,6 +161,12 @@
     return getOrCreateAreaFor(detailOrUid);
   }
 
+  /**
+   * cb:workarea:set Event feuern.
+   *
+   * Wird immer dann aufgerufen, wenn sich der Bereich ändert
+   * (z. B. bei applySelectionTile oder beim ersten beginSelection).
+   */
   function dispatchWorkAreaSet(area){
     if (!area) return;
 
@@ -155,9 +183,8 @@
       radiusTiles: area.radiusTiles
     };
 
-    LOG('cb:workarea:set →', detail);
-
     try{
+      INFO('cb:workarea:set →', detail);
       window.dispatchEvent(new CustomEvent('cb:workarea:set', { detail }));
     } catch(e){
       WARN('cb:workarea:set dispatch fehlgeschlagen', e);
@@ -188,8 +215,8 @@
       return;
     }
 
-    selecting     = true;
-    selectingUid  = area.uid;
+    selecting      = true;
+    selectingUid   = area.uid;
     currentBuilding = {
       id : area.id,
       uid: area.uid,
@@ -209,6 +236,8 @@
   /**
    * Wird von core.input.js aufgerufen, wenn auf die Karte geklickt wird
    * und GameWorkArea.isSelecting() === true ist.
+   *
+   * tx,ty: Tile-Koordinaten der Karte.
    */
   function applySelectionTile(tx, ty){
     if (!selecting || !selectingUid) return;
@@ -258,104 +287,76 @@
    *   - ctx: Canvas-Context (Haupt-Canvas oder Overlay)
    *   - cam: {x,y,zoom} – i. d. R. GameCamera.getState()
    */
-  function drawWorkAreas(ctx, cam){
-    if (!ctx) return;
-    if (!areasByUid.size) return;
-
-    const zoom = cam?.zoom ?? 1;
-    const oxPx = cam?.x    ?? 0;
-    const oyPx = cam?.y    ?? 0;
-
-    const ts =
-      (window.Game?.map?.tileSize) ||
-      (window.GameMap?._state?.map?.tileSize) ||
-      64;
+  function drawAreas(ctx, cam, tileSize){
+    if (!ctx || !cam || !tileSize) return;
 
     ctx.save();
-    ctx.translate(-oxPx * zoom, -oyPx * zoom);
-    ctx.scale(zoom, zoom);
+    try{
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(0, 150, 255, 0.8)';
 
-    for (const area of areasByUid.values()){
-      const cxPx = area.cx * ts;
-      const cyPx = area.cy * ts;
-      const rPx  = (area.radiusTiles || DEFAULT_RADIUS) * ts;
+      for (const area of areasByUid.values()){
+        const ts   = tileSize * cam.zoom;
+        const cxPx = (area.cx - cam.x) * ts + ts / 2;
+        const cyPx = (area.cy - cam.y) * ts + ts / 2;
+        const rPx  = (area.radiusTiles || DEFAULT_RADIUS) * ts;
 
-      ctx.save();
-
-      // aktiver Bereich etwas fetter / heller
-      const active = (selecting && area.uid === selectingUid);
-      ctx.lineWidth   = active ? Math.max(2, ts * 0.08) : Math.max(1, ts * 0.05);
-      ctx.strokeStyle = active
-        ? 'rgba(0, 255, 255, 0.9)'
-        : 'rgba(255, 255, 255, 0.7)';
-      ctx.setLineDash(active ? [ts * 0.4, ts * 0.2] : [ts * 0.6, ts * 0.3]);
-
-      drawCircle(ctx, cxPx, cyPx, rPx);
-
+        drawCircle(ctx, cxPx, cyPx, rPx);
+      }
+    } finally {
       ctx.restore();
     }
-
-    ctx.restore();
   }
 
-  // Diese Funktion wird vom Renderer direkt auf dem Haupt-Canvas verwendet.
-  function drawOnMainCanvas(ctx, cam){
-    drawWorkAreas(ctx, cam);
+  /**
+   * Convenience für den Renderer:
+   *   Kann z. B. aus game.renderer.js aufgerufen werden:
+   *
+   *     GameWorkArea.drawOnMainCanvas(mainCtx, GameCamera.getState(), tileSize);
+   */
+  function drawOnMainCanvas(ctx, cam, tileSize){
+    drawAreas(ctx, cam, tileSize);
   }
-
-  // Registrierung beim Overlay-System (falls vorhanden)
-  (function registerOverlay(){
-    function tryRegister(){
-      if (!window.OverlayHooks?.register) return false;
-      try{
-        window.OverlayHooks.register('workarea', (ctx)=>{
-          const cam = window.GameCamera?.getState?.() || { x:0, y:0, zoom:1 };
-          drawWorkAreas(ctx, cam);
-        });
-        LOG('WorkArea-Overlay registriert (workarea).');
-        return true;
-      } catch(e){
-        WARN('WorkArea-Overlay Registrierung fehlgeschlagen:', e);
-        return true;
-      }
-    }
-
-    if (tryRegister()) return;
-    let tries = 0;
-    const t = setInterval(()=>{
-      if (tryRegister() || ++tries > 20) clearInterval(t);
-    }, 200);
-  })();
 
   // --------------------------------------------------------------------------
-  //  EVENT-BINDINGS
+  //  EVENTS VOM SPIEL (z. B. Gebäude-Menü öffnen)
   // --------------------------------------------------------------------------
 
-  // Aktuelles Gebäude aus dem Menü merken
-  try{
-    window.addEventListener('cb:building:menu-open', ev=>{
-      const d = ev.detail || {};
-      currentBuilding = {
-        id      : d.id,
-        uid     : d.uid || null,
-        x       : d.x | 0,
-        y       : d.y | 0,
-        w       : (d.w | 0) || 3,
-        h       : (d.h | 0) || 3
-      };
-      LOG('Building-Menü geöffnet für', currentBuilding);
-    }, { passive:true });
-  }catch(e){
-    WARN('Listener cb:building:menu-open konnte nicht registriert werden:', e);
+  /**
+   * Gebäude-Menü wurde geöffnet → aktuelle Gebäude-Infos merken,
+   * damit beginSelection() auch ohne Detail-Parameter funktioniert.
+   */
+  function handleBuildingMenuOpen(ev){
+    const d = ev && ev.detail;
+    if (!d) return;
+
+    const uid = makeUid(d);
+    currentBuilding = {
+      id : d.id || d.buildingId || d.kind || 'building',
+      uid,
+      x  : d.x | 0,
+      y  : d.y | 0,
+      w  : (d.w | 0) || 3,
+      h  : (d.h | 0) || 3
+    };
+    INFO('cb:building:menu-open → currentBuilding =', currentBuilding);
+
+    // Sicherstellen, dass es für dieses Gebäude auch eine WorkArea gibt
+    getOrCreateAreaFor(currentBuilding);
   }
 
-  // Letzte Hover-Tile merken (für spätere Erweiterungen)
-  try{
-    window.addEventListener('cb:hover-tile', ev=>{
-      lastHoverTile = ev.detail || null;
-    }, { passive:true });
-  }catch(e){
-    WARN('Listener cb:hover-tile konnte nicht registriert werden:', e);
+  // Bei Bedarf könnte man hier noch auf cb:build:complete etc. hören,
+  // um WorkAreas automatisch anzulegen. Aktuell reicht das Menü-Ereignis.
+
+  // --------------------------------------------------------------------------
+  //  INITIALISIERUNG / EVENT-VERKABELUNG
+  // --------------------------------------------------------------------------
+
+  try {
+    window.addEventListener('cb:building:menu-open', handleBuildingMenuOpen);
+    INFO('Event-Listener cb:building:menu-open registriert');
+  } catch(e){
+    WARN('Event-Listener cb:building:menu-open konnte nicht registriert werden:', e);
   }
 
   // --------------------------------------------------------------------------
@@ -374,6 +375,6 @@
     _lastHoverTile: () => lastHoverTile
   };
 
-  LOG('GameWorkArea bereit v25.12.07-workarea-core-v2');
+  LOG('GameWorkArea bereit v25.12.08-workarea-core-v3-optionA');
 
 })();
