@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-08T11:11:02.661Z",
+  "createdAt": "2025-12-08T18:53:26.375Z",
   "root": ".",
   "count": 516,
   "entries": [
@@ -1197,11 +1197,6 @@
     },
     {
       "type": "file",
-      "path": "core/build.place.handler.js",
-      "size": 6463
-    },
-    {
-      "type": "file",
       "path": "core/camera.js",
       "size": 14547
     },
@@ -1238,7 +1233,7 @@
     {
       "type": "file",
       "path": "core/core.input.js",
-      "size": 15316
+      "size": 11114
     },
     {
       "type": "file",
@@ -1302,6 +1297,11 @@
     },
     {
       "type": "file",
+      "path": "core/game.place.js",
+      "size": 10238
+    },
+    {
+      "type": "file",
       "path": "core/game.production.js",
       "size": 5374
     },
@@ -1318,7 +1318,7 @@
     {
       "type": "file",
       "path": "core/game.renderer.js",
-      "size": 8547
+      "size": 8588
     },
     {
       "type": "file",
@@ -1333,7 +1333,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 11256
+      "size": 10474
     },
     {
       "type": "file",
@@ -2497,7 +2497,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16368
+      "size": 16410
     },
     {
       "type": "file",
