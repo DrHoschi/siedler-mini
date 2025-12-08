@@ -309,6 +309,29 @@
     drawWorkAreas(ctx, { zoom });
   }
 
+    // Renderer-Hook für alten Renderer (cam kommt vom Renderer rein)
+  function drawOnMainCanvas(ctx, cam){
+    drawWorkAreas(ctx, cam);
+  }
+
+  // NEU: Renderer-Hook für GameMap.render(..)
+  // GameMap ruft: GameWorkArea.drawWorld(ctx, { tileSize })
+  function drawWorld(ctx, opts){
+    // Kamera aus dem globalen GameCamera holen
+    const cam = window.GameCamera || { x: 0, y: 0, zoom: 1 };
+
+    // tileSize aus opts benutzen, falls du später variieren willst
+    if (opts && typeof opts.tileSize === 'number') {
+      // optional: falls du TILE_SIZE dynamisch machen willst
+      // aktuell nutzt drawWorkAreas intern dein festes TILE_SIZE,
+      // das passt aber zu deiner Map (64px), daher nur für später merken.
+      // z.B. könntest du dort ein override setzen.
+    }
+
+    // Zeichnung wie gehabt im Weltkoordinatensystem
+    drawWorkAreas(ctx, cam);
+  }
+  
   // --------------------------------------------------------------------------
   //  EVENTS VOM SPIEL (z. B. Gebäude-Menü öffnen)
   // --------------------------------------------------------------------------
@@ -339,7 +362,7 @@
     WARN('Event-Listener cb:building:menu-open konnte nicht registriert werden:', e);
   }
 
-  // --------------------------------------------------------------------------
+   // --------------------------------------------------------------------------
   //  EXPORT
   // --------------------------------------------------------------------------
 
@@ -351,9 +374,9 @@
     getAreaFor,
     getOrCreateAreaFor,
     drawOnMainCanvas,
-    drawWorld
+    drawWorld      // <- NEU, für GameMap.render(...)
   };
 
-  INFO('bereit v25.12.08-workarea-core-v5-drawworld');
+  INFO('bereit v25.12.08-workarea-core-v5-drawworld-fix');
 
 })();
