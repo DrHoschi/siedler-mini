@@ -547,7 +547,7 @@
     );
   }
 
-  // =========================
+    // =========================
   // Arbeitsbereich-API (für UI / WorkArea-Modul)
   // =========================
 
@@ -569,23 +569,12 @@
     LOG('Arbeitsbereich aktualisiert', uid, lj.workArea);
   }
 
-  /**
-   * Hook für WorkArea-Events:
-   * Wird bei cb:workarea:set aufgerufen.
-   *
-   * detail:
-   *   { id|buildingId|kind, uid, cx, cy, radiusTiles, x, y, w, h }
-   */
   function onWorkAreaSet(detail){
     if (!detail) return;
 
-    // Robuster Abgleich der Gebäude-ID:
     const bId = detail.id || detail.buildingId || detail.kind;
-    if (bId !== LUMBERJACK_ID) {
-      return; // anderes Gebäude -> ignorieren
-    }
+    if (bId !== LUMBERJACK_ID) return;
 
-    // UID so erzeugen wie beim Registrieren
     const uid = makeUidFromDetail(detail);
     if (!uid) return;
 
