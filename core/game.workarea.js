@@ -2,141 +2,88 @@
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
  * Version : v25.12.09-workarea-core-v7-maincanvas
+ * Zweck   : Arbeitsbereich (Kreis) für Gebäude, v. a. Holzfäller
  *
- * Zweck   :
- *   Zentrale Verwaltung der ARBEITSBEREICHE (WorkAreas) für Gebäude:
+ * Lauscht : –
+ * Bietet  : GameWorkArea.beginSelection(buildingDetail)
+ *           GameWorkArea.applySelectionTile(tx, ty)
+ *           GameWorkArea.drawWorld(ctx, {tileSize})
+ *           GameWorkArea.getAreaFor({id,uid,x,y,w,h})
+ *           GameWorkArea.cancelSelection()
  *
- *   - Pro Gebäude (uid) wird ein Arbeitskreis verwaltet:
- *       { id, buildingId, uid, x, y, w, h, cx, cy, radiusTiles }
- *
- *   - API (global über window.GameWorkArea):
- *       GameWorkArea.beginSelection(buildingDetail)
- *       GameWorkArea.isSelecting()
- *       GameWorkArea.applySelectionTile(tx, ty)
- *       GameWorkArea.cancelSelection()
- *       GameWorkArea.getAreaFor(detailOrUid)
- *       GameWorkArea.getOrCreateAreaFor(detail)
- *       GameWorkArea.ensureDefaultForBuilding(detail)
- *       GameWorkArea.drawWorld(ctx, { tileSize })
- * ========================================================================== */
+ * Events  : cb:workarea:set(detail)
+ * ============================================================================ */
 
-(() => {
-  'use strict';
-
+(function(){
   const TAG  = '[game.workarea]';
-  const LOG  = (window.CBLog?.ok   ?? console.log ).bind(console, TAG);
-  const WARN = (window.CBLog?.warn ?? console.warn).bind(console, TAG);
+  const LOG  = (window.CBLog?.ok   || console.log ).bind(console,  TAG);
+  const WARN = (window.CBLog?.warn || console.warn).bind(console,  TAG);
 
-  // -------------------------------------------------------------------------
-  // KONSTANTEN
-  // -------------------------------------------------------------------------
+  const DEFAULT_RADIUS_TILES = 2.5;
 
-  const DEFAULT_RADIUS_TILES = 2.5; // Standard-Radius um das Gebäude
-
-  // -------------------------------------------------------------------------
-  // STATE
-  // -------------------------------------------------------------------------
-
-  /** Map<uid, WorkAreaState> */
+  // uid → { uid, buildingId, x,y,w,h, cx,cy, radiusTiles }
   const areasByUid = new Map();
 
-  /** Aktuelles Gebäude (Detail aus dem Gebäude-Menü) */
+  let selecting     = false;
+  let selectingUid  = null;
+  let lastHoverTile = null;
   let currentBuilding = null;
 
-  /** Selektion aktiv? */
-  let selecting    = false;
-  let selectingUid = null;
-
-  /** Letzte Auswahlkoordinaten (Tile) */
-  let lastTx = null;
-  let lastTy = null;
-
   // -------------------------------------------------------------------------
-  // Helper
+  // UID-Hilfsfunktion (Holzfäller etc.)
   // -------------------------------------------------------------------------
-
-  function makeUid(detail) {
+  function makeUidFromDetail(detail){
     if (!detail) return null;
+    if (detail.uid) return String(detail.uid);
 
-    if (typeof detail === 'string') return detail;
-
-    // Bekommt typischerweise: { id, uid, x, y, w, h }
-    const id  = detail.id  || detail.kind || 'building';
-    const uid = detail.uid || `${id}@${detail.x},${detail.y}`;
-    return String(uid);
+    const id = detail.id || detail.buildingId || detail.kind || 'building';
+    const x  = detail.x | 0;
+    const y  = detail.y | 0;
+    return `${id}@${x},${y}`;
   }
 
-  function ensureBaseArea(detail) {
-    const uid = makeUid(detail);
+  function ensureDefaultForBuilding(detail){
+    const uid = makeUidFromDetail(detail);
     if (!uid) return null;
 
-    const id = detail.id || detail.kind || 'building';
+    let area = areasByUid.get(uid);
+    if (!area){
+      const x = detail.x | 0;
+      const y = detail.y | 0;
+      const w = (detail.w | 0) || 3;
+      const h = (detail.h | 0) || 3;
 
-    const x = (detail.x ?? detail.tx ?? 0) | 0;
-    const y = (detail.y ?? detail.ty ?? 0) | 0;
-    const w = (detail.w ?? detail.width  ?? 3) | 0;
-    const h = (detail.h ?? detail.height ?? 3) | 0;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
 
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-
-    return {
-      id,
-      buildingId: id,
-      uid,
-      x, y, w, h,
-      cx,
-      cy,
-      radiusTiles: DEFAULT_RADIUS_TILES
-    };
+      area = {
+        uid,
+        buildingId : detail.id || detail.buildingId || detail.kind || 'building',
+        x, y, w, h,
+        cx, cy,
+        radiusTiles: DEFAULT_RADIUS_TILES
+      };
+      areasByUid.set(uid, area);
+    }
+    return area;
   }
 
-  // -------------------------------------------------------------------------
-  // Daten-API
-  // -------------------------------------------------------------------------
-
-  function getAreaFor(detailOrUid) {
-    if (!detailOrUid) return null;
-
-    const uid = (typeof detailOrUid === 'string')
-      ? detailOrUid
-      : makeUid(detailOrUid);
-
+  function getAreaFor(detail){
+    const uid = makeUidFromDetail(detail);
     if (!uid) return null;
     return areasByUid.get(uid) || null;
   }
 
-  function getOrCreateAreaFor(detail) {
-    const uid = makeUid(detail);
-    if (!uid) return null;
-
-    let a = areasByUid.get(uid);
-    if (!a) {
-      a = ensureBaseArea(detail);
-      areasByUid.set(uid, a);
-    }
-    return a;
-  }
-
-  function ensureDefaultForBuilding(detail) {
-    const uid = makeUid(detail);
-    if (!uid) return null;
-
-    if (!areasByUid.has(uid)) {
-      const a = ensureBaseArea(detail);
-      areasByUid.set(uid, a);
-      LOG('Default-WorkArea angelegt für', uid, a);
-    }
-    return areasByUid.get(uid);
+  function getOrCreateAreaFor(detail){
+    return getAreaFor(detail) || ensureDefaultForBuilding(detail);
   }
 
   // -------------------------------------------------------------------------
   // Auswahl-Flow
   // -------------------------------------------------------------------------
-
-  function beginSelection(buildingDetail) {
-    if (!buildingDetail) {
-      WARN('beginSelection ohne Building-Detail aufgerufen');
+  function beginSelection(buildingDetail){
+    if (!buildingDetail){
+      WARN('beginSelection ohne buildingDetail aufgerufen');
       return;
     }
 
@@ -150,13 +97,12 @@
 
     selecting     = true;
     selectingUid  = area.uid;
-    lastTx = null;
-    lastTy = null;
+    lastHoverTile = { tx: area.cx, ty: area.cy };
 
     LOG('Selection gestartet für', selectingUid, area);
   }
 
-  function isSelecting() {
+  function isSelecting(){
     return !!selecting;
   }
 
@@ -164,51 +110,81 @@
    * Wird von core.input.js aufgerufen, wenn du auf eine Map-Tile klickst,
    * WÄHREND der WorkArea-Modus aktiv ist.
    */
-  function applySelectionTile(tx, ty) {
+  function applySelectionTile(tx, ty){
     if (!selecting || !selectingUid) {
-      return;
+      return false;
     }
-
-    lastTx = tx;
-    lastTy = ty;
 
     const area = areasByUid.get(selectingUid);
     if (!area) {
-      WARN('applySelectionTile: keine Area gefunden für', selectingUid);
-      return;
+      WARN('applySelectionTile: keine Area für uid', selectingUid);
+      selecting    = false;
+      selectingUid = null;
+      return false;
     }
 
-    // Mittelpunkt auf den neuen Tile-Mittelpunkt verschieben
-    area.cx = tx + 0.5;
-    area.cy = ty + 0.5;
+    lastHoverTile = { tx, ty };
 
-    LOG('Selection-Tile übernommen', { uid: selectingUid, tx, ty, area });
-  }
+    // Kreis muss das Gebäude berühren → Rand darf anlegen
+    const minX = area.x - area.radiusTiles;
+    const maxX = area.x + area.w - 1 + area.radiusTiles;
+    const minY = area.y - area.radiusTiles;
+    const maxY = area.y + area.h - 1 + area.radiusTiles;
 
-  function cancelSelection() {
-    if (!selecting && !selectingUid) return;
+    if (tx < minX) tx = minX;
+    if (tx > maxX) tx = maxX;
+    if (ty < minY) ty = minY;
+    if (ty > maxY) ty = maxY;
 
-    LOG('Selection abgebrochen', { selectingUid, lastTx, lastTy });
+    area.cx = tx;
+    area.cy = ty;
+
+    LOG('WorkArea übernommen', area.uid, '→', { cx: area.cx, cy: area.cy });
+
+    // Auswahl beenden – das Menü bleibt offen/zu, wie UI es macht
     selecting    = false;
     selectingUid = null;
-    lastTx       = null;
-    lastTy       = null;
-    currentBuilding = null;
+
+    // Event nach außen (Production-Module etc.)
+    try {
+      window.dispatchEvent(new CustomEvent('cb:workarea:set', {
+        detail: {
+          id          : area.buildingId,
+          buildingId  : area.buildingId,
+          uid         : area.uid,
+          x           : area.x,
+          y           : area.y,
+          w           : area.w,
+          h           : area.h,
+          cx          : area.cx,
+          cy          : area.cy,
+          radiusTiles : area.radiusTiles
+        }
+      }));
+    } catch (e) {
+      WARN('cb:workarea:set konnte nicht dispatcht werden:', e);
+    }
+
+    return true;
+  }
+
+  function cancelSelection(){
+    if (!selecting) return;
+    LOG('Selection abgebrochen für', selectingUid);
+    selecting    = false;
+    selectingUid = null;
   }
 
   // -------------------------------------------------------------------------
-  // Render
+  // Zeichnen des Arbeitskreises (im Haupt-Canvas)
   // -------------------------------------------------------------------------
-
   /**
-   * Zeichnet den Kreis auf den MAIN-Canvas (Map-Canvas).
-   * Wird von game.renderer.js aufgerufen:
-   *   GameWorkArea.drawWorld(ctx, { tileSize })
+   * Wird aus game.renderer.js aufgerufen:
+   *   GameWorkArea.drawWorld(ctx, { tileSize: ts });
+   * Kamera-Transform ist dort bereits gesetzt.
    */
-  function drawWorld(ctx, opts) {
+  function drawWorld(ctx, opts){
     if (!ctx) return;
-
-    // Kreis nur anzeigen, solange Auswahl aktiv ist
     if (!selecting || !selectingUid) return;
 
     const tileSize = (opts && opts.tileSize) | 0 || 64;
@@ -229,35 +205,34 @@
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
 
-    // Füllung leicht transparent
     ctx.fillStyle   = 'rgba(0, 180, 255, 0.10)';
     ctx.strokeStyle = 'rgba(0, 120, 220, 0.9)';
     ctx.lineWidth   = 2;
-
     ctx.fill();
+    ctx.stroke();
+
+    // kleine Hervorhebung am Rand
+    ctx.beginPath();
+    ctx.arc(px, py, r + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
+    ctx.lineWidth   = 2;
     ctx.stroke();
 
     ctx.restore();
   }
 
   // -------------------------------------------------------------------------
-  // Export
+  // EXPORT
   // -------------------------------------------------------------------------
-
   window.GameWorkArea = {
-    // Datenzugriff
     areasByUid,
     getAreaFor,
     getOrCreateAreaFor,
     ensureDefaultForBuilding,
-
-    // Auswahl-Flow
     beginSelection,
     isSelecting,
     applySelectionTile,
     cancelSelection,
-
-    // Render
     drawWorld
   };
 
