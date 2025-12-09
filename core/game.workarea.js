@@ -306,22 +306,18 @@ function drawWorld(ctx, opts){
   ctx.restore();
 }
   
-  // -------------------------------------------------------------------------
-  // EXPORT
-  // -------------------------------------------------------------------------
+  // ============================================================================
+// EXPORT
+// ============================================================================
+window.GameWorkArea = {
+  areas,
+  ensureDefaultForBuilding,
+  beginSelection,        // oder startSelectionForBuilding - je nach deiner Variante
+  applySelectionTile,
+  cancelSelection,
+  isSelecting,
+  drawWorld              // <–– WICHTIG für game.map.js
+};
 
-  window.GameWorkArea = {
-    beginSelection,
-    isSelecting,
-    applySelectionTile,
-    cancelSelection,
-    getAreaFor,
-    getOrCreateAreaFor,
-    drawWorld,
-    // Debug-State, falls du im Inspector reinschauen willst:
-    _areasByUid   : areasByUid,
-    _getLastHover : () => lastHoverTile
-  };
-
-  LOG('WorkArea-Core geladen (v6 – Selection + drawWorld).');
+LOG('WorkArea-Modul geladen v25.12.09-maincanvas-drawworld');
 })();
