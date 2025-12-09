@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-08T18:53:26.375Z",
+  "createdAt": "2025-12-09T08:25:20.819Z",
   "root": ".",
-  "count": 516,
+  "count": 515,
   "entries": [
     {
       "type": "dir",
@@ -1308,12 +1308,12 @@
     {
       "type": "file",
       "path": "core/game.production.stone.js",
-      "size": 18055
+      "size": 19047
     },
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 18345
+      "size": 19050
     },
     {
       "type": "file",
@@ -1333,7 +1333,7 @@
     {
       "type": "file",
       "path": "core/game.workarea.js",
-      "size": 10474
+      "size": 8934
     },
     {
       "type": "file",
@@ -1349,11 +1349,6 @@
       "type": "file",
       "path": "core/input.bridge.js",
       "size": 4601
-    },
-    {
-      "type": "file",
-      "path": "core/input.js",
-      "size": 7830
     },
     {
       "type": "file",
@@ -2397,7 +2392,7 @@
     {
       "type": "file",
       "path": "ui/ui-building-menu.js",
-      "size": 5944
+      "size": 6454
     },
     {
       "type": "file",
@@ -2477,12 +2472,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51121
+      "size": 51113
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19622
+      "size": 19614
     },
     {
       "type": "file",
