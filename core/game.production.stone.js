@@ -1,17 +1,16 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.09-stone-workarea-maincanvas-v1
+ * Version : v25.12.09-stone-workarea-maincanvas-v2
  *
  * Zweck   :
- *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
- *   - Für jedes Stein-Gebäude wird ein zufälliges "Steinfeld" erzeugt:
- *       große Felsen, Geröll, kleine Haufen ...
- *   - Steine werden direkt auf dem Haupt-Canvas gezeichnet (Weltkoordinaten),
- *     Kamera-Transform kommt vom Renderer.
- *   - Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
+ *   Visuelle Darstellung von Felsen / Steinbruch rund um b.quarry / Steinmetz:
+ *     - Reagiert auf cb:build:complete für Stein-Gebäude
+ *     - Erzeugt pro Gebäude ein StoneField mit zufälliger Fels-Verteilung
+ *     - Zeichnet die Steine direkt auf dem Haupt-Canvas in Weltkoordinaten
+ *     - Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
  *
- *       RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
+ *         RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
  *
  * Ereignisse:
  *   IN  :
@@ -311,19 +310,19 @@
   }
 
   // ========================================================================
-  // OVERLAY-ZEICHNUNG (jetzt: Haupt-Canvas, Weltkoordinaten)
+  // ZEICHNUNG AUF DEM HAUPT-CANVAS (Steine)
   // ========================================================================
 
   function drawOnMainCanvas(ctx, cam, tileSize){
     if (!ctx) return;
     if (!StoneFields.size) return;
 
-    void cam; // Kamera-Transform ist bereits aktiv
-
+    const Game = window.Game || {};
     const ts =
-      tileSize ||
-      (window.Game?.map?.tileSize) ||
-      (window.GameMap?._state?.map?.tileSize) ||
+      (tileSize) ||
+      (Game.map && Game.map.tileSize) ||
+      (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
+      Game.tileSize ||
       64;
 
     const atlasReady = ensureStoneAtlasReady();
@@ -340,20 +339,21 @@
         const tx = s.tx;
         const ty = s.ty;
 
-        const wx = (tx + 0.5) * ts;
-        const wy = (ty + 1.0) * ts;
+        // Weltkoordinaten (Kamera-Transform kommt aus game.renderer.js)
+        const cxPx = (tx + 0.5) * ts;
+        const cyPx = (ty + 1.0) * ts;
 
         let drawn = false;
 
         if (atlasReady){
-          const stageName   = STONE_STAGE[s.stageIndex] || null;
+          const stageName = STONE_STAGE[s.stageIndex] || null;
           const groupFrames = stageName &&
                               STONE_ATLAS_CFG.groupFrames &&
                               STONE_ATLAS_CFG.groupFrames[stageName];
 
           if (groupFrames && groupFrames.length){
             const frameName = groupFrames[s.variant % groupFrames.length];
-            drawn = drawStoneFrame(ctx, frameName, wx, wy, s.scale);
+            drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale);
           }
         }
 
@@ -363,7 +363,7 @@
           ctx.fillStyle   = '#888888';
           ctx.strokeStyle = '#444444';
           ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-          ctx.arc(wx, wy - r * 0.2, r, 0, Math.PI*2);
+          ctx.arc(cxPx, cyPx - r * 0.2, r, 0, Math.PI*2);
           ctx.fill();
           ctx.stroke();
         }
@@ -521,9 +521,10 @@
     field.cx = field.workArea.cx;
     field.cy = field.workArea.cy;
 
+    // neues Layout innerhalb des Arbeitsbereiches
     createRandomLayoutForField(field);
 
-    LOG('WorkArea für Stein-Feld aktualisiert', uid, field.workArea);
+    LOG(TAG, 'Arbeitsbereich aktualisiert:', uid, field.workArea);
   }
 
   try {
@@ -542,12 +543,10 @@
   } catch(e){
     (window.CBLog?.warn || console.warn)(
       TAG,
-      'cb:workarea:set-Listener konnte nicht registriert werden:',
+      'cb:workarea:set-Listener konnten nicht registriert werden:',
       e
     );
   }
-
-  // (alter applyWorkAreaToQuarry-Block war doppelt / fehlerhaft → entfernt)
 
   // ========================================================================
   // STUB-TICK (für spätere Erweiterungen)
@@ -570,7 +569,8 @@
         id             : 'stone',
         onBuildComplete,
         onWorkAreaSet,
-        tick
+        tick,
+        drawOnMainCanvas
       });
       LOG('Produktionsmodul "stone" registriert.');
       return true;
@@ -601,6 +601,6 @@
     _degradeField : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.09-stone-workarea-maincanvas-v1');
+  LOG('Stein-Modul geladen v25.12.09-stone-workarea-maincanvas-v2');
 
 })();
