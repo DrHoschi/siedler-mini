@@ -9,7 +9,7 @@
     "version": "v25.12.02"
   },
   "frames": {
-    "e1_rock_big_raw_v01": { "frame": { "x":   10, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
+    "e1_rock_big_raw_v01": { "frame": { "x":   10, "y":   0, "w": 170, "h": 150 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_raw_v02": { "frame": { "x": 128, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_raw_v03": { "frame": { "x": 256, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_raw_v04": { "frame": { "x": 384, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
