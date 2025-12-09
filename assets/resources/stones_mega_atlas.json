@@ -9,7 +9,7 @@
     "version": "v25.12.02"
   },
   "frames": {
-    "e1_rock_big_raw_v01": { "frame": { "x":   0, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
+    "e1_rock_big_raw_v01": { "frame": { "x":   10, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_raw_v02": { "frame": { "x": 128, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_raw_v03": { "frame": { "x": 256, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_raw_v04": { "frame": { "x": 384, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
@@ -18,7 +18,7 @@
     "e1_rock_big_raw_v07": { "frame": { "x": 768, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_raw_v08": { "frame": { "x": 896, "y":   0, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
 
-    "e1_rock_big_cracked_v01": { "frame": { "x":   0, "y": 128, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
+    "e1_rock_big_cracked_v01": { "frame": { "x":   10, "y": 128, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_cracked_v02": { "frame": { "x": 128, "y": 128, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_cracked_v03": { "frame": { "x": 256, "y": 128, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_cracked_v04": { "frame": { "x": 384, "y": 128, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
@@ -27,7 +27,7 @@
     "e1_rock_big_cracked_v07": { "frame": { "x": 768, "y": 128, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rock_big_cracked_v08": { "frame": { "x": 896, "y": 128, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
 
-    "e1_rubble_large_v01": { "frame": { "x":   0, "y": 256, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
+    "e1_rubble_large_v01": { "frame": { "x":   10, "y": 256, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rubble_large_v02": { "frame": { "x": 128, "y": 256, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rubble_large_v03": { "frame": { "x": 256, "y": 256, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
     "e1_rubble_large_v04": { "frame": { "x": 384, "y": 256, "w": 128, "h": 128 }, "pivot": { "x": 64, "y": 96 } },
