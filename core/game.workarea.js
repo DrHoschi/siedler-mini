@@ -139,59 +139,78 @@
   /**
    * Wird aus core.input.js aufgerufen, wenn du bei aktiver Auswahl
    * auf eine Tile klickst.
-   */
-  function applySelectionTile(tx, ty){
-    if (!selecting || !selectingUid) return false;
+   */function applySelectionTile(tx, ty){
+  if (!selecting || !selectingUid) return false;
 
-    const area = areasByUid.get(selectingUid);
-    if (!area){
-      WARN('applySelectionTile: keine Area für', selectingUid);
-      selecting    = false;
-      selectingUid = null;
-      return false;
-    }
-
-    // Kreis darf den Gebäude-Block berühren, aber nicht völlig weg sein
-    const minX = area.x - area.radiusTiles;
-    const maxX = area.x + area.w - 1 + area.radiusTiles;
-    const minY = area.y - area.radiusTiles;
-    const maxY = area.y + area.h - 1 + area.radiusTiles;
-
-    if (tx < minX) tx = minX;
-    if (tx > maxX) tx = maxX;
-    if (ty < minY) ty = minY;
-    if (ty > maxY) ty = maxY;
-
-    area.cx = tx;
-    area.cy = ty;
-
-    LOG('WorkArea übernommen', area.uid, { cx: area.cx, cy: area.cy });
-
+  const area = areasByUid.get(selectingUid);
+  if (!area){
+    WARN('applySelectionTile: keine Area für', selectingUid);
     selecting    = false;
     selectingUid = null;
-
-    // Event nach außen feuern → Produktionsmodule können reagieren
-    try {
-      window.dispatchEvent(new CustomEvent('cb:workarea:set', {
-        detail: {
-          id          : area.buildingId,
-          buildingId  : area.buildingId,
-          uid         : area.uid,
-          x           : area.x,
-          y           : area.y,
-          w           : area.w,
-          h           : area.h,
-          cx          : area.cx,
-          cy          : area.cy,
-          radiusTiles : area.radiusTiles
-        }
-      }));
-    } catch (e){
-      WARN('cb:workarea:set konnte nicht dispatcht werden:', e);
-    }
-
-    return true;
+    return false;
   }
+
+  // -------------------------------------------------------------
+  // Begrenzung:
+  // Mittelpunkt des Kreises MUSS in einem Rahmen von 1 Tile
+  // rund um den 3×3-Gebäudeblock bleiben.
+  //
+  // Gebäude-Block:  x .. x+w-1
+  // Erlaubter Bereich für Kreis-Mittelpunkt:
+  //   X: (x-1) .. (x+w)
+  //   Y: (y-1) .. (y+h)
+  // -------------------------------------------------------------
+  const w = area.w || 3;
+  const h = area.h || 3;
+
+  const minX = area.x - 1;
+  const maxX = area.x + w;
+  const minY = area.y - 1;
+  const maxY = area.y + h;
+
+  const rawTx = tx;
+  const rawTy = ty;
+
+  if (tx < minX) tx = minX;
+  if (tx > maxX) tx = maxX;
+  if (ty < minY) ty = minY;
+  if (ty > maxY) ty = maxY;
+
+  area.cx = tx;
+  area.cy = ty;
+
+  LOG('WorkArea übernommen', area.uid, {
+    clicked : { tx: rawTx, ty: rawTy },
+    clamped : { cx: area.cx, cy: area.cy },
+    bounds  : { minX, maxX, minY, maxY }
+  });
+
+  // Auswahl beenden – Kreis bleibt an der neuen Position stehen
+  selecting    = false;
+  selectingUid = null;
+
+  // Event nach außen feuern (dein vorhandener cb:workarea:set-Block bleibt)
+  try {
+    window.dispatchEvent(new CustomEvent('cb:workarea:set', {
+      detail: {
+        id          : area.buildingId,
+        buildingId  : area.buildingId,
+        uid         : area.uid,
+        x           : area.x,
+        y           : area.y,
+        w           : area.w,
+        h           : area.h,
+        cx          : area.cx,
+        cy          : area.cy,
+        radiusTiles : area.radiusTiles
+      }
+    }));
+  } catch (e){
+    WARN('cb:workarea:set konnte nicht dispatcht werden:', e);
+  }
+
+  return true;
+}
 
   function cancelSelection(){
     if (!selecting) return;
