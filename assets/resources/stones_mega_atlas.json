@@ -1,15 +1,14 @@
-{
+
   "meta": {
+    "name": "stones_mega_atlas",
     "image": "assets/resources/stones_mega_atlas.png",
-    "size": {
-      "w": 1024,
-      "h": 1024
-    },
-    "tool": "sprite-atlas-tool",
-    "toolVersion": "v25.12.09",
-    "exportedAt": "2025-12-09T20:13:17.761Z"
+    "size": { "w": 1024, "h": 1024 },
+    "tileSize": { "w": 128, "h": 128 },
+    "cols": 7,
+    "rows": 8,
+    "version": "v25.12.02a"
   },
-  "frames": {
+    "frames": {
     "frame_0_0": {
       "x": 10,
       "y": 0,
