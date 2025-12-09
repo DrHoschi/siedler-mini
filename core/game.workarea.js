@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.workarea.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.08-workarea-core-v6-maincanvas
+ * Version : v25.12.09-workarea-core-v7-maincanvas
  *
  * Zweck   :
  *   Zentrale Verwaltung der ARBEITSBEREICHE (WorkAreas) für Gebäude:
@@ -16,6 +16,7 @@
  *       GameWorkArea.cancelSelection()
  *       GameWorkArea.getAreaFor(detailOrUid)
  *       GameWorkArea.getOrCreateAreaFor(detailOrUid)
+ *       GameWorkArea.ensureDefaultForBuilding(detail)
  *       GameWorkArea.drawWorld(ctx, { tileSize })
  *
  *   - Events:
@@ -23,7 +24,7 @@
  *
  *   - Zeichnen:
  *       → GameMap / Renderer ruft GameWorkArea.drawWorld(ctx,{tileSize}) auf.
- *       → Kreis wird NUR gezeichnet, solange isSelecting() === true ist.
+ *       → Kreis wird nur gezeichnet, solange isSelecting() === true ist.
  * ========================================================================== */
 
 (function () {
@@ -53,7 +54,7 @@
   /** Letzte geklickte / gehoverte Tile – nur für spätere Features */
   let lastHoverTile = null;
 
-  const DEFAULT_RADIUS = 3; // Tiles
+  const DEFAULT_RADIUS_TILES = 3; // Tiles
 
   // -------------------------------------------------------------------------
   // HILFSFUNKTIONEN – UID, Defaults
@@ -70,9 +71,9 @@
   }
 
   function pickRadius(detail) {
-    if (!detail) return DEFAULT_RADIUS;
+    if (!detail) return DEFAULT_RADIUS_TILES;
     if (detail.radiusTiles != null) return detail.radiusTiles | 0;
-    return DEFAULT_RADIUS;
+    return DEFAULT_RADIUS_TILES;
   }
 
   /** Standard-Zentrum = Mitte des Gebäude-Rechtecks (in Tile-Koordinaten) */
@@ -137,6 +138,14 @@
     return a;
   }
 
+  /**
+   * Convenience für ältere Aufrufe (ensureDefaultForBuilding):
+   * erzeugt falls nötig einen Eintrag und gibt ihn zurück.
+   */
+  function ensureDefaultForBuilding(detail) {
+    return getOrCreateAreaFor(detail);
+  }
+
   // -------------------------------------------------------------------------
   // SELECTION-FLOW (Starten, Klicken, Abbrechen)
   // -------------------------------------------------------------------------
@@ -159,14 +168,11 @@
       return;
     }
 
-    selecting    = true;
-    selectingUid = area.uid;
+    selecting     = true;
+    selectingUid  = area.uid;
     lastHoverTile = { tx: area.cx, ty: area.cy };
 
     LOG('Selection gestartet für', selectingUid, area);
-
-    // optional könnten wir hier schon einmal ein cb:workarea:set feuern,
-    // aber aktuell warten wir auf den ersten „Bestätigen“-Klick.
   }
 
   function isSelecting() {
@@ -185,7 +191,7 @@
     const area = areasByUid.get(selectingUid);
     if (!area) {
       WARN('applySelectionTile: keine Area für uid', selectingUid);
-      selecting = false;
+      selecting    = false;
       selectingUid = null;
       return false;
     }
@@ -209,7 +215,7 @@
 
     LOG('WorkArea übernommen', area.uid, '→', { cx: area.cx, cy: area.cy });
 
-    // Auswahl beenden – Kreis bleibt aktuell nur beim Setzen sichtbar
+    // Auswahl beenden – das Menü schließt ja auch
     selecting    = false;
     selectingUid = null;
 
@@ -251,28 +257,21 @@
    * Zeichnet den aktuellen Auswahl-Kreis direkt im Welt-Koordinatensystem.
    * Aufruf aus GameMap / Renderer:
    *   GameWorkArea.drawWorld(ctx, { tileSize: ts });
+   *
+   * WICHTIG:
+   *   GameMap hat die Kamera-Transformation bereits gesetzt,
+   *   daher hier NICHT noch einmal verschieben oder skalieren.
    */
-  // ============================================================================
-// RENDER: Kreise direkt im Weltkoordinatensystem (= Map-Canvas)
-// ============================================================================
+  function drawWorld(ctx, opts) {
+    if (!ctx) return;
 
-function drawWorld(ctx, opts){
-  if (!ctx) return;
+    // Kreis nur anzeigen, solange Auswahl aktiv ist
+    if (!selecting || !selectingUid) return;
 
-  const tileSize = (opts && opts.tileSize) | 0 || getTileSize();
-  const cam      = (opts && opts.camera) || { x: 0, y: 0, zoom: 1 };
+    const tileSize = (opts && opts.tileSize) | 0 || 64;
 
-  ctx.save();
-
-  // Kamera-Offset wie bei Gebäuden: wir zeichnen in Tile-Koordinaten,
-  // GameMap hat i.d.R. bereits die Kamera berücksichtigt, daher hier
-  // NUR dann verschieben, wenn du wirklich mit GameCamera arbeitest:
-  // → falls dein GameMap bereits die Welt "gescrollt" hat, kannst du
-  //   die translate-Zeile auch komplett auskommentieren.
-  ctx.translate(-cam.x * tileSize, -cam.y * tileSize);
-
-  for (const area of areas.values()){
-    if (!area) continue;
+    const area = areasByUid.get(selectingUid);
+    if (!area) return;
 
     const cx = Number(area.cx) || (area.x + (area.w || 3) / 2);
     const cy = Number(area.cy) || (area.y + (area.h || 3) / 2);
@@ -281,6 +280,8 @@ function drawWorld(ctx, opts){
     const px = cx * tileSize;
     const py = cy * tileSize;
     const r  = rT * tileSize;
+
+    ctx.save();
 
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
@@ -293,31 +294,37 @@ function drawWorld(ctx, opts){
     ctx.fill();
     ctx.stroke();
 
-    // Wenn dieser Bereich gerade im Auswahlmodus ist → etwas hervorheben
-    if (area.uid === selectingUid){
-      ctx.beginPath();
-      ctx.arc(px, py, r + 3, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
-      ctx.lineWidth   = 2;
-      ctx.stroke();
-    }
+    // Optionale Hervorhebung für die aktuelle Auswahl
+    ctx.beginPath();
+    ctx.arc(px, py, r + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
+    ctx.lineWidth   = 2;
+    ctx.stroke();
+
+    ctx.restore();
   }
 
-  ctx.restore();
-}
-  
-  // ============================================================================
-// EXPORT
-// ============================================================================
-window.GameWorkArea = {
-  areas,
-  ensureDefaultForBuilding,
-  beginSelection,        // oder startSelectionForBuilding - je nach deiner Variante
-  applySelectionTile,
-  cancelSelection,
-  isSelecting,
-  drawWorld              // <–– WICHTIG für game.map.js
-};
+  // -------------------------------------------------------------------------
+  // EXPORT
+  // -------------------------------------------------------------------------
 
-LOG('WorkArea-Modul geladen v25.12.09-maincanvas-drawworld');
+  window.GameWorkArea = {
+    // Datenzugriff
+    areasByUid,
+    getAreaFor,
+    getOrCreateAreaFor,
+    ensureDefaultForBuilding,
+
+    // Auswahl-Flow
+    beginSelection,
+    isSelecting,
+    applySelectionTile,
+    cancelSelection,
+
+    // Render
+    drawWorld
+  };
+
+  LOG('WorkArea-Modul geladen v25.12.09-workarea-core-v7-maincanvas');
+
 })();
