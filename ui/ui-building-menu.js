@@ -127,30 +127,42 @@
   }
 
   // --------------------------------------------------------------------------
-  // Event-Bindings
-  // --------------------------------------------------------------------------
-  btnClose?.addEventListener('click', ()=>{
-    hidePanel();
-  });
+// Event-Bindings
+// --------------------------------------------------------------------------
 
-  btnWork?.addEventListener('click', ()=>{
-    if (!currentBuilding){
-      WARN('WorkArea-Button gedrückt, aber kein Gebäude aktiv.');
-      return;
+// Schließen-Button (X)
+btnClose?.addEventListener('click', (ev)=>{
+  // Klick nicht nach außen durchreichen
+  ev?.stopPropagation?.();
+  ev?.preventDefault?.();
+
+  hidePanel();
+});
+
+// WorkArea-Button
+btnWork?.addEventListener('click', (ev)=>{
+  // Ganz wichtig: verhindert, dass globale Click-Handler das Panel schließen
+  ev?.stopPropagation?.();
+  ev?.stopImmediatePropagation?.();
+  ev?.preventDefault?.();
+
+  if (!currentBuilding){
+    WARN('WorkArea-Button gedrückt, aber kein Gebäude aktiv.');
+    return;
+  }
+
+  LOG('WorkArea-Button → GameWorkArea.beginSelection', currentBuilding);
+
+  try {
+    if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function'){
+      GameWorkArea.beginSelection(currentBuilding);
+    } else {
+      WARN('GameWorkArea.beginSelection nicht verfügbar – WorkArea kann noch nicht gesetzt werden.');
     }
-
-    LOG('WorkArea-Button → GameWorkArea.beginSelection', currentBuilding);
-
-    try {
-      if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function'){
-        GameWorkArea.beginSelection(currentBuilding);
-      } else {
-        WARN('GameWorkArea.beginSelection nicht verfügbar – WorkArea kann noch nicht gesetzt werden.');
-      }
-    } catch (e){
-      WARN('Fehler bei GameWorkArea.beginSelection:', e);
-    }
-  });
+  } catch (e){
+    WARN('Fehler bei GameWorkArea.beginSelection:', e);
+  }
+});
 
   // Klick außerhalb des Panels → Menü schließen (außer im WorkArea-Setzmodus)
   document.addEventListener('click', (ev)=>{
