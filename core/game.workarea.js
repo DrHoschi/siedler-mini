@@ -252,30 +252,59 @@
    * Aufruf aus GameMap / Renderer:
    *   GameWorkArea.drawWorld(ctx, { tileSize: ts });
    */
-  function drawWorld(ctx, opts) {
-    if (!selecting || !selectingUid) return;
+  // ============================================================================
+// RENDER: Kreise direkt im Weltkoordinatensystem (= Map-Canvas)
+// ============================================================================
 
-    const area = areasByUid.get(selectingUid);
-    if (!area) return;
-    if (!ctx)   return;
+function drawWorld(ctx, opts){
+  if (!ctx) return;
 
-    const ts = (opts && opts.tileSize) || 64;
+  const tileSize = (opts && opts.tileSize) | 0 || getTileSize();
+  const cam      = (opts && opts.camera) || { x: 0, y: 0, zoom: 1 };
 
-    const cxPx = (area.cx + 0.5) * ts;
-    const cyPx = (area.cy + 0.5) * ts;
-    const rPx  = area.radiusTiles * ts;
+  ctx.save();
 
-    ctx.save();
+  // Kamera-Offset wie bei Gebäuden: wir zeichnen in Tile-Koordinaten,
+  // GameMap hat i.d.R. bereits die Kamera berücksichtigt, daher hier
+  // NUR dann verschieben, wenn du wirklich mit GameCamera arbeitest:
+  // → falls dein GameMap bereits die Welt "gescrollt" hat, kannst du
+  //   die translate-Zeile auch komplett auskommentieren.
+  ctx.translate(-cam.x * tileSize, -cam.y * tileSize);
+
+  for (const area of areas.values()){
+    if (!area) continue;
+
+    const cx = Number(area.cx) || (area.x + (area.w || 3) / 2);
+    const cy = Number(area.cy) || (area.y + (area.h || 3) / 2);
+    const rT = Number(area.radiusTiles) || DEFAULT_RADIUS_TILES;
+
+    const px = cx * tileSize;
+    const py = cy * tileSize;
+    const r  = rT * tileSize;
+
     ctx.beginPath();
-    ctx.lineWidth   = 3;
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillStyle   = 'rgba(255,255,255,0.08)';
-    ctx.arc(cxPx, cyPx, rPx, 0, Math.PI * 2);
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+
+    // Füllung leicht transparent
+    ctx.fillStyle   = 'rgba(0, 180, 255, 0.10)';
+    ctx.strokeStyle = 'rgba(0, 120, 220, 0.9)';
+    ctx.lineWidth   = 2;
+
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
+
+    // Wenn dieser Bereich gerade im Auswahlmodus ist → etwas hervorheben
+    if (area.uid === selectingUid){
+      ctx.beginPath();
+      ctx.arc(px, py, r + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
+      ctx.lineWidth   = 2;
+      ctx.stroke();
+    }
   }
 
+  ctx.restore();
+}
   
   // -------------------------------------------------------------------------
   // EXPORT
