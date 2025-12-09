@@ -1,38 +1,16 @@
 /* ============================================================================
- * Datei   : js/tree-viewer.js
+ * Datei   : assets/tex/deco/js/tree-viewer.js
  * Projekt : Trees Mega Atlas – Test-Viewer
- * Version : v25.12.09b (Indexed-JSON + Smart-Sort)
- * Zweck   : Lädt trees_mega_atlas.png + JSON (assets.draw-Format)
- *           und erlaubt:
- *             - einzelne Frames anzeigen
- *             - per Prev/Next durchgehen
- *             - einfache Animationen nach Prefix abspielen (z.B. e1_regrow_)
+ * Version : v25.12.09c (Grid-Viewer)
+ * Zweck   : Lädt einen Atlas (PNG + assets.draw-JSON) und bietet:
+ *             - Einzel-Frame-Viewer (großer Canvas)
+ *             - Grid-Viewer (Mini-Atlas mit Raster & Klick-Auswahl)
+ *             - einfache Animationen nach Prefix
  *
- * Wichtige Änderungen in dieser Version:
- *   ✔ Unterstützung für "trees_mega_atlas_indexed.json"
- *   ✔ Intelligente Sortierung:
- *        - Indexed-Namen: tree_00_r0c0 ... tree_63_r7c7 → Reihenfolge wie im Grid
- *        - Semantische Namen: alphabetisch sortiert wie vorher
- *   ✔ Debug-Ausgabe zeigt zusätzlich Grid-Position (rX,cY)
- *
- * Erwartete Projektstruktur relativ zur index.html:
- *
- *   assets/trees/trees_mega_atlas.png
- *   assets/trees/trees_mega_atlas_padded.png
- *   assets/trees/trees_mega_atlas.json              (semantische Namen, optional)
- *   assets/trees/trees_mega_atlas_indexed.json      (neutrale Namen, empfohlen)
- *
- * JSON-Format (assets.draw):
- *   {
- *     "image": "trees_mega_atlas.png",
- *     "tileW": 128,
- *     "tileH": 128,
- *     "frames": {
- *       "tree_00_r0c0": [0,0],
- *       "tree_01_r0c1": [1,0],
- *       ...
- *     }
- *   }
+ * Unterstützt:
+ *   - 7×7-Atlas (trees_mega_7x7.png/.json)
+ *   - 8×8-Atlas (trees_mega_atlas*.png/.json)
+ *   - sowie andere Kombinationen, solange tileW/tileH im JSON passen.
  * ==========================================================================*/
 
 /* ============================================================================
@@ -40,6 +18,9 @@
  * ==========================================================================*/
 const canvas        = document.getElementById('treeCanvas');
 const ctx           = canvas.getContext('2d');
+
+const gridCanvas    = document.getElementById('gridCanvas');
+const gridCtx       = gridCanvas.getContext('2d');
 
 const atlasImageSel = document.getElementById('atlasImageSel');
 const atlasJsonSel  = document.getElementById('atlasJsonSel');
@@ -62,25 +43,28 @@ const debugOutput   = document.getElementById('debugOutput');
  * [2] Zustands-Objekt
  * ==========================================================================*/
 const state = {
-  atlasImage: null,      // HTMLImageElement
-  atlasData: null,       // JSON-Inhalt
+  atlasImage: null,
+  atlasData: null,
+
   frameNames: [],        // Liste aller Framenamen (in gewünschter Reihenfolge)
-  frameMap: {},          // name -> {x,y,w,h, gx,gy}
+  frameMap: {},          // name -> {x,y,w,h,gx,gy}
   tileW: 128,
   tileH: 128,
+  tilesX: 0,
+  tilesY: 0,
 
   currentFrameIndex: 0,
 
   // Animation
   isPlaying: false,
-  animFrames: [],        // Liste von Framenamen in der aktuellen Animation
+  animFrames: [],
   animIndex: 0,
   animLastTime: 0,
-  animDelay: 250         // ms pro Frame
+  animDelay: 250
 };
 
 /* ============================================================================
- * [3] Hilfsfunktionen für Debug-Ausgabe
+ * [3] Debug-Helfer & Erkennung für "indexed" Namen
  * ==========================================================================*/
 function logDebug(msg) {
   console.log('[TreesViewer]', msg);
@@ -90,12 +74,7 @@ function logDebug(msg) {
 }
 
 /**
- * Prüft, ob die übergebene Namensliste einem "indexed" Schema entspricht:
- *   tree_00_r0c0, tree_01_r0c1, ...
- *
- * Heuristik:
- *   - Alle Namen fangen mit "tree_" an
- *   - Der zweite Teil ist eine zweistellige Zahl
+ * Heuristik: erkenne neutrale Index-Namen wie tree_00_r0c0
  */
 function looksIndexedNameList(names) {
   if (!names.length) return false;
@@ -110,7 +89,7 @@ function looksIndexedNameList(names) {
 }
 
 /* ============================================================================
- * [4] Atlas laden (Bild + JSON)
+ * [4] Atlas laden (Bild + JSON) + Ableitung von Grid-Größe
  * ==========================================================================*/
 async function loadAtlas() {
   const imgFile  = atlasImageSel.value;
@@ -134,20 +113,26 @@ async function loadAtlas() {
   const imgUrl = `assets/trees/${imgFile}`;
   state.atlasImage = await loadImage(imgUrl);
 
+  // Grid-Größe aus Bild + Tilegröße ableiten
+  state.tilesX = Math.floor(state.atlasImage.width  / state.tileW);
+  state.tilesY = Math.floor(state.atlasImage.height / state.tileH);
+
   // Frames aus JSON extrahieren
   parseFramesFromAssetsDraw(data);
 
   // UI füllen
+  state.currentFrameIndex = 0;
   fillFrameSelect();
   buildAnimationsFromNames();
 
-  state.currentFrameIndex = 0;
   updateCanvasInfo();
   renderCurrentFrame();
-  logDebug(`Atlas geladen. Frames: ${state.frameNames.length}`);
+  renderGrid();
+
+  logDebug(`Atlas geladen. Tiles: ${state.tilesX}×${state.tilesY}, Frames: ${state.frameNames.length}`);
 }
 
-// Promise-basierter Image-Loader
+// Promise-Image-Loader
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -158,7 +143,7 @@ function loadImage(url) {
 }
 
 /**
- * JSON (assets.draw) in frameMap übersetzen.
+ * assets.draw → frameMap
  *
  * data.frames:
  *   "name": [gridX, gridY]
@@ -169,7 +154,7 @@ function parseFramesFromAssetsDraw(data) {
 
   const frames = data.frames || {};
 
-  // In Einfügereihenfolge sammeln
+  // in Einfügereihenfolge sammeln
   for (const [name, coord] of Object.entries(frames)) {
     const gx = coord[0];
     const gy = coord[1];
@@ -180,9 +165,7 @@ function parseFramesFromAssetsDraw(data) {
     state.frameMap[name] = { x, y, w: state.tileW, h: state.tileH, gx, gy };
   }
 
-  // Sortier-Strategie:
-  //  - Indexed-JSON (tree_00_r0c0, ...) → NICHT sortieren (Reihenfolge = Grid)
-  //  - Sonst → alphabetisch sortieren (wie ursprüngliche Version)
+  // Nur nicht-indexed Namen alphabetisch sortieren
   if (!looksIndexedNameList(state.frameNames)) {
     state.frameNames.sort();
   }
@@ -200,29 +183,22 @@ function fillFrameSelect() {
     const f = state.frameMap[name];
     const labelIndex = i.toString().padStart(2, '0');
 
-    // Zusatzinfo: Grid-Position (rX,cY) anhängen
-    const gridInfo = (f && typeof f.gx === 'number' && typeof f.gy === 'number')
-      ? `  [r${f.gy}c${f.gx}]`
-      : '';
+    const gridInfo =
+      f && typeof f.gx === 'number' && typeof f.gy === 'number'
+        ? `  [r${f.gy}c${f.gx}]`
+        : '';
 
     const opt = document.createElement('option');
     opt.value = String(i);
     opt.textContent = `${labelIndex} – ${name}${gridInfo}`;
     frameSelect.appendChild(opt);
   }
+
   frameSelect.value = String(state.currentFrameIndex);
 }
 
 /* ============================================================================
  * [6] Animationen aus Namen ableiten
- *
- * Gruppenbildung:
- *   - "e1_regrow_seed"    → Prefix "e1_regrow"
- *   - "e2_regrow_tree_big"→ Prefix "e2_regrow"
- *   - "cut_fall_left"     → Prefix "cut_fall"
- *
- * Indexed-Namen ("tree_00_r0c0") erzeugen zwar Prefix "tree_00", sind aber
- * in der Praxis eher für Einzelbild-Test gedacht – kann man trotzdem wählen.
  * ==========================================================================*/
 function buildAnimationsFromNames() {
   const groups = new Map(); // prefix -> [names]
@@ -231,11 +207,11 @@ function buildAnimationsFromNames() {
     const parts = name.split('_');
     let prefix;
     if (parts.length >= 3) {
-      prefix = parts[0] + '_' + parts[1]; // z.B. e1_regrow, tree_00
+      prefix = parts[0] + '_' + parts[1]; // e1_regrow, tree_00, ...
     } else if (parts.length === 2) {
-      prefix = parts[0] + '_' + parts[1]; // z.B. cut_fall
+      prefix = parts[0] + '_' + parts[1]; // cut_fall
     } else {
-      prefix = parts[0];                   // fallback
+      prefix = parts[0];
     }
 
     if (!groups.has(prefix)) {
@@ -244,10 +220,8 @@ function buildAnimationsFromNames() {
     groups.get(prefix).push(name);
   }
 
-  // UI füllen
   animSelect.innerHTML = '';
 
-  // "Keine Animation"
   const optNone = document.createElement('option');
   optNone.value = '';
   optNone.textContent = '– (Einzelbild / kein Auto-Loop) –';
@@ -255,12 +229,7 @@ function buildAnimationsFromNames() {
 
   const sortedPrefixes = Array.from(groups.keys()).sort();
   for (const prefix of sortedPrefixes) {
-    const names = groups.get(prefix).slice();
-
-    // Für indexed "tree_00" etc. wollen wir meist keine Gruppe im Sinne von Animation,
-    // trotzdem bleibt es wählbar – schadet nicht.
-    names.sort();
-
+    const names = groups.get(prefix).slice().sort();
     const opt = document.createElement('option');
     opt.value = prefix;
     opt.textContent = `${prefix} (${names.length} Frames)`;
@@ -273,7 +242,7 @@ function buildAnimationsFromNames() {
 }
 
 /* ============================================================================
- * [7] Frame zeichnen
+ * [7] Einzel-Frame zeichnen
  * ==========================================================================*/
 function renderCurrentFrame() {
   if (!state.atlasImage || !state.frameNames.length) return;
@@ -281,30 +250,28 @@ function renderCurrentFrame() {
   const index = state.currentFrameIndex;
   const name  = state.frameNames[index];
   const frame = state.frameMap[name];
-
   if (!frame) return;
 
-  // Canvas leeren
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 128x128 → 256x256 skalieren und zentrieren
-  const scaleX = canvas.width / state.tileW;
+  const scaleX = canvas.width  / state.tileW;
   const scaleY = canvas.height / state.tileH;
   const scale  = Math.min(scaleX, scaleY);
 
   const drawW = state.tileW * scale;
   const drawH = state.tileH * scale;
-  const dx = (canvas.width - drawW) / 2;
+  const dx = (canvas.width  - drawW) / 2;
   const dy = (canvas.height - drawH) / 2;
 
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(
     state.atlasImage,
-    frame.x, frame.y, frame.w, frame.h,  // Quelle
-    dx, dy, drawW, drawH                 // Ziel
+    frame.x, frame.y, frame.w, frame.h,
+    dx, dy, drawW, drawH
   );
 
   updateCanvasInfo();
+  renderGrid(); // Highlight im Grid aktualisieren
 }
 
 function updateCanvasInfo() {
@@ -319,16 +286,139 @@ function updateCanvasInfo() {
   const frame = state.frameMap[name];
   const total = state.frameNames.length;
 
-  const gridInfo = frame
-    ? `  [r${frame.gy}, c${frame.gx}]`
-    : '';
+  const gridInfo = frame ? `  [r${frame.gy}, c${frame.gx}]` : '';
 
   canvasInfo.textContent = `Frame: ${name}${gridInfo}`;
   frameIndexInfo.textContent = `Index: ${i + 1}/${total}`;
 }
 
 /* ============================================================================
- * [8] Animation-Loop
+ * [8] Grid-Viewer zeichnen
+ *      - kompletter Atlas als Miniatur
+ *      - Rasterlinien
+ *      - Highlight für aktuell ausgewählte Kachel
+ * ==========================================================================*/
+function renderGrid() {
+  if (!state.atlasImage) {
+    gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+    return;
+  }
+
+  const img = state.atlasImage;
+
+  gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+
+  // Bild so skalieren, dass es maximal in den Grid-Canvas passt
+  const scaleX = gridCanvas.width  / img.width;
+  const scaleY = gridCanvas.height / img.height;
+  const scale  = Math.min(scaleX, scaleY);
+
+  const drawW = img.width  * scale;
+  const drawH = img.height * scale;
+  const dx = (gridCanvas.width  - drawW) / 2;
+  const dy = (gridCanvas.height - drawH) / 2;
+
+  gridCtx.imageSmoothingEnabled = false;
+  gridCtx.drawImage(img, dx, dy, drawW, drawH);
+
+  // Rasterlinien zeichnen
+  gridCtx.save();
+  gridCtx.translate(dx, dy);
+  gridCtx.scale(scale, scale);
+
+  gridCtx.lineWidth = 1 / scale;
+  gridCtx.strokeStyle = 'rgba(255,255,255,0.18)';
+
+  for (let gx = 0; gx <= state.tilesX; gx++) {
+    const x = gx * state.tileW;
+    gridCtx.beginPath();
+    gridCtx.moveTo(x + 0.5, 0);
+    gridCtx.lineTo(x + 0.5, state.tilesY * state.tileH);
+    gridCtx.stroke();
+  }
+
+  for (let gy = 0; gy <= state.tilesY; gy++) {
+    const y = gy * state.tileH;
+    gridCtx.beginPath();
+    gridCtx.moveTo(0, y + 0.5);
+    gridCtx.lineTo(state.tilesX * state.tileW, y + 0.5);
+    gridCtx.stroke();
+  }
+
+  // Highlight: aktuelle Kachel
+  if (state.frameNames.length) {
+    const name  = state.frameNames[state.currentFrameIndex];
+    const frame = state.frameMap[name];
+    if (frame) {
+      gridCtx.lineWidth = 2 / scale;
+      gridCtx.strokeStyle = 'rgba(255,210,80,0.9)';
+      gridCtx.strokeRect(
+        frame.gx * state.tileW + 1,
+        frame.gy * state.tileH + 1,
+        state.tileW - 2,
+        state.tileH - 2
+      );
+    }
+  }
+
+  gridCtx.restore();
+}
+
+/**
+ * Klick im Grid → Kachel bestimmen → passenden Frame auswählen
+ */
+function handleGridClick(evt) {
+  if (!state.atlasImage) return;
+
+  const rect = gridCanvas.getBoundingClientRect();
+  const px = evt.clientX - rect.left;
+  const py = evt.clientY - rect.top;
+
+  const img = state.atlasImage;
+
+  const scaleX = gridCanvas.width  / img.width;
+  const scaleY = gridCanvas.height / img.height;
+  const scale  = Math.min(scaleX, scaleY);
+
+  const drawW = img.width  * scale;
+  const drawH = img.height * scale;
+  const dx = (gridCanvas.width  - drawW) / 2;
+  const dy = (gridCanvas.height - drawH) / 2;
+
+  const localX = (px - dx) / scale;
+  const localY = (py - dy) / scale;
+
+  if (localX < 0 || localY < 0 ||
+      localX >= img.width || localY >= img.height) {
+    // Klick außerhalb des Bildes
+    return;
+  }
+
+  const gx = Math.floor(localX / state.tileW);
+  const gy = Math.floor(localY / state.tileH);
+
+  // passenden Frame mit (gx,gy) suchen
+  let index = -1;
+  for (let i = 0; i < state.frameNames.length; i++) {
+    const f = state.frameMap[state.frameNames[i]];
+    if (f && f.gx === gx && f.gy === gy) {
+      index = i;
+      break;
+    }
+  }
+  if (index === -1) {
+    logDebug(`Grid-Klick auf leerer Kachel (gx=${gx}, gy=${gy}) – kein Frame in JSON.`);
+    return;
+  }
+
+  state.currentFrameIndex = index;
+  frameSelect.value = String(index);
+  state.isPlaying = false;
+  renderCurrentFrame();
+}
+
+/* ============================================================================
+ * [9] Animation-Loop
  * ==========================================================================*/
 function animationLoop(timestamp) {
   requestAnimationFrame(animationLoop);
@@ -356,12 +446,12 @@ function animationLoop(timestamp) {
 }
 
 /* ============================================================================
- * [9] Event-Handler
+ * [10] Event-Handler
  * ==========================================================================*/
 frameSelect.addEventListener('change', () => {
   const idx = Number(frameSelect.value) || 0;
   state.currentFrameIndex = idx;
-  state.isPlaying = false; // Einzelbild-Auswahl stoppt ggf. Animation
+  state.isPlaying = false;
   renderCurrentFrame();
 });
 
@@ -411,7 +501,6 @@ animSelect.addEventListener('change', () => {
 
 btnPlay.addEventListener('click', () => {
   if (!state.animFrames.length) {
-    // Fallback: wenn vorhanden, e1_regrow-Gruppe nutzen
     const fallbackPrefix = 'e1_regrow';
     const frames = state.frameNames.filter(name => name.startsWith(fallbackPrefix));
     if (frames.length) {
@@ -438,44 +527,40 @@ speedRange.addEventListener('input', () => {
   speedInfo.textContent = `${val} ms/Frame`;
 });
 
+// Grid-Klick
+gridCanvas.addEventListener('click', handleGridClick);
+
 /* ============================================================================
- * [10] Initialisierung
+ * [11] Initialisierung
  * ==========================================================================*/
 function init() {
-  logDebug('Initialisiere Trees Mega Atlas Viewer ...');
+  logDebug('Initialisiere Trees Mega Atlas Viewer (Grid-Version) ...');
   speedInfo.textContent = `${state.animDelay} ms/Frame`;
 
-  // Sicherstellen, dass die neue JSON-Datei im Dropdown vorhanden ist
-  // (falls du sie nicht manuell in die index.html eingetragen hast)
+  // sicherstellen, dass wichtige JSON-Dateien im Dropdown sind
   if (atlasJsonSel) {
-    const filesWanted = [
-      'trees_mega_atlas.json',
+    const wanted = [
+      'trees_mega_7x7.json',
       'trees_mega_atlas_indexed.json'
     ];
-
-    const existingValues = Array.from(atlasJsonSel.options).map(o => o.value);
-    for (const file of filesWanted) {
-      if (!existingValues.includes(file)) {
+    const existing = Array.from(atlasJsonSel.options).map(o => o.value);
+    for (const file of wanted) {
+      if (!existing.includes(file)) {
         const opt = document.createElement('option');
         opt.value = file;
-        opt.textContent =
-          file === 'trees_mega_atlas_indexed.json'
-            ? 'trees_mega_atlas_indexed.json (indexed)'
-            : file;
+        opt.textContent = file.includes('7x7')
+          ? `${file} (7×7, indexed)`
+          : `${file} (indexed)`;
         atlasJsonSel.appendChild(opt);
       }
     }
-
-    // Standard: bevorzugt indexed-JSON, falls vorhanden
-    if (existingValues.includes('trees_mega_atlas_indexed.json')) {
-      atlasJsonSel.value = 'trees_mega_atlas_indexed.json';
+    // Standard: 7x7, wenn verfügbar
+    if (wanted.includes('trees_mega_7x7.json')) {
+      atlasJsonSel.value = 'trees_mega_7x7.json';
     }
   }
 
-  // Atlas laden
   loadAtlas().catch(err => logDebug(err));
-
-  // Animationsloop starten
   requestAnimationFrame(animationLoop);
 }
 
