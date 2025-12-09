@@ -88,14 +88,7 @@
         "h": 128
       }
     },
-    "e2_fir_small": {
-      "frame": {
-        "x": 10,
-        "y": 256,
-        "w": 128,
-        "h": 128
-      }
-    },
+    "e2_fir_small": { "frame": {    "x": 10,     "y": 256,    "w": 128,   "h": 128    }   },
     "e2_fir_medium": {
       "frame": {
         "x": 128,
@@ -151,14 +144,7 @@
         "h": 128
       }
     },
-    "e2_regrow_seed": {
-      "frame": {
-        "x": 0,
-        "y": 500,
-        "w": 140,
-        "h": 120
-      }
-    },
+    "e2_regrow_seed": {   "frame": {   "x": 0,     "y": 500,      "w": 140,       "h": 120   }j    },
     "e2_regrow_sprout": {
       "frame": {
         "x": 140,
@@ -215,12 +201,7 @@
         "h": 120
       }
     },
-    "cut_fall_left": {
-      "frame": {
-        "x": 15,
-        "y": 608,
-        "w": 140,
-        "h": 150
+    "cut_fall_left": {    "frame": {      "x": 15,      "y": 608,     "w": 140,      "h": 150
       }
     },
     "cut_fall_right": {
@@ -263,28 +244,15 @@
         "h": 128
       }
     },
-    "cut_tree_lie_fir": {
-      "frame": {
-        "x": 768,
-        "y": 512,
+    "cut_tree_lie_fir": {     "frame": {       "x": 768,    "y": 512,     "w": 128,     "h": 128
+      }
+    },
+    "cut_tree_lie_pine": {   "frame": {       "x": 896,     "y": 512,
         "w": 128,
         "h": 128
       }
     },
-    "cut_tree_lie_pine": {
-      "frame": {
-        "x": 896,
-        "y": 512,
-        "w": 128,
-        "h": 128
-      }
-    },
-    "stump_small": {
-      "frame": {
-        "x": 0,
-        "y": 640,
-        "w": 128,
-        "h": 128
+    "stump_small": {   "frame": {    "x": 0,      "y": 640,      "w": 128,      "h": 128
       }
     },
     "stump_medium": {
@@ -343,12 +311,7 @@
         "h": 128
       }
     },
-    "log_long": {
-      "frame": {
-        "x": 0,
-        "y": 768,
-        "w": 128,
-        "h": 128
+    "log_long": {  "frame": {    "x": 0,    "y": 768,       "w": 128,     "h": 128
       }
     },
     "log_chunks": {
@@ -415,56 +378,49 @@
         "h": 128
       }
     },
-    "reserve_2": {
-      "frame": {
+    "reserve_2": {    "frame": {
         "x": 128,
         "y": 896,
         "w": 128,
         "h": 128
       }
     },
-    "reserve_3": {
-      "frame": {
+    "reserve_3": {    "frame": {
         "x": 256,
         "y": 896,
         "w": 128,
         "h": 128
       }
     },
-    "reserve_4": {
-      "frame": {
+    "reserve_4": {    "frame": {
         "x": 384,
         "y": 896,
         "w": 128,
         "h": 128
       }
     },
-    "reserve_5": {
-      "frame": {
+    "reserve_5": {    "frame": {
         "x": 512,
         "y": 896,
         "w": 128,
         "h": 128
       }
     },
-    "reserve_6": {
-      "frame": {
+    "reserve_6": {    "frame": {
         "x": 640,
         "y": 896,
         "w": 128,
         "h": 128
       }
     },
-    "reserve_7": {
-      "frame": {
+    "reserve_7": {   "frame": {
         "x": 768,
         "y": 896,
         "w": 128,
         "h": 128
       }
     },
-    "reserve_8": {
-      "frame": {
+    "reserve_8": {  "frame": {
         "x": 896,
         "y": 896,
         "w": 128,
