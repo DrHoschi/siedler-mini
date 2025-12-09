@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sprite-/Atlas-Tool – v25.12.09</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- =========================================================================
+       Datei   : index-sprite-tool.html
+       Projekt : Neue Siedler – Asset-Werkzeuge
+       Version : v25.12.09-sprite-tool-basics
+       Zweck   :
+         Universelles Sprite-/Atlas-Tool zum Arbeiten mit Texturen:
+         - PNG/Sprite-Sheet laden
+         - Frames zeichnen (x,y,w,h)
+         - Anker/Grundlinie pro Frame setzen (z.B. Baumfuß)
+         - optionale Scale pro Frame
+         - bestehende JSON-Atlanten (Phaser-ähnlich) importieren
+         - einheitliche JSON-Datei wieder exportieren
+       ========================================================================= -->
+
+  <style>
+    /* =========================================================================
+       [1] Grundlayout
+       ========================================================================= */
+
+    :root {
+      --bg: #10141a;
+      --bg-alt: #181f28;
+      --panel: #202a36;
+      --accent: #4ea1ff;
+      --accent-soft: rgba(78, 161, 255, 0.12);
+      --border: #2f3a4a;
+      --text: #f5f7fa;
+      --text-muted: #a4b0c3;
+      --danger: #ff6b6b;
+      --success: #3dd68c;
+      --radius: 6px;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top left, #1d2734, #05070a);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 10px 16px;
+      background: linear-gradient(90deg, #131922, #141a24 30%, #11151c);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header h1 span.badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      text-transform: none;
+    }
+
+    header .meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: right;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    .column {
+      padding: 10px;
+    }
+
+    .column.left {
+      width: 340px;
+      max-width: 100%;
+      background: rgba(10, 14, 21, 0.95);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+    }
+
+    .column.right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: stretch;
+      gap: 10px;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        flex-direction: column;
+      }
+      .column.left {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        max-height: 46vh;
+      }
+      .column.right {
+        flex: 1;
+      }
+    }
+
+    /* =========================================================================
+       [2] Panels, Inputs, Buttons
+       ========================================================================= */
+
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 10px;
+      padding: 8px 10px 10px;
+      background: rgba(22, 30, 45, 0.95);
+    }
+
+    fieldset legend {
+      padding: 0 6px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      margin-bottom: 4px;
+      color: var(--text-muted);
+    }
+
+    input[type="file"],
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-alt);
+      color: var(--text);
+      padding: 4px 6px;
+      font-size: 12px;
+      margin-bottom: 6px;
+      font-family: inherit;
+    }
+
+    input[type="number"] {
+      text-align: right;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .row > * {
+      flex: 1;
+    }
+
+    .row.compact {
+      margin-bottom: 2px;
+    }
+
+    .row label {
+      margin-bottom: 0;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+      margin-bottom: 4px;
+    }
+
+    button {
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 11px;
+      padding: 4px 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #348bff, #4ea1ff);
+      border-color: #4ea1ff;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: rgba(255, 107, 107, 0.07);
+    }
+
+    button.secondary {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(78, 161, 255, 0.08);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    small.hint {
+      display: block;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .info-line {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin: 2px 0;
+    }
+
+    .info-line strong {
+      color: var(--accent);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-right: 4px;
+      margin-bottom: 2px;
+    }
+
+    /* Frame-Liste */
+    #frameList {
+      min-height: 120px;
+      max-height: 160px;
+      overflow-y: auto;
+      border-radius: 4px;
+      padding: 4px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      font-size: 11px;
+    }
+
+    #frameList div {
+      padding: 2px 4px;
+      border-radius: 3px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    #frameList div span.name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
+    }
+
+    #frameList div span.coords {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    #frameList div.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    /* =========================================================================
+       [3] Canvas & Status
+       ========================================================================= */
+
+    .canvas-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      padding-right: 12px;
+      padding-bottom: 12px;
+    }
+
+    .canvas-panel {
+      flex: 1;
+      border-radius: var(--radius);
+      background:
+        linear-gradient(45deg, #141b24, #10141b),
+        repeating-conic-gradient(from 45deg, #141922 0deg 90deg, #131822 90deg 180deg);
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas#atlasCanvas {
+      background-image:
+        linear-gradient(45deg, #1b2431 25%, transparent 25%),
+        linear-gradient(-45deg, #1b2431 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #1b2431 75%),
+        linear-gradient(-45deg, transparent 75%, #1b2431 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+      border-radius: 4px;
+    }
+
+    .canvas-overlay-info {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      font-size: 10px;
+      background: rgba(8, 12, 20, 0.84);
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      pointer-events: none;
+      max-width: 60%;
+    }
+
+    .canvas-overlay-info strong {
+      color: var(--accent);
+    }
+
+    .status-bar {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .status-bar span {
+      white-space: nowrap;
+    }
+
+    .status-bar span:last-child {
+      text-align: right;
+      flex: 1;
+    }
+
+    .mode-radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    .mode-radio-group label {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      margin-bottom: 0;
+    }
+
+    .mode-radio-group input[type="radio"] {
+      margin: 0;
+    }
+
+    .json-area {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: #05070b;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>
+      Sprite-/Atlas-Tool
+      <span class="badge">v25.12.09</span>
+    </h1>
+    <div class="meta">
+      <div>Universeller JSON-/Frame-Editor für Texturen</div>
+      <div>Click &amp; Drag: Frames zeichnen · Click: Anchor setzen</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- =========================================================================
+         LINKER BEREICH – Steuerung, Frames, Import/Export
+         ========================================================================= -->
+    <div class="column left">
+      <!-- Bild & JSON laden -->
+      <fieldset>
+        <legend>Bild &amp; JSON laden</legend>
+        <label for="imageInput">Sprite-Sheet / PNG laden</label>
+        <input type="file" id="imageInput" accept="image/*" />
+
+        <div class="info-line" id="imageInfo">Kein Bild geladen.</div>
+
+        <label for="jsonInput">Atlas-JSON laden (optional)</label>
+        <input type="file" id="jsonInput" accept="application/json" />
+        <small class="hint">
+          Unterstützt: eigenes Format &amp; Phaser-ähnliche Atlanten
+          (<code>frames: [...]</code> mit <code>frame: {x,y,w,h}</code>).
+        </small>
+      </fieldset>
+
+      <!-- Modus (Canvas-Interaktion) -->
+      <fieldset>
+        <legend>Modus &amp; Interaktion</legend>
+        <div class="mode-radio-group">
+          <label>
+            <input type="radio" name="mode" value="none" checked />
+            Nur ansehen
+          </label>
+          <label>
+            <input type="radio" name="mode" value="draw" />
+            Frame zeichnen (Drag)
+          </label>
+          <label>
+            <input type="radio" name="mode" value="anchor" />
+            Anchor/Grundlinie setzen (Click)
+          </label>
+        </div>
+        <small class="hint">
+          Tipp: Erst Frames anlegen (ziehen), dann beim ausgewählten Frame
+          den Anchor (z.B. Baumfuß) setzen.
+        </small>
+      </fieldset>
+
+      <!-- Frame-Liste -->
+      <fieldset>
+        <legend>Frames</legend>
+        <div class="info-line">
+          <span class="pill">Click: wählen</span>
+          <span class="pill">Canvas-Drag: neuer Frame</span>
+        </div>
+        <div id="frameList"></div>
+        <div class="info-line">
+          <strong id="frameCount">0</strong> Frames
+        </div>
+      </fieldset>
+
+      <!-- Aktueller Frame (Details bearbeiten) -->
+      <fieldset>
+        <legend>Aktueller Frame</legend>
+        <label for="frameName">Name</label>
+        <input type="text" id="frameName" placeholder="z.B. tree_00" />
+
+        <div class="row compact">
+          <div>
+            <label for="frameX">x</label>
+            <input type="number" id="frameX" step="1" />
+          </div>
+          <div>
+            <label for="frameY">y</label>
+            <input type="number" id="frameY" step="1" />
+          </div>
+        </div>
+        <div class="row compact">
+          <div>
+            <label for="frameW">w</label>
+            <input type="number" id="frameW" step="1" />
+          </div>
+          <div>
+            <label for="frameH">h</label>
+            <input type="number" id="frameH" step="1" />
+          </div>
+        </div>
+        <div class="row compact">
+          <div>
+            <label for="anchorX">Anchor X</label>
+            <input type="number" id="anchorX" step="1" />
+          </div>
+          <div>
+            <label for="anchorY">Anchor Y</label>
+            <input type="number" id="anchorY" step="1" />
+          </div>
+        </div>
+        <div class="row compact">
+          <div>
+            <label for="scale">Scale</label>
+            <input type="number" id="scale" step="0.01" />
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button type="button" id="btnCenterAnchor">Anchor zentrieren</button>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button type="button" id="btnApplyFrame" class="primary">Änderungen übernehmen</button>
+          <button type="button" id="btnDeleteFrame" class="danger">Frame löschen</button>
+        </div>
+        <small class="hint">
+          Anchor ist in <strong>Bildpixeln</strong> angegeben (nicht relativ).<br />
+          Dein Renderer kann diese Werte direkt nutzen, um z.B. den Baumfuß
+          genau auf die Kachel zu setzen.
+        </small>
+      </fieldset>
+
+      <!-- Grid/Auto-Frames (optional) -->
+      <fieldset>
+        <legend>Grid-Generator (optional)</legend>
+        <div class="row compact">
+          <div>
+            <label for="gridTileW">Tile-Breite</label>
+            <input type="number" id="gridTileW" value="128" />
+          </div>
+          <div>
+            <label for="gridTileH">Tile-Höhe</label>
+            <input type="number" id="gridTileH" value="128" />
+          </div>
+        </div>
+        <div class="row compact">
+          <div>
+            <label for="gridCols">Spalten</label>
+            <input type="number" id="gridCols" value="8" />
+          </div>
+          <div>
+            <label for="gridRows">Zeilen</label>
+            <input type="number" id="gridRows" value="8" />
+          </div>
+        </div>
+        <div class="row compact">
+          <div>
+            <label for="gridOffsetX">Offset X</label>
+            <input type="number" id="gridOffsetX" value="0" />
+          </div>
+          <div>
+            <label for="gridOffsetY">Offset Y</label>
+            <input type="number" id="gridOffsetY" value="0" />
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="button" id="btnGenerateGrid" class="secondary">
+            Grid-Frames erzeugen
+          </button>
+        </div>
+        <small class="hint">
+          Erzeugt automatisch ein Raster aus Frames (z.B. 8×8 á 128×128).<br />
+          Praktisch für deine 1024×1024 Bäume, Werkzeuge, Steine usw.
+        </small>
+      </fieldset>
+
+      <!-- Export -->
+      <fieldset>
+        <legend>Export</legend>
+        <div class="btn-row">
+          <button type="button" id="btnExportJson" class="primary">
+            JSON generieren
+          </button>
+          <button type="button" id="btnDownloadJson">
+            JSON speichern
+          </button>
+        </div>
+        <div class="btn-row">
+          <button type="button" id="btnDownloadPreview">
+            Preview-PNG speichern
+          </button>
+        </div>
+        <textarea id="jsonOutput" class="json-area" readonly
+          placeholder="Hier erscheint das generierte JSON..."></textarea>
+      </fieldset>
+    </div>
+
+    <!-- =========================================================================
+         RECHTER BEREICH – Canvas (Bild + Frames + Anchor)
+         ========================================================================= -->
+    <div class="column right">
+      <div class="canvas-wrapper">
+        <div class="canvas-panel">
+          <canvas id="atlasCanvas" width="768" height="768"></canvas>
+          <div class="canvas-overlay-info" id="canvasOverlayInfo">
+            PNG laden, dann:
+            <br />
+            <strong>Modus „Frame zeichnen“:</strong> Maus ziehen → neuer Frame<br />
+            <strong>Modus „Anchor setzen“:</strong> beim gewählten Frame klicken → Anchor
+          </div>
+        </div>
+        <div class="status-bar">
+          <span id="statusImage">Bild: –</span>
+          <span id="statusMouse">Maus: –</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===========================================================================
+       SCRIPT – komplette Logik im gleichen File
+       ======================================================================== -->
+  <script>
+    /* ==========================================================================
+     * Sprite-/Atlas-Tool – Hauptlogik
+     * ==========================================================================
+     * Zentrale Idee:
+     *   - Wir halten intern eine Liste von "frames".
+     *   - Jeder Frame ist ein Objekt:
+     *       {
+     *         name: "tree_00",
+     *         x, y, w, h,        // Ausschnitt im Bild
+     *         anchorX, anchorY,  // Pivot/Grundlinie (in Bildpixeln)
+     *         scale: 1.0         // optionaler Scale-Faktor
+     *       }
+     *   - Zusätzlich gibt es Meta-Infos:
+     *       imageName, imageWidth, imageHeight
+     *   - Import:
+     *       - eigenes Format: { meta: {...}, frames: {name:{...}} }
+     *       - Phaser-ähnlich: { frames:[{filename, frame:{x,y,w,h}, ...}] }
+     *   - Export:
+     *       Unser einheitliches Format (frames als Map).
+     *   - Canvas:
+     *       - Bild wird eingepasst (Scale+Offset).
+     *       - Alle Frames werden mit Rechteck angezeigt.
+     *       - Der ausgewählte Frame wird hervorgehoben.
+     *       - Anchor wird als kleines Kreuz gezeichnet.
+     *       - Modus:
+     *           "draw": Drag => neuer Frame
+     *           "anchor": Click => Anchor auf Bildpos setzen
+     * ======================================================================= */
+
+    // -----------------------------------------------------------------------
+    // [1] DOM-Verweise
+    // -----------------------------------------------------------------------
+    const imageInput = document.getElementById('imageInput');
+    const jsonInput = document.getElementById('jsonInput');
+    const imageInfo = document.getElementById('imageInfo');
+
+    const frameListEl = document.getElementById('frameList');
+    const frameCountEl = document.getElementById('frameCount');
+
+    const frameNameEl = document.getElementById('frameName');
+    const frameXEl = document.getElementById('frameX');
+    const frameYEl = document.getElementById('frameY');
+    const frameWEl = document.getElementById('frameW');
+    const frameHEl = document.getElementById('frameH');
+    const anchorXEl = document.getElementById('anchorX');
+    const anchorYEl = document.getElementById('anchorY');
+    const scaleEl = document.getElementById('scale');
+
+    const btnCenterAnchor = document.getElementById('btnCenterAnchor');
+    const btnApplyFrame = document.getElementById('btnApplyFrame');
+    const btnDeleteFrame = document.getElementById('btnDeleteFrame');
+
+    const gridTileWEl = document.getElementById('gridTileW');
+    const gridTileHEl = document.getElementById('gridTileH');
+    const gridColsEl = document.getElementById('gridCols');
+    const gridRowsEl = document.getElementById('gridRows');
+    const gridOffsetXEl = document.getElementById('gridOffsetX');
+    const gridOffsetYEl = document.getElementById('gridOffsetY');
+    const btnGenerateGrid = document.getElementById('btnGenerateGrid');
+
+    const btnExportJson = document.getElementById('btnExportJson');
+    const btnDownloadJson = document.getElementById('btnDownloadJson');
+    const btnDownloadPreview = document.getElementById('btnDownloadPreview');
+    const jsonOutput = document.getElementById('jsonOutput');
+
+    const canvas = document.getElementById('atlasCanvas');
+    const ctx = canvas.getContext('2d');
+    const canvasOverlayInfo = document.getElementById('canvasOverlayInfo');
+    const statusImage = document.getElementById('statusImage');
+    const statusMouse = document.getElementById('statusMouse');
+
+    const modeRadios = document.querySelectorAll('input[name="mode"]');
+
+    // -----------------------------------------------------------------------
+    // [2] Interner Zustand
+    // -----------------------------------------------------------------------
+    let atlasImage = null;              // HTMLImageElement
+    let atlasImageName = '';
+    let atlasImageWidth = 0;
+    let atlasImageHeight = 0;
+
+    /** @type {Array<{name:string,x:number,y:number,w:number,h:number,anchorX:number,anchorY:number,scale:number}>} */
+    let frames = [];
+
+    let selectedFrameIndex = -1;
+
+    // Canvas-View (Einpassen des Bildes)
+    let viewScale = 1;
+    let viewOffsetX = 0;
+    let viewOffsetY = 0;
+
+    // Mouse-State für Draw-Modus
+    let isDragging = false;
+    let dragStart = null; // {x,y} in Bildkoordinaten
+
+    // -----------------------------------------------------------------------
+    // [3] Hilfsfunktionen – Koordinaten & Canvas
+    // -----------------------------------------------------------------------
+
+    /**
+     * Passt viewScale und viewOffset an, damit das Bild komplett im Canvas sichtbar ist.
+     */
+    function updateViewTransform() {
+      if (!atlasImage) return;
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const iw = atlasImageWidth;
+      const ih = atlasImageHeight;
+
+      // Einheitlicher Scale, der das Bild vollständig im Canvas zeigt
+      const scale = Math.min(cw / iw, ch / ih);
+      viewScale = scale;
+
+      // Zentriert
+      viewOffsetX = (cw - iw * scale) / 2;
+      viewOffsetY = (ch - ih * scale) / 2;
+    }
+
+    /**
+     * Canvas-Koordinate (Pixel) -> Bildkoordinate (float).
+     */
+    function canvasToImageCoord(cx, cy) {
+      const ix = (cx - viewOffsetX) / viewScale;
+      const iy = (cy - viewOffsetY) / viewScale;
+      return { x: ix, y: iy };
+    }
+
+    /**
+     * Bildkoordinate -> Canvas-Koordinate.
+     */
+    function imageToCanvasCoord(ix, iy) {
+      const cx = ix * viewScale + viewOffsetX;
+      const cy = iy * viewScale + viewOffsetY;
+      return { x: cx, y: cy };
+    }
+
+    /**
+     * Zeichnet alles neu.
+     */
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!atlasImage) {
+        canvasOverlayInfo.innerHTML = 'PNG laden, dann: <br/><strong>Frame zeichnen</strong> oder <strong>Anchor setzen</strong>.';
+        return;
+      }
+
+      // Bild zeichnen
+      ctx.save();
+      ctx.setTransform(viewScale, 0, 0, viewScale, viewOffsetX, viewOffsetY);
+      ctx.drawImage(atlasImage, 0, 0);
+      ctx.restore();
+
+      // Frames zeichnen
+      frames.forEach((frame, index) => {
+        const colorBorder = index === selectedFrameIndex ? '#4ea1ff' : 'rgba(204, 214, 246, 0.7)';
+        const colorFill = index === selectedFrameIndex ? 'rgba(78, 161, 255, 0.18)' : 'rgba(255, 255, 255, 0.06)';
+
+        const p1 = imageToCanvasCoord(frame.x, frame.y);
+        const p2 = imageToCanvasCoord(frame.x + frame.w, frame.y + frame.h);
+        const w = p2.x - p1.x;
+        const h = p2.y - p1.y;
+
+        // Füllung
+        ctx.fillStyle = colorFill;
+        ctx.fillRect(p1.x, p1.y, w, h);
+
+        // Rahmen
+        ctx.strokeStyle = colorBorder;
+        ctx.lineWidth = index === selectedFrameIndex ? 2 : 1;
+        ctx.strokeRect(p1.x + 0.5, p1.y + 0.5, w - 1, h - 1);
+
+        // Name (oben links)
+        if (w > 40 && h > 16) {
+          ctx.font = '10px system-ui';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = 'rgba(5, 8, 12, 0.9)';
+          ctx.fillRect(p1.x + 2, p1.y + 2, ctx.measureText(frame.name).width + 4, 12);
+          ctx.fillStyle = '#dfe8ff';
+          ctx.fillText(frame.name, p1.x + 4, p1.y + 4);
+        }
+
+        // Anchor als Kreuz
+        if (typeof frame.anchorX === 'number' && typeof frame.anchorY === 'number') {
+          const ac = imageToCanvasCoord(frame.anchorX, frame.anchorY);
+          ctx.strokeStyle = '#ffdd66';
+          ctx.lineWidth = 1;
+          const size = 4;
+          ctx.beginPath();
+          ctx.moveTo(ac.x - size, ac.y);
+          ctx.lineTo(ac.x + size, ac.y);
+          ctx.moveTo(ac.x, ac.y - size);
+          ctx.lineTo(ac.x, ac.y + size);
+          ctx.stroke();
+        }
+      });
+
+      // Hinweis-Overlay aktualisieren
+      const currentMode = getMode();
+      let modeText = '';
+      if (currentMode === 'draw') {
+        modeText = '<strong>Frame zeichnen:</strong> Maus drücken &amp; ziehen – neuer Frame.';
+      } else if (currentMode === 'anchor') {
+        modeText = '<strong>Anchor setzen:</strong> Beim ausgewählten Frame klicken – Anchor/Grundlinie.';
+      } else {
+        modeText = 'Modus wechseln: „Frame zeichnen“ oder „Anchor setzen“.';
+      }
+      canvasOverlayInfo.innerHTML = `Bild: <strong>${atlasImageName}</strong><br/>${modeText}`;
+    }
+
+    // -----------------------------------------------------------------------
+    // [4] Frames verwalten
+    // -----------------------------------------------------------------------
+
+    function refreshFrameList() {
+      frameListEl.innerHTML = '';
+      frames.forEach((f, idx) => {
+        const div = document.createElement('div');
+        div.dataset.index = String(idx);
+        if (idx === selectedFrameIndex) {
+          div.classList.add('active');
+        }
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'name';
+        nameSpan.textContent = f.name || `frame_${idx}`;
+
+        const coordsSpan = document.createElement('span');
+        coordsSpan.className = 'coords';
+        coordsSpan.textContent = `(${f.x},${f.y},${f.w},${f.h})`;
+
+        div.appendChild(nameSpan);
+        div.appendChild(coordsSpan);
+        frameListEl.appendChild(div);
+      });
+
+      frameCountEl.textContent = String(frames.length);
+    }
+
+    function selectFrame(index) {
+      if (index < 0 || index >= frames.length) {
+        selectedFrameIndex = -1;
+        clearFrameDetails();
+        refreshFrameList();
+        render();
+        return;
+      }
+      selectedFrameIndex = index;
+      const f = frames[index];
+      frameNameEl.value = f.name || '';
+      frameXEl.value = f.x;
+      frameYEl.value = f.y;
+      frameWEl.value = f.w;
+      frameHEl.value = f.h;
+      anchorXEl.value = f.anchorX ?? Math.round(f.x + f.w / 2);
+      anchorYEl.value = f.anchorY ?? Math.round(f.y + f.h);
+      scaleEl.value = f.scale ?? 1;
+      refreshFrameList();
+      render();
+    }
+
+    function clearFrameDetails() {
+      frameNameEl.value = '';
+      frameXEl.value = '';
+      frameYEl.value = '';
+      frameWEl.value = '';
+      frameHEl.value = '';
+      anchorXEl.value = '';
+      anchorYEl.value = '';
+      scaleEl.value = '';
+    }
+
+    function applyFrameDetails() {
+      if (selectedFrameIndex < 0 || selectedFrameIndex >= frames.length) return;
+      const f = frames[selectedFrameIndex];
+      f.name = frameNameEl.value || f.name || `frame_${selectedFrameIndex}`;
+      f.x = parseInt(frameXEl.value, 10) || 0;
+      f.y = parseInt(frameYEl.value, 10) || 0;
+      f.w = parseInt(frameWEl.value, 10) || 0;
+      f.h = parseInt(frameHEl.value, 10) || 0;
+      f.anchorX = parseFloat(anchorXEl.value);
+      f.anchorY = parseFloat(anchorYEl.value);
+      f.scale = parseFloat(scaleEl.value) || 1;
+      refreshFrameList();
+      render();
+    }
+
+    function deleteSelectedFrame() {
+      if (selectedFrameIndex < 0 || selectedFrameIndex >= frames.length) return;
+      frames.splice(selectedFrameIndex, 1);
+      if (frames.length === 0) {
+        selectedFrameIndex = -1;
+      } else {
+        selectedFrameIndex = Math.min(selectedFrameIndex, frames.length - 1);
+      }
+      refreshFrameList();
+      if (selectedFrameIndex >= 0) {
+        selectFrame(selectedFrameIndex);
+      } else {
+        clearFrameDetails();
+        render();
+      }
+    }
+
+    function addFrameFromRect(rect) {
+      // rect: {x,y,w,h} in Bildkoordinaten
+      if (rect.w <= 0 || rect.h <= 0) return;
+      const idx = frames.length;
+      const name = `frame_${idx.toString().padStart(2, '0')}`;
+      const anchorX = Math.round(rect.x + rect.w / 2);
+      const anchorY = Math.round(rect.y + rect.h); // unten Mitte (Baumfuß)
+
+      frames.push({
+        name,
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        w: Math.round(rect.w),
+        h: Math.round(rect.h),
+        anchorX,
+        anchorY,
+        scale: 1
+      });
+
+      refreshFrameList();
+      selectFrame(frames.length - 1);
+    }
+
+    // -----------------------------------------------------------------------
+    // [5] Modus & Maus-Handling
+    // -----------------------------------------------------------------------
+
+    function getMode() {
+      let value = 'none';
+      modeRadios.forEach(r => {
+        if (r.checked) value = r.value;
+      });
+      return value;
+    }
+
+    canvas.addEventListener('mousedown', (ev) => {
+      if (!atlasImage) return;
+      const mode = getMode();
+      const rect = canvas.getBoundingClientRect();
+      const cx = ev.clientX - rect.left;
+      const cy = ev.clientY - rect.top;
+      const imgPos = canvasToImageCoord(cx, cy);
+
+      statusMouse.textContent = `Maus: Bild(${imgPos.x.toFixed(1)}, ${imgPos.y.toFixed(1)})`;
+
+      if (mode === 'draw') {
+        isDragging = true;
+        dragStart = imgPos;
+      } else if (mode === 'anchor') {
+        // Anchor setzen beim ausgewählten Frame (falls Klick im Frame liegt)
+        if (selectedFrameIndex >= 0 && selectedFrameIndex < frames.length) {
+          const frame = frames[selectedFrameIndex];
+          if (
+            imgPos.x >= frame.x && imgPos.x <= frame.x + frame.w &&
+            imgPos.y >= frame.y && imgPos.y <= frame.y + frame.h
+          ) {
+            frame.anchorX = Math.round(imgPos.x);
+            frame.anchorY = Math.round(imgPos.y);
+            frameNameEl.value = frame.name;
+            frameXEl.value = frame.x;
+            frameYEl.value = frame.y;
+            frameWEl.value = frame.w;
+            frameHEl.value = frame.h;
+            anchorXEl.value = frame.anchorX;
+            anchorYEl.value = frame.anchorY;
+            scaleEl.value = frame.scale ?? 1;
+            refreshFrameList();
+            render();
+          }
+        }
+      }
+    });
+
+    canvas.addEventListener('mousemove', (ev) => {
+      if (!atlasImage) return;
+      const rect = canvas.getBoundingClientRect();
+      const cx = ev.clientX - rect.left;
+      const cy = ev.clientY - rect.top;
+      const imgPos = canvasToImageCoord(cx, cy);
+
+      statusMouse.textContent = `Maus: Bild(${imgPos.x.toFixed(1)}, ${imgPos.y.toFixed(1)})`;
+
+      const mode = getMode();
+      if (mode === 'draw' && isDragging && dragStart) {
+        // Live-Preview des Rechtecks (temporär)
+        render(); // alles neu
+
+        ctx.save();
+        ctx.strokeStyle = '#ffcc66';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+
+        const x0 = dragStart.x;
+        const y0 = dragStart.y;
+        const x1 = imgPos.x;
+        const y1 = imgPos.y;
+
+        const rx = Math.min(x0, x1);
+        const ry = Math.min(y0, y1);
+        const rw = Math.abs(x1 - x0);
+        const rh = Math.abs(y1 - y0);
+
+        const p1 = imageToCanvasCoord(rx, ry);
+        const p2 = imageToCanvasCoord(rx + rw, ry + rh);
+        const w = p2.x - p1.x;
+        const h = p2.y - p1.y;
+
+        ctx.strokeRect(p1.x + 0.5, p1.y + 0.5, w - 1, h - 1);
+        ctx.restore();
+      }
+    });
+
+    window.addEventListener('mouseup', (ev) => {
+      if (!atlasImage) return;
+      const mode = getMode();
+      if (mode === 'draw' && isDragging && dragStart) {
+        const rect = canvas.getBoundingClientRect();
+        const cx = ev.clientX - rect.left;
+        const cy = ev.clientY - rect.top;
+        const imgPos = canvasToImageCoord(cx, cy);
+
+        const x0 = dragStart.x;
+        const y0 = dragStart.y;
+        const x1 = imgPos.x;
+        const y1 = imgPos.y;
+
+        const rx = Math.min(x0, x1);
+        const ry = Math.min(y0, y1);
+        const rw = Math.abs(x1 - x0);
+        const rh = Math.abs(y1 - y0);
+
+        isDragging = false;
+        dragStart = null;
+
+        if (rw > 2 && rh > 2) {
+          addFrameFromRect({ x: rx, y: ry, w: rw, h: rh });
+        } else {
+          render();
+        }
+      }
+    });
+
+    // Frame-Liste Click
+    frameListEl.addEventListener('click', (ev) => {
+      const target = ev.target.closest('div[data-index]');
+      if (!target) return;
+      const idx = parseInt(target.dataset.index, 10);
+      selectFrame(idx);
+    });
+
+    // -----------------------------------------------------------------------
+    // [6] Grid-Generator
+    // -----------------------------------------------------------------------
+    btnGenerateGrid.addEventListener('click', () => {
+      if (!atlasImage) {
+        alert('Bitte zuerst ein Bild laden.');
+        return;
+      }
+
+      const tileW = parseInt(gridTileWEl.value, 10) || 0;
+      const tileH = parseInt(gridTileHEl.value, 10) || 0;
+      const cols = parseInt(gridColsEl.value, 10) || 0;
+      const rows = parseInt(gridRowsEl.value, 10) || 0;
+      const offsetX = parseInt(gridOffsetXEl.value, 10) || 0;
+      const offsetY = parseInt(gridOffsetYEl.value, 10) || 0;
+
+      if (tileW <= 0 || tileH <= 0 || cols <= 0 || rows <= 0) {
+        alert('Tile-Breite/-Höhe, Spalten und Zeilen müssen > 0 sein.');
+        return;
+      }
+
+      frames = [];
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = offsetX + col * tileW;
+          const y = offsetY + row * tileH;
+          const name = `frame_${row}_${col}`;
+          const anchorX = Math.round(x + tileW / 2);
+          const anchorY = Math.round(y + tileH);
+          frames.push({
+            name,
+            x,
+            y,
+            w: tileW,
+            h: tileH,
+            anchorX,
+            anchorY,
+            scale: 1
+          });
+        }
+      }
+
+      refreshFrameList();
+      if (frames.length > 0) {
+        selectFrame(0);
+      } else {
+        render();
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // [7] Anchor-Helfer
+    // -----------------------------------------------------------------------
+    btnCenterAnchor.addEventListener('click', () => {
+      if (selectedFrameIndex < 0 || selectedFrameIndex >= frames.length) return;
+      const f = frames[selectedFrameIndex];
+      f.anchorX = Math.round(f.x + f.w / 2);
+      f.anchorY = Math.round(f.y + f.h);
+      anchorXEl.value = f.anchorX;
+      anchorYEl.value = f.anchorY;
+      render();
+    });
+
+    btnApplyFrame.addEventListener('click', () => {
+      applyFrameDetails();
+    });
+
+    btnDeleteFrame.addEventListener('click', () => {
+      if (!confirm('Ausgewählten Frame wirklich löschen?')) return;
+      deleteSelectedFrame();
+    });
+
+    // -----------------------------------------------------------------------
+    // [8] Bild-Load
+    // -----------------------------------------------------------------------
+    imageInput.addEventListener('change', () => {
+      const file = imageInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          atlasImage = img;
+          atlasImageName = file.name;
+          atlasImageWidth = img.width;
+          atlasImageHeight = img.height;
+
+          updateViewTransform();
+          statusImage.textContent = `Bild: ${atlasImageName} (${atlasImageWidth}×${atlasImageHeight})`;
+          imageInfo.textContent = `Geladen: ${atlasImageName} (${atlasImageWidth}×${atlasImageHeight})`;
+          render();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // -----------------------------------------------------------------------
+    // [9] JSON-Import
+    // -----------------------------------------------------------------------
+    jsonInput.addEventListener('change', () => {
+      const file = jsonInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          importFromJson(json);
+        } catch (err) {
+          alert('JSON konnte nicht geparst werden: ' + err);
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+
+    function importFromJson(data) {
+      // Versuche unser eigenes Format zuerst:
+      // { meta:{}, frames:{ name:{x,y,w,h,anchorX,anchorY,scale} } }
+      if (data && typeof data.frames === 'object' && !Array.isArray(data.frames)) {
+        frames = [];
+        for (const [name, frameData] of Object.entries(data.frames)) {
+          frames.push({
+            name,
+            x: frameData.x ?? 0,
+            y: frameData.y ?? 0,
+            w: frameData.w ?? frameData.width ?? 0,
+            h: frameData.h ?? frameData.height ?? 0,
+            anchorX: frameData.anchorX ?? Math.round((frameData.x ?? 0) + (frameData.w ?? frameData.width ?? 0) / 2),
+            anchorY: frameData.anchorY ?? Math.round((frameData.y ?? 0) + (frameData.h ?? frameData.height ?? 0)),
+            scale: frameData.scale ?? 1
+          });
+        }
+      }
+      // Phaser-ähnliches Format:
+      // { frames:[ { filename, frame:{x,y,w,h}, anchor? } ] }
+      else if (data && Array.isArray(data.frames)) {
+        frames = data.frames.map((entry, idx) => {
+          const f = entry.frame || entry;
+          const name = entry.filename || entry.name || `frame_${idx}`;
+          const x = f.x ?? 0;
+          const y = f.y ?? 0;
+          const w = f.w ?? f.width ?? 0;
+          const h = f.h ?? f.height ?? 0;
+          const anchorX = entry.anchorX ?? (entry.anchor ? entry.anchor.x : null);
+          const anchorY = entry.anchorY ?? (entry.anchor ? entry.anchor.y : null);
+          return {
+            name,
+            x,
+            y,
+            w,
+            h,
+            anchorX: typeof anchorX === 'number' ? anchorX : Math.round(x + w / 2),
+            anchorY: typeof anchorY === 'number' ? anchorY : Math.round(y + h),
+            scale: entry.scale ?? 1
+          };
+        });
+      } else {
+        alert('Unbekanntes JSON-Format. Es wird nur der "frames"-Teil importiert.');
+        return;
+      }
+
+      refreshFrameList();
+      if (frames.length > 0) {
+        selectFrame(0);
+      } else {
+        render();
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // [10] JSON-Export
+    // -----------------------------------------------------------------------
+    function buildExportJson() {
+      const meta = {
+        image: atlasImageName || null,
+        size: { w: atlasImageWidth, h: atlasImageHeight },
+        tool: 'sprite-atlas-tool',
+        toolVersion: 'v25.12.09',
+        exportedAt: new Date().toISOString()
+      };
+
+      const framesMap = {};
+      frames.forEach((f) => {
+        framesMap[f.name] = {
+          x: f.x,
+          y: f.y,
+          w: f.w,
+          h: f.h,
+          anchorX: f.anchorX,
+          anchorY: f.anchorY,
+          scale: f.scale
+        };
+      });
+
+      return { meta, frames: framesMap };
+    }
+
+    btnExportJson.addEventListener('click', () => {
+      const data = buildExportJson();
+      jsonOutput.value = JSON.stringify(data, null, 2);
+    });
+
+    btnDownloadJson.addEventListener('click', () => {
+      const data = buildExportJson();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      const baseName = atlasImageName ? atlasImageName.replace(/\.[^.]+$/, '') : 'atlas';
+      a.href = url;
+      a.download = baseName + '_atlas.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    // -----------------------------------------------------------------------
+    // [11] Preview-PNG-Export (Canvas-Snapshot)
+    // -----------------------------------------------------------------------
+    btnDownloadPreview.addEventListener('click', () => {
+      if (!atlasImage) {
+        alert('Bitte zuerst ein Bild laden.');
+        return;
+      }
+      // Damit der Screenshot maximal sauber ist, einmal neu rendern:
+      render();
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      const baseName = atlasImageName ? atlasImageName.replace(/\.[^.]+$/, '') : 'atlas';
+      a.href = dataUrl;
+      a.download = baseName + '_preview.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+
+    // -----------------------------------------------------------------------
+    // [12] Initialstatus
+    // -----------------------------------------------------------------------
+    statusImage.textContent = 'Bild: –';
+    statusMouse.textContent = 'Maus: –';
+    render();
+  </script>
+</body>
+</html>
