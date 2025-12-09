@@ -1,21 +1,7 @@
 {
   "frames": {
-    "e1_birch_small": {
-      "frame": {
-        "x": 10,
-        "y": 0,
-        "w": 170,
-        "h": 150
-      }
-    },
-    "e1_birch_medium": {
-      "frame": {
-        "x": 180,
-        "y": 0,
-        "w": 160,
-        "h": 150
-      }
-    },
+    "e1_birch_small": { "frame": {  "x": 10,   "y": 0,  "w": 170, "h": 150  }  },
+    "e1_birch_medium": {  "frame": {  "x": 180,  "y": 0,  "w": 160,   "h": 150 }  },
     "e1_birch_big": {
       "frame": {
         "x": 340,
