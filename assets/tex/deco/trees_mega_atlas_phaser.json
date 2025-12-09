@@ -1,52 +1,17 @@
 {
   "frames": {
-    "e1_birch_small": { "frame": {  "x": 10,   "y": 0,  "w": 170, "h": 150  }  },
-    "e1_birch_medium": {  "frame": {  "x": 180,  "y": 0,  "w": 160,   "h": 150 }  },
-    "e1_birch_big": {
-      "frame": {
-        "x": 340,
-        "y": 0,
-        "w": 165,
-        "h": 150
-      }
-    },
-    "e1_oak_small": {
-      "frame": {
-        "x": 505,
-        "y": 0,
-        "w": 165,
-        "h": 150
-      }
-    },
-    "e1_oak_medium": {
-      "frame": {
-        "x": 670,
-        "y": 0,
-        "w": 170,
-        "h": 150
-      }
-    },
-    "e1_oak_big": {
-      "frame": {
-        "x": 840,
-        "y": 0,
-        "w": 170,
-        "h": 150
-      }
-    },
-    "e1_fruit_small": {
-      "frame": {
-        "x": 670,
-        "y": 0,
-        "w": 170,
-        "h": 150
-      }
-    },
+    "e1_birch_small": { "frame": {  "x": 15,   "y": 8,  "w": 140, "h": 150  }  },
+    "e1_birch_medium": {  "frame": {  "x": 155,  "y": 8,  "w": 140,   "h": 150 }  },
+    "e1_birch_big": {  "frame": {  "x": 275,  "y": 8,   "w": 140,  "h": 150    }   },
+    "e1_oak_small": { "frame": {  "x": 390,   "y": 8,  "w": 140,  "h": 150 } },
+    "e1_oak_medium": {  "frame": {   "x": 540,   "y": 8,     "w": 140,   "h": 150   }  },
+    "e1_oak_big": {   "frame": {   "x": 695,   "y": 8,    "w": 140,  "h": 150 } },
+    "e1_fruit_small": {   "frame": {  "x": 855,  "y": 8,   "w": 140,   "h": 150     } },
     "e1_fruit_big": {
       "frame": {
-        "x": 840,
-        "y": 0,
-        "w": 170,
+        "x": 855,
+        "y": 8,
+        "w": 140,
         "h": 150
       }
     },
