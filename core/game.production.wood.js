@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.07-wood-workarea-bridge-v3
+ * Version : v25.12.09-wood-workarea-radius-v4
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -11,7 +11,7 @@
  *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
  *     - Erzeugt Holz über Production.addResource('wood', ...)
  *     - Zeichnet Bäume als Overlay (Arbeitskreis selbst kommt aus WorkArea-Modul)
- *     - Nutzt optional den trees_mega_atlas als Grafikquelle
+ *     - Nutzt den trees_mega_atlas als Grafikquelle (fallback: Kreise)
  *
  * Ereignisse:
  *   IN  :
@@ -117,6 +117,68 @@
     return `${id}@${x},${y}`;
   }
 
+  // ----------------------------------------------------------
+  // Kleine Pseudo-Zufallsfunktion aus String (uid-basiert),
+  // damit der Baum-Spot stabil bleibt, aber je Zyklus wechseln kann
+  // ----------------------------------------------------------
+  function makeRng(seedStr){
+    let s = 0;
+    for (let i=0; i<seedStr.length; i++){
+      s = (s * 31 + seedStr.charCodeAt(i)) >>> 0;
+    }
+    if (!s) s = 1;
+    return function rng(){
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 0xFFFFFFFF;
+    };
+  }
+
+  /**
+   * Wählt eine konkrete Baum-Position innerhalb des Arbeitsbereichs
+   * und speichert sie in lj.treePos = { tx, ty } in Tile-Koordinaten.
+   *
+   * - Mittelpunkt = WorkArea.cx / cy (Fallback: Gebäudecenter)
+   * - Radius     = WorkArea.radiusTiles (Fallback: 2.5)
+   * - Die Position liegt IMMER im Kreis (nicht irgendwo oben links).
+   */
+  function recomputeTreePos(lj){
+    if (!lj) return;
+
+    const wa = lj.workArea || {};
+    const cx = (typeof wa.cx === 'number') ? wa.cx : (lj.x + (lj.w || 3) / 2);
+    const cy = (typeof wa.cy === 'number') ? wa.cy : (lj.y + (lj.h || 3) / 2);
+    const r  = (typeof wa.radiusTiles === 'number') ? wa.radiusTiles : 2.5;
+
+    const seed = `${lj.uid}|${lj.cycle || 0}`;
+    const rnd  = makeRng(seed);
+
+    const r2 = r * r;
+    let tx = Math.round(cx);
+    let ty = Math.round(cy);
+
+    // ein paar Versuche, einen Punkt im Kreis zu finden
+    for (let i=0; i<20; i++){
+      const angle = rnd() * Math.PI * 2;
+      const dist  = r * Math.sqrt(rnd()); // sqrt → mehr Punkte in der Mitte
+      const px    = cx + Math.cos(angle) * dist;
+      const py    = cy + Math.sin(angle) * dist;
+
+      const dx = px - cx;
+      const dy = py - cy;
+      if (dx*dx + dy*dy <= r2){
+        tx = Math.round(px);
+        ty = Math.round(py);
+        break;
+      }
+    }
+
+    lj.treePos = { tx, ty };
+    LOG('Baum-Spot neu gewählt', lj.uid, {
+      center : { cx, cy, r },
+      treePos: lj.treePos
+    });
+  }
+
   /**
    * Förster-Instanz registrieren – wird von onBuildComplete() aufgerufen.
    */
@@ -152,13 +214,17 @@
       cycle    : 0,
       treeProg : 0,
 
-      // Standard-Arbeitsbereich: Kreis um das Gebäude-Zentrum.
-      // Wird – falls vorhanden – direkt mit dem WorkArea-Modul synchronisiert.
+      // ARBEITSBEREICH:
+      // Standard-Kreismitte = Gebäudecenter; wird später von GameWorkArea
+      // bzw. cb:workarea:set überschrieben.
       workArea : {
         cx         : centerX,
         cy         : centerY,
         radiusTiles: 2.5
-      }
+      },
+
+      // Konkreter Baum-Spot im Arbeitsbereich
+      treePos: null
     };
 
     // Versuchen, eine bereits existierende WorkArea vom WorkArea-Modul zu holen
@@ -180,6 +246,9 @@
     } catch(e){
       WARN('Konnte WorkArea für Lumberjack nicht übernehmen:', e);
     }
+
+    // ERSTMALS Baum-Position im Arbeitskreis wählen
+    recomputeTreePos(state);
 
     Lumberjacks.set(uid, state);
 
@@ -219,6 +288,7 @@
       }
 
       case LJ_PHASE.READY: {
+        // Hier könnten später Arbeitswege / Trägerjobs reinkommen.
         lj.timer = 0;
         lj.phase = LJ_PHASE.CUT;
         break;
@@ -246,6 +316,9 @@
           } catch(e){
             WARN('cb:prod:output dispatch fehlgeschlagen', e);
           }
+
+          // Nach jedem vollständigen Zyklus neuen Baum-Spot im Arbeitsbereich wählen
+          recomputeTreePos(lj);
         }
         break;
       }
@@ -398,15 +471,23 @@
       const bw = lj.w || 3;
       const bh = lj.h || 3;
 
-      // Position für den Baum:
-      // → Standard: Gebäudemitte unten
-      // → wenn WorkArea gesetzt: Mitte des Arbeitsbereichs
-      const area    = lj.workArea || {};
-      const cxTiles = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
-      const cyTiles = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
+      // Wenn noch kein Baum-Spot gesetzt wurde (z.B. nach Laden), jetzt nachholen
+      if (!lj.treePos){
+        recomputeTreePos(lj);
+      }
 
-      const cxTree  = cxTiles * ts;
-      const cyTree  = cyTiles * ts;
+      const area = lj.workArea || {};
+
+      // Basis: WorkArea-Mittelpunkt / Building-Mitte (für spätere Checks)
+      const cxBase = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
+      const cyBase = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
+
+      // Tatsächlicher Baum-Spot in Tiles → IMMER innerhalb des Arbeitsbereichs
+      const tx = (lj.treePos && typeof lj.treePos.tx === 'number') ? lj.treePos.tx : cxBase;
+      const ty = (lj.treePos && typeof lj.treePos.ty === 'number') ? lj.treePos.ty : cyBase;
+
+      const cxTree  = tx * ts;
+      const cyTree  = ty * ts;
 
       // 1) Baum – Atlas oder Fallback
       let treeDrawn = false;
@@ -547,7 +628,7 @@
     );
   }
 
-    // =========================
+  // =========================
   // Arbeitsbereich-API (für UI / WorkArea-Modul)
   // =========================
 
@@ -565,6 +646,9 @@
       cy         : (cfg && typeof cfg.cy === 'number') ? cfg.cy : (lj.y + (lj.h || 3) / 2),
       radiusTiles: (cfg && typeof cfg.radiusTiles === 'number') ? cfg.radiusTiles : fallbackRadius
     };
+
+    // Sobald sich der Arbeitsbereich ändert → Baum-Spot neu berechnen
+    recomputeTreePos(lj);
 
     LOG('Arbeitsbereich aktualisiert', uid, lj.workArea);
   }
@@ -649,9 +733,10 @@
     setWorkArea,
     _tickOne: tickLumberjack,
     _ensureTreeAtlasReady : ensureTreeAtlasReady,
-    _drawTreeFrame        : drawTreeFrame
+    _drawTreeFrame        : drawTreeFrame,
+    _recomputeTreePos     : recomputeTreePos
   };
 
-  LOG('Holz-Modul geladen v25.12.07-wood-workarea-bridge-v3');
+  LOG('Holz-Modul geladen v25.12.09-wood-workarea-radius-v4');
 
 })();
