@@ -1,18 +1,17 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.06-stone-workarea-bridge-v2
+ * Version : v25.12.09-stone-workarea-maincanvas-v1
  *
  * Zweck   :
  *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
  *   - Für jedes Stein-Gebäude wird ein zufälliges "Steinfeld" erzeugt:
  *       große Felsen, Geröll, kleine Haufen ...
- *   - Der Renderer zeichnet diese Steine als Overlay um das Gebäude herum.
+ *   - Steine werden direkt auf dem Haupt-Canvas gezeichnet (Weltkoordinaten),
+ *     Kamera-Transform kommt vom Renderer.
  *   - Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
  *
  *       RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
- *
- *   - Datenbasis: stones_mega_atlas.json + stones_mega_atlas.png
  *
  * Ereignisse:
  *   IN  :
@@ -24,17 +23,13 @@
  *     - keine (nur visuelle Darstellung + interner Abbau-Status)
  *
  * Debug / API:
- *   - window.ProductionStone.fields        → Map<uid, StoneFieldState>
- *   - window.ProductionStone._degradeOne  → 1 Stein manuell degradieren
- *   - window.ProductionStone._degradeField(uid, qty) → mehrere degradieren
+ *   - window.ProductionStone.fields
+ *   - window.ProductionStone.drawOnMainCanvas(ctx, cam, tileSize)
+ *   - window.ProductionStone._degradeOne / _degradeField
  * ========================================================================== */
 
 (function(){
   'use strict';
-
-  // ========================================================================
-  // LOGGING
-  // ========================================================================
 
   const TAG  = '[prod-stone]';
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
@@ -316,27 +311,24 @@
   }
 
   // ========================================================================
-  // OVERLAY-ZEICHNUNG (Steine)
+  // OVERLAY-ZEICHNUNG (jetzt: Haupt-Canvas, Weltkoordinaten)
   // ========================================================================
 
-  function drawStoneOverlay(ctx, cam){
+  function drawOnMainCanvas(ctx, cam, tileSize){
     if (!ctx) return;
     if (!StoneFields.size) return;
 
-    const zoom = cam?.zoom ?? 1;
-    const oxPx = cam?.x    ?? 0;
-    const oyPx = cam?.y    ?? 0;
+    void cam; // Kamera-Transform ist bereits aktiv
 
     const ts =
+      tileSize ||
       (window.Game?.map?.tileSize) ||
       (window.GameMap?._state?.map?.tileSize) ||
       64;
 
-    ctx.save();
-    ctx.translate(-oxPx * zoom, -oyPx * zoom);
-    ctx.scale(zoom, zoom);
-
     const atlasReady = ensureStoneAtlasReady();
+
+    ctx.save();
 
     for (const field of StoneFields.values()){
       const stones = field.stones || [];
@@ -348,20 +340,20 @@
         const tx = s.tx;
         const ty = s.ty;
 
-        const cxPx = (tx + 0.5) * ts;
-        const cyPx = (ty + 1.0) * ts;
+        const wx = (tx + 0.5) * ts;
+        const wy = (ty + 1.0) * ts;
 
         let drawn = false;
 
         if (atlasReady){
-          const stageName = STONE_STAGE[s.stageIndex] || null;
+          const stageName   = STONE_STAGE[s.stageIndex] || null;
           const groupFrames = stageName &&
                               STONE_ATLAS_CFG.groupFrames &&
                               STONE_ATLAS_CFG.groupFrames[stageName];
 
           if (groupFrames && groupFrames.length){
             const frameName = groupFrames[s.variant % groupFrames.length];
-            drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale);
+            drawn = drawStoneFrame(ctx, frameName, wx, wy, s.scale);
           }
         }
 
@@ -371,7 +363,7 @@
           ctx.fillStyle   = '#888888';
           ctx.strokeStyle = '#444444';
           ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-          ctx.arc(cxPx, cyPx - r * 0.2, r, 0, Math.PI*2);
+          ctx.arc(wx, wy - r * 0.2, r, 0, Math.PI*2);
           ctx.fill();
           ctx.stroke();
         }
@@ -447,33 +439,6 @@
   }
 
   // ========================================================================
-  // OVERLAY-REGISTRIERUNG
-  // ========================================================================
-
-  (function registerStoneOverlay(){
-    function tryRegister(){
-      if (!window.OverlayHooks?.register) return false;
-      try {
-        window.OverlayHooks.register('stones', (ctx)=>{
-          const cam = window.GameCamera?.getState?.() || { x:0, y:0, zoom:1 };
-          drawStoneOverlay(ctx, cam);
-        });
-        LOG('Stone-Overlay registriert (stones).');
-        return true;
-      } catch(e){
-        WARN('Stone-Overlay Registrierung fehlgeschlagen:', e);
-        return true;
-      }
-    }
-
-    if (tryRegister()) return;
-    let tries = 0;
-    const t = setInterval(()=>{
-      if (tryRegister() || ++tries > 20) clearInterval(t);
-    }, 200);
-  })();
-
-  // ========================================================================
   // EVENT-BINDING (build/production)
   // ========================================================================
 
@@ -529,7 +494,6 @@
   // WORKAREA-HOOK: cb:workarea:set
   // ========================================================================
 
-    // WORKAREA-HOOK: cb:workarea:set
   function onWorkAreaSet(detail){
     if (!detail) return;
     const kind = (detail.id || '').toLowerCase();
@@ -548,24 +512,20 @@
       ? detail.radiusTiles
       : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
 
-    // WorkArea-Objekt aktualisieren
     field.workArea = {
       cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
       cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
       radiusTiles: radius
     };
 
-    // Zentrumskoordinaten für das Layout auf das WorkArea-Zentrum legen
     field.cx = field.workArea.cx;
     field.cy = field.workArea.cy;
 
-    // Steine neu um das neue Zentrum verteilen
     createRandomLayoutForField(field);
 
     LOG('WorkArea für Stein-Feld aktualisiert', uid, field.workArea);
   }
 
-  // Direktes Event-Binding auf cb:workarea:set
   try {
     window.addEventListener('cb:workarea:set', (ev)=>{
       const detail = ev.detail || {};
@@ -587,33 +547,8 @@
     );
   }
 
-  // ============================================================================
-// WORKAREA-SUPPORT
-// ============================================================================
+  // (alter applyWorkAreaToQuarry-Block war doppelt / fehlerhaft → entfernt)
 
-function applyWorkAreaToQuarry(detail) {
-  const uid = detail.uid;
-  const q = StoneFields[uid];
-  if (!q) return;
-
-  q.center = {
-    cx         : detail.cx,
-    cy         : detail.cy,
-    radiusTiles: detail.radiusTiles || 3
-  };
-
-  LOG('[prod-stone] Arbeitsbereich aktualisiert:', uid, q.center);
-}
-
-// Listener für das WorkArea-Event
-window.addEventListener('cb:workarea:set', (ev)=>{
-  const d = ev.detail;
-  if (!d) return;
-  if (d.id !== 'b.quarry') return;
-
-  applyWorkAreaToQuarry(d);
-});
-  
   // ========================================================================
   // STUB-TICK (für spätere Erweiterungen)
   // ========================================================================
@@ -623,7 +558,7 @@ window.addEventListener('cb:workarea:set', (ev)=>{
   }
 
   // ========================================================================
-  // REGISTRIERUNG BEIM Production-Manager (optional)
+  // REGISTRIERUNG BEIM Production-Manager
   // ========================================================================
 
   function registerWithManager(){
@@ -657,14 +592,15 @@ window.addEventListener('cb:workarea:set', (ev)=>{
   // ========================================================================
 
   window.ProductionStone = {
-    fields          : StoneFields,
+    fields        : StoneFields,
     STONE_ATLAS_CFG,
     STONE_STAGE,
-    ensureAtlas     : ensureStoneAtlasReady,
-    _degradeOne     : degradeSingleStone,
-    _degradeField   : degradeFieldByStone
+    ensureAtlas   : ensureStoneAtlasReady,
+    drawOnMainCanvas,
+    _degradeOne   : degradeSingleStone,
+    _degradeField : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.06-stone-workarea-bridge-v2');
+  LOG('Stein-Modul geladen v25.12.09-stone-workarea-maincanvas-v1');
 
 })();
