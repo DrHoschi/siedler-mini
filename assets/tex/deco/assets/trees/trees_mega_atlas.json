@@ -1,0 +1,263 @@
+{
+  "image": "trees_mega_atlas.png",
+  "tileW": 128,
+  "tileH": 128,
+  "frames": {
+    "e1_birch_small": [
+      0,
+      0
+    ],
+    "e1_birch_medium": [
+      1,
+      0
+    ],
+    "e1_birch_big": [
+      2,
+      0
+    ],
+    "e1_oak_small": [
+      3,
+      0
+    ],
+    "e1_oak_medium": [
+      4,
+      0
+    ],
+    "e1_oak_big": [
+      5,
+      0
+    ],
+    "e1_fruit_small": [
+      6,
+      0
+    ],
+    "e1_fruit_big": [
+      7,
+      0
+    ],
+    "e1_regrow_seed": [
+      0,
+      1
+    ],
+    "e1_regrow_sprout": [
+      1,
+      1
+    ],
+    "e1_regrow_young": [
+      2,
+      1
+    ],
+    "e1_regrow_half": [
+      3,
+      1
+    ],
+    "e1_regrow_tree_small": [
+      4,
+      1
+    ],
+    "e1_regrow_tree_medium": [
+      5,
+      1
+    ],
+    "e1_regrow_tree_big": [
+      6,
+      1
+    ],
+    "e1_regrow_done": [
+      7,
+      1
+    ],
+    "e2_fir_small": [
+      0,
+      2
+    ],
+    "e2_fir_medium": [
+      1,
+      2
+    ],
+    "e2_fir_big": [
+      2,
+      2
+    ],
+    "e2_spruce_small": [
+      3,
+      2
+    ],
+    "e2_spruce_medium": [
+      4,
+      2
+    ],
+    "e2_spruce_big": [
+      5,
+      2
+    ],
+    "e2_pine_small": [
+      6,
+      2
+    ],
+    "e2_pine_medium": [
+      7,
+      2
+    ],
+    "e2_regrow_seed": [
+      0,
+      3
+    ],
+    "e2_regrow_sprout": [
+      1,
+      3
+    ],
+    "e2_regrow_young": [
+      2,
+      3
+    ],
+    "e2_regrow_half": [
+      3,
+      3
+    ],
+    "e2_regrow_tree_small": [
+      4,
+      3
+    ],
+    "e2_regrow_tree_medium": [
+      5,
+      3
+    ],
+    "e2_regrow_tree_big": [
+      6,
+      3
+    ],
+    "e2_regrow_done": [
+      7,
+      3
+    ],
+    "cut_fall_left": [
+      0,
+      4
+    ],
+    "cut_fall_right": [
+      1,
+      4
+    ],
+    "cut_fall_forward": [
+      2,
+      4
+    ],
+    "cut_fall_back": [
+      3,
+      4
+    ],
+    "cut_tree_lie_left": [
+      4,
+      4
+    ],
+    "cut_tree_lie_right": [
+      5,
+      4
+    ],
+    "cut_tree_lie_fir": [
+      6,
+      4
+    ],
+    "cut_tree_lie_pine": [
+      7,
+      4
+    ],
+    "stump_small": [
+      0,
+      5
+    ],
+    "stump_medium": [
+      1,
+      5
+    ],
+    "stump_big": [
+      2,
+      5
+    ],
+    "stump_moss": [
+      3,
+      5
+    ],
+    "stump_root": [
+      4,
+      5
+    ],
+    "stump_dead": [
+      5,
+      5
+    ],
+    "tree_dead": [
+      6,
+      5
+    ],
+    "tree_winter": [
+      7,
+      5
+    ],
+    "log_long": [
+      0,
+      6
+    ],
+    "log_chunks": [
+      1,
+      6
+    ],
+    "log_large": [
+      2,
+      6
+    ],
+    "log_medium": [
+      3,
+      6
+    ],
+    "log_small": [
+      4,
+      6
+    ],
+    "log_pile": [
+      5,
+      6
+    ],
+    "wood_scrap": [
+      6,
+      6
+    ],
+    "wood_bits": [
+      7,
+      6
+    ],
+    "reserve_1": [
+      0,
+      7
+    ],
+    "reserve_2": [
+      1,
+      7
+    ],
+    "reserve_3": [
+      2,
+      7
+    ],
+    "reserve_4": [
+      3,
+      7
+    ],
+    "reserve_5": [
+      4,
+      7
+    ],
+    "reserve_6": [
+      5,
+      7
+    ],
+    "reserve_7": [
+      6,
+      7
+    ],
+    "reserve_8": [
+      7,
+      7
+    ]
+  }
+}
