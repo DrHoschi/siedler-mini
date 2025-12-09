@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-09T12:57:37.902Z",
+  "createdAt": "2025-12-09T18:35:12.930Z",
   "root": ".",
   "count": 600,
   "entries": [
@@ -1105,12 +1105,12 @@
     {
       "type": "file",
       "path": "assets/tex/deco/js/tree-viewer.js",
-      "size": 15326
+      "size": 17190
     },
     {
       "type": "file",
       "path": "assets/tex/deco/index.trees.html",
-      "size": 7813
+      "size": 8897
     },
     {
       "type": "file",
@@ -1728,17 +1728,17 @@
     {
       "type": "file",
       "path": "core/game.production.stone.js",
-      "size": 19047
+      "size": 17021
     },
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 18042
+      "size": 19463
     },
     {
       "type": "file",
       "path": "core/game.renderer.js",
-      "size": 8588
+      "size": 9204
     },
     {
       "type": "file",
