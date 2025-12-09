@@ -1,0 +1,273 @@
+<!-- =========================================================================
+  Datei   : index.html
+  Projekt : Trees Mega Atlas – Test-Viewer
+  Version : v25.12.09
+  Zweck   : Kleine Standalone-Testseite zum Anzeigen & Animieren der Baum-Sprites
+            aus "trees_mega_atlas.png" + "trees_mega_atlas.json"
+
+  Nutzung :
+    - Im Browser öffnen (lokal oder über kleinen Webserver).
+    - Links Canvas mit aktuellem Frame.
+    - Rechts Steuerung:
+        * Frame-Auswahl (Select)
+        * Prev/Next-Buttons
+        * Animationsliste (einfach nach Prefix gruppiert)
+        * Play/Pause + Geschwindigkeit
+============================================================================ -->
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Trees Mega Atlas – Test-Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    /* =========================================================================
+       [1] Basis-Layout
+    ========================================================================= */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #202020;
+      color: #f0f0f0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      height: 100%;
+    }
+
+    .wrapper {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 8px 12px;
+      background: #303030;
+      border-bottom: 1px solid #444;
+      font-size: 14px;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      gap: 12px;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+
+    /* =========================================================================
+       [2] Canvas-Bereich
+    ========================================================================= */
+    .canvas-panel {
+      flex: 0 0 auto;
+      background: #181818;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    canvas {
+      background: #000;
+      border-radius: 4px;
+      image-rendering: pixelated; /* wichtig für scharfe Pixel */
+    }
+
+    .canvas-info {
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    /* =========================================================================
+       [3] Control-Panel
+    ========================================================================= */
+    .control-panel {
+      flex: 1 1 auto;
+      background: #181818;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    fieldset {
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 8px;
+    }
+
+    legend {
+      padding: 0 4px;
+      font-size: 12px;
+      color: #ffd080;
+    }
+
+    label {
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+
+    select, input[type="number"], input[type="range"], button {
+      font-size: 13px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      border: 1px solid #555;
+      background: #303030;
+      color: #f0f0f0;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #3a3a3a;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .grow {
+      flex: 1 1 auto;
+    }
+
+    .small {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .mono {
+      font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    }
+
+    footer {
+      padding: 6px 10px;
+      background: #303030;
+      border-top: 1px solid #444;
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    @media (max-width: 800px) {
+      main {
+        flex-direction: column;
+      }
+      .canvas-panel {
+        align-self: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <header>
+      <strong>Trees Mega Atlas – Test-Viewer</strong>
+      <span class="small"> | Tiles: 8×8 • 128×128px • Quelle: trees_mega_atlas.png</span>
+    </header>
+
+    <main>
+      <!-- =============================================================
+           Canvas-Bereich
+      ============================================================= -->
+      <section class="canvas-panel">
+        <!-- Canvas größer, damit wir 128×128 bequem hochskalieren können -->
+        <canvas id="treeCanvas" width="256" height="256"></canvas>
+        <div class="canvas-info mono" id="canvasInfo">
+          Frame: (noch nicht geladen)
+        </div>
+      </section>
+
+      <!-- =============================================================
+           Control-Panel (Auswahl + Animation)
+      ============================================================= -->
+      <section class="control-panel">
+        <!-- [A] Atlas-Quelle -->
+        <fieldset>
+          <legend>Atlas-Dateien</legend>
+          <div class="row">
+            <label for="atlasImageSel">Bild:</label>
+            <select id="atlasImageSel">
+              <option value="trees_mega_atlas.png">trees_mega_atlas.png (tight)</option>
+              <option value="trees_mega_atlas_padded.png">trees_mega_atlas_padded.png (padded)</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="atlasJsonSel">JSON:</label>
+            <select id="atlasJsonSel">
+              <option value="trees_mega_atlas.json">trees_mega_atlas.json (assets.draw)</option>
+              <!-- falls du später ein anderes Format testen willst -->
+            </select>
+          </div>
+          <div class="row small">
+            Hinweis: JSON &amp; Bild werden relativ zu <code>assets/trees/</code> geladen.
+          </div>
+        </fieldset>
+
+        <!-- [B] Frame-Auswahl -->
+        <fieldset>
+          <legend>Frame-Auswahl</legend>
+          <div class="row">
+            <label for="frameSelect">Frame:</label>
+            <select id="frameSelect" class="grow"></select>
+          </div>
+          <div class="row">
+            <button type="button" id="btnPrev">&laquo; Prev</button>
+            <button type="button" id="btnNext">Next &raquo;</button>
+            <span class="small mono" id="frameIndexInfo"></span>
+          </div>
+        </fieldset>
+
+        <!-- [C] Animation -->
+        <fieldset>
+          <legend>Animation</legend>
+          <div class="row">
+            <label for="animSelect">Animation:</label>
+            <select id="animSelect" class="grow">
+              <!-- wird dynamisch gefüllt z. B. e1_regrow_*, e2_regrow_*, cut_fall_*, ... -->
+            </select>
+          </div>
+          <div class="row">
+            <button type="button" id="btnPlay">Play</button>
+            <button type="button" id="btnPause">Pause</button>
+            <label for="speedRange">Speed:</label>
+            <input type="range" id="speedRange" min="50" max="1000" value="250" />
+            <span class="small" id="speedInfo">250 ms/Frame</span>
+          </div>
+          <div class="row small">
+            Animationsgruppen werden automatisch nach Prefix gebildet
+            (z.B. <code>e1_regrow_</code>, <code>e2_regrow_</code>, <code>cut_fall_</code>).
+          </div>
+        </fieldset>
+
+        <!-- [D] Debug-Ausgabe -->
+        <fieldset>
+          <legend>Debug</legend>
+          <div class="small mono" id="debugOutput">
+            Lade Atlas ...
+          </div>
+        </fieldset>
+      </section>
+    </main>
+
+    <footer>
+      Trees Mega Atlas Viewer v25.12.09 – Nur Testseite, kann später 1:1 ins Siedler-Projekt
+      übernommen oder in den Inspector integriert werden.
+    </footer>
+  </div>
+
+  <!-- Logik -->
+  <script src="js/tree-viewer.js"></script>
+</body>
+</html>
