@@ -529,6 +529,7 @@
   // WORKAREA-HOOK: cb:workarea:set
   // ========================================================================
 
+    // WORKAREA-HOOK: cb:workarea:set
   function onWorkAreaSet(detail){
     if (!detail) return;
     const kind = (detail.id || '').toLowerCase();
@@ -547,11 +548,19 @@
       ? detail.radiusTiles
       : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
 
+    // WorkArea-Objekt aktualisieren
     field.workArea = {
       cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
       cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
       radiusTiles: radius
     };
+
+    // Zentrumskoordinaten für das Layout auf das WorkArea-Zentrum legen
+    field.cx = field.workArea.cx;
+    field.cy = field.workArea.cy;
+
+    // Steine neu um das neue Zentrum verteilen
+    createRandomLayoutForField(field);
 
     LOG('WorkArea für Stein-Feld aktualisiert', uid, field.workArea);
   }
