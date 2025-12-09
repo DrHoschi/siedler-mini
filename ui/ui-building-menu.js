@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : ui/ui-building-menu.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.08-workarea-bridge-v4-close-cancels
+ * Version : v25.12.09-workarea-bridge-v5-button-fix
  *
  * Zweck   :
  *   - Gebäude-Menü (Anzeige von Name, Status, Kategorie, Position)
@@ -26,15 +26,12 @@
     else console.warn(TAG, ...args);
   }
 
-  // --------------------------------------------------------------------------
-  // DOM-Grundstruktur
-  // --------------------------------------------------------------------------
-  const UI_ROOT = document.getElementById('ui-root');
-  if (!UI_ROOT){
-    WARN('ui-root nicht gefunden – Gebäude-Menü wird nicht initialisiert.');
-    return;
-  }
+  // Wurzel-Container der UI (wird vom HUD/Start-UI genutzt)
+  const UI_ROOT = document.querySelector('#ui-root') || document.body;
 
+  // --------------------------------------------------------------------------
+  // Panel + DOM-Struktur erzeugen
+  // --------------------------------------------------------------------------
   const panel = document.createElement('div');
   panel.id = 'ui-building-menu';
   panel.className = 'ui-panel hidden';
@@ -74,22 +71,42 @@
   const elStatus   = panel.querySelector('#ui-building-status');
   const elCategory = panel.querySelector('#ui-building-category');
   const elPos      = panel.querySelector('#ui-building-pos');
+
   const btnClose   = panel.querySelector('#ui-building-close');
   const btnWork    = panel.querySelector('#btn-building-workarea');
 
   let currentBuilding = null;
 
   // --------------------------------------------------------------------------
-  // Helper: Menü befüllen + anzeigen
+  // Helper
   // --------------------------------------------------------------------------
-  function fillFromBuilding(b){
-    if (!b) return;
 
-    const id       = b.id       || b.buildingId || '—';
-    const uid      = b.uid      || '—';
-    const label    = b.label    || id;
-    const category = b.category || '—';
-    const status   = b.status   || '—';
+  function hidePanel() {
+    panel.classList.add('hidden');
+
+    // Beim Schließen evtl. aktive WorkArea-Selektion abbrechen
+    try {
+      if (window.GameWorkArea && typeof GameWorkArea.cancelSelection === 'function'){
+        GameWorkArea.cancelSelection();
+      }
+    } catch (e) {
+      WARN('Fehler beim Abbrechen der WorkArea-Selektion beim Schließen des Menüs:', e);
+    }
+  }
+
+  function showPanelForBuilding(b){
+    if (!b){
+      currentBuilding = null;
+      hidePanel();
+      return;
+    }
+
+    const id        = b.kind || b.id || '–';
+    const uid       = b.uid  || '—';
+    const label     = b.label || id;
+    const status    = b.status || '—';
+    const category  = b.category || '—';
+
     const x        = (b.x ?? b.tx ?? 0) | 0;
     const y        = (b.y ?? b.ty ?? 0) | 0;
     const w        = (b.w || b.width  || 3) | 0;
@@ -106,63 +123,47 @@
     elStatus.textContent   = status;
     elCategory.textContent = category;
     elPos.textContent      = `${x}, ${y} (${w}×${h})`;
-  }
 
-  function showPanel(){
     panel.classList.remove('hidden');
   }
 
-  function hidePanel(){
-    panel.classList.add('hidden');
-    currentBuilding = null;
-
-    // Beim Schließen WorkArea-Selection beenden → Kreis ausblenden
-    try {
-      if (window.GameWorkArea && typeof GameWorkArea.cancelSelection === 'function') {
-        GameWorkArea.cancelSelection();
-      }
-    } catch (e) {
-      WARN('Fehler beim Abbrechen der WorkArea-Selektion beim Schließen des Menüs:', e);
-    }
-  }
-
   // --------------------------------------------------------------------------
-// Event-Bindings
-// --------------------------------------------------------------------------
+  // Event-Bindings
+  // --------------------------------------------------------------------------
 
-// Schließen-Button (X)
-btnClose?.addEventListener('click', (ev)=>{
-  // Klick nicht nach außen durchreichen
-  ev?.stopPropagation?.();
-  ev?.preventDefault?.();
+  // Schließen-Button (X)
+  btnClose?.addEventListener('click', (ev)=>{
+    // Klick nicht nach außen durchreichen
+    ev?.stopPropagation?.();
+    ev?.preventDefault?.();
 
-  hidePanel();
-});
+    hidePanel();
+  });
 
-// WorkArea-Button
-btnWork?.addEventListener('click', (ev)=>{
-  // Ganz wichtig: verhindert, dass globale Click-Handler das Panel schließen
-  ev?.stopPropagation?.();
-  ev?.stopImmediatePropagation?.();
-  ev?.preventDefault?.();
+  // WorkArea-Button
+  btnWork?.addEventListener('click', (ev)=>{
+    // Ganz wichtig: verhindert, dass globale Click-Handler das Panel schließen
+    ev?.stopPropagation?.();
+    ev?.stopImmediatePropagation?.();
+    ev?.preventDefault?.();
 
-  if (!currentBuilding){
-    WARN('WorkArea-Button gedrückt, aber kein Gebäude aktiv.');
-    return;
-  }
-
-  LOG('WorkArea-Button → GameWorkArea.beginSelection', currentBuilding);
-
-  try {
-    if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function'){
-      GameWorkArea.beginSelection(currentBuilding);
-    } else {
-      WARN('GameWorkArea.beginSelection nicht verfügbar – WorkArea kann noch nicht gesetzt werden.');
+    if (!currentBuilding){
+      WARN('WorkArea-Button gedrückt, aber kein Gebäude aktiv.');
+      return;
     }
-  } catch (e){
-    WARN('Fehler bei GameWorkArea.beginSelection:', e);
-  }
-});
+
+    LOG('WorkArea-Button → GameWorkArea.beginSelection', currentBuilding);
+
+    try {
+      if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function'){
+        GameWorkArea.beginSelection(currentBuilding);
+      } else {
+        WARN('GameWorkArea.beginSelection nicht verfügbar – WorkArea kann noch nicht gesetzt werden.');
+      }
+    } catch (e){
+      WARN('Fehler bei GameWorkArea.beginSelection:', e);
+    }
+  });
 
   // Klick außerhalb des Panels → Menü schließen (außer im WorkArea-Setzmodus)
   document.addEventListener('click', (ev)=>{
@@ -185,12 +186,12 @@ btnWork?.addEventListener('click', (ev)=>{
   // --------------------------------------------------------------------------
   // Listener: Klick auf Gebäude → cb:building:menu-open
   // --------------------------------------------------------------------------
-  window.addEventListener('cb:building:menu-open', ev=>{
-    const detail = ev?.detail || {};
+  window.addEventListener('cb:building:menu-open', (ev)=>{
+    const detail = ev.detail || ev;
     LOG('cb:building:menu-open empfangen', detail);
-    fillFromBuilding(detail);
-    showPanel();
+    showPanelForBuilding(detail);
   });
 
-  LOG('Modul geladen – Gebäude-Menü bereit (nur via Klick).');
+  // Debug: kleines Log beim Laden
+  LOG('Gebäude-Menü geladen (v25.12.09-workarea-bridge-v5-button-fix)');
 })();
