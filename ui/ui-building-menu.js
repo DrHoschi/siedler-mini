@@ -1,12 +1,28 @@
 /* ============================================================================
  * Datei   : ui/ui-building-menu.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.09-building-menu-workarea-v3
- * Zweck   : Gebäude-Menü (per Klick auf Gebäude) + WorkArea-Button
- * 
- * Lauscht : cb:building:menu-open (von core.input)
- * Sendet  : GameWorkArea.beginSelection(detail)
- *           GameWorkArea.cancelSelection()
+ * Version : v25.12.09-building-menu-workarea-V4
+ *
+ * Zweck   :
+ *   - Bestehendes Gebäude-Menü (HTML + CSS) ansteuern
+ *   - Daten anzeigen (Name, ID, Status, Kategorie, Position)
+ *   - Button "Arbeitsbereich setzen" → GameWorkArea.beginSelection(...)
+ *   - Beim Schließen → GameWorkArea.cancelSelection()
+ *
+ * Annahmen:
+ *   - Es gibt im DOM bereits:
+ *       #ui-building-menu          (Panel)
+ *       #ui-building-title         (Titel)
+ *       #ui-building-subtitle      (Untertitel)
+ *       #ui-building-id            (ID-Anzeige)
+ *       #ui-building-status        (Status-Anzeige)
+ *       #ui-building-category      (Kategorie-Anzeige)
+ *       #ui-building-pos           (Positions-Anzeige)
+ *       #ui-building-close         (X-Button)
+ *       #btn-building-workarea     (Button "Arbeitsbereich setzen")
+ *
+ * Lauscht:
+ *   - window: cb:building:menu-open (von core.input)
  * ============================================================================ */
 
 (function(){
@@ -14,91 +30,29 @@
   const LOG  = (window.CBLog?.ok   || console.log ).bind(console,  TAG);
   const WARN = (window.CBLog?.warn || console.warn).bind(console,  TAG);
 
-  const UI_ROOT = document.getElementById('ui-root') || document.body;
-
   // --------------------------------------------------------------------------
-  // Panel-HTML
+  // DOM-Referenzen auf DEIN vorhandenes Panel
   // --------------------------------------------------------------------------
-  const panel = document.createElement('div');
-  panel.id = 'ui-building-menu';
-  panel.className = 'ui-building-menu hidden';
+  const panel     = document.getElementById('ui-building-menu');
+  const elTitle   = panel?.querySelector('#ui-building-title');
+  const elSub     = panel?.querySelector('#ui-building-subtitle');
+  const elId      = panel?.querySelector('#ui-building-id');
+  const elStatus  = panel?.querySelector('#ui-building-status');
+  const elCat     = panel?.querySelector('#ui-building-category');
+  const elPos     = panel?.querySelector('#ui-building-pos');
+  const btnClose  = panel?.querySelector('#ui-building-close');
+  const btnWork   = panel?.querySelector('#btn-building-workarea');
 
-  panel.innerHTML = `
-    <div class="ui-building-menu__titlebar">
-      <div>
-        <div id="ui-building-title" class="ui-building-menu__title">Gebäude</div>
-        <div id="ui-building-subtitle" class="ui-building-menu__subtitle">–</div>
-      </div>
-      <button id="ui-building-close" class="ui-building-menu__close" type="button">×</button>
-    </div>
-
-    <div class="ui-building-menu__body">
-      <div class="ui-building-menu__row">
-        <span class="ui-building-menu__label">ID</span>
-        <span id="ui-building-id" class="ui-building-menu__value">–</span>
-      </div>
-      <div class="ui-building-menu__row">
-        <span class="ui-building-menu__label">Status</span>
-        <span id="ui-building-status" class="ui-building-menu__value">–</span>
-      </div>
-      <div class="ui-building-menu__row">
-        <span class="ui-building-menu__label">Kategorie</span>
-        <span id="ui-building-category" class="ui-building-menu__value">–</span>
-      </div>
-      <div class="ui-building-menu__row">
-        <span class="ui-building-menu__label">Position</span>
-        <span id="ui-building-pos" class="ui-building-menu__value">–</span>
-      </div>
-    </div>
-
-    <div id="ui-building-footer" class="ui-building-menu__footer">
-      <button id="btn-building-workarea" class="btn btn--small" type="button">
-        Arbeitsbereich setzen
-      </button>
-    </div>
-  `;
-  UI_ROOT.appendChild(panel);
-
-  const elTitle    = panel.querySelector('#ui-building-title');
-  const elSubTitle = panel.querySelector('#ui-building-subtitle');
-  const elId       = panel.querySelector('#ui-building-id');
-  const elStatus   = panel.querySelector('#ui-building-status');
-  const elCategory = panel.querySelector('#ui-building-category');
-  const elPos      = panel.querySelector('#ui-building-pos');
-  const btnClose   = panel.querySelector('#ui-building-close');
-  const btnWork    = panel.querySelector('#btn-building-workarea');
+  if (!panel) {
+    WARN('Panel #ui-building-menu nicht gefunden – Modul beendet sich.');
+    return;
+  }
 
   let currentBuilding = null;
 
   // --------------------------------------------------------------------------
-  // Helper: Menü befüllen + anzeigen
+  // Helper
   // --------------------------------------------------------------------------
-  function fillFromBuilding(b){
-    if (!b) return;
-
-    const id       = b.id       || b.buildingId || '—';
-    const uid      = b.uid      || '—';
-    const label    = b.label    || id;
-    const category = b.category || '—';
-    const status   = b.status   || '—';
-    const x        = (b.x ?? b.tx ?? 0) | 0;
-    const y        = (b.y ?? b.ty ?? 0) | 0;
-    const w        = (b.w || b.width  || 3) | 0;
-    const h        = (b.h || b.height || 3) | 0;
-
-    currentBuilding = {
-      id, uid, label, category, status,
-      x, y, w, h
-    };
-
-    elTitle.textContent    = label;
-    elSubTitle.textContent = `${id} (${category})`;
-    elId.textContent       = uid !== '—' ? `${id} #${uid}` : id;
-    elStatus.textContent   = status;
-    elCategory.textContent = category;
-    elPos.textContent      = `${x}, ${y} (${w}×${h})`;
-  }
-
   function showPanel(){
     panel.classList.remove('hidden');
   }
@@ -107,55 +61,81 @@
     panel.classList.add('hidden');
     currentBuilding = null;
 
-    // Beim Schließen WorkArea-Selection beenden → Kreis ausblenden
+    // aktiven WorkArea-Modus abbrechen, falls aktiv
     try {
       if (window.GameWorkArea && typeof GameWorkArea.cancelSelection === 'function') {
         GameWorkArea.cancelSelection();
       }
     } catch (e) {
-      WARN('Fehler beim Abbrechen der WorkArea-Selektion beim Schließen des Menüs:', e);
+      WARN('Fehler beim cancelSelection beim Schließen:', e);
     }
   }
 
+  function fillFromBuilding(b){
+    if (!b) return;
+
+    const id       = b.id       || b.buildingId || b.kind || '—';
+    const uid      = b.uid      || '—';
+    const label    = b.label    || id;
+    const cat      = b.category || '—';
+    const status   = b.status   || '—';
+    const x        = (b.x ?? b.tx ?? 0) | 0;
+    const y        = (b.y ?? b.ty ?? 0) | 0;
+    const w        = (b.w ?? b.width  ?? 3) | 0;
+    const h        = (b.h ?? b.height ?? 3) | 0;
+
+    currentBuilding = { id, uid, label, category: cat, status, x, y, w, h };
+
+    if (elTitle)  elTitle.textContent = label;
+    if (elSub)    elSub.textContent   = `${id} (${cat})`;
+    if (elId)     elId.textContent    = uid !== '—' ? `${id} #${uid}` : id;
+    if (elStatus) elStatus.textContent= status;
+    if (elCat)    elCat.textContent   = cat;
+    if (elPos)    elPos.textContent   = `${x}, ${y} (${w}×${h})`;
+  }
+
   // --------------------------------------------------------------------------
-  // Event-Bindings
+  // Button-Events
   // --------------------------------------------------------------------------
-  btnClose?.addEventListener('click', ()=>{
+  btnClose?.addEventListener('click', (ev)=>{
+    ev?.stopPropagation?.();
+    ev?.preventDefault?.();
     hidePanel();
   });
 
-  // WICHTIG: Hier MUSS beim Klick ein Log im Inspector auftauchen!
-  btnWork?.addEventListener('click', ()=>{
+  btnWork?.addEventListener('click', (ev)=>{
+    ev?.stopPropagation?.();
+    ev?.preventDefault?.();
+
     if (!currentBuilding){
-      WARN('WorkArea-Button gedrückt, aber kein Gebäude aktiv.');
+      WARN('WorkArea-Button gedrückt, aber kein Gebäude gesetzt.');
       return;
     }
 
     LOG('WorkArea-Button → GameWorkArea.beginSelection', currentBuilding);
 
     try {
-      if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function'){
+      if (window.GameWorkArea && typeof GameWorkArea.beginSelection === 'function') {
         GameWorkArea.beginSelection(currentBuilding);
       } else {
-        WARN('GameWorkArea.beginSelection nicht verfügbar – WorkArea kann noch nicht gesetzt werden.');
+        WARN('GameWorkArea.beginSelection nicht verfügbar – Script core/game.workarea.js geladen?');
       }
-    } catch (e){
+    } catch (e) {
       WARN('Fehler bei GameWorkArea.beginSelection:', e);
     }
   });
 
-  // Klick außerhalb des Panels → Menü schließen (außer im WorkArea-Setzmodus)
+  // Klick außerhalb des Panels → schließen (außer wenn WorkArea gerade aktiv)
   document.addEventListener('click', (ev)=>{
     if (panel.classList.contains('hidden')) return;
 
     const target = ev.target;
     if (!target) return;
-
-    if (panel.contains(target)) return; // Klick IM Panel → ignorieren
+    if (panel.contains(target)) return; // Klick im Panel → ignorieren
 
     try {
       if (window.GameWorkArea && typeof GameWorkArea.isSelecting === 'function') {
-        if (GameWorkArea.isSelecting()) return; // beim Setzen nicht automatisch schließen
+        if (GameWorkArea.isSelecting()) return; // bei aktiver Auswahl NICHT schließen
       }
     } catch(e){}
 
@@ -163,14 +143,14 @@
   });
 
   // --------------------------------------------------------------------------
-  // Listener: Klick auf Gebäude → cb:building:menu-open
+  // cb:building:menu-open vom Input-Modul
   // --------------------------------------------------------------------------
-  window.addEventListener('cb:building:menu-open', ev=>{
+  window.addEventListener('cb:building:menu-open', (ev)=>{
     const detail = ev?.detail || {};
     LOG('cb:building:menu-open empfangen', detail);
     fillFromBuilding(detail);
     showPanel();
   });
 
-  LOG('Modul geladen – Gebäude-Menü bereit (nur via Klick).');
+  LOG('Gebäude-Menü-Bridge geladen v25.12.09-building-menu-workarea-V4');
 })();
