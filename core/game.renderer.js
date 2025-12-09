@@ -1,13 +1,16 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.06-workarea-maincanvas-nored
+ * Version : v25.12.09-workarea-maincanvas-prod
  *
  * Zweck   :
  *   Zentraler Renderer für:
  *   - Map / Terrain (Fallback, falls GameMap.render nicht alles übernimmt)
  *   - Gebäude / Baustellen (mit einfachen Platzhalter-Grafiken)
- *   - Debug-/Produktions-Overlays (WorkArea, Pfade, Unit-Overlay)
+ *   - Debug-/Produktions-Overlays:
+ *       • WorkArea (direkt auf Haupt-Canvas)
+ *       • Holz/Stein-Produktion (direkt auf Haupt-Canvas)
+ *       • Pfade/Units über OverlayHooks auf separatem Overlay-Canvas
  *
  * WICHTIG:
  *   - KEINE ES-Module (kein import/export), sondern klassisches IIFE
@@ -152,14 +155,25 @@
       }
 
       // -----------------------------------------------------------
-// 3b. Arbeitsbereiche (WorkAreas) direkt auf dem Haupt-Canvas
-//     zeichnen – mit derselben Kamera-Transform wie die Gebäude.
-//     (Kein eigenes Overlay, damit Position & Rundung exakt passen.)
-// -----------------------------------------------------------
-if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'function') {
-  // WICHTIG: tileSize mitgeben, sonst zeichnet game.workarea.js nichts
-  window.GameWorkArea.drawOnMainCanvas(ctx, cam, this.tile);
-}
+      // 3b. Arbeitsbereiche (WorkAreas) direkt auf dem Haupt-Canvas
+      //     zeichnen – mit derselben Kamera-Transform wie die Gebäude.
+      // -----------------------------------------------------------
+      if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'function') {
+        // WICHTIG: tileSize mitgeben, sonst zeichnet game.workarea.js nichts
+        window.GameWorkArea.drawOnMainCanvas(ctx, cam, this.tile);
+      }
+
+      // -----------------------------------------------------------
+      // 3c. Produktions-Overlays (Holz & Stein) auf dem Haupt-Canvas
+      //     → gleiche Kamera-Transform wie Map/Gebäude, kein eigenes Overlay.
+      // -----------------------------------------------------------
+      if (window.ProductionWood && typeof window.ProductionWood.drawOnMainCanvas === 'function') {
+        window.ProductionWood.drawOnMainCanvas(ctx, cam, this.tile);
+      }
+
+      if (window.ProductionStone && typeof window.ProductionStone.drawOnMainCanvas === 'function') {
+        window.ProductionStone.drawOnMainCanvas(ctx, cam, this.tile);
+      }
 
       ctx.restore();
 
@@ -234,14 +248,10 @@ if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'func
       ctxO.setTransform(1, 0, 0, 1, 0, 0);
       ctxO.clearRect(0, 0, ctxO.canvas.width, ctxO.canvas.height);
 
-      // DEBUG (kann bei Bedarf wieder aktiviert werden):
-      // ctxO.fillStyle = 'rgba(255,0,0,0.25)';
-      // ctxO.fillRect(0, 0, 80, 80);
-
       try {
         if (window.OverlayHooks && typeof window.OverlayHooks.draw === 'function') {
           // OverlayHooks verteilt den Zeichenvorgang auf alle Layer,
-          // z.B. 'paths', 'unit-overlay', 'test-workarea-debug'
+          // z.B. 'paths', 'unit-overlay', ...
           window.OverlayHooks.draw(ctxO);
         }
       } catch (e) {
@@ -253,6 +263,6 @@ if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'func
   // Global verfügbar machen, damit game.js darauf zugreifen kann
   window.Renderer = Renderer;
 
-  LOG('Modul geladen – Renderer global verfügbar (ohne roten Fallback).');
+  LOG('Modul geladen – Renderer global verfügbar (mit Holz/Stein auf MainCanvas).');
 
 })();
