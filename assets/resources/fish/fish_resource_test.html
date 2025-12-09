@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Fish Resource Test</title>
+  <style>
+    body { margin: 0; background: #102030; color: #eee; font-family: sans-serif; }
+    #game-container { width: 800px; height: 600px; margin: 20px auto; border: 2px solid #444; }
+    #ui { width: 800px; margin: 0 auto; text-align: center; }
+    button { margin: 4px; padding: 6px 10px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+  <script type="module">
+    import {
+      preloadFishResource,
+      FISH_RESOURCE_FRAMES,
+      createFishResourceSprite,
+      registerFishJumpAnimation
+    } from './phaser_fish_resource.js';
+
+    class FishTestScene extends Phaser.Scene {
+      constructor () {
+        super('FishTestScene');
+      }
+
+      preload () {
+        preloadFishResource(this);
+      }
+
+      create () {
+        // Basis: ein Rohfisch-Icon als Resource
+        this.icon = createFishResourceSprite(this, 100, 120, FISH_RESOURCE_FRAMES.fish_raw_01);
+
+        // Wasser + Sprung-Fisch in der Mitte
+        this.fish = this.add.sprite(400, 300, 'fish_resource', FISH_RESOURCE_FRAMES.fish_jump_01);
+        registerFishJumpAnimation(this, 'fish_jump_loop');
+        this.fish.play('fish_jump_loop');
+
+        // Buttons via DOM-API
+        window.setFishFrame = (key) => {
+          this.icon.setFrame(FISH_RESOURCE_FRAMES[key]);
+        };
+      }
+    }
+
+    const config = {
+      type: Phaser.AUTO,
+      width: 800,
+      height: 600,
+      parent: 'game-container',
+      backgroundColor: '#102030',
+      scene: [FishTestScene]
+    };
+
+    new Phaser.Game(config);
+  </script>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div id="ui">
+    <p>Fisch-Ressource Test – klicke auf einen Button, um das Icon zu wechseln:</p>
+    <button onclick="setFishFrame('fish_raw_01')">Rohfisch 1</button>
+    <button onclick="setFishFrame('fish_bucket_01')">Fisch im Eimer</button>
+    <button onclick="setFishFrame('fish_basket_01')">Fisch im Korb</button>
+    <button onclick="setFishFrame('fish_icon_01')">Icon 1</button>
+    <button onclick="setFishFrame('fish_icon_alt_01')">Icon alt</button>
+  </div>
+</body>
+</html>
