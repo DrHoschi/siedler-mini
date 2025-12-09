@@ -349,15 +349,26 @@
     }
 
     // ---------------------------------------------------------------------
-    // Arbeitsbereiche (WorkAreas) zeichnen – direkt im Weltkoordinatensystem
-    // ---------------------------------------------------------------------
-    if (window.GameWorkArea && typeof window.GameWorkArea.drawWorld === 'function') {
-      try {
-        window.GameWorkArea.drawWorld(ctx, { tileSize: ts });
-      } catch (e) {
-        WARN('WorkArea-Draw Fehler:', e);
-      }
+// Arbeitsbereiche (WorkAreas) zeichnen
+//   - bevorzugt: drawWorld(ctx, {tileSize})
+//   - Fallback: drawOnMainCanvas(ctx, cam)
+// ---------------------------------------------------------------------
+if (window.GameWorkArea) {
+  try {
+    const wa  = window.GameWorkArea;
+    const cam = window.GameCamera?.getState?.() || { x: 0, y: 0, zoom: 1 };
+
+    if (typeof wa.drawWorld === 'function') {
+      // Neuer Weg: Welt-Koordinaten, TileSize kommt aus GameMap
+      wa.drawWorld(ctx, { tileSize: ts, camera: cam });
+    } else if (typeof wa.drawOnMainCanvas === 'function') {
+      // Fallback: alte Variante benutzt eigene Kamera-Infos
+      wa.drawOnMainCanvas(ctx, cam);
     }
+  } catch (e) {
+    WARN('WorkArea-Draw Fehler:', e);
+  }
+}
     
     // ---------------------------------------------------------------------
     // Einheiten-Fallback: Carrier als weiße Punkte
