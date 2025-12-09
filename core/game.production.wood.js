@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.09-wood-workarea-radius-v4
+ * Version : v25.12.09-wood-workarea-target-v2
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -133,20 +133,94 @@
     };
   }
 
+  // ========================================================================
+  // Helfer: Ziel-Tile für Holzfäller basierend auf Arbeitsbereich
+  // ========================================================================
+
+  /**
+   * Ermittelt den Ziel-Tile (x,y in Tile-Koordinaten) für einen Lumberjack.
+   *
+   * Priorität:
+   *  1. GameWorkArea.getCenterTileForBuilding(...) (falls vorhanden)
+   *  2. Aktuelle WorkArea im Lumberjack-State (lj.workArea)
+   *  3. Fallback: Gebäudemitte (niemals (0,0) in der Ecke, außer das Gebäude
+   *     steht wirklich bei 0/0).
+   *
+   * Hinweis:
+   *  - Diese Funktion ist bewusst defensiv gebaut, damit wir auch dann noch
+   *    eine sinnvolle Position erhalten, wenn WorkArea / GameWorkArea einmal
+   *    nicht korrekt initialisiert wurden.
+   */
+  function getTreeTargetTileForLumberjack(lj){
+    // Sicherheitsnetz
+    if (!lj){
+      return { x: 0, y: 0 };
+    }
+
+    // 1) Versuch: GameWorkArea → Mittelpunkt des Arbeitsbereichs
+    try {
+      const waMod = window.GameWorkArea;
+      if (waMod && typeof waMod.getCenterTileForBuilding === 'function'){
+        // Wir versuchen mehrere mögliche IDs (falls du mit buildingId/uid arbeitest)
+        const buildingKey =
+          lj.buildingId ||
+          lj.uid ||
+          lj.id ||
+          lj.kind ||
+          LUMBERJACK_ID;
+
+        const wa = waMod.getCenterTileForBuilding(buildingKey);
+        if (wa && Number.isFinite(wa.cx) && Number.isFinite(wa.cy)){
+          return {
+            x: wa.cx | 0,
+            y: wa.cy | 0
+          };
+        }
+      }
+    } catch (e){
+      (window.CBLog?.warn || console.warn)(
+        TAG,
+        'getTreeTargetTileForLumberjack WorkArea-Fehler:',
+        e
+      );
+    }
+
+    // 2) Versuch: Aktuelle WorkArea aus dem Lumberjack-State
+    if (lj.workArea && Number.isFinite(lj.workArea.cx) && Number.isFinite(lj.workArea.cy)){
+      return {
+        x: lj.workArea.cx | 0,
+        y: lj.workArea.cy | 0
+      };
+    }
+
+    // 3) Fallback: Gebäudemitte aus x,y,w,h
+    const bx = lj.x | 0;
+    const by = lj.y | 0;
+    const bw = lj.w || 3;
+    const bh = lj.h || 3;
+
+    return {
+      x: (bx + Math.floor(bw / 2)) | 0,
+      y: (by + Math.floor(bh / 2)) | 0
+    };
+  }
+
   /**
    * Wählt eine konkrete Baum-Position innerhalb des Arbeitsbereichs
    * und speichert sie in lj.treePos = { tx, ty } in Tile-Koordinaten.
    *
-   * - Mittelpunkt = WorkArea.cx / cy (Fallback: Gebäudecenter)
+   * - Mittelpunkt = getTreeTargetTileForLumberjack(lj)
    * - Radius     = WorkArea.radiusTiles (Fallback: 2.5)
    * - Die Position liegt IMMER im Kreis (nicht irgendwo oben links).
    */
   function recomputeTreePos(lj){
     if (!lj) return;
 
-    const wa = lj.workArea || {};
-    const cx = (typeof wa.cx === 'number') ? wa.cx : (lj.x + (lj.w || 3) / 2);
-    const cy = (typeof wa.cy === 'number') ? wa.cy : (lj.y + (lj.h || 3) / 2);
+    const center = getTreeTargetTileForLumberjack(lj);
+    const wa     = lj.workArea || {};
+
+    const cx = center.x;
+    const cy = center.y;
     const r  = (typeof wa.radiusTiles === 'number') ? wa.radiusTiles : 2.5;
 
     const seed = `${lj.uid}|${lj.cycle || 0}`;
@@ -442,123 +516,124 @@
     ctx.stroke();
   }
 
-// --------------------------------------------------------------------------
-// Hilfsfunktion: Tile-Koordinaten -> Screen-Pixel (wie im unit-overlay)
-// --------------------------------------------------------------------------
-function woodTileToScreen(tx, ty, camOverride) {
-  const Game = window.Game || {};
-  // bevorzugt die gleiche TileSize wie der Renderer
-  const ts =
-    (Game.map && Game.map.tileSize) ||
-    (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
-    Game.tileSize ||
-    64;
+  // --------------------------------------------------------------------------
+  // Hilfsfunktion: Tile-Koordinaten -> Screen-Pixel (wie im unit-overlay)
+  // --------------------------------------------------------------------------
+  function woodTileToScreen(tx, ty, camOverride) {
+    const Game = window.Game || {};
+    // bevorzugt die gleiche TileSize wie der Renderer
+    const ts =
+      (Game.map && Game.map.tileSize) ||
+      (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
+      Game.tileSize ||
+      64;
 
-  const cam  = camOverride || window.GameCamera || {};
-  const zoom = Number(cam.zoom ?? 1);
-  const camX = Number(cam.x    ?? 0);
-  const camY = Number(cam.y    ?? 0);
+    const cam  = camOverride || window.GameCamera || {};
+    const zoom = Number(cam.zoom ?? 1);
+    const camX = Number(cam.x    ?? 0);
+    const camY = Number(cam.y    ?? 0);
 
-  const wx = tx * ts;
-  const wy = ty * ts;
+    const wx = tx * ts;
+    const wy = ty * ts;
 
-  const sx = (wx - camX) * zoom;
-  const sy = (wy - camY) * zoom;
+    const sx = (wx - camX) * zoom;
+    const sy = (wy - camY) * zoom;
 
-  return { sx, sy, ts, zoom };
-}
+    return { sx, sy, ts, zoom };
+  }
   
-// --------------------------------------------------------------------------
-// Zeichenfunktion: Bäume / Arbeitsposition pro Holzfäller
-//   - Nutzt woodTileToScreen(...) wie das unit-overlay
-//   - Position = Mitte des Arbeitsbereichs (cx,cy) oder Gebäudemitte
-// --------------------------------------------------------------------------
-function drawLumberjackOverlay(ctx, cam){
-  if (!ctx) return;
-  if (!Lumberjacks.size) return;
+  // --------------------------------------------------------------------------
+  // Zeichenfunktion: Bäume / Arbeitsposition pro Holzfäller
+  //   - Nutzt woodTileToScreen(...) wie das unit-overlay
+  //   - Position = konkreter Arbeits-/Baum-Tile (treePos oder WorkArea-Center)
+  // --------------------------------------------------------------------------
+  function drawLumberjackOverlay(ctx, cam){
+    if (!ctx) return;
+    if (!Lumberjacks.size) return;
 
-  const atlasReady = ensureTreeAtlasReady();
+    const atlasReady = ensureTreeAtlasReady();
 
-  ctx.save();
-  ctx.globalAlpha = 1.0;
+    ctx.save();
+    ctx.globalAlpha = 1.0;
 
-  for (const lj of Lumberjacks.values()){
-    if (!lj) continue;
+    for (const lj of Lumberjacks.values()){
+      if (!lj) continue;
 
-    const bx = lj.x | 0;
-    const by = lj.y | 0;
-    const bw = lj.w || 3;
-    const bh = lj.h || 3;
+      const area = lj.workArea || {};
 
-    // Arbeitsbereich:
-    //  - wenn gesetzt: cx,cy kommen direkt aus GameWorkArea
-    //  - sonst: Gebäudemitte unten
-    const area    = lj.workArea || {};
-    const cxTiles = (typeof area.cx === 'number') ? area.cx : (bx + bw / 2);
-    const cyTiles = (typeof area.cy === 'number') ? area.cy : (by + bh / 2);
+      // Ziel-Tile:
+      //  - bevorzugt konkreten Spot (lj.treePos),
+      //  - sonst Helper (WorkArea-Center / Gebäudemitte)
+      const targetTile =
+        (lj.treePos && Number.isFinite(lj.treePos.tx) && Number.isFinite(lj.treePos.ty))
+          ? { x: lj.treePos.tx, y: lj.treePos.ty }
+          : getTreeTargetTileForLumberjack(lj);
 
-    // Tile → Screen (inkl. Zoom & Kamera-Offset)
-    const { sx, sy, ts, zoom } = woodTileToScreen(cxTiles, cyTiles, cam);
+      const cxTiles = targetTile.x;
+      const cyTiles = targetTile.y;
 
-    // ----------------------------------------------------------------------
-    // 1) Baum – Atlas oder Fallback-Kreis
-    // ----------------------------------------------------------------------
-    let treeDrawn = false;
+      // Tile → Screen (inkl. Zoom & Kamera-Offset)
+      const { sx, sy, ts, zoom } = woodTileToScreen(cxTiles, cyTiles, cam);
 
-    if (atlasReady){
-      let key = null;
-      if (lj.phase === LJ_PHASE.PLANT) key = TREE_ATLAS_CFG.frameMap.PLANT;
-      else if (lj.phase === LJ_PHASE.GROW)  key = TREE_ATLAS_CFG.frameMap.GROW;
-      else if (lj.phase === LJ_PHASE.READY) key = TREE_ATLAS_CFG.frameMap.READY;
-      else if (lj.phase === LJ_PHASE.CUT)   key = TREE_ATLAS_CFG.frameMap.CUT;
+      // ----------------------------------------------------------------------
+      // 1) Baum – Atlas oder Fallback-Kreis
+      // ----------------------------------------------------------------------
+      let treeDrawn = false;
 
-      if (key){
-        const sizeScreen = ts * 2.0 * zoom; // 2×Tilegröße, an Zoom angepasst
-        const ok = drawTreeFrame(ctx, key, sx, sy, sizeScreen);
-        if (ok){
-          treeDrawn = true;
+      if (atlasReady){
+        let key = null;
+        if (lj.phase === LJ_PHASE.PLANT) key = TREE_ATLAS_CFG.frameMap.PLANT;
+        else if (lj.phase === LJ_PHASE.GROW)  key = TREE_ATLAS_CFG.frameMap.GROW;
+        else if (lj.phase === LJ_PHASE.READY) key = TREE_ATLAS_CFG.frameMap.READY;
+        else if (lj.phase === LJ_PHASE.CUT)   key = TREE_ATLAS_CFG.frameMap.CUT;
 
-          // kleiner Wachstums-Ring bei GROW
-          if (lj.phase === LJ_PHASE.GROW){
-            ctx.beginPath();
-            ctx.lineWidth   = Math.max(1.5, ts * zoom * 0.04);
-            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-            const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
-            const r    = sizeScreen * 0.35;
-            ctx.arc(
-              sx,
-              sy - sizeScreen * 0.9,
-              r,
-              -Math.PI/2,
-              -Math.PI/2 + prog * Math.PI * 2
-            );
-            ctx.stroke();
+        if (key){
+          const sizeScreen = ts * 2.0 * zoom; // 2×Tilegröße, an Zoom angepasst
+          const ok = drawTreeFrame(ctx, key, sx, sy, sizeScreen);
+          if (ok){
+            treeDrawn = true;
+
+            // kleiner Wachstums-Ring bei GROW
+            if (lj.phase === LJ_PHASE.GROW){
+              ctx.beginPath();
+              ctx.lineWidth   = Math.max(1.5, ts * zoom * 0.04);
+              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+              const prog = Math.max(0, Math.min(1, lj.treeProg || 0));
+              const r    = sizeScreen * 0.35;
+              ctx.arc(
+                sx,
+                sy - sizeScreen * 0.9,
+                r,
+                -Math.PI/2,
+                -Math.PI/2 + prog * Math.PI * 2
+              );
+              ctx.stroke();
+            }
           }
         }
       }
+
+      // Fallback: einfacher grüner Punkt, falls Atlas nicht verfügbar
+      if (!treeDrawn){
+        drawSimpleTreeCircle(ctx, sx, sy, ts * zoom);
+      }
+
+      // ----------------------------------------------------------------------
+      // 2) Optional: Arbeitskreis-Schatten leicht abdunkeln (nur Deko)
+      //    -> der echte Arbeitskreis kommt aus game.workarea.js
+      // ----------------------------------------------------------------------
+      if (area && typeof area.radiusTiles === 'number'){
+        const rPx = area.radiusTiles * ts * zoom;
+        ctx.beginPath();
+        ctx.arc(sx, sy, rPx, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(30,120,255,0.35)';
+        ctx.lineWidth   = Math.max(1.0, ts * zoom * 0.04);
+        ctx.stroke();
+      }
     }
 
-    // Fallback: einfacher grüner Punkt, falls Atlas nicht verfügbar
-    if (!treeDrawn){
-      drawSimpleTreeCircle(ctx, sx, sy, ts * zoom);
-    }
-
-    // ----------------------------------------------------------------------
-    // 2) Optional: Arbeitskreis-Schatten leicht abdunkeln (nur Deko)
-    //    -> der echte Arbeitskreis kommt aus game.workarea.js
-    // ----------------------------------------------------------------------
-    if (area && typeof area.radiusTiles === 'number'){
-      const rPx = area.radiusTiles * ts * zoom;
-      ctx.beginPath();
-      ctx.arc(sx, sy, rPx, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(30,120,255,0.35)';
-      ctx.lineWidth   = Math.max(1.0, ts * zoom * 0.04);
-      ctx.stroke();
-    }
+    ctx.restore();
   }
-
-  ctx.restore();
-}
 
   // =========================
   // OVERLAY-REGISTRIERUNG
@@ -733,12 +808,13 @@ function drawLumberjackOverlay(ctx, cam){
     LJ_TIMES,
     TREE_ATLAS_CFG,
     setWorkArea,
-    _tickOne: tickLumberjack,
+    _tickOne              : tickLumberjack,
     _ensureTreeAtlasReady : ensureTreeAtlasReady,
     _drawTreeFrame        : drawTreeFrame,
-    _recomputeTreePos     : recomputeTreePos
+    _recomputeTreePos     : recomputeTreePos,
+    _getTreeTargetTile    : getTreeTargetTileForLumberjack
   };
 
-  LOG('Holz-Modul geladen v25.12.09-wood-workarea-radius-v4');
+  LOG('Holz-Modul geladen v25.12.09-wood-workarea-target-v2');
 
 })();
