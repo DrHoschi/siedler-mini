@@ -442,6 +442,32 @@
     ctx.stroke();
   }
 
+// --------------------------------------------------------------------------
+// Hilfsfunktion: Tile-Koordinaten -> Screen-Pixel (wie im unit-overlay)
+// --------------------------------------------------------------------------
+function woodTileToScreen(tx, ty, camOverride) {
+  const Game = window.Game || {};
+  // bevorzugt die gleiche TileSize wie der Renderer
+  const ts =
+    (Game.map && Game.map.tileSize) ||
+    (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
+    Game.tileSize ||
+    64;
+
+  const cam  = camOverride || window.GameCamera || {};
+  const zoom = Number(cam.zoom ?? 1);
+  const camX = Number(cam.x    ?? 0);
+  const camY = Number(cam.y    ?? 0);
+
+  const wx = tx * ts;
+  const wy = ty * ts;
+
+  const sx = (wx - camX) * zoom;
+  const sy = (wy - camY) * zoom;
+
+  return { sx, sy, ts, zoom };
+}
+  
   // =========================
   // OVERLAY-ZEICHNUNG (Bäume)
   // =========================
