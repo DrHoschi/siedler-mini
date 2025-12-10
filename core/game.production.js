@@ -17,7 +17,7 @@
  *   – Holz-/Stein-/Fisch-Modul rufen Production.addResource('wood'|'stone'|'fish', ...)
  *
  * Struktur:
- *   IMPORTS (global) → Konstanten → Hilfsfunktionen → Event-Verteiler → Tick →
+ *   IMPORTS → Konstanten → Hilfsfunktionen → Event-Verteiler → Tick →
  *   Bindings → Export (window.Production)
  * ============================================================================ */
 (() => {
@@ -26,7 +26,7 @@
   // ==========================================================================
   // KONSTANTEN & LOGGING
   // ==========================================================================
-  const TAG   = '[game.production]';
+  const TAG   = '[prod-core]';
   const LOG   = (...a) => (window.CBLog?.ok   ?? console.log ).call(console,   TAG, ...a);
   const WARN  = (...a) => (window.CBLog?.warn ?? console.warn).call(console,   TAG, ...a);
   const ERR   = (...a) => (window.CBLog?.error?? console.error).call(console,  TAG, ...a);
@@ -73,8 +73,8 @@
     if (!resId) return;
     if (!delta || !Number.isFinite(delta)) return;
 
-    const key = String(resId);  // bewusst KEIN 'res.*' Prefix
-    const old = Number(RES_STORE[key] || 0);
+    const key   = String(resId);               // bewusst KEIN 'res.*' Prefix
+    const old   = Number(RES_STORE[key] || 0);
     const value = old + delta;
 
     RES_STORE[key] = value;
@@ -109,48 +109,6 @@
     return Number(RES_STORE[String(resId)] || 0);
   }
 
-  // in core/game.production.js bei den Hilfsfunktionen:
-
-/**
- * Erzeugt einen "carry"-Job: Ware von einem Gebäude zum HQ bringen.
- * Holz/Stein/Fisch-Module müssen dann NICHT wissen,
- * wie genau JobEngine/CarrierRuntime ticken.
- */
-function enqueueCarryJobFromBuilding(building, resId, qty = 1){
-  if (!window.JobEngine) return;
-
-  const eng = window.JobEngine;
-  const res = String(resId || 'wood');
-
-  // Source = Gebäudeposition (Mitte)
-  const bw = Number.isFinite(building.w) ? building.w : 1;
-  const bh = Number.isFinite(building.h) ? building.h : 1;
-  const from = {
-    x: building.x + bw / 2,
-    y: building.y + bh / 2
-  };
-
-  // Ziel = HQ (falls bekannt), sonst von CarrierRuntime später ersetzt
-  const to = null;
-
-  const job = {
-    id   : 'job-carry-' + Date.now().toString(16),
-    type : 'carry',     // wird in carrier.js bereits verstanden
-    res  : res,
-    from,
-    to
-  };
-
-  if (typeof eng.push === 'function'){
-    eng.push(job);
-  } else if (typeof eng.add === 'function'){
-    eng.add(job);
-  }
-
-  (window.CBLog?.ok || console.log)('[prod-core] carry-job erzeugt', job);
-  return job;
-}
-  
   // ==========================================================================
   // MODUL-REGISTRIERUNG
   // ==========================================================================
@@ -252,16 +210,9 @@ function enqueueCarryJobFromBuilding(building, resId, qty = 1){
   // ==========================================================================
   // EXPORT / GLOBAL-API
   // ==========================================================================
-window.Production = {
-  registerModule,
-  addResource,
-  getStore,
-  enqueueCarryJobFromBuilding   // <--- NEU nach außen
-};
-  // Bestehendes Production-Objekt NICHT zerstören (wegen core/production.js)
+
   const Prod = (window.Production = window.Production || {});
 
-  // Nur ergänzen/überschreiben, was wir wirklich brauchen:
   Prod.registerModule   = registerModule;
   Prod.addResource      = addResource;
   Prod.getResourceValue = getResourceValue;
