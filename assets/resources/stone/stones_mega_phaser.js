@@ -8,7 +8,7 @@
 
 window.NS_STONES_ATLAS = {
   meta: {
-    image: 'assets/resources/stones_mega_atlas.png',
+    image: 'assets/resources/stone/stones_mega_atlas.png',
     frameWidth: 128,
     frameHeight: 128,
     cols: 8,
