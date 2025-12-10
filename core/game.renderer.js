@@ -1,21 +1,21 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-workarea-maincanvas-prod-v4
+ * Version : v25.12.10-workarea-maincanvas-prod-v5
  *
  * Zweck   :
  *   Zentraler Renderer für:
- *   - Map / Terrain (Fallback, falls GameMap.render nicht alles übernimmt)
- *   - Gebäude / Baustellen (mit einfachen Platzhalter-Grafiken)
+ *   - Map / Terrain
+ *   - Gebäude / Baustellen
  *   - Debug-/Produktions-Overlays:
- *       • WorkArea (direkt auf Haupt-Canvas, Weltkoordinaten)
- *       • Holz / Stein / Fisch (direkt auf Haupt-Canvas, Weltkoordinaten)
+ *       • WorkArea (Haupt-Canvas, Weltkoordinaten)
+ *       • Holz / Stein / Fisch (Haupt-Canvas, Weltkoordinaten)
  *       • Pfade/Units über OverlayHooks auf separatem Overlay-Canvas
  *
  * WICHTIG:
- *   - KEINE ES-Module (kein import/export), sondern klassisches IIFE
- *   - `window.Renderer` wird global bereitgestellt
- *   - game.js ruft dann `Renderer.init(Game)` + `Renderer.draw(Game)` auf
+ *   - KEINE ES-Module (kein import/export)
+ *   - `window.Renderer` global
+ *   - game.js ruft `Renderer.init(Game)` + `Renderer.draw(Game)` auf
  * ============================================================================ */
 
 (function () {
@@ -138,37 +138,32 @@
         }
       }
 
-      // 1c) Steine HINTER Gebäuden (Back-Layer – Weltkoordinaten!)
-      if (window.ProductionStone && typeof window.ProductionStone.drawBackOnMainCanvas === 'function') {
-        window.ProductionStone.drawBackOnMainCanvas(ctx, cam, this.tile);
-      }
-
-      // 1d) Gebäude / Baustellen zeichnen
+      // 1c) Gebäude / Baustellen zeichnen
       const list = getBuildingsList(g);
       for (const b of list) {
         this.drawBuilding(b);
       }
 
-      // 1e) WorkArea-Kreise auf Haupt-Canvas (auch Weltkoordinaten)
+      // 1d) WorkArea-Kreise auf Haupt-Canvas (Weltkoordinaten)
       if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'function') {
         window.GameWorkArea.drawOnMainCanvas(ctx, cam, this.tile);
       }
 
-      // 1f) Holz- und Fisch-Produktion (Bäume, Fisch, etc.)
+      // 1e) Produktions-Module – ALLE in Weltkoordinaten,
+      //     Kamera-Transform kommt vom Renderer, KEIN eigenes toScreen!
       if (window.ProductionWood && typeof window.ProductionWood.drawOnMainCanvas === 'function') {
         window.ProductionWood.drawOnMainCanvas(ctx, cam, this.tile);
+      }
+
+      if (window.ProductionStone && typeof window.ProductionStone.drawOnMainCanvas === 'function') {
+        window.ProductionStone.drawOnMainCanvas(ctx, cam, this.tile);
       }
 
       if (window.ProductionFish && typeof window.ProductionFish.drawOnMainCanvas === 'function') {
         window.ProductionFish.drawOnMainCanvas(ctx, cam, this.tile);
       }
 
-      // 1g) Steine VOR Gebäuden (Front-Layer – Weltkoordinaten)
-      if (window.ProductionStone && typeof window.ProductionStone.drawFrontOnMainCanvas === 'function') {
-        window.ProductionStone.drawFrontOnMainCanvas(ctx, cam, this.tile);
-      }
-
-      // 1h) Kamera-Transform wieder aufheben – ab hier nur noch Screen-Space
+      // 1f) Kamera-Transform wieder aufheben – ab hier nur noch Screen-Space
       ctx.restore();
 
       // ================================
@@ -216,12 +211,11 @@
       const imgKey = def.img || def.sprite || def.icon;
       const img    = window.Assets?.get ? Assets.get(imgKey) : null;
 
-      // Falls Sprite fehlt, zeichnen wir NICHTS (kein roter Debug-Block)
+      // Falls Sprite fehlt, zeichnen wir NICHTS
       if (!img) {
         return;
       }
 
-      // Einfaches Draw – später gerne durch isometrische Projektion ersetzen
       ctx.drawImage(
         img,
         px, py,
@@ -244,8 +238,6 @@
 
       try {
         if (window.OverlayHooks && typeof window.OverlayHooks.draw === 'function') {
-          // OverlayHooks verteilt den Zeichenvorgang auf alle Layer,
-          // z.B. 'paths', 'unit-overlay', ...
           window.OverlayHooks.draw(ctxO);
         }
       } catch (e) {
@@ -254,9 +246,9 @@
     }
   };
 
-  // Global verfügbar machen, damit game.js darauf zugreifen kann
+  // Global verfügbar machen
   window.Renderer = Renderer;
 
-  LOG('Modul geladen – Renderer global verfügbar (WorkArea + Holz/Stein/Fisch auf MainCanvas, Stone mit Back/Front-Layern).');
+  LOG('Modul geladen – Renderer global verfügbar (WorkArea + Holz/Stein/Fisch auf MainCanvas).');
 
 })();
