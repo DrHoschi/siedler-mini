@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.09-wood-workarea-maincanvas-v2
+ * Version : v25.12.10-wood-workarea-maincanvas-final
  *
  * Zweck   :
  *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
@@ -10,8 +10,11 @@
  *     - Zyklus:
  *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
  *     - Erzeugt Holz über Production.addResource('wood', ...)
- *     - Zeichnet Bäume direkt auf dem Haupt-Canvas in Weltkoordinaten
- *     - Nutzt den trees_mega_atlas als Grafikquelle (Fallback: Punkte)
+ *
+ *   Darstellung:
+ *     - Zeichnet Bäume direkt auf dem HAUPT-CANVAS in Weltkoordinaten
+ *     - KEIN OverlayHooks / kein eigenes Overlay-Canvas für die Bäume
+ *     - Nutzt trees_mega_atlas.* (Fallback: einfacher grüner Punkt)
  *
  * Ereignisse:
  *   IN  :
@@ -25,23 +28,24 @@
  *   API / Debug:
  *     - window.ProductionWood.Lumberjacks
  *     - window.ProductionWood.drawOnMainCanvas(ctx, cam, tileSize)
+ *     - window.ProductionWood.setWorkArea(uid, {cx,cy,radiusTiles})
  * ========================================================================== */
 
 (function(){
   'use strict';
 
-  // =========================
+  // ========================================================================
   // LOGGING / META
-  // =========================
+  // ========================================================================
 
   const TAG  = '[prod-wood]';
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
   const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
 
-  // =========================
+  // ========================================================================
   // KONSTANTEN
-  // =========================
+  // ========================================================================
 
   const LUMBERJACK_ID = 'b.lumberjack';
 
@@ -68,6 +72,7 @@
     urlJson  : 'assets/tex/deco/trees_mega_atlas.json',
     urlImage : 'assets/tex/deco/trees_mega_atlas.png',
 
+    // Logische Phasen → Frame-Namen
     frameMap : {
       PLANT : 'e1_regrow_sprout',
       GROW  : 'e1_regrow_tree_medium',
@@ -78,9 +83,9 @@
     resolvedFrames : null
   };
 
-  // =========================
+  // ========================================================================
   // STATE
-  // =========================
+  // ========================================================================
 
   /** Map<uid, LumberjackState> */
   const Lumberjacks = new Map();
@@ -91,9 +96,9 @@
   let treeAtlasLoaded  = false; // TRUE, wenn das Bild geladen wurde
   let treeAtlasLoading = false; // Ladevorgang bereits gestartet?
 
-  // =========================
-  // HILFSFUNKTIONEN LOGIK
-  // =========================
+  // ========================================================================
+  // HILFSFUNKTIONEN – GENERELL
+  // ========================================================================
 
   function addResource(resId, delta, reason, src){
     if (!window.Production || typeof window.Production.addResource !== 'function'){
@@ -118,7 +123,7 @@
   }
 
   // ----------------------------------------------------------
-  // Kleine Pseudo-Zufallsfunktion aus String (uid-basiert),
+  // Pseudo-Zufall aus String (uid-basiert),
   // damit der Baum-Spot stabil bleibt, aber je Zyklus wechseln kann
   // ----------------------------------------------------------
   function makeRng(seedStr){
@@ -139,6 +144,7 @@
    *
    * - Mittelpunkt = WorkArea.cx / cy (Fallback: Gebäudecenter)
    * - Radius     = WorkArea.radiusTiles (Fallback: 2.5)
+   * - Die Position liegt IMMER im Kreis – nicht mehr „oben links“.
    */
   function recomputeTreePos(lj){
     if (!lj) return;
@@ -262,6 +268,10 @@
     LOG('Lumberjack registriert', state);
   }
 
+  // ========================================================================
+  // TICK / PHASEN-LOGIK
+  // ========================================================================
+
   function tickLumberjack(lj, dtMs){
     lj.timer += dtMs;
 
@@ -339,9 +349,9 @@
     }
   }
 
-  // ==========================================================================
+  // ========================================================================
   // BAUM-ATLAS-LOADING
-  // ==========================================================================
+  // ========================================================================
 
   function ensureTreeAtlasLoaded(){
     if (treeAtlasLoaded || treeAtlasLoading) return;
@@ -445,11 +455,14 @@
     ctx.stroke();
   }
 
-  // --------------------------------------------------------------------------
-  // Zeichnen auf dem Haupt-Canvas (Weltkoordinaten)
-  //   - wird aus game.renderer.js aufgerufen
-  //   - Kamera-Transform ist bereits gesetzt
-  // --------------------------------------------------------------------------
+  // ========================================================================
+  // HAUPT-CANVAS-ZEICHNUNG (Bäume)
+  // ========================================================================
+
+  /**
+   * Wird vom Renderer aufgerufen, nachdem die Kamera-Transform gesetzt wurde.
+   * → ctx ist bereits in Weltkoordinaten transformiert.
+   */
   function drawOnMainCanvas(ctx, cam, tileSize){
     if (!ctx) return;
     if (!Lumberjacks.size) return;
@@ -482,12 +495,10 @@
       const tx = (typeof treePos.tx === 'number') ? treePos.tx : cxTiles;
       const ty = (typeof treePos.ty === 'number') ? treePos.ty : cyTiles;
 
+      // Weltkoordinaten (Kamera-Transform kommt aus game.renderer.js)
       const cxPx = (tx + 0.5) * ts;
       const cyPx = (ty + 1.0) * ts;
 
-      // --------------------------------------------------------------------
-      // 1) Baum – Atlas oder Fallback-Kreis
-      // --------------------------------------------------------------------
       let treeDrawn = false;
 
       if (atlasReady){
@@ -527,15 +538,14 @@
       if (!treeDrawn){
         drawSimpleTreeCircle(ctx, cxPx, cyPx, ts);
       }
-      // (Kein Arbeitskreis hier – der kommt aus game.workarea.js)
     }
 
     ctx.restore();
   }
 
-  // =========================
+  // ========================================================================
   // MODUL-SCHNITTSTELLE FÜR Production-Manager
-  // =========================
+  // ========================================================================
 
   function onBuildComplete(detail){
     registerLumberjackFromBuild(detail);
@@ -576,9 +586,9 @@
     );
   }
 
-  // =========================
+  // ========================================================================
   // Arbeitsbereich-API (für UI / WorkArea-Modul)
-  // =========================
+  // ========================================================================
 
   function setWorkArea(uid, cfg){
     const lj = Lumberjacks.get(uid);
@@ -639,9 +649,9 @@
     );
   }
 
-  // =========================
+  // ========================================================================
   // REGISTRIERUNG BEIM Production-Manager
-  // =========================
+  // ========================================================================
 
   function registerWithManager(){
     if (!window.Production || typeof window.Production.registerModule !== 'function'){
@@ -653,7 +663,7 @@
         onBuildComplete,
         onWorkAreaSet,
         tick,
-        drawOnMainCanvas
+        drawOnMainCanvas   // <-- WICHTIG: Main-Canvas-Zeichner registrieren
       });
       LOG('Produktionsmodul "wood" registriert.');
       return true;
@@ -670,9 +680,9 @@
     }, 200);
   }
 
-  // =========================
+  // ========================================================================
   // DEBUG-EXPORT
-  // =========================
+  // ========================================================================
 
   window.ProductionWood = {
     Lumberjacks,
@@ -687,6 +697,6 @@
     _recomputeTreePos    : recomputeTreePos
   };
 
-  LOG('Holz-Modul geladen v25.12.09-wood-workarea-maincanvas-v2');
+  LOG('Holz-Modul geladen v25.12.10-wood-workarea-maincanvas-final');
 
 })();
