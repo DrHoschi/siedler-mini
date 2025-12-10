@@ -1,46 +1,46 @@
 /* ============================================================================
  * Datei   : core/game.production.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.03-core-manager+workarea
+ * Version : v25.12.10-res-core-v1
  *
  * Zweck   :
- *   Zentrale Produktions-Verwaltung (Manager):
- *     - Hält eine Liste von Produktions-Modulen (wood, fish, stone, …)
- *     - Verteilt Events (z.B. cb:build:complete, cb:workarea:set) an die Module
- *     - Ruft pro Tick alle Module auf
- *     - Stellt eine gemeinsame Ressourcenschreib-API bereit (addResource)
+ *   Zentraler Produktions-Manager + einheitliche Ressourcen-Zählung
  *
- *   WICHTIG:
- *     - KEINE spezifische Gebäude-Logik hier drin (kein Holzfäller-Code)
- *     - Das kommt in core/game.production.wood.js usw.
+ *   – Hält eine Liste von Produktions-Modulen (wood, stone, fish, …)
+ *   – Verteilt Events (cb:build:complete, cb:workarea:set) an die Module
+ *   – Bietet Production.addResource(...) als EINHEITLICHEN Weg zum Zählen
+ *   – Schickt cb:res:change → HUD aktualisiert sich
+ *
+ * Integration:
+ *   – game.tick.js ruft (falls vorhanden) Production.tick() auf
+ *   – Produktions-Module registrieren sich via Production.registerModule({ ... })
+ *   – Holz-/Stein-/Fisch-Modul rufen Production.addResource('wood'|'stone'|'fish', ...)
  *
  * Struktur:
- *   IMPORTS → KONSTANTEN → HILFSFUNKTIONEN → MANAGER-KLASSE → EXPORT
- * ========================================================================== */
-
-(function(){
+ *   IMPORTS (global) → Konstanten → Hilfsfunktionen → Event-Verteiler → Tick →
+ *   Bindings → Export (window.Production)
+ * ============================================================================ */
+(() => {
   'use strict';
 
-  // =========================
-  // KONSOLE / LOG-HILFEN
-  // =========================
-  const TAG  = '[prod-core]';
-  const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
-  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
-  const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
+  // ==========================================================================
+  // KONSTANTEN & LOGGING
+  // ==========================================================================
+  const TAG   = '[game.production]';
+  const LOG   = (...a) => (window.CBLog?.ok   ?? console.log ).call(console,   TAG, ...a);
+  const WARN  = (...a) => (window.CBLog?.warn ?? console.warn).call(console,   TAG, ...a);
+  const ERR   = (...a) => (window.CBLog?.error?? console.error).call(console,  TAG, ...a);
 
-  // =========================
-  // KONSTANTEN
-  // =========================
-  const TICK_MS = 200; // passend zu game.tick.js (Loop alle 200ms)
+  /** Tick-Dauer (ms) – sollte zu core/game.tick.js::TICK_MS passen */
+  const TICK_MS = 200;
 
-  // =========================
-  // INTERNER STATE
-  // =========================
+  // ==========================================================================
+  // LAUFZEIT-STATE
+  // ==========================================================================
 
   /**
    * Liste aller Produktions-Module.
-   * Jedes Modul ist ein Objekt:
+   * Jedes Modul:
    *   {
    *     id: 'wood',
    *     tick?: (dtMs) => void,
@@ -50,43 +50,68 @@
    */
   const MODULES = [];
 
-  /** Ressourcen-Speicher (globaler, einfacher Store) */
+  /**
+   * Globaler Ressourcen-Speicher.
+   *   – Wird außerdem vom HUD gelesen (RegistryValues.*)
+   *   – addResource() ist der einzige Weg, diesen Store zu ändern.
+   */
   const RES_STORE = (window.RegistryValues = window.RegistryValues || {});
 
-  // =========================
-  // HILFSFUNKTIONEN
-  // =========================
+  // ==========================================================================
+  // HILFSFUNKTIONEN – RESSOURCEN
+  // ==========================================================================
 
   /**
    * Ressource ändern + HUD / andere Systeme informieren.
    *
-   * @param {string} resId   – z.B. 'wood'
+   * @param {string} resId   – z.B. 'wood' | 'stone' | 'fish'
    * @param {number} delta   – z.B. +1 / -1
-   * @param {string} reason  – Kurztext für Logs ('prod', 'lumberjack-cycle', ...)
-   * @param {string} src     – Modul/Quelle ('wood', 'fish', ...)
+   * @param {string} reason  – Kurztext für Logs ('lumberjack-cycle', 'stone-cycle', ...)
+   * @param {string} src     – Quelle/Modul ('wood', 'stone', 'fish', 'unit', ...)
    */
-  function addResource(resId, delta, reason, src){
-    if (!resId || !delta) return;
+  function addResource(resId, delta, reason, src) {
+    if (!resId) return;
+    if (!delta || !Number.isFinite(delta)) return;
 
-    const old   = Number(RES_STORE[resId] || 0);
+    const key = String(resId);  // bewusst KEIN 'res.*' Prefix
+    const old = Number(RES_STORE[key] || 0);
     const value = old + delta;
-    RES_STORE[resId] = value;
 
+    RES_STORE[key] = value;
+
+    // Debug-Log optional
+    LOG('Ressource geändert:', { res: key, old, delta, value, reason, src });
+
+    // HUD / andere Systeme informieren
     try {
-      dispatchEvent(new CustomEvent('cb:res:change', {
-        detail:{
-          res   : resId,
+      window.dispatchEvent(new CustomEvent('cb:res:change', {
+        detail: {
+          res   : key,                  // 'wood' | 'stone' | 'fish' ...
           old,
           value,
           delta,
           reason: reason || 'prod',
-          src   : src || TAG
+          src   : src    || TAG
         }
       }));
-    } catch(e){
+    } catch (e) {
       WARN('cb:res:change dispatch fehlgeschlagen', e);
     }
   }
+
+  /**
+   * Aktuellen Wert einer Ressource abfragen.
+   * @param {string} resId
+   * @returns {number}
+   */
+  function getResourceValue(resId) {
+    if (!resId) return 0;
+    return Number(RES_STORE[String(resId)] || 0);
+  }
+
+  // ==========================================================================
+  // MODUL-REGISTRIERUNG
+  // ==========================================================================
 
   /**
    * Produktions-Modul registrieren (z.B. wood, fish, stone, …)
@@ -97,7 +122,7 @@
    *   - onBuildComplete?: (detail:object) => void
    *   - onWorkAreaSet?: (detail:object) => void
    */
-  function registerModule(mod){
+  function registerModule(mod) {
     if (!mod || !mod.id) {
       WARN('registerModule ohne id aufgerufen', mod);
       return;
@@ -106,19 +131,24 @@
     LOG('Modul registriert:', mod.id);
   }
 
+  // ==========================================================================
+  // EVENT-VERTEILER
+  // ==========================================================================
+
   /**
    * Event-Verteiler für cb:build:complete.
-   * Hier werden ALLE Produktions-Module informert, die onBuildComplete haben.
+   *   – Wird aufgerufen, wenn ein Gebäude fertig gebaut ist.
+   *   – Alle Module, die onBuildComplete haben, bekommen das detail.
    */
-  function handleBuildComplete(ev){
+  function handleBuildComplete(ev) {
     const d = ev?.detail || {};
     if (!d) return;
 
-    for (const mod of MODULES){
-      if (typeof mod.onBuildComplete === 'function'){
+    for (const mod of MODULES) {
+      if (typeof mod.onBuildComplete === 'function') {
         try {
           mod.onBuildComplete(d);
-        } catch(e){
+        } catch (e) {
           ERR('Fehler in Modul.onBuildComplete:', mod.id, e);
         }
       }
@@ -127,64 +157,74 @@
 
   /**
    * Event-Verteiler für cb:workarea:set.
-   * Hier werden ALLE Produktions-Module informert, die onWorkAreaSet haben.
+   *   – Wird aufgerufen, wenn der Arbeitsbereich eines Gebäudes gesetzt/verschoben wird.
    *
    * detail:
    *   { id, uid, cx, cy, radiusTiles, x, y, w, h }
    */
-  function handleWorkAreaSet(ev){
+  function handleWorkAreaSet(ev) {
     const d = ev?.detail || {};
     if (!d) return;
 
-    for (const mod of MODULES){
-      if (typeof mod.onWorkAreaSet === 'function'){
+    for (const mod of MODULES) {
+      if (typeof mod.onWorkAreaSet === 'function') {
         try {
           mod.onWorkAreaSet(d);
-        } catch(e){
+        } catch (e) {
           ERR('Fehler in Modul.onWorkAreaSet:', mod.id, e);
         }
       }
     }
   }
 
+  // ==========================================================================
+  // ZENTRALER TICK (wird von core/game.tick.js aufgerufen)
+  // ==========================================================================
+
   /**
-   * Zentraler Tick – wird von core/game.tick.js aufgerufen.
+   * Zentraler Tick – wird von core/game.tick.js alle TICK_MS aufgerufen.
+   *   – Reicht dtMs an alle Module durch (damit Zyklen funktionieren).
    */
-  function tick(){
-    for (const mod of MODULES){
-      if (typeof mod.tick === 'function'){
+  function tick() {
+    for (const mod of MODULES) {
+      if (typeof mod.tick === 'function') {
         try {
           mod.tick(TICK_MS);
-        } catch(e){
+        } catch (e) {
           ERR('Fehler in Modul.tick:', mod.id, e);
         }
       }
     }
   }
 
-  // =========================
-  // EVENT-BINDINGS
-  // =========================
+  // ==========================================================================
+  // EVENT-BINDINGS (einmalig)
+  // ==========================================================================
 
-  // Fertiggestelltes Gebäude → an Produktions-Module verteilen
-  window.addEventListener('cb:build:complete', handleBuildComplete, { passive:true });
+  // Gebäude fertiggestellt → an Produktions-Module verteilen
+  window.addEventListener('cb:build:complete', handleBuildComplete, { passive: true });
 
   // Arbeitsbereich geändert → an Produktions-Module verteilen
-  window.addEventListener('cb:workarea:set', handleWorkAreaSet, { passive:true });
+  window.addEventListener('cb:workarea:set', handleWorkAreaSet, { passive: true });
 
-  // =========================
+  // ==========================================================================
   // EXPORT / GLOBAL-API
-  // =========================
+  // ==========================================================================
 
-  window.Production = window.Production || {};
-  window.Production.registerModule = registerModule;
-  window.Production.addResource    = addResource;
-  window.Production.tick           = tick;
-  window.Production._state         = {
+  // Bestehendes Production-Objekt NICHT zerstören (wegen core/production.js)
+  const Prod = (window.Production = window.Production || {});
+
+  // Nur ergänzen/überschreiben, was wir wirklich brauchen:
+  Prod.registerModule   = registerModule;
+  Prod.addResource      = addResource;
+  Prod.getResourceValue = getResourceValue;
+  Prod.tick             = tick;
+
+  // Debug-/Inspector-Einblick
+  Prod._state = {
     MODULES,
     RES_STORE
   };
 
-  LOG('Manager geladen v25.12.03-core-manager+workarea');
-
+  LOG('Manager geladen v25.12.10-res-core-v1');
 })();
