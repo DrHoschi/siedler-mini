@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.09-workarea-maincanvas-prod
+ * Version : v25.12.10-workarea-maincanvas-prod-v2
  *
  * Zweck   :
  *   Zentraler Renderer für:
@@ -15,7 +15,7 @@
  * WICHTIG:
  *   - KEINE ES-Module (kein import/export), sondern klassisches IIFE
  *   - `window.Renderer` wird global bereitgestellt
- *   - Game.js ruft dann `Renderer.init(Game)` + `Renderer.draw(Game)` auf
+ *   - game.js ruft dann `Renderer.init(Game)` + `Renderer.draw(Game)` auf
  * ============================================================================ */
 
 (function () {
@@ -175,10 +175,12 @@
         window.ProductionStone.drawOnMainCanvas(ctx, cam, this.tile);
       }
 
+      // Ab hier keine Welt-Transform mehr
       ctx.restore();
 
       // -----------------------------------------------------------
       // 4. Overlays (Pfade, Units etc.) auf eigenem Overlay-Canvas
+      //     → Screen-Space, LOSGELÖST von der Kameratransform.
       // -----------------------------------------------------------
       this.drawOverlays();
     },
@@ -263,6 +265,6 @@
   // Global verfügbar machen, damit game.js darauf zugreifen kann
   window.Renderer = Renderer;
 
-  LOG('Modul geladen – Renderer global verfügbar (mit Holz/Stein auf MainCanvas).');
+  LOG('Modul geladen – Renderer global verfügbar (WorkArea + Holz/Stein auf MainCanvas).');
 
 })();
