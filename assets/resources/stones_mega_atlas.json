@@ -3,7 +3,7 @@
     "name": "stones_mega_atlas",
     "image": "assets/resources/stones_mega_atlas.png",
     "size": { "w": 1024, "h": 1024 },
-    "tileSize": { "w": 128, "h": 128 },
+    "tileSize": { "w": 64, "h": 64 },
     "cols": 8,
     "rows": 8,
     "version": "v25.12.02"
