@@ -1,10 +1,10 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-wood-workarea-maincanvas-final
+ * Version : v25.12.10-wood-workarea-maincanvas-final-v2
  *
  * Zweck   :
- *   Spezielle Produktionslogik für Holz / Förster / Holzfäller:
+ *   Produktionslogik für Holz / Förster / Holzfäller:
  *     - Reagiert auf cb:build:complete für b.lumberjack
  *     - Legt pro Holzfäller ein eigenes State-Objekt an
  *     - Zyklus:
@@ -13,7 +13,7 @@
  *
  *   Darstellung:
  *     - Zeichnet Bäume direkt auf dem HAUPT-CANVAS in Weltkoordinaten
- *     - KEIN OverlayHooks / kein eigenes Overlay-Canvas für die Bäume
+ *     - KEIN OverlayHooks mehr, kein eigenes Overlay-Canvas
  *     - Nutzt trees_mega_atlas.* (Fallback: einfacher grüner Punkt)
  *
  * Ereignisse:
@@ -122,10 +122,8 @@
     return `${id}@${x},${y}`;
   }
 
-  // ----------------------------------------------------------
   // Pseudo-Zufall aus String (uid-basiert),
   // damit der Baum-Spot stabil bleibt, aber je Zyklus wechseln kann
-  // ----------------------------------------------------------
   function makeRng(seedStr){
     let s = 0;
     for (let i=0; i<seedStr.length; i++){
@@ -144,7 +142,6 @@
    *
    * - Mittelpunkt = WorkArea.cx / cy (Fallback: Gebäudecenter)
    * - Radius     = WorkArea.radiusTiles (Fallback: 2.5)
-   * - Die Position liegt IMMER im Kreis – nicht mehr „oben links“.
    */
   function recomputeTreePos(lj){
     if (!lj) return;
@@ -697,6 +694,6 @@
     _recomputeTreePos    : recomputeTreePos
   };
 
-  LOG('Holz-Modul geladen v25.12.10-wood-workarea-maincanvas-final');
+  LOG('Holz-Modul geladen v25.12.10-wood-workarea-maincanvas-final-v2');
 
 })();
