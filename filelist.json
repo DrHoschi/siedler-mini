@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-10T09:03:54.990Z",
+  "createdAt": "2025-12-10T18:03:06.856Z",
   "root": ".",
-  "count": 538,
+  "count": 542,
   "entries": [
     {
       "type": "dir",
@@ -660,7 +660,12 @@
     },
     {
       "type": "file",
-      "path": "assets/resources/fish/fish_resource_1024.png",
+      "path": "assets/resources/fish/fish_mega_atlas.json",
+      "size": 11693
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/fish/fish_mega_atlas.png",
       "size": 1940021
     },
     {
@@ -691,7 +696,7 @@
     {
       "type": "file",
       "path": "assets/resources/stones_mega_atlas.json",
-      "size": 7686
+      "size": 7684
     },
     {
       "type": "file",
@@ -790,6 +795,11 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas_assetsDraw.json",
+      "size": 3086
+    },
+    {
+      "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas_padded.png",
       "size": 679484
     },
@@ -805,18 +815,28 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas-old.json",
+      "size": 3087
+    },
+    {
+      "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas-test.json",
       "size": 7778
     },
     {
       "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas.json",
-      "size": 3087
+      "size": 11836
     },
     {
       "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas.png",
       "size": 2010739
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/trees_mega_phaser_map.json",
+      "size": 1786
     },
     {
       "type": "dir",
@@ -1399,7 +1419,7 @@
     {
       "type": "file",
       "path": "core/game.production.fish.js",
-      "size": 17878
+      "size": 20045
     },
     {
       "type": "file",
@@ -1409,12 +1429,12 @@
     {
       "type": "file",
       "path": "core/game.production.stone.js",
-      "size": 17115
+      "size": 22571
     },
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 20504
+      "size": 27689
     },
     {
       "type": "file",
@@ -2582,12 +2602,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 61472
+      "size": 53586
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 24825
+      "size": 20783
     },
     {
       "type": "file",
