@@ -1,8 +1,10 @@
 {
   "meta": {
     "name": "trees_mega_atlas",
-    "image": "assets/resources/trees_mega_atlas.png",
+    "image": "assets/tex/deco/trees_mega_atlas.png",
     "size": { "w": 1024, "h": 1024 },
+    "cols": 8,
+    "rows": 8,
     "tool": "sprite-atlas-tool",
     "toolVersion": "v25.12.09",
     "exportedAt": "2025-12-09T22:27:09.025Z",
