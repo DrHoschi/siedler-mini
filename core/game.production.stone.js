@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-stone-workarea-maincanvas-final
+ * Version : v25.12.10-stone-workarea-maincanvas-v2
  *
  * Zweck   :
  *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
@@ -54,9 +54,13 @@
   // Anzahl Felsen pro Feld
   const STONES_PER_FIELD = 7;
 
-  // Radius-Bereich um das Gebäude / den WorkArea-Mittelpunkt
-  const STONE_RADIUS_MIN = 1.2;
+  // Radius-Bereich um den WorkArea-Mittelpunkt (in Tiles)
+  const STONE_RADIUS_MIN = 1.4;
   const STONE_RADIUS_MAX = 3.0;
+
+  // Sicherheitsabstand um den Gebäude-Footprint (in Tiles),
+  // damit Felsen nicht AUF dem Gebäude liegen.
+  const BUILDING_MARGIN  = 0.4;
 
   // Abbau-Stufen
   const STONE_STAGE = [
@@ -128,6 +132,19 @@
     return false;
   }
 
+  // Prüft, ob ein Tile (tx,ty) innerhalb des Gebäude-Footprints
+  // + kleinem Rand (BUILDING_MARGIN) liegt.
+  function isInsideBuildingFootprint(tx, ty, field){
+    const margin = BUILDING_MARGIN;
+
+    const minX = field.x - margin;
+    const maxX = field.x + field.w + margin;
+    const minY = field.y - margin;
+    const maxY = field.y + field.h + margin;
+
+    return (tx >= minX && tx <= maxX && ty >= minY && ty <= maxY);
+  }
+
   // ========================================================================
   // ATLAS-LADEN + AUFBEREITEN
   // ========================================================================
@@ -196,8 +213,8 @@
     // 2) Gruppen (RAW_BIG, RUBBLE_...) aus Präfixen auflösen
     if (!STONE_ATLAS_CFG.groupFrames){
       const groupFrames = {};
-      const frames = stoneAtlas.frames || {};
-      const groupDefs = STONE_ATLAS_CFG.groups || {};
+      const frames      = stoneAtlas.frames || {};
+      const groupDefs   = STONE_ATLAS_CFG.groups || {};
 
       for (const name of Object.keys(frames)){
         for (const [gName, prefix] of Object.entries(groupDefs)){
@@ -223,7 +240,7 @@
     const f = frames && frames[key];
     if (!f || !stoneAtlasImg) return false;
 
-    const s  = (typeof scale === 'number' && scale>0) ? scale : 1;
+    const s  = (typeof scale === 'number' && scale > 0) ? scale : 1;
     const dw = f.w * s;
     const dh = f.h * s;
 
@@ -272,8 +289,8 @@
       x, y, w, h,
       cx : cxTiles,
       cy : cyTiles,
-      workArea : null,
-      stones : []
+      workArea : null,   // wird von cb:workarea:set ggf. überschrieben
+      stones   : []
     };
 
     createRandomLayoutForField(field);
@@ -283,18 +300,44 @@
     ensureStoneAtlasLoaded();
   }
 
+  /**
+   * Legt zufällige Steine im Arbeitsbereich an:
+   *   - Zentrum = WorkArea.cx/cy (Fallback: Gebäudecenter)
+   *   - Radius  = WorkArea.radiusTiles (Fallback: STONE_RADIUS_MAX)
+   *   - KEINE Steine innerhalb des Gebäude-Footprints (+Margin)
+   */
   function createRandomLayoutForField(field){
     const rng = makeRng(field.uid);
     field.stones.length = 0;
 
+    const wa   = field.workArea || {};
+    const cxt  = (typeof wa.cx === 'number') ? wa.cx : field.cx;
+    const cyt  = (typeof wa.cy === 'number') ? wa.cy : field.cy;
+    const rMax = (typeof wa.radiusTiles === 'number')
+      ? wa.radiusTiles
+      : STONE_RADIUS_MAX;
+    const rMin = STONE_RADIUS_MIN;
+
     const count = STONES_PER_FIELD;
 
     for (let i=0; i<count; i++){
-      const angle  = rng() * Math.PI * 2;
-      const radius = STONE_RADIUS_MIN + (STONE_RADIUS_MAX - STONE_RADIUS_MIN) * rng();
+      let tx = cxt;
+      let ty = cyt;
 
-      const tx = field.cx + Math.cos(angle) * radius;
-      const ty = field.cy + Math.sin(angle) * radius;
+      // Bis zu 30 Versuche, einen Punkt zu finden, der
+      //   - im Kreis [rMin, rMax] liegt
+      //   - NICHT im Gebäude-Footprint liegt
+      for (let tries=0; tries<30; tries++){
+        const angle  = rng() * Math.PI * 2;
+        const radius = rMin + (rMax - rMin) * rng();
+
+        tx = cxt + Math.cos(angle) * radius;
+        ty = cyt + Math.sin(angle) * radius;
+
+        if (!isInsideBuildingFootprint(tx, ty, field)){
+          break;
+        }
+      }
 
       const scale = 0.85 + 0.3 * rng();
 
@@ -318,12 +361,16 @@
   }
 
   // ========================================================================
-  // ZEICHNUNG AUF DEM HAUPT-CANVAS (Steine)
+  // ZEICHNUNG AUF DEM HAUPT-CANVAS (Steine, Y-sortiert)
   // ========================================================================
 
   /**
    * Wird vom Renderer nach Kamera-Transform aufgerufen.
    * ctx ist damit bereits in Weltkoordinaten.
+   *
+   * Neu:
+   *   - Alle Steine werden zunächst gesammelt und nach ihrer
+   *     Bildschirm-Y-Position sortiert → Depth-Ordering von oben nach unten.
    */
   function drawOnMainCanvas(ctx, cam, tileSize){
     if (!ctx) return;
@@ -339,7 +386,8 @@
 
     const atlasReady = ensureStoneAtlasReady();
 
-    ctx.save();
+    // Sammelliste für alle Steine über alle StoneFields
+    const drawList = [];
 
     for (const field of StoneFields.values()){
       const stones = field.stones || [];
@@ -354,31 +402,50 @@
         const cxPx = (tx + 0.5) * ts;
         const cyPx = (ty + 1.0) * ts;
 
-        let drawn = false;
+        drawList.push({
+          cyPx,
+          cxPx,
+          stone : s
+        });
+      }
+    }
 
-        if (atlasReady){
-          const stageName = STONE_STAGE[s.stageIndex] || null;
-          const groupFrames = stageName &&
-                              STONE_ATLAS_CFG.groupFrames &&
-                              STONE_ATLAS_CFG.groupFrames[stageName];
+    if (!drawList.length) return;
 
-          if (groupFrames && groupFrames.length){
-            const frameName = groupFrames[s.variant % groupFrames.length];
-            drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale);
-          }
+    // Y-Sortierung (kleine y zuerst → oben, große y zuletzt → "vorne")
+    drawList.sort((a, b) => a.cyPx - b.cyPx);
+
+    ctx.save();
+
+    for (const entry of drawList){
+      const s    = entry.stone;
+      const cxPx = entry.cxPx;
+      const cyPx = entry.cyPx;
+
+      let drawn = false;
+
+      if (atlasReady){
+        const stageName   = STONE_STAGE[s.stageIndex] || null;
+        const groupFrames = stageName &&
+                            STONE_ATLAS_CFG.groupFrames &&
+                            STONE_ATLAS_CFG.groupFrames[stageName];
+
+        if (groupFrames && groupFrames.length){
+          const frameName = groupFrames[s.variant % groupFrames.length];
+          drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale);
         }
+      }
 
-        if (!drawn){
-          // Fallback-Kreis
-          const r = ts * 0.35;
-          ctx.beginPath();
-          ctx.fillStyle   = '#888888';
-          ctx.strokeStyle = '#444444';
-          ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-          ctx.arc(cxPx, cyPx - r * 0.2, r, 0, Math.PI*2);
-          ctx.fill();
-          ctx.stroke();
-        }
+      if (!drawn){
+        // Fallback-Kreis
+        const r = ts * 0.35;
+        ctx.beginPath();
+        ctx.fillStyle   = '#888888';
+        ctx.strokeStyle = '#444444';
+        ctx.lineWidth   = Math.max(1.5, ts * 0.04);
+        ctx.arc(cxPx, cyPx - r * 0.2, r, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
       }
     }
 
@@ -393,6 +460,7 @@
     const stones = field.stones || [];
     if (!stones.length) return null;
 
+    // Immer erst große Steine abbauen, dann Geröll
     for (let stageIndex=0; stageIndex<STONE_STAGE.length; stageIndex++){
       const candidatesIdx = [];
       for (let i=0; i<stones.length; i++){
@@ -462,40 +530,37 @@
   }
 
   function onWorkAreaSet(detail){
-  if (!detail) return;
+    if (!detail) return;
+    const kind = (detail.id || '').toLowerCase();
+    if (!isStoneBuildingId(kind)) return;
 
-  // wie beim Build: id || buildingId || kind
-  const kindRaw = detail.id || detail.buildingId || detail.kind || '';
-  const kind    = String(kindRaw).toLowerCase();
-  if (!isStoneBuildingId(kind)) return;
+    const x   = detail.x | 0;
+    const y   = detail.y | 0;
+    const uid = detail.uid || `${kind}@${x},${y}`;
 
-  const x   = detail.x | 0;
-  const y   = detail.y | 0;
-  const uid = detail.uid || `${kind}@${x},${y}`;
+    const field = StoneFields.get(uid);
+    if (!field){
+      return;
+    }
 
-  const field = StoneFields.get(uid);
-  if (!field){
-    return;
+    const radius = (typeof detail.radiusTiles === 'number')
+      ? detail.radiusTiles
+      : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
+
+    field.workArea = {
+      cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
+      cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
+      radiusTiles: radius
+    };
+
+    field.cx = field.workArea.cx;
+    field.cy = field.workArea.cy;
+
+    // neues Layout innerhalb des (neuen) Arbeitsbereiches
+    createRandomLayoutForField(field);
+
+    LOG(TAG, 'Arbeitsbereich aktualisiert:', uid, field.workArea);
   }
-
-  const radius = (typeof detail.radiusTiles === 'number')
-    ? detail.radiusTiles
-    : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
-
-  field.workArea = {
-    cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
-    cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
-    radiusTiles: radius
-  };
-
-  field.cx = field.workArea.cx;
-  field.cy = field.workArea.cy;
-
-  // neues Layout innerhalb des (neuen) Arbeitsbereiches
-  createRandomLayoutForField(field);
-
-  LOG('Arbeitsbereich aktualisiert:', uid, field.workArea);
-}
 
   function tick(dtMs){
     // aktuell keine eigene Zeit-Logik nötig
@@ -601,6 +666,6 @@
     _degradeField : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-final');
+  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-v2');
 
 })();
