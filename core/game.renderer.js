@@ -4,18 +4,22 @@
  * Version : v25.12.10-workarea-maincanvas-prod-v3
  *
  * Zweck   :
- *   Zentraler Renderer für:
- *   - Map / Terrain (Fallback, falls GameMap.render nicht alles übernimmt)
- *   - Gebäude / Baustellen (mit einfachen Platzhalter-Grafiken)
- *   - Debug-/Produktions-Overlays:
- *       • WorkArea (direkt auf Haupt-Canvas, Weltkoordinaten)
- *       • Holz/Stein/Fisch-Produktion (direkt auf Haupt-Canvas, Weltkoordinaten)
- *       • Pfade/Units über OverlayHooks auf separatem Overlay-Canvas (Screen-Space)
+ *   Zusatz-Renderer für:
+ *   - Arbeitsbereiche (WorkArea) direkt auf dem Haupt-Canvas
+ *   - Produktions-Overlays (Holz / Stein / Fisch) direkt auf dem Haupt-Canvas
+ *   - Pfade/Units über OverlayHooks auf separatem Overlay-Canvas (#overlay)
  *
  * WICHTIG:
- *   - KEINE ES-Module (kein import/export), sondern klassisches IIFE
- *   - `window.Renderer` wird global bereitgestellt
- *   - game.js ruft dann `Renderer.init(Game)` + `Renderer.draw(Game)` auf
+ *   - Die eigentliche Map + Gebäude werden von GameMap.render gezeichnet.
+ *   - GameMap.render setzt bereits die Kamera-Transform (Pan + Zoom).
+ *   - Renderer.draw **setzt KEINE eigene Kamera-Transform mehr**, sondern
+ *     zeichnet einfach in den bestehenden Welt-Koordinaten weiter.
+ *
+ *   Aufruf-Reihenfolge (game.js):
+ *     1) GameMap.render(Game)      → Terrain + Gebäude, Kamera gesetzt
+ *     2) GameConstruction.render() → Baustellen-Drops etc.
+ *     3) Renderer.draw(Game)       → WorkArea + Produktion (Holz/Stein/Fisch)
+ *     4) OverlayHooks.render()     → Pfad-/Unit-Overlays im Overlay-Canvas
  * ============================================================================ */
 
 (function () {
@@ -64,8 +68,8 @@
      * Erwartet das zentrale Game-Objekt mit:
      *   - Game.canvas (Haupt-Canvas)
      *   - Game.ctx    (2D-Context)
-     *   - Game.map    (mit tileSize, draw / drawLayersCulled)
-     *   - Game.camera (optional, mit applyTransform / toScreen)
+     *   - Game.map    (mit tileSize)
+     *   - Game.camera (GameCamera, wird aber NICHT hier transformiert)
      */
     init(game) {
       this.game = game;
@@ -103,94 +107,91 @@
 
     /**
      * Haupt-Zeichnen pro Frame.
-     * Wird aus game.js als `Renderer.draw(Game)` aufgerufen.
+     *
+     * ACHTUNG:
+     *   - GameMap.render wurde bereits aufgerufen und hat:
+     *       • den Canvas gecleart
+     *       • die Kamera-Transform (Pan + Zoom) gesetzt
+     *       • Terrain + Gebäude gezeichnet
+     *   - Hier NICHT noch einmal setTransform aufrufen!
      */
     draw(gameArg) {
       const g   = gameArg || this.game;
       const ctx = this.ctx;
       if (!g || !ctx) return;
 
-      const cam = g.camera || null;
+      const cam = g.camera || window.GameCamera || null;
 
+      // Wir gehen davon aus, dass die aktuelle Transform bereits
+      // die Welt-Koordinaten (mit Kamera) repräsentiert.
       ctx.save();
 
-      // -----------------------------------------------------------
-      // 1. Kamera-Transform setzen (falls vorhanden)
-      // -----------------------------------------------------------
-      if (cam && typeof cam.applyTransform === 'function') {
-        // Neues Kamera-Modul
-        cam.applyTransform(ctx);
-      } else if (cam && typeof cam.toScreen === 'function') {
-        // Älteres Kamera-Modul: einfache translate/scale
-        const z = cam.zoom || 1;
-        ctx.translate(-cam.x * z, -cam.y * z);
-        ctx.scale(z, z);
-      } else {
-        // Fallback: Identitäts-Transform
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-      }
+      const tileSize = this.tile;
 
       // -----------------------------------------------------------
-      // 2. Map zeichnen (Boden / Terrain)
-      //    → nur als Fallback, falls GameMap.render nicht alles macht.
+      // 1. Arbeitsbereiche (WorkAreas) direkt auf dem Haupt-Canvas
       // -----------------------------------------------------------
-      const map = g.map;
+      try {
+        if (window.GameWorkArea) {
+          const wa = window.GameWorkArea;
 
-      if (map) {
-        if (typeof map.drawLayersCulled === 'function') {
-          map.drawLayersCulled(ctx);
-        } else if (typeof map.draw === 'function') {
-          map.draw(ctx);
-        } else if (typeof map.render === 'function') {
-          map.render(ctx);
+          if (typeof wa.drawWorld === 'function') {
+            // Neuer, "sauberer" Weg: Welt-Koordinaten mit tileSize + Kamera
+            const camState =
+              (cam && typeof cam.getState === 'function')
+                ? cam.getState()
+                : (window.GameCamera?.getState?.() || { x: 0, y: 0, zoom: 1 });
+
+            wa.drawWorld(ctx, { tileSize, camera: camState });
+          } else if (typeof wa.drawOnMainCanvas === 'function') {
+            // Fallback: ältere Variante
+            wa.drawOnMainCanvas(ctx, cam, tileSize);
+          }
         }
+      } catch (e) {
+        WARN('WorkArea-Zeichnung Fehler:', e);
       }
 
       // -----------------------------------------------------------
-      // 3. Gebäude / Baustellen zeichnen
+      // 2. Produktions-Overlays (Holz, Stein, Fisch) auf Haupt-Canvas
+      //    → zeichnen in Welt-Koordinaten, nutzen dieselbe Transform.
       // -----------------------------------------------------------
-      const list = getBuildingsList(g);
-      for (const b of list) {
-        this.drawBuilding(b);
+      try {
+        if (window.ProductionWood && typeof window.ProductionWood.drawOnMainCanvas === 'function') {
+          window.ProductionWood.drawOnMainCanvas(ctx, cam, tileSize);
+        }
+      } catch (e) {
+        WARN('ProductionWood.drawOnMainCanvas Fehler:', e);
       }
 
-      // -----------------------------------------------------------
-      // 3b. Arbeitsbereiche (WorkAreas) direkt auf dem Haupt-Canvas
-      //     zeichnen – mit derselben Kamera-Transform wie die Gebäude.
-      // -----------------------------------------------------------
-      if (window.GameWorkArea && typeof window.GameWorkArea.drawOnMainCanvas === 'function') {
-        // WICHTIG: tileSize mitgeben, sonst zeichnet game.workarea.js nichts
-        window.GameWorkArea.drawOnMainCanvas(ctx, cam, this.tile);
+      try {
+        if (window.ProductionStone && typeof window.ProductionStone.drawOnMainCanvas === 'function') {
+          window.ProductionStone.drawOnMainCanvas(ctx, cam, tileSize);
+        }
+      } catch (e) {
+        WARN('ProductionStone.drawOnMainCanvas Fehler:', e);
       }
 
-      // -----------------------------------------------------------
-      // 3c. Produktions-Overlays (Holz / Stein / Fisch) auf dem Haupt-Canvas
-      //     → gleiche Kamera-Transform wie Map/Gebäude, kein eigenes Overlay.
-      // -----------------------------------------------------------
-      if (window.ProductionWood && typeof window.ProductionWood.drawOnMainCanvas === 'function') {
-        window.ProductionWood.drawOnMainCanvas(ctx, cam, this.tile);
+      try {
+        if (window.ProductionFish && typeof window.ProductionFish.drawOnMainCanvas === 'function') {
+          window.ProductionFish.drawOnMainCanvas(ctx, cam, tileSize);
+        }
+      } catch (e) {
+        WARN('ProductionFish.drawOnMainCanvas Fehler:', e);
       }
 
-      if (window.ProductionStone && typeof window.ProductionStone.drawOnMainCanvas === 'function') {
-        window.ProductionStone.drawOnMainCanvas(ctx, cam, this.tile);
-      }
-
-      if (window.ProductionFish && typeof window.ProductionFish.drawOnMainCanvas === 'function') {
-        window.ProductionFish.drawOnMainCanvas(ctx, cam, this.tile);
-      }
-
-      // Ab hier keine Welt-Transform mehr
       ctx.restore();
 
       // -----------------------------------------------------------
-      // 4. Overlays (Pfade, Units etc.) auf eigenem Overlay-Canvas
+      // 3. Overlays (Pfade, Units etc.) auf eigenem Overlay-Canvas
       //     → Screen-Space, LOSGELÖST von der Kameratransform.
       // -----------------------------------------------------------
       this.drawOverlays();
     },
 
     // -----------------------------------------------------------------
-    // Gebäude ODER Baustelle zeichnen
+    // Gebäude zeichnen (wird aktuell NICHT benutzt, Map macht das)
+    //   – bleibt als Reserve / späterer Ausbau drin.
     // -----------------------------------------------------------------
     drawBuilding(b) {
       if (!b) return;
@@ -228,12 +229,10 @@
       const imgKey = def.img || def.sprite || def.icon;
       const img    = window.Assets?.get ? Assets.get(imgKey) : null;
 
-      // Falls Sprite fehlt, zeichnen wir NICHTS (kein roter Debug-Block mehr)
       if (!img) {
-        return;
+        return; // kein Fallback-Block, um Dopplungen zu vermeiden
       }
 
-      // Einfaches Draw – später gerne durch isometrische Projektion ersetzen
       ctx.drawImage(
         img,
         px, py,
@@ -269,6 +268,6 @@
   // Global verfügbar machen, damit game.js darauf zugreifen kann
   window.Renderer = Renderer;
 
-  LOG('Modul geladen – Renderer global verfügbar (WorkArea + Holz/Stein/Fisch auf MainCanvas).');
+  LOG('Modul geladen – Renderer global verfügbar (WorkArea + Produktion auf MainCanvas).');
 
 })();
