@@ -1,41 +1,39 @@
 /* ============================================================================
  * Datei   : core/game.production.fish.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-fish-workarea-maincanvas-v1
+ * Version : v25.12.10-fish-workarea-water-maincanvas-final
  *
  * Zweck   :
- *   Visuelle Darstellung & einfache Produktionslogik für Fisch:
- *     - Reagiert auf cb:build:complete für Fisch-Gebäude (Fischerhütte, Fishery ...)
- *     - Legt pro Gebäude ein "FishField" an (Schwarm-Bereich im Wasser)
- *     - Zeichnet Fische direkt auf dem HAUPT-CANVAS im Arbeitsbereich
- *     - Nutzt fish_mega_atlas.* als Grafikquelle (Fallback: einfache Kreise)
+ *   Produktions-/Deko-Logik für Fisch (Fischerhütte):
+ *     - Reagiert auf cb:build:complete für Fischer-Gebäude
+ *     - Legt pro Gebäude ein eigenes "Fischfeld" an
+ *     - Verteilt Fische IM Arbeitsbereich (WorkArea)
+ *     - Fische dürfen NUR auf Wasser-Tiles (ID 8 oder 9) liegen
+ *     - Zeichnet Fische + "arbeitenden Fischer" direkt auf dem HAUPT-CANVAS
  *
- *   Optional:
- *     - Reagiert auf cb:prod:output { item:'fish', ... }
- *       → könnte z.B. den Fischschwarm ausdünnen / animieren
+ *   Darstellung:
+ *     - KEIN OverlayHooks, kein eigenes Overlay-Canvas
+ *     - Nutzt fish_mega_atlas.* (Fallback: einfache blaue Punkte)
  *
  * Ereignisse:
  *   IN  :
  *     - cb:build:complete { id, uid?, x,y,w,h, ... }
  *     - cb:workarea:set   { id|buildingId|kind, uid, cx,cy,radiusTiles, x,y,w,h }
- *     - cb:prod:output    { bId, kind, item:'fish', qty }  (optional)
  *
  *   OUT :
- *     - aktuell keine eigenen Events (nur Deko / Visualisierung)
+ *     - aktuell keine eigenen Produktions-Events (nur Deko + Worker)
  *
- * Debug / API:
- *   - window.ProductionFish.fields
- *   - window.ProductionFish.drawOnMainCanvas(ctx, cam, tileSize)
- *   - window.ProductionFish.ensureAtlas()
- *
- * WICHTIG:
- *   - KEINE OverlayHooks, KEIN eigenes Overlay-Canvas.
- *   - Renderer ruft ProductionFish.drawOnMainCanvas(ctx, cam, tileSize)
- *     im gleichen Kamera-Kontext auf wie Map & Gebäude.
+ *   API / Debug:
+ *     - window.ProductionFish.fields
+ *     - window.ProductionFish.drawOnMainCanvas(ctx, cam, tileSize)
  * ========================================================================== */
 
 (function(){
   'use strict';
+
+  // ========================================================================
+  // LOGGING / META
+  // ========================================================================
 
   const TAG  = '[prod-fish]';
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
@@ -46,53 +44,64 @@
   // KONSTANTEN
   // ========================================================================
 
-  // Alle Building-IDs, die als "Fischerhütte / Fishery" gelten sollen.
+  // Mögliche IDs für Fischerhütte / Fischer-Gebäude
+  // → großzügig, damit wir alle Varianten erwischen.
   const FISH_BUILDING_IDS = new Set([
+    'b.fish',
     'b.fishery',
-    'fishery',
     'b.fisher',
+    'b.fischer',
+    'fish',
+    'fishery',
     'fisher',
-    'b.fischerhuette',
-    'fischerhuette',
-    'b.fisher_hut',
-    'fisher_hut'
+    'fischer'
   ]);
 
-  // Anzahl Fische pro Field
-  const FISH_PER_FIELD = 8;
+  // Anzahl Fische pro Feld (pro Gebäude)
+  const FISH_PER_FIELD = 10;
 
-  // Radius um den WorkArea-Mittelpunkt (in Tiles)
-  const FISH_RADIUS_MIN = 1.5;
-  const FISH_RADIUS_MAX = 3.5;
+  // Basis-Radius um den Arbeitsbereich (in Tiles)
+  // → tatsächlicher Radius = WorkArea.radiusTiles (falls gesetzt),
+  //   sonst diese Default-Werte.
+  const FISH_RADIUS_MIN = 2.0;
+  const FISH_RADIUS_MAX = 6.0;
 
-  // "Zustände" im Schwarm (z.B. für spätere Animation / Depletion)
-  const FISH_STAGE = [
-    'IDLE',
-    'JUMP',
-    'DIVE'
-  ];
+  // Wasser-Tile-IDs laut deiner Map (z. B. map-epoch1.json)
+  const WATER_TILE_IDS = new Set([8, 9]);
 
-  // Atlas-Konfiguration (bitte bei Bedarf an deine Pfade anpassen)
+  // Atlas-Konfiguration Fisch
   const FISH_ATLAS_CFG = {
     urlJson  : 'assets/resources/fish_mega_atlas.json',
     urlImage : 'assets/resources/fish_mega_atlas.png',
 
-    // Logische Gruppen → Präfixe im Atlas
-    groups   : {
-      IDLE : 'fish_idle_',
-      JUMP : 'fish_jump_',
-      DIVE : 'fish_dive_'
-    },
-
-    resolvedFrames : null,
-    groupFrames    : null
+    resolvedFrames : null,  // Name → {x,y,w,h,pivotX,pivotY}
+    frameNames     : null   // Array aller verfügbaren Framenamen
   };
 
   // ========================================================================
   // STATE
   // ========================================================================
 
-  /** Map<uid, FishFieldState> */
+  /**
+   * Map<uid, FishFieldState>
+   *
+   * FishFieldState:
+   *   {
+   *     uid, kind,
+   *     x,y,w,h,         // Gebäude-Rechteck in Tiles
+   *     cx,cy,           // aktuelle Feld-Mitte in Tiles
+   *     workArea,        // {cx,cy,radiusTiles} oder null
+   *     fishes: [ ... ], // Liste aller Fisch-Instanzen
+   *   }
+   *
+   * Fisch-Eintrag:
+   *   {
+   *     tx,ty,           // Tile-Position (float) in Tiles
+   *     frameName,       // Sprite-Name aus dem Atlas
+   *     scale,           // Skalierung des Sprites
+   *     phaseOffset      // Zufalls-Offset für Animation (Springen/Wellen)
+   *   }
+   */
   const FishFields = new Map();
 
   let fishAtlas        = null;
@@ -129,6 +138,52 @@
     if (FISH_BUILDING_IDS.has(k)) return true;
     if (!k.startsWith('b.')) return FISH_BUILDING_IDS.has('b.' + k);
     return false;
+  }
+
+  // ========================================================================
+  // HELFER – MAP / WASSER / KOLLISION
+  // ========================================================================
+
+  /**
+   * Liefert die Tile-ID an einer (float-)Tile-Position tx,ty.
+   * tx,ty sind in Tiles (nicht in Pixeln).
+   */
+  function getTileIdAt(tx, ty){
+    const GameMap = window.GameMap;
+    const state   = GameMap && GameMap._state;
+    if (!state || !state.grid) return -1;
+
+    const gx = Math.floor(tx);
+    const gy = Math.floor(ty);
+
+    if (gy < 0 || gy >= state.rows || gx < 0 || gx >= state.cols) return -1;
+
+    const row = state.grid[gy];
+    if (!row) return -1;
+
+    return row[gx];
+  }
+
+  /**
+   * Prüft, ob die Tile-Position auf Wasser liegt.
+   * Nutzt WATER_TILE_IDS (hier: IDs 8 und 9).
+   */
+  function isWaterTile(tx, ty){
+    const id = getTileIdAt(tx, ty);
+    return WATER_TILE_IDS.has(id);
+  }
+
+  /**
+   * Prüft, ob eine Tile-Position innerhalb des Gebäude-Rechtecks liegt.
+   * → Damit Fische nicht auf/unter dem Haus gezeichnet werden.
+   */
+  function isInsideBuilding(field, tx, ty){
+    if (!field) return false;
+    const x = field.x | 0;
+    const y = field.y | 0;
+    const w = field.w || 3;
+    const h = field.h || 3;
+    return (tx >= x && tx < x + w && ty >= y && ty < y + h);
   }
 
   // ========================================================================
@@ -169,51 +224,59 @@
     }
   }
 
+  /**
+   * Bereitet die Frames so auf, dass sowohl "trees_mega_atlas"-Stil (tileW/tileH
+   * + [cx,cy]) als auch "stones_mega_atlas"-Stil (frame/pivot) unterstützt werden.
+   */
   function ensureFishAtlasReady(){
     if (!fishAtlasLoaded || !fishAtlasImg || !fishAtlas || !fishAtlas.frames){
       return false;
     }
 
-    // 1) Einzel-Frames mit Pivot auflösen (falls im JSON vorhanden)
     if (!FISH_ATLAS_CFG.resolvedFrames){
-      const resolved = {};
-      const frames   = fishAtlas.frames || {};
+      const rawFrames = fishAtlas.frames || {};
+      const resolved  = {};
+      const names     = [];
 
-      for (const [name, info] of Object.entries(frames)){
-        const f = info.frame || {};
-        const p = info.pivot || {};
-        resolved[name] = {
-          x      : f.x|0,
-          y      : f.y|0,
-          w      : f.w|0,
-          h      : f.h|0,
-          pivotX : (p.x|0) || ((f.w|0) / 2),
-          pivotY : (p.y|0) || (f.h|0)
-        };
+      const defaultTileW = fishAtlas.tileW || 128;
+      const defaultTileH = fishAtlas.tileH || 128;
+
+      for (const [name, info] of Object.entries(rawFrames)){
+        let x, y, w, h, pivotX, pivotY;
+
+        if (Array.isArray(info)){
+          // Variante wie bei trees_mega_atlas:
+          // info = [cx,cy] mit global tileW/tileH
+          const cx = info[0] | 0;
+          const cy = info[1] | 0;
+          w = defaultTileW;
+          h = defaultTileH;
+          x = cx * w;
+          y = cy * h;
+          pivotX = w / 2;
+          pivotY = h / 2;
+        } else {
+          // Variante wie bei stones_mega_atlas:
+          // info.frame = {x,y,w,h}, info.pivot = {x,y} optional
+          const f = info.frame || info;
+          w = (f.w | 0) || defaultTileW;
+          h = (f.h | 0) || defaultTileH;
+          x = f.x | 0;
+          y = f.y | 0;
+
+          const p = info.pivot || {};
+          pivotX = (typeof p.x === 'number') ? p.x : (w / 2);
+          pivotY = (typeof p.y === 'number') ? p.y : h; // Fußpunkt unten
+        }
+
+        resolved[name] = { x, y, w, h, pivotX, pivotY };
+        names.push(name);
       }
 
       FISH_ATLAS_CFG.resolvedFrames = resolved;
-      LOG('Fish-Atlas Frames aufgelöst (resolvedFrames).');
-    }
+      FISH_ATLAS_CFG.frameNames     = names;
 
-    // 2) Gruppen (IDLE, JUMP, DIVE) aus Präfixen auflösen
-    if (!FISH_ATLAS_CFG.groupFrames){
-      const groupFrames = {};
-      const frames = fishAtlas.frames || {};
-      const groupDefs = FISH_ATLAS_CFG.groups || {};
-
-      for (const name of Object.keys(frames)){
-        for (const [gName, prefix] of Object.entries(groupDefs)){
-          if (name.startsWith(prefix)){
-            if (!groupFrames[gName]) groupFrames[gName] = [];
-            groupFrames[gName].push(name);
-            break;
-          }
-        }
-      }
-
-      FISH_ATLAS_CFG.groupFrames = groupFrames;
-      LOG('Fish-Atlas Gruppen aufgelöst (groupFrames).');
+      LOG('Fish-Atlas Frames aufgelöst (resolvedFrames, frameNames).');
     }
 
     return true;
@@ -223,13 +286,14 @@
     if (!ensureFishAtlasReady()) return false;
 
     const frames = FISH_ATLAS_CFG.resolvedFrames;
-    const f = frames && frames[key];
+    const f      = frames && frames[key];
     if (!f || !fishAtlasImg) return false;
 
-    const s  = (typeof scale === 'number' && scale>0) ? scale : 1;
+    const s  = (typeof scale === 'number' && scale > 0) ? scale : 1;
     const dw = f.w * s;
     const dh = f.h * s;
 
+    // Pivot = Fußpunkt im Wasser (PivotY unten)
     const dx = cx - f.pivotX * s;
     const dy = cy - f.pivotY * s;
 
@@ -276,7 +340,7 @@
       cx : cxTiles,
       cy : cyTiles,
       workArea : null,
-      fishes : []
+      fishes   : []
     };
 
     createRandomFishLayout(field);
@@ -286,44 +350,76 @@
     ensureFishAtlasLoaded();
   }
 
+  /**
+   * Erzeugt das Layout der Fische innerhalb des aktuellen Arbeitsbereichs.
+   * - Mittelpunkt: field.workArea.cx/cy oder field.cx/field.cy
+   * - Radius: field.workArea.radiusTiles oder FISH_RADIUS_MAX
+   * - Fische dürfen NUR auf Wasser-Tiles (8/9) liegen
+   * - Fische dürfen NICHT innerhalb des Gebäude-Rechtecks liegen
+   */
   function createRandomFishLayout(field){
-    const rng = makeRng(field.uid);
-    field.fishes.length = 0;
+    const rng    = makeRng(field.uid);
+    const fishes = field.fishes;
+    fishes.length = 0;
 
-    const count = FISH_PER_FIELD;
+    const wa = field.workArea || null;
+    const cx = (wa && typeof wa.cx === 'number') ? wa.cx : field.cx;
+    const cy = (wa && typeof wa.cy === 'number') ? wa.cy : field.cy;
 
-    for (let i=0; i<count; i++){
-      const angle  = rng() * Math.PI * 2;
-      const radius = FISH_RADIUS_MIN + (FISH_RADIUS_MAX - FISH_RADIUS_MIN) * rng();
+    const rMax = (wa && typeof wa.radiusTiles === 'number')
+      ? wa.radiusTiles
+      : FISH_RADIUS_MAX;
 
-      const tx = field.cx + Math.cos(angle) * radius;
-      const ty = field.cy + Math.sin(angle) * radius;
+    const rMin = Math.min(FISH_RADIUS_MIN, rMax * 0.6);
 
-      const scale = 0.8 + 0.3 * rng();
+    const names = FISH_ATLAS_CFG.frameNames || null;
+    const now   = performance.now ? performance.now() : Date.now();
 
-      // simple Stage-Auswahl
-      let stageIndex;
-      const rStage = rng();
-      if (rStage < 0.6)       stageIndex = 0; // IDLE
-      else if (rStage < 0.85) stageIndex = 1; // JUMP
-      else                    stageIndex = 2; // DIVE
+    const targetCount = FISH_PER_FIELD;
 
-      const variant = Math.floor(rng() * 16) & 0xFF;
+    for (let i = 0; i < targetCount; i++){
+      let placed = false;
 
-      field.fishes.push({
-        tx,
-        ty,
-        stageIndex,
-        variant,
-        scale,
-        // kleines internes "Phasen-Timing", falls wir später animieren wollen
-        tOffset: rng() * 10000
-      });
+      // Sicherheitsnetz: mehrere Versuche pro Fisch,
+      // um eine Wasser-Position zu finden.
+      for (let tries = 0; tries < 40 && !placed; tries++){
+        const angle  = rng() * Math.PI * 2;
+        const radius = rMin + (rMax - rMin) * rng();
+
+        const tx = cx + Math.cos(angle) * radius;
+        const ty = cy + Math.sin(angle) * radius;
+
+        if (!isWaterTile(tx, ty)) continue;
+        if (isInsideBuilding(field, tx, ty)) continue;
+
+        const frameName = names && names.length
+          ? pickRandom(names, rng)
+          : null;
+
+        const scale = 0.7 + 0.5 * rng();
+        const phaseOffset = now + rng() * 5000;
+
+        fishes.push({
+          tx,
+          ty,
+          frameName,
+          scale,
+          phaseOffset
+        });
+
+        placed = true;
+      }
+
+      // Falls nach vielen Versuchen kein gültiger Platz gefunden wurde,
+      // lassen wir diesen Fisch einfach weg (besser als auf Land zu landen).
+      if (!placed){
+        WARN('createRandomFishLayout: kein Wasserplatz gefunden für Fisch', i, 'in Feld', field.uid);
+      }
     }
   }
 
   // ========================================================================
-  // ZEICHNUNG AUF DEM HAUPT-CANVAS (Fische)
+  // ZEICHNUNG AUF DEM HAUPT-CANVAS (Fische + Fischer)
   // ========================================================================
 
   /**
@@ -343,84 +439,98 @@
       64;
 
     const atlasReady = ensureFishAtlasReady();
+    const now        = performance.now ? performance.now() : Date.now();
 
     ctx.save();
-
-    const now = performance.now ? performance.now() : Date.now();
 
     for (const field of FishFields.values()){
       const fishes = field.fishes || [];
       if (!fishes.length) continue;
 
-      for (const fsh of fishes){
-        if (fsh.stageIndex == null || fsh.stageIndex < 0) continue;
+      // -----------------------------------------------------------
+      // 1) Fische zeichnen (leicht wabernde/wackelnde Position)
+      // -----------------------------------------------------------
+      for (const f of fishes){
+        if (!f) continue;
 
-        const tx = fsh.tx;
-        const ty = fsh.ty;
+        const tx = f.tx;
+        const ty = f.ty;
 
-        // Welt → Pixel (Kamera-Transform ist bereits aktiv)
+        // Weltkoordinaten des Wassers (Tile-Mitte)
         let cxPx = (tx + 0.5) * ts;
-        let cyPx = (ty + 0.9) * ts; // leicht unterhalb der Tile-Mitte (Wasseroberfläche)
+        let cyPx = (ty + 1.0) * ts;
+
+        // kleine Wellen-/Spring-Animation über phaseOffset
+        const phase = (now - f.phaseOffset) * 0.004;
+        const bobX  = Math.sin(phase * 0.7) * ts * 0.05;
+        const bobY  = Math.sin(phase * 1.1) * ts * 0.04;
+
+        cxPx += bobX;
+        cyPx += bobY;
 
         let drawn = false;
 
-        // einfache "Pseudo-Animation" über Zeit:
-        // Stage kann sanft zwischen IDLE / JUMP / DIVE wechseln, je nach Zeit.
-        let stageIndex = fsh.stageIndex;
-        const tPhase = ((now + fsh.tOffset) / 1000.0) % 4.0; // 0..4s Schleife
-
-        if (tPhase < 1.5){
-          stageIndex = 0; // IDLE
-        } else if (tPhase < 2.2){
-          stageIndex = 1; // JUMP
-        } else if (tPhase < 3.0){
-          stageIndex = 2; // DIVE
-        } else {
-          stageIndex = 0;
-        }
-
-        if (atlasReady){
-          let groupName = FISH_STAGE[stageIndex] || 'IDLE';
-          const groupFrames = groupName &&
-                              FISH_ATLAS_CFG.groupFrames &&
-                              FISH_ATLAS_CFG.groupFrames[groupName];
-
-          if (groupFrames && groupFrames.length){
-            const frameName = groupFrames[fsh.variant % groupFrames.length];
-
-            // Beim Sprung den Fisch etwas nach oben schieben
-            if (groupName === 'JUMP'){
-              cyPx -= ts * 0.2;
-            }
-            // Beim Abtauchen etwas nach unten
-            if (groupName === 'DIVE'){
-              cyPx += ts * 0.1;
-            }
-
-            drawn = drawFishFrame(ctx, frameName, cxPx, cyPx, fsh.scale);
-          }
+        if (atlasReady && f.frameName){
+          drawn = drawFishFrame(ctx, f.frameName, cxPx, cyPx, f.scale);
         }
 
         if (!drawn){
-          // Fallback: kleiner blauer Blob
+          // Fallback: einfacher blauer Punkt im Wasser
           const r = ts * 0.22;
           ctx.beginPath();
-          ctx.fillStyle   = 'rgba(30,144,255,0.85)';
-          ctx.strokeStyle = 'rgba(0, 0, 80, 0.9)';
-          ctx.lineWidth   = Math.max(1.0, ts * 0.03);
-          ctx.arc(cxPx, cyPx, r, 0, Math.PI * 2);
+          ctx.fillStyle   = 'rgba(60, 140, 220, 0.9)';
+          ctx.strokeStyle = 'rgba(0, 40, 90, 0.9)';
+          ctx.lineWidth   = Math.max(1.5, ts * 0.04);
+          ctx.arc(cxPx, cyPx - r * 0.3, r, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
       }
+
+      // -----------------------------------------------------------
+      // 2) "Arbeitender Fischer" – einfache graue Blase am Gebäude
+      //    (nur Deko, später echte Unit-Logik möglich)
+      // -----------------------------------------------------------
+      const gx = field.x | 0;
+      const gy = field.y | 0;
+      const gw = field.w || 3;
+      const gh = field.h || 3;
+
+      const workerX = (gx + gw * 0.5) * ts;
+      const workerY = (gy + gh) * ts;
+
+      const bob   = Math.sin(now * 0.004 + gx + gy) * ts * 0.07;
+      const rWork = ts * 0.25;
+
+      ctx.beginPath();
+      ctx.fillStyle   = 'rgba(235,235,235,0.95)';
+      ctx.strokeStyle = 'rgba(20,20,20,0.9)';
+      ctx.lineWidth   = Math.max(1.0, ts * 0.035);
+      ctx.arc(workerX, workerY - ts * 0.7 + bob, rWork, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // kleiner Punkt als "Kopf" / Blickrichtung
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(30,30,30,0.95)';
+      ctx.arc(workerX + rWork * 0.25, workerY - ts * 0.8 + bob, rWork * 0.22, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.restore();
   }
 
   // ========================================================================
-  // WORKAREA-HOOK: cb:workarea:set
+  // EVENT-BINDING (build/workarea)
   // ========================================================================
+
+  function onBuildComplete(detail){
+    try {
+      registerFishFieldFromBuild(detail);
+    } catch(e){
+      ERR('onBuildComplete Fehler:', e);
+    }
+  }
 
   function onWorkAreaSet(detail){
     if (!detail) return;
@@ -446,61 +556,23 @@
       radiusTiles: radius
     };
 
-    // Mittelpunkt auf neuen WorkArea-Mittelpunkt setzen
+    // Feld-Mitte an WorkArea koppeln
     field.cx = field.workArea.cx;
     field.cy = field.workArea.cy;
 
-    // Neues Layout innerhalb des (neuen) Arbeitsbereiches
+    // neues Layout innerhalb des (neuen) Arbeitsbereiches
     createRandomFishLayout(field);
 
-    LOG(TAG, 'Arbeitsbereich (Fisch) aktualisiert:', uid, field.workArea);
+    LOG(TAG, 'Arbeitsbereich aktualisiert (Fisch):', uid, field.workArea);
   }
-
-  // ========================================================================
-  // PRODUKTIONS-HOOK (optional): cb:prod:output item:'fish'
-  // ========================================================================
-
-  function onFishProduced(detail){
-    if (!detail) return;
-    const item = detail.item || detail.resource || detail.resId;
-    if (item !== 'fish') return;
-
-    const uid = detail.bId || detail.buildingUid || detail.uid;
-    if (!uid) return;
-
-    const field = FishFields.get(uid);
-    if (!field) return;
-
-    // aktuell nur "kurze Reaktion":
-    // wir könnten z.B. kurz alle Fische in JUMP-Stufe setzen, oder
-    // später die Schwarmgröße reduzieren.
-    LOG(TAG, 'Fisch-Produktion erkannt (Deko-Hook):', uid, detail.qty || 1);
-  }
-
-  // ========================================================================
-  // TICK (optional, aktuell nur Stub)
-  // ========================================================================
 
   function tick(dtMs){
-    // Aktuell nutzen wir nur performance.now() für pseudo-Animation,
-    // brauchen kein eigenes Zeitaccum hier.
+    // aktuell keine eigene Zeit-Logik nötig (Animation läuft über performance.now)
     void dtMs;
   }
 
-  // ========================================================================
-  // EVENT-BINDING (build/production/workarea)
-  // ========================================================================
-
-  function onBuildComplete(detail){
-    try {
-      registerFishFieldFromBuild(detail);
-    } catch(e){
-      ERR('onBuildComplete Fehler:', e);
-    }
-  }
-
+  // Browser-Events (Fallback, zusätzlich zur Production.registerModule-Koppelung)
   try {
-    // Gebäude-Event
     window.addEventListener('cb:build:complete', (ev)=>{
       const detail = ev.detail || {};
       try {
@@ -520,7 +592,6 @@
       }
     }, { passive:true });
 
-    // WorkArea-Event
     window.addEventListener('cb:workarea:set', (ev)=>{
       const detail = ev.detail || {};
       try {
@@ -533,25 +604,10 @@
         );
       }
     }, { passive:true });
-
-    // Produktions-Event (optional)
-    window.addEventListener('cb:prod:output', (ev)=>{
-      const detail = ev.detail || {};
-      try {
-        onFishProduced(detail);
-      } catch(e){
-        (window.CBLog?.warn || console.warn)(
-          TAG,
-          'cb:prod:output-Listener Fehler (fish):',
-          e
-        );
-      }
-    }, { passive:true });
-
   } catch(e){
     (window.CBLog?.warn || console.warn)(
       TAG,
-      'Event-Listener (fish) konnten nicht registriert werden:',
+      'Event-Listener konnten nicht registriert werden:',
       e
     );
   }
@@ -570,7 +626,7 @@
         onBuildComplete,
         onWorkAreaSet,
         tick,
-        drawOnMainCanvas
+        drawOnMainCanvas   // <-- Main-Canvas-Zeichner
       });
       LOG('Produktionsmodul "fish" registriert.');
       return true;
@@ -594,12 +650,11 @@
   window.ProductionFish = {
     fields        : FishFields,
     FISH_ATLAS_CFG,
-    FISH_STAGE,
     drawOnMainCanvas,
     ensureAtlas   : ensureFishAtlasReady,
-    _createLayout : createRandomFishLayout
+    _recreate     : createRandomFishLayout
   };
 
-  LOG('Fisch-Modul geladen v25.12.10-fish-workarea-maincanvas-v1');
+  LOG('Fisch-Modul geladen v25.12.10-fish-workarea-water-maincanvas-final');
 
 })();
