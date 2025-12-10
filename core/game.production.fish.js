@@ -520,6 +520,27 @@
     ctx.restore();
   }
 
+  function handleFishCaught(tile, school) {
+  // 1) Visueller Effekt / Animation
+  animateFishCatch(tile, school);   // dein bestehender Code
+
+  // 2) NEU: Ressource zählen
+  if (window.Production?.addResource) {
+    window.Production.addResource('fish', 1, 'fish-cycle', 'fish');
+  }
+}
+  
+  // -----------------------------------------------------------
+// RESSOURCEN-ZÄHLUNG: Fisch hinzufügen (Schritt A)
+// -----------------------------------------------------------
+if (window.Production && typeof window.Production.addResource === 'function') {
+  const qty    = 1;             // pro Fang 1 Fisch
+  const reason = 'fish-cycle';
+  const src    = 'fish';
+
+  window.Production.addResource('fish', qty, reason, src);
+}
+  
   // ========================================================================
   // EVENT-BINDING (build/workarea)
   // ========================================================================
