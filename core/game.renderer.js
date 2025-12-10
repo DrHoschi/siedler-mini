@@ -175,6 +175,10 @@
         window.ProductionStone.drawOnMainCanvas(ctx, cam, this.tile);
       }
 
+      if (window.ProductionFish && typeof window.ProductionFish.drawOnMainCanvas === 'function') {
+  window.ProductionFish.drawOnMainCanvas(ctx, cam, this.tile);
+}
+      
       // Ab hier keine Welt-Transform mehr
       ctx.restore();
 
