@@ -1,7 +1,7 @@
 {
   "meta": {
     "type": "phaser-spritesheet-map",
-    "image": "assets/resources/stones_mega_atlas.png",
+    "image": "assets/resources/stone/stones_mega_atlas.png",
     "frameWidth": 128,
     "frameHeight": 128,
     "cols": 8,
