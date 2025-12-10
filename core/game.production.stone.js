@@ -524,6 +524,28 @@
       lastSel = sel;
     }
 
+    function handleStoneHit(field) {
+  // 1) Visuelle Degradation
+  degradeStoneField(field);    // dein vorhandener Code
+
+  // 2) NEU: Ressource zählen
+  if (window.Production?.addResource) {
+    window.Production.addResource('stone', 1, 'stone-cycle', 'stone');
+  }
+}
+    
+// -----------------------------------------------------------
+// RESSOURCEN-ZÄHLUNG: Stein hinzufügen (Schritt A)
+// -----------------------------------------------------------
+if (window.Production && typeof window.Production.addResource === 'function') {
+  // Menge kannst du anpassen: 1, 2, oder abh. von Feld-Stufe
+  const qty    = 1;
+  const reason = 'stone-cycle';
+  const src    = 'stone';
+
+  window.Production.addResource('stone', qty, reason, src);
+}
+    
     // Wenn mindestens ein Stein abgetragen wurde, einfachen
     // "Steinmetz"-Laufzyklus starten.
     if (lastSel){
@@ -561,7 +583,7 @@
     const qty = detail.qty || detail.amount || 1;
     degradeFieldByStone(field, qty);
   }
-
+  
   // ========================================================================
   // EVENT-BINDING (build/production/workarea)
   // ========================================================================
