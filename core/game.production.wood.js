@@ -447,6 +447,19 @@
     }
   }
 
+  // im Holz-Modul, Abschnitt 3) JOB-ANBINDUNG:
+
+function onTreeCutDone(field, tree){
+  // 1. Ressource zählen
+  window.Production?.addResource('wood', +1, 'lumberjack-cycle', 'wood');
+
+  // 2. optional: Träger-Job erzeugen (Ware vom Gebäude zum HQ)
+  const building = field.building;  // dein bestehendes Feld kennt das Gebäude
+  if (building && window.Production?.enqueueCarryJobFromBuilding){
+    Production.enqueueCarryJobFromBuilding(building, 'wood', 1);
+  }
+}
+  
   function tickAllLumberjacks(dtMs){
     if (!Lumberjacks.size) return;
     for (const lj of Lumberjacks.values()){
