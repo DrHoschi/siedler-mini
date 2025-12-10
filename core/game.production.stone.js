@@ -1,24 +1,31 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-stone-workarea-maincanvas-depth-v2
+ * Version : v25.12.10-stone-workarea-maincanvas-depth-worker-v3
  *
  * Zweck   :
  *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
  *   - Für jedes Stein-Gebäude wird ein zufälliges "Steinfeld" erzeugt:
  *       große Felsen, Geröll, kleine Haufen ...
- *   - Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
+ *   - Später: Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
  *
  *       RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
  *
- *   Darstellung:
+ * Darstellung:
  *   - Zeichnet die Steine direkt auf dem HAUPT-CANVAS in Weltkoordinaten
  *   - KEIN OverlayHooks / kein eigenes Overlay-Canvas für Steine
+ *   - Datenbasis: stones_mega_atlas.json + stones_mega_atlas.png
+ *
+ * Extra:
+ *   - Einfacher "Steinmetz"-Marker (graue Blase), die zwischen Gebäude
+ *     und einem Stein hin- und herläuft (Ping-Pong).
+ *   - Läuft auch OHNE echte Produktion (cb:prod:output), damit man sofort
+ *     etwas "arbeiten" sieht.
  *
  * Ereignisse:
  *   IN  :
  *     - cb:build:complete { id, uid?, x,y,w,h, ... }
- *     - cb:prod:output    { bId, kind, item:'stone', qty }
+ *     - cb:prod:output    { bId, kind, item:'stone', qty }   (optional)
  *     - cb:workarea:set   { id, uid, cx, cy, radiusTiles, x,y,w,h }
  *
  *   OUT :
@@ -57,7 +64,7 @@
   const STONE_RADIUS_MIN = 1.2;
   const STONE_RADIUS_MAX = 3.0;
 
-  // Abbau-Stufen
+  // Abbau-Stufen (Index 0 → "voll", 3 → "fast weg", -1 → unsichtbar)
   const STONE_STAGE = [
     'RAW_BIG',
     'CRACKED',
@@ -273,7 +280,7 @@
       cy : cyTiles,
       workArea : null,
       stones : [],
-      worker : null     // einfacher "Steinmetz"-Marker
+      worker : null
     };
 
     createRandomLayoutForField(field);
@@ -302,7 +309,7 @@
       let ty = 0;
       let placed = false;
 
-      // Ein paar Versuche, einen Punkt im Ring um den Mittelpunkt zu finden,
+      // Versuche, einen Punkt im Ring um den Mittelpunkt zu finden,
       // der NICHT im Gebäude liegt.
       for (let tries=0; tries<20 && !placed; tries++){
         const angle  = rng() * Math.PI * 2;
@@ -349,10 +356,6 @@
   // HAUPT-CANVAS-ZEICHNUNG (Steine + Steinmetz-Blase)
   // ========================================================================
 
-  /**
-   * Wird vom Renderer nach der Kamera-Transform aufgerufen.
-   * ctx ist damit bereits in Weltkoordinaten (Map + Gebäude).
-   */
   function drawOnMainCanvas(ctx, cam, tileSize){
     if (!ctx) return;
     if (!StoneFields.size) return;
@@ -538,7 +541,8 @@
         toTx       : lastSel.stone.tx,
         toTy       : lastSel.stone.ty,
         tNorm      : 0,
-        targetStone: lastSel.stone
+        targetStone: lastSel.stone,
+        idle       : false
       };
     }
   }
@@ -610,13 +614,48 @@
     const WORKER_TOTAL_MS  = WORKER_TRAVEL_MS * 2; // Hin + Zurück
 
     for (const field of StoneFields.values()){
+      const stones = field.stones || [];
+
+      // Falls es überhaupt keine sichtbaren Steine gibt → kein Worker
+      const visibleStones = stones.filter(s => s.stageIndex != null && s.stageIndex >= 0);
+
+      if (!visibleStones.length){
+        field.worker = null;
+        continue;
+      }
+
+      // Wenn noch kein Worker gesetzt ist → einfachen Idle-Worker
+      // (damit man Bewegung sieht, auch ohne echte Produktion).
+      if (!field.worker){
+        const target = pickRandom(visibleStones);
+        const bx0 = field.x | 0;
+        const by0 = field.y | 0;
+        const bw  = (field.w | 0) || 3;
+        const bh  = (field.h | 0) || 3;
+        const centerTx = bx0 + bw / 2;
+        const centerTy = by0 + bh / 2;
+
+        field.worker = {
+          tMs        : 0,
+          fromTx     : centerTx,
+          fromTy     : centerTy,
+          toTx       : target.tx,
+          toTy       : target.ty,
+          tNorm      : 0,
+          targetStone: target,
+          idle       : true    // Idle-Modus (kein echtes Abbauen)
+        };
+      }
+
       const w = field.worker;
       if (!w) continue;
 
       w.tMs += dtMs || 0;
 
       if (w.tMs >= WORKER_TOTAL_MS){
-        // Animation fertig
+        // Idle-/Produktions-Zyklus fertig → Worker verschwindet kurz,
+        // und wird in der nächsten Tick-Runde neu erzeugt (oder bei
+        // echter Produktion per degradeFieldByStone gesetzt).
         field.worker = null;
         continue;
       }
@@ -727,6 +766,6 @@
     _degradeField : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-depth-v2');
+  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-depth-worker-v3');
 
 })();
