@@ -71,8 +71,8 @@
 
   // Atlas-Konfiguration Fisch
   const FISH_ATLAS_CFG = {
-    urlJson  : 'assets/resources/fish_mega_atlas.json',
-    urlImage : 'assets/resources/fish_mega_atlas.png',
+    urlJson  : 'assets/resources/fish/fish_mega_atlas.json',
+    urlImage : 'assets/resources/fish/fish_mega_atlas.png',
 
     resolvedFrames : null,  // Name → {x,y,w,h,pivotX,pivotY}
     frameNames     : null   // Array aller verfügbaren Framenamen
