@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-stone-workarea-maincanvas-v2
+ * Version : v25.12.10-stone-workarea-maincanvas-v3
  *
  * Zweck   :
  *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
@@ -11,10 +11,15 @@
  *
  *       RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
  *
- *   Darstellung:
+ * Darstellung:
  *   - Zeichnet die Steine direkt auf dem HAUPT-CANVAS in Weltkoordinaten
  *   - KEIN OverlayHooks / kein eigenes Overlay-Canvas für Steine
  *   - Datenbasis: stones_mega_atlas.json + stones_mega_atlas.png
+ *
+ *   NEU in v3:
+ *     - Steine werden nach Y sortiert UND in zwei Layer getrennt:
+ *         • drawBackOnMainCanvas  → Steine HINTER dem Gebäude
+ *         • drawFrontOnMainCanvas → Steine VOR dem Gebäude
  *
  * Ereignisse:
  *   IN  :
@@ -27,7 +32,8 @@
  *
  * Debug / API:
  *   - window.ProductionStone.fields
- *   - window.ProductionStone.drawOnMainCanvas(ctx, cam, tileSize)
+ *   - window.ProductionStone.drawBackOnMainCanvas(ctx, cam, tileSize)
+ *   - window.ProductionStone.drawFrontOnMainCanvas(ctx, cam, tileSize)
  * ========================================================================== */
 
 (function(){
@@ -364,30 +370,9 @@
   // ZEICHNUNG AUF DEM HAUPT-CANVAS (Steine, Y-sortiert)
   // ========================================================================
 
-  /**
-   * Wird vom Renderer nach Kamera-Transform aufgerufen.
-   * ctx ist damit bereits in Weltkoordinaten.
-   *
-   * Neu:
-   *   - Alle Steine werden zunächst gesammelt und nach ihrer
-   *     Bildschirm-Y-Position sortiert → Depth-Ordering von oben nach unten.
-   */
-  function drawOnMainCanvas(ctx, cam, tileSize){
-    if (!ctx) return;
-    if (!StoneFields.size) return;
-
-    const Game = window.Game || {};
-    const ts =
-      (tileSize) ||
-      (Game.map && Game.map.tileSize) ||
-      (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
-      Game.tileSize ||
-      64;
-
-    const atlasReady = ensureStoneAtlasReady();
-
-    // Sammelliste für alle Steine über alle StoneFields
-    const drawList = [];
+  // Baut eine sortierte Draw-Liste über ALLE Felder
+  function buildDrawList(ts){
+    const list = [];
 
     for (const field of StoneFields.values()){
       const stones = field.stones || [];
@@ -402,25 +387,55 @@
         const cxPx = (tx + 0.5) * ts;
         const cyPx = (ty + 1.0) * ts;
 
-        drawList.push({
-          cyPx,
+        list.push({
           cxPx,
-          stone : s
+          cyPx,
+          stone : s,
+          field
         });
       }
     }
 
-    if (!drawList.length) return;
+    if (!list.length) return list;
 
     // Y-Sortierung (kleine y zuerst → oben, große y zuletzt → "vorne")
-    drawList.sort((a, b) => a.cyPx - b.cyPx);
+    list.sort((a, b) => a.cyPx - b.cyPx);
+
+    return list;
+  }
+
+  // Helfer: zeichnet eine Schicht (back/front)
+  function drawLayer(ctx, cam, tileSize, mode){
+    if (!ctx) return;
+
+    const Game = window.Game || {};
+    const ts =
+      (tileSize) ||
+      (Game.map && Game.map.tileSize) ||
+      (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
+      Game.tileSize ||
+      64;
+
+    const atlasReady = ensureStoneAtlasReady();
+    const drawList   = buildDrawList(ts);
+    if (!drawList.length) return;
 
     ctx.save();
 
     for (const entry of drawList){
-      const s    = entry.stone;
-      const cxPx = entry.cxPx;
-      const cyPx = entry.cyPx;
+      const s     = entry.stone;
+      const field = entry.field;
+      const cxPx  = entry.cxPx;
+      const cyPx  = entry.cyPx;
+
+      // Gebäude-Basislinie in Pixel (untere Kante des Gebäudes)
+      const buildingBaseY = (field.y + field.h) * ts;
+
+      const isBack  = (cyPx <= buildingBaseY);
+      const isFront = !isBack;
+
+      if (mode === 'back'  && !isBack)  continue;
+      if (mode === 'front' && !isFront) continue;
 
       let drawn = false;
 
@@ -450,6 +465,22 @@
     }
 
     ctx.restore();
+  }
+
+  // Öffentliche Layer-Funktionen für den Renderer
+  function drawBackOnMainCanvas(ctx, cam, tileSize){
+    drawLayer(ctx, cam, tileSize, 'back');
+  }
+
+  function drawFrontOnMainCanvas(ctx, cam, tileSize){
+    drawLayer(ctx, cam, tileSize, 'front');
+  }
+
+  // Kompatibel bleiben: „alles“ zeichnen, falls irgendein älterer Code
+  // noch drawOnMainCanvas aufruft.
+  function drawOnMainCanvas(ctx, cam, tileSize){
+    drawLayer(ctx, cam, tileSize, 'back');
+    drawLayer(ctx, cam, tileSize, 'front');
   }
 
   // ========================================================================
@@ -631,11 +662,13 @@
     }
     try {
       window.Production.registerModule({
-        id             : 'stone',
+        id               : 'stone',
         onBuildComplete,
         onWorkAreaSet,
         tick,
-        drawOnMainCanvas   // <-- Main-Canvas-Zeichner
+        drawOnMainCanvas,
+        drawBackOnMainCanvas,
+        drawFrontOnMainCanvas
       });
       LOG('Produktionsmodul "stone" registriert.');
       return true;
@@ -657,15 +690,17 @@
   // ========================================================================
 
   window.ProductionStone = {
-    fields        : StoneFields,
+    fields              : StoneFields,
     STONE_ATLAS_CFG,
     STONE_STAGE,
     drawOnMainCanvas,
-    ensureAtlas   : ensureStoneAtlasReady,
-    _degradeOne   : degradeSingleStone,
-    _degradeField : degradeFieldByStone
+    drawBackOnMainCanvas,
+    drawFrontOnMainCanvas,
+    ensureAtlas         : ensureStoneAtlasReady,
+    _degradeOne         : degradeSingleStone,
+    _degradeField       : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-v2');
+  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-v3');
 
 })();
