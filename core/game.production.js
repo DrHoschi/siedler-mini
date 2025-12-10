@@ -109,6 +109,48 @@
     return Number(RES_STORE[String(resId)] || 0);
   }
 
+  // in core/game.production.js bei den Hilfsfunktionen:
+
+/**
+ * Erzeugt einen "carry"-Job: Ware von einem Gebäude zum HQ bringen.
+ * Holz/Stein/Fisch-Module müssen dann NICHT wissen,
+ * wie genau JobEngine/CarrierRuntime ticken.
+ */
+function enqueueCarryJobFromBuilding(building, resId, qty = 1){
+  if (!window.JobEngine) return;
+
+  const eng = window.JobEngine;
+  const res = String(resId || 'wood');
+
+  // Source = Gebäudeposition (Mitte)
+  const bw = Number.isFinite(building.w) ? building.w : 1;
+  const bh = Number.isFinite(building.h) ? building.h : 1;
+  const from = {
+    x: building.x + bw / 2,
+    y: building.y + bh / 2
+  };
+
+  // Ziel = HQ (falls bekannt), sonst von CarrierRuntime später ersetzt
+  const to = null;
+
+  const job = {
+    id   : 'job-carry-' + Date.now().toString(16),
+    type : 'carry',     // wird in carrier.js bereits verstanden
+    res  : res,
+    from,
+    to
+  };
+
+  if (typeof eng.push === 'function'){
+    eng.push(job);
+  } else if (typeof eng.add === 'function'){
+    eng.add(job);
+  }
+
+  (window.CBLog?.ok || console.log)('[prod-core] carry-job erzeugt', job);
+  return job;
+}
+  
   // ==========================================================================
   // MODUL-REGISTRIERUNG
   // ==========================================================================
