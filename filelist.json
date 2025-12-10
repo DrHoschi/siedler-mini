@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-09T18:35:12.930Z",
+  "createdAt": "2025-12-10T09:03:54.990Z",
   "root": ".",
-  "count": 600,
+  "count": 538,
   "entries": [
     {
       "type": "dir",
@@ -659,335 +659,6 @@
       "path": "assets/resources/fish/"
     },
     {
-      "type": "dir",
-      "path": "assets/resources/fish/fish_resource_tiles/"
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/fish.md",
-      "size": 1
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_00.png",
-      "size": 32076
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_01.png",
-      "size": 30630
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_02.png",
-      "size": 30328
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_03.png",
-      "size": 31918
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_04.png",
-      "size": 34662
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_05.png",
-      "size": 34069
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_06.png",
-      "size": 30474
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_07.png",
-      "size": 35260
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_08.png",
-      "size": 29305
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_09.png",
-      "size": 29432
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_10.png",
-      "size": 28324
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_11.png",
-      "size": 29631
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_12.png",
-      "size": 35048
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_13.png",
-      "size": 29883
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_14.png",
-      "size": 27540
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_15.png",
-      "size": 32731
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_16.png",
-      "size": 31111
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_17.png",
-      "size": 29805
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_18.png",
-      "size": 28448
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_19.png",
-      "size": 35214
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_20.png",
-      "size": 35323
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_21.png",
-      "size": 26499
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_22.png",
-      "size": 24180
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_23.png",
-      "size": 28594
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_24.png",
-      "size": 32686
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_25.png",
-      "size": 32343
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_26.png",
-      "size": 31092
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_27.png",
-      "size": 38460
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_28.png",
-      "size": 30933
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_29.png",
-      "size": 27271
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_30.png",
-      "size": 24859
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_31.png",
-      "size": 30314
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_32.png",
-      "size": 32098
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_33.png",
-      "size": 35221
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_34.png",
-      "size": 33964
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_35.png",
-      "size": 38493
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_36.png",
-      "size": 38693
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_37.png",
-      "size": 34308
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_38.png",
-      "size": 30817
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_39.png",
-      "size": 36137
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_40.png",
-      "size": 32595
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_41.png",
-      "size": 28981
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_42.png",
-      "size": 27056
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_43.png",
-      "size": 34559
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_44.png",
-      "size": 33385
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_45.png",
-      "size": 30249
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_46.png",
-      "size": 27523
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_47.png",
-      "size": 32789
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_48.png",
-      "size": 27527
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_49.png",
-      "size": 27076
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_50.png",
-      "size": 25499
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_51.png",
-      "size": 33873
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_52.png",
-      "size": 33845
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_53.png",
-      "size": 29187
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_54.png",
-      "size": 29624
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_55.png",
-      "size": 33107
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_56.png",
-      "size": 27237
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_57.png",
-      "size": 28013
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_58.png",
-      "size": 27573
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_59.png",
-      "size": 30328
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_60.png",
-      "size": 30486
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_61.png",
-      "size": 28467
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_62.png",
-      "size": 27588
-    },
-    {
-      "type": "file",
-      "path": "assets/resources/fish/fish_resource_tiles/tile_63.png",
-      "size": 28981
-    },
-    {
       "type": "file",
       "path": "assets/resources/fish/fish_resource_1024.png",
       "size": 1940021
@@ -1020,7 +691,7 @@
     {
       "type": "file",
       "path": "assets/resources/stones_mega_atlas.json",
-      "size": 7684
+      "size": 7686
     },
     {
       "type": "file",
@@ -1125,7 +796,7 @@
     {
       "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas_phaser.json",
-      "size": 8150
+      "size": 7883
     },
     {
       "type": "file",
@@ -1134,8 +805,13 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas-test.json",
+      "size": 7778
+    },
+    {
+      "type": "file",
       "path": "assets/tex/deco/trees_mega_atlas.json",
-      "size": 3086
+      "size": 3087
     },
     {
       "type": "file",
@@ -1722,23 +1398,28 @@
     },
     {
       "type": "file",
+      "path": "core/game.production.fish.js",
+      "size": 17878
+    },
+    {
+      "type": "file",
       "path": "core/game.production.js",
       "size": 5374
     },
     {
       "type": "file",
       "path": "core/game.production.stone.js",
-      "size": 17021
+      "size": 17115
     },
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 19463
+      "size": 20504
     },
     {
       "type": "file",
       "path": "core/game.renderer.js",
-      "size": 9204
+      "size": 9311
     },
     {
       "type": "file",
@@ -2384,6 +2065,15 @@
       "size": 5078
     },
     {
+      "type": "dir",
+      "path": "tools/sprites/"
+    },
+    {
+      "type": "file",
+      "path": "tools/sprites/index-sprite-tool.html",
+      "size": 41799
+    },
+    {
       "type": "file",
       "path": "tools/ai-profiler.js",
       "size": 191
@@ -2912,7 +2602,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16410
+      "size": 16471
     },
     {
       "type": "file",
