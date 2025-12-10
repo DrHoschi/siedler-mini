@@ -462,37 +462,40 @@
   }
 
   function onWorkAreaSet(detail){
-    if (!detail) return;
-    const kind = (detail.id || '').toLowerCase();
-    if (!isStoneBuildingId(kind)) return;
+  if (!detail) return;
 
-    const x   = detail.x | 0;
-    const y   = detail.y | 0;
-    const uid = detail.uid || `${kind}@${x},${y}`;
+  // wie beim Build: id || buildingId || kind
+  const kindRaw = detail.id || detail.buildingId || detail.kind || '';
+  const kind    = String(kindRaw).toLowerCase();
+  if (!isStoneBuildingId(kind)) return;
 
-    const field = StoneFields.get(uid);
-    if (!field){
-      return;
-    }
+  const x   = detail.x | 0;
+  const y   = detail.y | 0;
+  const uid = detail.uid || `${kind}@${x},${y}`;
 
-    const radius = (typeof detail.radiusTiles === 'number')
-      ? detail.radiusTiles
-      : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
-
-    field.workArea = {
-      cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
-      cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
-      radiusTiles: radius
-    };
-
-    field.cx = field.workArea.cx;
-    field.cy = field.workArea.cy;
-
-    // neues Layout innerhalb des (neuen) Arbeitsbereiches
-    createRandomLayoutForField(field);
-
-    LOG(TAG, 'Arbeitsbereich aktualisiert:', uid, field.workArea);
+  const field = StoneFields.get(uid);
+  if (!field){
+    return;
   }
+
+  const radius = (typeof detail.radiusTiles === 'number')
+    ? detail.radiusTiles
+    : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
+
+  field.workArea = {
+    cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
+    cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
+    radiusTiles: radius
+  };
+
+  field.cx = field.workArea.cx;
+  field.cy = field.workArea.cy;
+
+  // neues Layout innerhalb des (neuen) Arbeitsbereiches
+  createRandomLayoutForField(field);
+
+  LOG('Arbeitsbereich aktualisiert:', uid, field.workArea);
+}
 
   function tick(dtMs){
     // aktuell keine eigene Zeit-Logik nötig
