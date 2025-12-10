@@ -1,5 +1,5 @@
 // ============================================================================
-// Datei   : assets/resources/stones_mega_phaser.js
+// Datei   : assets/resources/stone/stones_mega_phaser.js
 // Projekt : Neue Siedler – Stein-Atlas
 // Version : v25.12.02
 // Zweck   : Hilfs-Mapping für Phaser: Name -> FrameIndex
