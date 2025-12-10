@@ -1,16 +1,16 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-workarea-maincanvas-prod-v2
+ * Version : v25.12.10-workarea-maincanvas-prod-v3
  *
  * Zweck   :
  *   Zentraler Renderer für:
  *   - Map / Terrain (Fallback, falls GameMap.render nicht alles übernimmt)
  *   - Gebäude / Baustellen (mit einfachen Platzhalter-Grafiken)
  *   - Debug-/Produktions-Overlays:
- *       • WorkArea (direkt auf Haupt-Canvas)
- *       • Holz/Stein-Produktion (direkt auf Haupt-Canvas)
- *       • Pfade/Units über OverlayHooks auf separatem Overlay-Canvas
+ *       • WorkArea (direkt auf Haupt-Canvas, Weltkoordinaten)
+ *       • Holz/Stein/Fisch-Produktion (direkt auf Haupt-Canvas, Weltkoordinaten)
+ *       • Pfade/Units über OverlayHooks auf separatem Overlay-Canvas (Screen-Space)
  *
  * WICHTIG:
  *   - KEINE ES-Module (kein import/export), sondern klassisches IIFE
@@ -164,7 +164,7 @@
       }
 
       // -----------------------------------------------------------
-      // 3c. Produktions-Overlays (Holz & Stein) auf dem Haupt-Canvas
+      // 3c. Produktions-Overlays (Holz / Stein / Fisch) auf dem Haupt-Canvas
       //     → gleiche Kamera-Transform wie Map/Gebäude, kein eigenes Overlay.
       // -----------------------------------------------------------
       if (window.ProductionWood && typeof window.ProductionWood.drawOnMainCanvas === 'function') {
@@ -176,9 +176,9 @@
       }
 
       if (window.ProductionFish && typeof window.ProductionFish.drawOnMainCanvas === 'function') {
-  window.ProductionFish.drawOnMainCanvas(ctx, cam, this.tile);
-}
-      
+        window.ProductionFish.drawOnMainCanvas(ctx, cam, this.tile);
+      }
+
       // Ab hier keine Welt-Transform mehr
       ctx.restore();
 
@@ -269,6 +269,6 @@
   // Global verfügbar machen, damit game.js darauf zugreifen kann
   window.Renderer = Renderer;
 
-  LOG('Modul geladen – Renderer global verfügbar (WorkArea + Holz/Stein auf MainCanvas).');
+  LOG('Modul geladen – Renderer global verfügbar (WorkArea + Holz/Stein/Fisch auf MainCanvas).');
 
 })();
