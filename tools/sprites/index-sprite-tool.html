@@ -1205,58 +1205,130 @@
     });
 
     function importFromJson(data) {
-      // Versuche unser eigenes Format zuerst:
-      // { meta:{}, frames:{ name:{x,y,w,h,anchorX,anchorY,scale} } }
-      if (data && typeof data.frames === 'object' && !Array.isArray(data.frames)) {
-        frames = [];
-        for (const [name, frameData] of Object.entries(data.frames)) {
-          frames.push({
-            name,
-            x: frameData.x ?? 0,
-            y: frameData.y ?? 0,
-            w: frameData.w ?? frameData.width ?? 0,
-            h: frameData.h ?? frameData.height ?? 0,
-            anchorX: frameData.anchorX ?? Math.round((frameData.x ?? 0) + (frameData.w ?? frameData.width ?? 0) / 2),
-            anchorY: frameData.anchorY ?? Math.round((frameData.y ?? 0) + (frameData.h ?? frameData.height ?? 0)),
-            scale: frameData.scale ?? 1
-          });
-        }
-      }
-      // Phaser-ähnliches Format:
-      // { frames:[ { filename, frame:{x,y,w,h}, anchor? } ] }
-      else if (data && Array.isArray(data.frames)) {
-        frames = data.frames.map((entry, idx) => {
-          const f = entry.frame || entry;
-          const name = entry.filename || entry.name || `frame_${idx}`;
-          const x = f.x ?? 0;
-          const y = f.y ?? 0;
-          const w = f.w ?? f.width ?? 0;
-          const h = f.h ?? f.height ?? 0;
-          const anchorX = entry.anchorX ?? (entry.anchor ? entry.anchor.x : null);
-          const anchorY = entry.anchorY ?? (entry.anchor ? entry.anchor.y : null);
-          return {
-            name,
-            x,
-            y,
-            w,
-            h,
-            anchorX: typeof anchorX === 'number' ? anchorX : Math.round(x + w / 2),
-            anchorY: typeof anchorY === 'number' ? anchorY : Math.round(y + h),
-            scale: entry.scale ?? 1
-          };
-        });
-      } else {
-        alert('Unbekanntes JSON-Format. Es wird nur der "frames"-Teil importiert.');
-        return;
+  // Fall 1: unser eigenes Map-Format
+  //   { meta:{}, frames:{ name:{x,y,w,h,anchorX,anchorY,scale} } }
+  if (data && typeof data.frames === 'object' && !Array.isArray(data.frames)) {
+    frames = [];
+
+    for (const [name, frameData] of Object.entries(data.frames)) {
+      // NEU: verschachtelte Strukturen unterstützen
+      // z.B. fish_mega_atlas.json:
+      // "fish_raw_v01": {
+      //   "frame": {"x":0,"y":0,"w":128,"h":128},
+      //   "pivot": {"x":64,"y":96},
+      //   "anchor":{"x":0.5,"y":0.75},
+      //   "size":{"w":128,"h":128},
+      //   "scale":1
+      // }
+      const f = frameData.frame || frameData;        // Basis: Frame-Ausschnitt
+      const sz = frameData.size || f;                // Größe (lokal)
+
+      const fx = f.x ?? 0;
+      const fy = f.y ?? 0;
+      const fw = f.w ?? f.width ?? 0;
+      const fh = f.h ?? f.height ?? 0;
+
+      const sw = sz.w ?? sz.width ?? fw;
+      const sh = sz.h ?? sz.height ?? fh;
+
+      // Anchor/Pivot in BILDPIXELN berechnen
+      // 1) Pivot (lokal) → global
+      let anchorGlobalX = null;
+      let anchorGlobalY = null;
+
+      if (frameData.pivot && typeof frameData.pivot.x === 'number' && typeof frameData.pivot.y === 'number') {
+        // Pivot ist bereits in lokalen Pixeln (0..w / 0..h)
+        anchorGlobalX = fx + frameData.pivot.x;
+        anchorGlobalY = fy + frameData.pivot.y;
+      } else if (frameData.anchor && typeof frameData.anchor.x === 'number' && typeof frameData.anchor.y === 'number') {
+        // Anchor ist relativ (0..1) → erst in lokale Pixel, dann global versetzen
+        anchorGlobalX = fx + frameData.anchor.x * sw;
+        anchorGlobalY = fy + frameData.anchor.y * sh;
       }
 
-      refreshFrameList();
-      if (frames.length > 0) {
-        selectFrame(0);
-      } else {
-        render();
+      // Fallback: Mitte/Unten des Frames
+      if (anchorGlobalX == null) {
+        anchorGlobalX = Math.round(fx + fw / 2);
       }
+      if (anchorGlobalY == null) {
+        anchorGlobalY = Math.round(fy + fh);
+      }
+
+      frames.push({
+        // WICHTIG: Original-Namen aus der JSON behalten (z.B. "fish_raw_v01")
+        name,
+        x: fx,
+        y: fy,
+        w: fw,
+        h: fh,
+        anchorX: Math.round(anchorGlobalX),
+        anchorY: Math.round(anchorGlobalY),
+        scale: frameData.scale ?? 1
+      });
     }
+  }
+
+  // Fall 2: Phaser-ähnliches Array-Format:
+  // { frames:[ { filename, frame:{x,y,w,h}, anchor?/pivot?/size? } ] }
+  else if (data && Array.isArray(data.frames)) {
+    frames = data.frames.map((entry, idx) => {
+      const f = entry.frame || entry;
+      const sz = entry.size || f;
+
+      const fx = f.x ?? 0;
+      const fy = f.y ?? 0;
+      const fw = f.w ?? f.width ?? 0;
+      const fh = f.h ?? f.height ?? 0;
+
+      const sw = sz.w ?? sz.width ?? fw;
+      const sh = sz.h ?? sz.height ?? fh;
+
+      const name = entry.filename || entry.name || `frame_${idx}`;
+
+      let anchorGlobalX = null;
+      let anchorGlobalY = null;
+
+      if (entry.pivot && typeof entry.pivot.x === 'number' && typeof entry.pivot.y === 'number') {
+        anchorGlobalX = fx + entry.pivot.x;
+        anchorGlobalY = fy + entry.pivot.y;
+      } else if (entry.anchor && typeof entry.anchor.x === 'number' && typeof entry.anchor.y === 'number') {
+        anchorGlobalX = fx + entry.anchor.x * sw;
+        anchorGlobalY = fy + entry.anchor.y * sh;
+      }
+
+      if (anchorGlobalX == null) {
+        anchorGlobalX = Math.round(fx + fw / 2);
+      }
+      if (anchorGlobalY == null) {
+        anchorGlobalY = Math.round(fy + fh);
+      }
+
+      return {
+        name,
+        x: fx,
+        y: fy,
+        w: fw,
+        h: fh,
+        anchorX: Math.round(anchorGlobalX),
+        anchorY: Math.round(anchorGlobalY),
+        scale: entry.scale ?? 1
+      };
+    });
+  }
+
+  // Unbekanntes Format
+  else {
+    alert('Unbekanntes JSON-Format. Es wird nur der "frames"-Teil importiert.');
+    return;
+  }
+
+  refreshFrameList();
+  if (frames.length > 0) {
+    selectFrame(0);
+  } else {
+    render();
+  }
+}
 
     // -----------------------------------------------------------------------
     // [10] JSON-Export
