@@ -73,7 +73,7 @@
   ];
 
   const STONE_ATLAS_CFG = {
-    urlJson  : 'assets/resources/stone/stones_mega_atlas.json',
+    urlJson  : 'assets/resources/stone/stones_mega_atlas_merged.json',
     urlImage : 'assets/resources/stone/stones_mega_atlas.png',
 
     groups   : {
