@@ -252,7 +252,12 @@ function enqueueCarryJobFromBuilding(building, resId, qty = 1){
   // ==========================================================================
   // EXPORT / GLOBAL-API
   // ==========================================================================
-
+window.Production = {
+  registerModule,
+  addResource,
+  getStore,
+  enqueueCarryJobFromBuilding   // <--- NEU nach außen
+};
   // Bestehendes Production-Objekt NICHT zerstören (wegen core/production.js)
   const Prod = (window.Production = window.Production || {});
 
