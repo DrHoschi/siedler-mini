@@ -1,18 +1,19 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-stone-workarea-bridge-depth-v1
+ * Version : v25.12.10-stone-workarea-maincanvas-depth-v2
  *
  * Zweck   :
  *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
  *   - Für jedes Stein-Gebäude wird ein zufälliges "Steinfeld" erzeugt:
  *       große Felsen, Geröll, kleine Haufen ...
- *   - Der Renderer zeichnet diese Steine als Overlay um das Gebäude herum.
  *   - Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
  *
  *       RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
  *
- *   - Datenbasis: stones_mega_atlas.json + stones_mega_atlas.png
+ *   Darstellung:
+ *   - Zeichnet die Steine direkt auf dem HAUPT-CANVAS in Weltkoordinaten
+ *   - KEIN OverlayHooks / kein eigenes Overlay-Canvas für Steine
  *
  * Ereignisse:
  *   IN  :
@@ -24,9 +25,8 @@
  *     - keine (nur visuelle Darstellung + interner Abbau-Status)
  *
  * Debug / API:
- *   - window.ProductionStone.fields        → Map<uid, StoneFieldState>
- *   - window.ProductionStone._degradeOne  → 1 Stein manuell degradieren
- *   - window.ProductionStone._degradeField→ Feld um n Steine reduzieren
+ *   - window.ProductionStone.fields
+ *   - window.ProductionStone.drawOnMainCanvas(ctx, cam, tileSize)
  * ========================================================================== */
 
 (function(){
@@ -273,7 +273,7 @@
       cy : cyTiles,
       workArea : null,
       stones : [],
-      worker : null
+      worker : null     // einfacher "Steinmetz"-Marker
     };
 
     createRandomLayoutForField(field);
@@ -346,31 +346,20 @@
   }
 
   // ========================================================================
-  // OVERLAY-ZEICHNUNG (Steine + optionaler „Steinmetz“-Marker)
+  // HAUPT-CANVAS-ZEICHNUNG (Steine + Steinmetz-Blase)
   // ========================================================================
 
-  function drawStoneOverlay(ctx, cam){
+  /**
+   * Wird vom Renderer nach der Kamera-Transform aufgerufen.
+   * ctx ist damit bereits in Weltkoordinaten (Map + Gebäude).
+   */
+  function drawOnMainCanvas(ctx, cam, tileSize){
+    if (!ctx) return;
+    if (!StoneFields.size) return;
+
     const Game = window.Game || {};
-
-    // Kamera auslesen (wie unit-overlay / path-overlay)
-    const cameraState = cam ||
-      (window.GameCamera && typeof window.GameCamera.getState === 'function'
-        ? GameCamera.getState()
-        : (Game && Game.camera) || null);
-
-    const zoom = cameraState && typeof cameraState.zoom === 'number'
-      ? cameraState.zoom
-      : 1;
-
-    const camX = cameraState && typeof cameraState.x === 'number'
-      ? cameraState.x
-      : 0;
-
-    const camY = cameraState && typeof cameraState.y === 'number'
-      ? cameraState.y
-      : 0;
-
     const ts =
+      (tileSize) ||
       (Game.map && Game.map.tileSize) ||
       (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
       Game.tileSize ||
@@ -380,18 +369,11 @@
 
     ctx.save();
 
-    // Overlay ist in Screen-Space → eigene Transform:
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    const canvas = ctx.canvas;
-    const wPx = canvas.width;
-    const hPx = canvas.height;
-
     for (const field of StoneFields.values()){
       const stonesRaw = field.stones || [];
       if (!stonesRaw.length) continue;
 
-      // Gebäudefläche für Tiefen-Logik (hinter/vor dem Gebäude)
+      // Gebäudefläche in Tile-Koordinaten
       const bx0 = field.x | 0;
       const by0 = field.y | 0;
       const bw  = (field.w | 0) || 3;
@@ -399,11 +381,12 @@
       const bx1 = bx0 + bw;
       const by1 = by0 + bh;
 
-      // Grenze für „vor dem Gebäude“: alles unterhalb der unteren Kante
+      // alles oberhalb dieser Linie und im x-Bereich des Gebäudes
+      // wird als "hinter dem Gebäude" betrachtet
       const frontY = by1 - 0.2;
 
-      // Sortierung nach ty → von oben nach unten zeichnen
-      const stones = [...stonesRaw].sort((a,b)=> (a.ty - b.ty));
+      // Y-Sort: von oben nach unten, damit vorn/hinten bei Steinen stimmt
+      const stones = stonesRaw.slice().sort((a,b)=> (a.ty - b.ty));
 
       for (const s of stones){
         if (s.stageIndex == null || s.stageIndex < 0) continue;
@@ -411,28 +394,19 @@
         const tx = s.tx;
         const ty = s.ty;
 
-        // Steine, die im „Schatten“ des Gebäudes liegen (y oberhalb der
-        // unteren Gebäudekante und x grob im Gebäude-Bereich), werden
-        // nicht gezeichnet → wirken wie „hinter dem Gebäude“.
-        if (ty < frontY &&
-            tx >= bx0 - 0.5 && tx <= bx1 + 0.5){
+        // Steine, die im "Schatten" des Gebäudes liegen, nicht zeichnen:
+        // → sie sind "hinter" dem Gebäude und würden sonst auf der Wand kleben.
+        const behindBuilding =
+          ty < frontY &&
+          tx >= bx0 - 0.5 && tx <= bx1 + 0.5;
+
+        if (behindBuilding){
           continue;
         }
 
-        // Welt → Screen (wie map.layer)
-        const wx = (tx + 0.5) * ts;
-        const wy = (ty + 1.0) * ts;
-
-        const sx = (wx - camX) * zoom;
-        const sy = (wy - camY) * zoom;
-
-        // ggf. culling (grob)
-        if (sx < -ts*zoom || sy < -ts*zoom || sx > wPx + ts*zoom || sy > hPx + ts*zoom){
-          continue;
-        }
-
-        const cxPx = sx;
-        const cyPx = sy;
+        // Weltkoordinaten in Pixel (ctx ist bereits mit Kamera-Transform belegt)
+        const cxPx = (tx + 0.5) * ts;
+        const cyPx = (ty + 1.0) * ts;
 
         let drawn = false;
 
@@ -444,53 +418,48 @@
 
           if (groupFrames && groupFrames.length){
             const frameName = groupFrames[s.variant % groupFrames.length];
-            drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale * zoom);
+            drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale);
           }
         }
 
         if (!drawn){
           // Fallback-Kreis
-          const r = ts * 0.35 * zoom;
+          const r = ts * 0.35;
           ctx.beginPath();
           ctx.fillStyle   = '#888888';
           ctx.strokeStyle = '#444444';
-          ctx.lineWidth   = Math.max(1.5, ts * 0.04 * zoom);
+          ctx.lineWidth   = Math.max(1.5, ts * 0.04);
           ctx.arc(cxPx, cyPx - r * 0.2, r, 0, Math.PI*2);
           ctx.fill();
           ctx.stroke();
         }
+      }
 
-        // Optional: einfacher „Steinmetz“-Marker als graue Blase:
-        // wird im Tick aktualisiert (field.worker).
-        if (field.worker && field.worker.targetStone === s){
-          const w     = field.worker;
-          const tNorm = Math.max(0, Math.min(1, w.tNorm || 0));
+      // Optionaler "Steinmetz": graue Blase zwischen Gebäudezentrum und Ziel-Stein
+      if (field.worker){
+        const w = field.worker;
+        const tNorm = Math.max(0, Math.min(1, w.tNorm || 0));
 
-          // Position in Tile-Koordinaten zwischen Gebäudezentrum und Stein
-          const fromTx = w.fromTx;
-          const fromTy = w.fromTy;
-          const toTx   = w.toTx;
-          const toTy   = w.toTy;
+        const fromTx = w.fromTx;
+        const fromTy = w.fromTy;
+        const toTx   = w.toTx;
+        const toTy   = w.toTy;
 
-          const curTx = fromTx + (toTx - fromTx) * tNorm;
-          const curTy = fromTy + (toTy - fromTy) * tNorm;
+        const curTx = fromTx + (toTx - fromTx) * tNorm;
+        const curTy = fromTy + (toTy - fromTy) * tNorm;
 
-          const wx2 = (curTx + 0.5) * ts;
-          const wy2 = (curTy + 1.0) * ts;
+        const wx = (curTx + 0.5) * ts;
+        const wy = (curTy + 1.0) * ts;
 
-          const sx2 = (wx2 - camX) * zoom;
-          const sy2 = (wy2 - camY) * zoom;
+        const rr = ts * 0.25;
 
-          const rr = ts * 0.25 * zoom;
-
-          ctx.beginPath();
-          ctx.fillStyle   = 'rgba(160,160,160,0.9)';
-          ctx.strokeStyle = 'rgba(40,40,40,0.9)';
-          ctx.lineWidth   = Math.max(1, ts * 0.03 * zoom);
-          ctx.arc(sx2, sy2 - rr * 1.2, rr, 0, Math.PI*2);
-          ctx.fill();
-          ctx.stroke();
-        }
+        ctx.beginPath();
+        ctx.fillStyle   = 'rgba(160,160,160,0.9)';
+        ctx.strokeStyle = 'rgba(40,40,40,0.9)';
+        ctx.lineWidth   = Math.max(1, ts * 0.03);
+        ctx.arc(wx, wy - rr * 1.2, rr, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
       }
     }
 
@@ -505,6 +474,7 @@
     const stones = field.stones || [];
     if (!stones.length) return null;
 
+    // immer zuerst "vollere" Stufen abbauen (RAW → CRACKED → ...)
     for (let stageIndex=0; stageIndex<STONE_STAGE.length; stageIndex++){
       const candidatesIdx = [];
       for (let i=0; i<stones.length; i++){
@@ -530,7 +500,6 @@
 
     // Eine Stufe weiter degradieren
     stone.stageIndex += 1;
-    stone.key = null;
 
     if (stone.stageIndex >= STONE_STAGE.length){
       // komplett abgetragen → nicht mehr zeichnen
@@ -552,8 +521,8 @@
       lastSel = sel;
     }
 
-    // Wenn mindestens ein Stein abgetragen wurde, einen einfachen
-    // „Steinmetz“-Laufzyklus für das Feld starten.
+    // Wenn mindestens ein Stein abgetragen wurde, einfachen
+    // "Steinmetz"-Laufzyklus starten.
     if (lastSel){
       const bx0 = field.x | 0;
       const by0 = field.y | 0;
@@ -635,7 +604,7 @@
   }
 
   function tick(dtMs){
-    // Einfache Animation für den „Steinmetz“-Marker:
+    // Einfache Animation für den "Steinmetz"-Marker:
     // läuft vom Gebäudezentrum zum aktiven Stein und wieder zurück.
     const WORKER_TRAVEL_MS = 1400;          // Hinweg
     const WORKER_TOTAL_MS  = WORKER_TRAVEL_MS * 2; // Hin + Zurück
@@ -726,7 +695,8 @@
         id             : 'stone',
         onBuildComplete,
         onWorkAreaSet,
-        tick
+        tick,
+        drawOnMainCanvas   // <-- Main-Canvas-Zeichner
       });
       LOG('Produktionsmodul "stone" registriert.');
       return true;
@@ -751,12 +721,12 @@
     fields        : StoneFields,
     STONE_ATLAS_CFG,
     STONE_STAGE,
-    drawOverlay   : drawStoneOverlay,
+    drawOnMainCanvas,
     ensureAtlas   : ensureStoneAtlasReady,
     _degradeOne   : degradeSingleStone,
     _degradeField : degradeFieldByStone
   };
 
-  LOG('Stein-Modul geladen v25.12.10-stone-workarea-bridge-depth-v1');
+  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-depth-v2');
 
 })();
