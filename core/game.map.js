@@ -349,9 +349,8 @@
     }
     // ----------------------------------------------------------------
     // Ressourcen-Layer (Bäume/Steine/Fische) – Platzhalter-Darstellung
-if (window.MapResources && typeof window.MapResources.drawWorld === 'function') {
-  window.MapResources.drawWorld(ctx, { tileSize: ts });
-}
+    // if (window.MapResources && typeof window.MapResources.drawWorld === 'function') {
+    // window.MapResources.drawWorld(ctx, { tileSize: ts });}
     
     // ---------------------------------------------------------------------
 // Arbeitsbereiche (WorkAreas) zeichnen
