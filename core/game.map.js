@@ -347,10 +347,17 @@
         }
       }
     }
-    // ----------------------------------------------------------------
-    // Ressourcen-Layer (Bäume/Steine/Fische) – Platzhalter-Darstellung
-    // if (window.MapResources && typeof window.MapResources.drawWorld === 'function') {
-    // window.MapResources.drawWorld(ctx, { tileSize: ts });}
+    // ---------------------------------------------------------------------
+// Ressourcen-Layer (Bäume/Steine/Fische) – Platzhalter-Darstellung
+//    → wird VOR WorkArea gezeichnet, damit WorkArea drüber liegt
+// ---------------------------------------------------------------------
+if (window.MapResources && typeof window.MapResources.drawWorld === 'function') {
+  try {
+    window.MapResources.drawWorld(ctx, { tileSize: ts });
+  } catch (e) {
+    WARN('MapResources.drawWorld Fehler:', e);
+  }
+}
     
     // ---------------------------------------------------------------------
 // Arbeitsbereiche (WorkAreas) zeichnen
