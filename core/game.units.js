@@ -1,13 +1,15 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-carrier-jobs-fix2
+ * Version : v25.12.11-carrier-jobs-fix3
  *
  * Zweck   : Träger mit Job-System
  *           – verwaltet HQ-Position & Carrier-Liste
  *           – bewegt Carrier (Idle + Job-Phasen)
  *           – versteht Jobs mit {tx,ty} ODER {x,y}
- *           – sendet cb:build:deliver bei Ankunft an der Baustelle
+ *           – sendet:
+ *               • cb:build:deliver für Job-Typ "deliver" (Baustellen)
+ *               • cb:job:done     für alle anderen Job-Typen (z.B. "carry")
  * ========================================================================== */
 (function () {
   'use strict';
@@ -19,7 +21,7 @@
   // ---------------------------------------------------------------------------
   // STATE
   // ---------------------------------------------------------------------------
-  /** @type {{id:number,type:string,x:number,y:number,task?:any,carrying?:string}[]} */
+  /** @type {{id:number,type:string,x:number,y:number,task?:any,carrying?:string,_idleTarget?:{x:number,y:number}}[]} */
   const _units = [];
   let _hqPos   = null;      // { tx, ty } in Tile-Koordinaten
   let _nextId  = 1;
@@ -74,7 +76,8 @@
         x    : _hqPos.tx + _rand(-0.2, 0.2),
         y    : _hqPos.ty + _rand(-0.2, 0.2),
         task : null,
-        carrying: null
+        carrying: null,
+        _idleTarget: null
       };
       _units.push(u);
     }
@@ -212,11 +215,19 @@
       if (jobType === 'deliver'){
         // Klassischer Bau-Job → Bau-Subsystem informieren
         try{
+          const x = t.dest.x;
+          const y = t.dest.y;
+
+          // WICHTIG: kompatibel zu construction-Modul
           window.dispatchEvent(new CustomEvent('cb:build:deliver', {
             detail: {
-              x    : t.dest.x,
-              y    : t.dest.y,
-              res  : u.carrying,
+              // float-Koordinate (Mitte des Zieltiles)
+              x,
+              y,
+              // zusätzlich Tile-Koordinaten (älterer Code erwartet tx/ty)
+              tx : x,
+              ty : y,
+              res: u.carrying,
               jobId: t.job?.id
             }
           }));
@@ -299,17 +310,16 @@
   // EXPORT
   // ---------------------------------------------------------------------------
   window.GameUnits = window.GameUnits || {};
-  window.GameUnits.tick      = tick;
-  window.GameUnits.needsJob  = needsJob;
-  window.GameUnits.assignJob = assignJob;
-  window.GameUnits.getUnits  = getUnits;
-  window.GameUnits.getHQPos  = getHQPos;
+  window.GameUnits.tick         = tick;
+  window.GameUnits.needsJob     = needsJob;
+  window.GameUnits.assignJob    = assignJob;
+  window.GameUnits.getUnits     = getUnits;
+  window.GameUnits.getHQPos     = getHQPos;
   window.GameUnits.spawnCarrier = spawnCarrier;
-  window.GameUnits._state    = {
+  window.GameUnits._state       = {
     units : _units,
     hqPos : () => _hqPos
   };
 
-  LOG('Modul geladen (Carrier + Jobs)');
-
+  LOG('Modul geladen (Carrier + Jobs, fix3)');
 })();
