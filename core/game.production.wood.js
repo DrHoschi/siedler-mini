@@ -198,23 +198,38 @@
         break;
       }
 
-      case LJ_PHASE.CUT: {
+            case LJ_PHASE.CUT: {
         if (lj.timer >= LJ_TIMES.CUT){
-          lj.timer    = 0;
-          lj.phase    = LJ_PHASE.PLANT;
+          lj.timer = 0;
+          lj.phase = LJ_PHASE.PLANT;
           lj.treeProg = 0;
-          lj.cycle    = (lj.cycle || 0) + 1;
+          lj.cycle = (lj.cycle || 0) + 1;
 
           const qty = 1;
-          addResource('wood', qty, 'lumberjack-cycle', lj.uid);
 
+          // Geometrie des Gebäudes
+          const bx = lj.x | 0;
+          const by = lj.y | 0;
+          const bw = (lj.w | 0) || 3;
+          const bh = (lj.h | 0) || 3;
+
+          const centerX = bx + bw / 2;
+          const centerY = by + bh / 2;
+
+          // 🔁 Nur noch PROD-OUTPUT-Event feuern
+          // → Ressourcenzählung + Jobs macht jetzt game.production.js
           try {
             dispatchEvent(new CustomEvent('cb:prod:output', {
               detail:{
-                bId  : lj.uid,
-                kind : lj.kind,
-                item : 'wood',
-                qty  : qty
+                bId  : lj.uid,        // entspricht uid aus cb:build:complete
+                uid  : lj.uid,        // fallback, falls bId anders heißt
+                kind : lj.kind,       // 'b.lumberjack'
+                item : 'wood',        // Ressource
+                qty  : qty,           // Menge
+                x    : centerX,       // Gebäudecenter (für Fallback)
+                y    : centerY,
+                w    : bw,
+                h    : bh
               }
             }));
           } catch(e){
