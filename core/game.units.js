@@ -1,16 +1,25 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.11-carrier-jobs-fix3
+ * Version : v25.12.11-carrier-jobs-fix4
  *
- * Zweck   : Träger mit Job-System
+ * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
  *           – bewegt Carrier (Idle + Job-Phasen)
  *           – versteht Jobs mit {tx,ty} ODER {x,y}
  *           – sendet:
  *               • cb:build:deliver für Job-Typ "deliver" (Baustellen)
- *               • cb:job:done     für alle anderen Job-Typen (z.B. "carry")
- * ========================================================================== */
+ *               • cb:job:done     für andere Job-Typen (z.B. "carry" später)
+ *
+ * API     :
+ *   GameUnits.setHQPos({tx,ty})
+ *   GameUnits.getHQPos()
+ *   GameUnits.spawnInitialCarriers(n)
+ *   GameUnits.getUnits()
+ *   GameUnits.needsJob()
+ *   GameUnits.assignJob(job)
+ *   GameUnits.tick(dt?)
+ * ============================================================================ */
 (function () {
   'use strict';
 
@@ -18,19 +27,23 @@
   const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // STATE
-  // ---------------------------------------------------------------------------
-  /** @type {{id:number,type:string,x:number,y:number,task?:any,carrying?:string,_idleTarget?:{x:number,y:number}}[]} */
+  // -------------------------------------------------------------------------
+  /** @type {Array<{id:number,type:string,x:number,y:number,task?:any,carrying?:string,_idleTarget?:{x:number,y:number}}>} */
   const _units = [];
-  let _hqPos   = null;      // { tx, ty } in Tile-Koordinaten
-  let _nextId  = 1;
+
+  /** @type {{tx:number,ty:number}|null} */
+  let _hqPos = null;
+
+  /** optional Referenz aufs Game-Objekt (für spätere Erweiterungen) */
+  let _game = null;
 
   const SPEED_TILES_PER_SEC = 2.0;
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // HELFER
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   function _rand(min, max){
     return min + Math.random() * (max - min);
   }
@@ -42,56 +55,64 @@
 
   function _ensureGameBinding(game){
     if (!game) return;
+    _game = game;
     if (!Array.isArray(game.buildings)){
       game.buildings = [];
     }
   }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // HQ & UNITS
-  // ---------------------------------------------------------------------------
-  function setHQPos(tx, ty){
-    if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
-    _hqPos = { tx, ty };
-    LOG('HQ-Position gesetzt', _hqPos);
+  // -------------------------------------------------------------------------
+  function setHQPos(pos) {
+    if (!pos) return;
+    if (!Number.isFinite(pos.tx) || !Number.isFinite(pos.ty)) return;
+    _hqPos = { tx: pos.tx, ty: pos.ty };
+    LOG('HQPos gesetzt', _hqPos);
   }
 
   function getHQPos(){
     return _hqPos ? { tx: _hqPos.tx, ty: _hqPos.ty } : null;
   }
 
-  function spawnCarrier(count){
+  function _spawnCarrierAt(tx, ty) {
+    const unit = {
+      id   : _units.length + 1,
+      type : 'carrier',
+      x    : tx,
+      y    : ty,
+      task : null,
+      carrying   : null,
+      _idleTarget: null
+    };
+    _units.push(unit);
+    return unit;
+  }
+
+  function spawnInitialCarriers(count){
+    if (!_hqPos){
+      WARN('spawnInitialCarriers ohne HQPos aufgerufen');
+      return;
+    }
     count = count | 0;
     if (count <= 0) return;
 
-    if (!_hqPos){
-      WARN('spawnCarrier ohne HQ-Position – abgebrochen');
-      return;
-    }
-
     for (let i = 0; i < count; i++){
-      const u = {
-        id   : _nextId++,
-        type : 'carrier',
-        x    : _hqPos.tx + _rand(-0.2, 0.2),
-        y    : _hqPos.ty + _rand(-0.2, 0.2),
-        task : null,
-        carrying: null,
-        _idleTarget: null
-      };
-      _units.push(u);
+      const jitterX = _rand(-0.3, 0.3);
+      const jitterY = _rand(-0.3, 0.3);
+      _spawnCarrierAt(_hqPos.tx + jitterX, _hqPos.ty + jitterY);
     }
 
-    LOG('Carrier gespawnt', { count, hq: _hqPos });
+    LOG('Start-Carrier gespawnt', { count, hq: _hqPos });
   }
 
   function getUnits(){
     return _units;
   }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // JOB HANDLING
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   function needsJob(){
     // Mindestens ein Carrier ohne laufenden Task?
     return _units.some(u => u.type === 'carrier' && !u.task);
@@ -100,6 +121,14 @@
   /**
    * Job einem freien Carrier zuweisen.
    * Job darf from/to als {tx,ty} ODER {x,y} enthalten.
+   *
+   * job = {
+   *   id   : 'job-deliver-1',
+   *   type : 'deliver' | 'carry' | ...,
+   *   res  : 'wood' | 'stone' | ...,
+   *   from : {x,y} | {tx,ty} (optional, sonst HQ),
+   *   to   : {x,y} | {tx,ty}
+   * }
    */
   function assignJob(job){
     const u = _units.find(u => u.type === 'carrier' && !u.task);
@@ -117,17 +146,18 @@
     const sy = _coord(job.from || hq, 'y',  hq.ty);
 
     // Ziel – tolerant gegenüber {x,y} / {tx,ty}
-    const tx = _coord(job.to   || hq, 'x',  hq.tx);
-    const ty = _coord(job.to   || hq, 'y',  hq.ty);
+    const tx = _coord(job.to   || {}, 'x',  sx);
+    const ty = _coord(job.to   || {}, 'y',  sy);
 
     const source = { x: sx, y: sy };
     const dest   = { x: tx, y: ty };
 
     u.task = {
-      job,
-      phase       : 'go_source',
-      source,
-      dest,
+      phase  : 'go_source',   // erst zur Quelle (HQ)
+      job    : job,
+      source : source,
+      dest   : dest,
+      target : source,        // aktuelles Bewegungsziel
       pickupTimer : 0
     };
 
@@ -140,13 +170,16 @@
     return true;
   }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // BEWEGUNG
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   function _randomTargetNearHQ(){
     if (!_hqPos) return null;
     const r = 1.2;
-    return { x: _hqPos.tx + _rand(-r, r), y: _hqPos.ty + _rand(-r, r) };
+    return {
+      x: _hqPos.tx + _rand(-r, r),
+      y: _hqPos.ty + _rand(-r, r)
+    };
   }
 
   function _moveTowards(u, target, dt){
@@ -157,7 +190,7 @@
     const dist = Math.hypot(dx, dy);
 
     if (!(dist > 0.0001)) {
-      return true;
+      return true; // praktisch schon da
     }
 
     const step = SPEED_TILES_PER_SEC * dt;
@@ -170,7 +203,6 @@
     const nx = u.x + dx / dist * step;
     const ny = u.y + dy / dist * step;
 
-    // Numerik absichern: NaN vermeiden
     if (Number.isFinite(nx)) u.x = nx;
     if (Number.isFinite(ny)) u.y = ny;
 
@@ -185,7 +217,7 @@
     if (t.phase === 'go_source'){
       if (_moveTowards(u, t.source, dt)){
         t.phase       = 'pickup';
-        t.pickupTimer = 0.3; // kurze Pause zum „Aufladen“
+        t.pickupTimer = 0.3; // kleine Pause zum „Aufladen“
       }
       return;
     }
@@ -211,22 +243,20 @@
     // Phase 4: Abliefern → Event schicken + Ladung leeren
     if (t.phase === 'deliver'){
       const jobType = t.job?.type || 'deliver';
+      const tileX   = t.dest.x;
+      const tileY   = t.dest.y;
 
       if (jobType === 'deliver'){
         // Klassischer Bau-Job → Bau-Subsystem informieren
         try{
-          const x = t.dest.x;
-          const y = t.dest.y;
-
-          // WICHTIG: kompatibel zu construction-Modul
           window.dispatchEvent(new CustomEvent('cb:build:deliver', {
             detail: {
-              // float-Koordinate (Mitte des Zieltiles)
-              x,
-              y,
-              // zusätzlich Tile-Koordinaten (älterer Code erwartet tx/ty)
-              tx : x,
-              ty : y,
+              // Welt-/Tile-Koordinate (Mitte des Zieltiles)
+              x  : tileX,
+              y  : tileY,
+              // zusätzlich Tile-Koordinaten, weil ältere Module tx/ty erwarten
+              tx : tileX,
+              ty : tileY,
               res: u.carrying,
               jobId: t.job?.id
             }
@@ -235,14 +265,16 @@
           WARN('cb:build:deliver dispatch fehlgeschlagen', e);
         }
       } else {
-        // Allgemeiner Job (z.B. Trage-/Produktionsjob)
+        // Allgemeiner Job (z.B. zukünftige Tragejobs "carry")
         try{
           window.dispatchEvent(new CustomEvent('cb:job:done', {
             detail: {
               type     : jobType,
               carrierId: u.id,
               res      : u.carrying,
-              jobId    : t.job?.id
+              jobId    : t.job?.id,
+              x        : tileX,
+              y        : tileY
             }
           }));
         } catch(e){
@@ -257,7 +289,7 @@
   }
 
   function _tickIdle(u, dt){
-    if (!_hqPos) return; // kein HQ → nicht herumwandern
+    if (!_hqPos) return; // kein HQ → gar nicht bewegen
 
     if (!u._idleTarget || Math.random() < 0.01){
       u._idleTarget = _randomTargetNearHQ();
@@ -268,7 +300,10 @@
   }
 
   function tick(dt){
-    if (!dt || !Number.isFinite(dt)) dt = 1/60;
+    if (!dt || !Number.isFinite(dt)){
+      // Fallback für Aufrufe ohne dt (z.B. game.tick.js)
+      dt = 1/60;
+    }
 
     for (const u of _units){
       if (u.type !== 'carrier') continue;
@@ -281,9 +316,9 @@
     }
   }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // EVENTS
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
 
   // Game-Bindung, sobald das Spiel losläuft
   window.addEventListener('cb:game:start', ev => {
@@ -293,33 +328,37 @@
 
   // HQ-Position merken & Start-Träger spawnen, wenn HQ platziert wird
   window.addEventListener('cb:build:place', ev => {
-    const d = ev?.detail || {};
-    if (!d) return;
+    const d  = ev?.detail || {};
+    const id = d.buildingId || d.id || '';
+    if (id !== 'b.hq') return;
 
-    if (d.id === 'b.hq'){
-      const tx = Number(d.cx ?? d.x ?? 0);
-      const ty = Number(d.cy ?? d.y ?? 0);
-      setHQPos(tx, ty);
+    const w  = d.w ?? 3;
+    const h  = d.h ?? 3;
+    const tx = (d.x ?? d.tx ?? 0) + w / 2;
+    const ty = (d.y ?? d.ty ?? 0) + h / 2;
 
-      // Starter-Carrier
-      spawnCarrier(3);
-    }
+    setHQPos({ tx, ty });
+    spawnInitialCarriers(3);
   });
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // EXPORT
-  // ---------------------------------------------------------------------------
-  window.GameUnits = window.GameUnits || {};
-  window.GameUnits.tick         = tick;
-  window.GameUnits.needsJob     = needsJob;
-  window.GameUnits.assignJob    = assignJob;
-  window.GameUnits.getUnits     = getUnits;
-  window.GameUnits.getHQPos     = getHQPos;
-  window.GameUnits.spawnCarrier = spawnCarrier;
-  window.GameUnits._state       = {
-    units : _units,
-    hqPos : () => _hqPos
+  // -------------------------------------------------------------------------
+  window.GameUnits = {
+    setHQPos,
+    getHQPos,
+    spawnInitialCarriers,
+    getUnits,
+    needsJob,
+    assignJob,
+    tick,
+    // für spätere Worker-Typen:
+    _state: {
+      units : _units,
+      hqPos : () => _hqPos,
+      game  : () => _game
+    }
   };
 
-  LOG('Modul geladen (Carrier + Jobs, fix3)');
+  LOG('Units geladen → Jobfähig (fix4, deliver + job:done)');
 })();
