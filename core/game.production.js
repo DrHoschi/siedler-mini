@@ -1,84 +1,106 @@
 /* ============================================================================
  * Datei   : core/game.production.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.11-res-core+jobs-v1
+ * Version : v25.12.11-prod-core+jobs-v2
  *
  * Zweck   :
- *   Zentraler Produktions-Manager + einheitliche Ressourcen-Zählung
+ *   Zentraler Produktions-Kern für Epoche 1:
+ *     - verwaltet Produktions-Module (Holz / Stein / Fisch / ...)
+ *     - zählt Ressourcen (HUD via cb:res:change)
+ *     - verteilt Events cb:build:complete / cb:workarea:set an Module
+ *     - hört auf cb:prod:output der Module und:
+ *         → addResource(res, qty, reason, src)
+ *         → erzeugt optional einen "carry"-Job für Carrier/Träger
  *
- *   – Hält eine Liste von Produktions-Modulen (wood, stone, fish, …)
- *   – Verteilt Events (cb:build:complete, cb:workarea:set) an die Module
- *   – Ruft pro Tick alle Module auf
- *   – Stellt Production.addResource(...) als EINHEITLICHEN Weg zum Zählen bereit
- *   – Hört auf cb:prod:output und erzeugt optionale Träger-Jobs ("carry")
+ * Ereignisse:
+ *   IN :
+ *     - cb:build:complete { id, x,y,w,h, ... }
+ *     - cb:workarea:set   { id|kind, uid, cx,cy,radiusTiles, x,y,w,h }
+ *     - cb:prod:output    { bId, kind, item, qty, x?,y?,w?,h? }
+ *     - cb:game:tick      { dtMs }   (optional, falls genutzt)
  *
- * WICHTIG:
- *   – KEINE Holz-/Stein-/Fisch-Logik hier drin.
- *     Das bleibt in game.production.wood.js / .stone.js / .fish.js.
- * ========================================================================== */
-(function () {
+ *   OUT:
+ *     - cb:res:change { res, old, value, delta, reason, src }
+ *
+ * API (window.Production):
+ *   - registerModule(mod)
+ *   - addResource(resId, delta, reason, src)
+ *   - getResourceValue(resId)
+ *   - getStore()
+ *   - tick(dtMs?)
+ *   - enqueueCarryJobFromBuilding(building, resId, qty?)
+ * ============================================================================ */
+
+(function(){
   'use strict';
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // LOGGING / META
-  // --------------------------------------------------------------------------
-  const TAG  = '[prod-core]';
-  const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
-  const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
-  const ERR  = (...a) => (window.CBLog?.error?? console.error)(TAG, ...a);
+  // ==========================================================================
 
-  /** Tick-Dauer (ms) – sollte zu core/game.tick.js::TICK_MS passen */
+  const TAG  = '[game.production]';
+  const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
+  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
+  const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
+
+  /** Tick-Dauer (ms) – sollte grob zu core/game.tick.js passen */
   const TICK_MS = 200;
 
-  // --------------------------------------------------------------------------
-  // STATE
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // LAUFZEIT-STATE
+  // ==========================================================================
 
   /**
-   * Registrierte Produktions-Module.
+   * Liste aller Produktions-Module.
    * Jedes Modul:
    *   {
    *     id: 'wood',
-   *     tick?: (dtMs:number) => void,
-   *     onBuildComplete?: (detail:object) => void,
-   *     onWorkAreaSet?: (detail:object) => void
+   *     tick?: (dtMs) => void,
+   *     onBuildComplete?: (detail) => void,
+   *     onWorkAreaSet?: (detail) => void
    *   }
    */
   const MODULES = [];
 
   /**
    * Globaler Ressourcen-Speicher.
-   * Wird auch vom HUD (RegistryValues.*) benutzt.
+   *   – Wird außerdem vom HUD gelesen (RegistryValues.*)
+   *   – addResource() ist der einzige Weg, diesen Store zu ändern.
    */
   const RES_STORE = (window.RegistryValues = window.RegistryValues || {});
 
-  // --------------------------------------------------------------------------
-  // RESSOURCEN-API
-  // --------------------------------------------------------------------------
+  // Für optionale Zuordnung bId → Gebäude-Info (für Jobs)
+  const BUILDINGS_BY_UID = new Map();
+
+  // ==========================================================================
+  // HILFSFUNKTIONEN – RESSOURCEN
+  // ==========================================================================
 
   /**
    * Ressource ändern + HUD / andere Systeme informieren.
    *
    * @param {string} resId   – z.B. 'wood' | 'stone' | 'fish'
-   * @param {number} delta   – Änderung (+1 / -1 / …)
-   * @param {string} reason  – z.B. 'lumberjack-cycle', 'stone-cycle', …
-   * @param {string} src     – Modulname, z.B. 'wood'
+   * @param {number} delta   – z.B. +1 / -1
+   * @param {string} reason  – Kurztext für Logs ('lumberjack-cycle', 'stone-cycle', ...)
+   * @param {string} src     – Quelle/Modul ('wood', 'stone', 'fish', 'unit', ...)
    */
   function addResource(resId, delta, reason, src) {
     if (!resId) return;
     if (!delta || !Number.isFinite(delta)) return;
 
-    const key   = String(resId);
-    const old   = Number(RES_STORE[key] || 0);
+    const key = String(resId);  // bewusst KEIN 'res.*' Prefix
+    const old = Number(RES_STORE[key] || 0);
     const value = old + delta;
+
     RES_STORE[key] = value;
 
-    LOG('Ressource geändert', { res: key, old, delta, value, reason, src });
+    LOG('Ressource geändert:', { res: key, old, delta, value, reason, src });
 
+    // HUD / andere Systeme informieren
     try {
       window.dispatchEvent(new CustomEvent('cb:res:change', {
         detail: {
-          res   : key,
+          res   : key,                  // 'wood' | 'stone' | 'fish' ...
           old,
           value,
           delta,
@@ -91,256 +113,285 @@
     }
   }
 
+  /**
+   * Aktuellen Wert einer Ressource abfragen.
+   * @param {string} resId
+   * @returns {number}
+   */
   function getResourceValue(resId) {
     if (!resId) return 0;
-    const key = String(resId);
-    return Number(RES_STORE[key] || 0);
+    return Number(RES_STORE[String(resId)] || 0);
   }
 
-  // --------------------------------------------------------------------------
-  // MODUL-REGISTRIERUNG
-  // --------------------------------------------------------------------------
+  /**
+   * Gesamten Store zurückgeben (z.B. für Debug / Inspector).
+   */
+  function getStore(){
+    return RES_STORE;
+  }
 
-  function registerModule(mod) {
+  // ==========================================================================
+  // HILFSFUNKTION – CARRY-JOB
+  // ==========================================================================
+
+  /**
+   * Erzeugt einen "carry"-Job: Ware von einem Gebäude zum HQ bringen.
+   * Holz/Stein/Fisch-Module müssen dann NICHT wissen,
+   * wie genau JobEngine/CarrierRuntime ticken.
+   *
+   * @param {object} building – { id, kind, x,y,w,h }
+   * @param {string} resId    – 'wood' | 'stone' | 'fish'
+   * @param {number} qty      – Anzahl (aktuell eher kosmetisch)
+   */
+  function enqueueCarryJobFromBuilding(building, resId, qty = 1){
+    if (!window.JobEngine) return;
+    if (!building) return;
+
+    const eng = window.JobEngine;
+    const res = String(resId || 'wood');
+
+    // "from" = Gebäudecenter in Tile-Koordinaten
+    const bx = Number(building.x ?? 0);
+    const by = Number(building.y ?? 0);
+    const bw = Number(building.w ?? 1);
+    const bh = Number(building.h ?? 1);
+
+    const from = {
+      x : bx + bw / 2,
+      y : by + bh / 2
+    };
+
+    // "to" wird aktuell von CarrierRuntime / HQ ermittelt → null = später setzen
+    const to = null;
+
+    const job = {
+      id   : 'job-carry-' + Date.now().toString(16),
+      type : 'carry',     // wird in carrier.runtime.js bereits verstanden
+      res  : res,
+      qty  : qty,
+      from,
+      to
+    };
+
+    if (typeof eng.push === 'function'){
+      eng.push(job);
+    } else if (typeof eng.add === 'function'){
+      eng.add(job);
+    }
+
+    LOG('carry-job erzeugt', job);
+    return job;
+  }
+
+  // ==========================================================================
+  // MODUL-REGISTRIERUNG
+  // ==========================================================================
+
+  /**
+   * Produktions-Modul registrieren (z.B. wood, fish, stone, …)
+   *
+   * @param {object} mod
+   *   - id: string (Pflicht)
+   *   - tick?: (dtMs:number) => void
+   *   - onBuildComplete?: (detail:object) => void
+   *   - onWorkAreaSet?: (detail:object) => void
+   */
+  function registerModule(mod){
     if (!mod || !mod.id) {
-      WARN('registerModule ohne id', mod);
+      WARN('registerModule ohne id aufgerufen', mod);
       return;
     }
     MODULES.push(mod);
-    LOG('Produktionsmodul registriert:', mod.id);
+    LOG('Modul registriert:', mod.id);
   }
 
-  // --------------------------------------------------------------------------
-  // JOB-HELPER: Produktion → Träger-Jobs
-  // --------------------------------------------------------------------------
-
-  // HQ-Position aus GameUnits lesen (alte + neue Variante)
-  function getHQPosTiles(Units) {
-    if (!Units) return null;
-
-    // alte Variante: Units.hqPos = { x, y }
-    if (Units.hqPos &&
-        Number.isFinite(Units.hqPos.x) &&
-        Number.isFinite(Units.hqPos.y)) {
-      return { x: Units.hqPos.x, y: Units.hqPos.y };
-    }
-
-    // neue Variante: Units.getHQPos() = { tx, ty }
-    if (typeof Units.getHQPos === 'function') {
-      try {
-        const pos = Units.getHQPos();
-        if (pos && Number.isFinite(pos.tx) && Number.isFinite(pos.ty)) {
-          return { x: pos.tx, y: pos.ty };
-        }
-      } catch (_) {}
-    }
-
-    return null;
-  }
-
-  // Building-Instanz aus Game.buildings suchen
-  function findBuildingInstance(hint) {
-    const G = window.Game || {};
-    let list = [];
-
-    if (Array.isArray(G.buildings)) {
-      list = G.buildings;
-    } else if (typeof G.getBuildings === 'function') {
-      try {
-        list = G.getBuildings() || [];
-      } catch (_) {
-        list = [];
-      }
-    }
-
-    if (!Array.isArray(list) || !list.length) return null;
-
-    const uid  = hint?.bId || hint?.uid || hint?.buildingUid;
-    const kind = hint?.kind || hint?.id;
-
-    if (uid != null) {
-      const b = list.find(b => b && (b.uid === uid || b.id === uid));
-      if (b) return b;
-    }
-    if (kind) {
-      const b = list.find(b => b && b.id === kind);
-      if (b) return b;
-    }
-    return null;
-  }
+  // ==========================================================================
+  // EVENT-VERTEILER – BUILD / WORKAREA
+  // ==========================================================================
 
   /**
-   * Erzeugt einen Trage-Job "carry" von Gebäude → HQ.
-   * Wird aktuell nur für visuellen Transport (Trampelpfade, Carrier-Bewegung)
-   * benutzt – die eigentliche Ressourcenzählung passiert weiter im Modul.
-   *
-   * @param {object} buildingOrHint – Buildingobjekt oder detail aus cb:prod:output
-   * @param {string} resId          – 'wood' | 'stone' | 'fish' | ...
-   * @param {number} qty            – Anzahl (aktuell 1 = 1 Job)
+   * Event-Verteiler für cb:build:complete.
+   *   – Wird aufgerufen, wenn ein Gebäude fertig gebaut ist.
+   *   – Alle Module, die onBuildComplete haben, bekommen das detail.
+   *   – Zusätzlich merken wir uns die Gebäude-Geometrie unter einer uid.
    */
-  function enqueueCarryJobFromBuilding(buildingOrHint, resId, qty) {
-    const JobEngine = window.JobEngine;
-    if (!JobEngine ||
-        (typeof JobEngine.add !== 'function' &&
-         typeof JobEngine.push !== 'function')) {
-      // Kein Job-System → still schweigen
-      return null;
-    }
-
-    const Units = window.GameUnits || window.Units;
-    const hq    = getHQPosTiles(Units);
-    if (!hq) {
-      WARN('enqueueCarryJobFromBuilding ohne HQ-Position');
-      return null;
-    }
-
-    let building = buildingOrHint;
-    if (!building || !Number.isFinite(building.x) || !Number.isFinite(building.y)) {
-      building = findBuildingInstance(buildingOrHint || {});
-    }
-    if (!building) {
-      WARN('Building für Carry-Job nicht gefunden', buildingOrHint);
-      return null;
-    }
-
-    const bw = Number.isFinite(building.w) ? building.w : 1;
-    const bh = Number.isFinite(building.h) ? building.h : 1;
-    const bx = Number.isFinite(building.x) ? building.x : 0;
-    const by = Number.isFinite(building.y) ? building.y : 0;
-
-    const center = {
-      x: bx + bw / 2,
-      y: by + bh / 2
-    };
-
-    const engine = JobEngine;
-    const pushFn = typeof engine.add === 'function'
-      ? engine.add.bind(engine)
-      : engine.push.bind(engine);
-
-    const jobs  = [];
-    const count = Math.max(1, qty | 0);
-
-    for (let i = 0; i < count; i++) {
-      const job = {
-        id   : 'job-carry-' + Date.now().toString(16) + '-' + Math.floor(Math.random() * 1e4),
-        type : 'carry',                   // wird in game.units.js NICHT als Baujob behandelt
-        res  : String(resId || 'wood'),
-        from : { x: center.x, y: center.y }, // Quelle = Gebäude-Mitte
-        to   : { x: hq.x,     y: hq.y }      // Ziel   = HQ
-      };
-
-      try {
-        pushFn(job);
-        jobs.push(job);
-      } catch (e) {
-        WARN('JobEngine.add/push Fehler', e);
-      }
-    }
-
-    if (jobs.length) {
-      LOG('Carry-Jobs erzeugt', {
-        res: resId,
-        qty: jobs.length,
-        buildingUid: building.uid || building.id
-      });
-    }
-    return jobs;
-  }
-
-  // --------------------------------------------------------------------------
-  // EVENT-VERTEILER
-  // --------------------------------------------------------------------------
-
-  // Gebäude fertig → an alle Module weiterreichen
-  function handleBuildComplete(ev) {
+  function handleBuildComplete(ev){
     const d = ev?.detail || {};
     if (!d) return;
 
-    for (const mod of MODULES) {
-      if (typeof mod.onBuildComplete === 'function') {
+    const kind = d.id || d.kind || d.buildingId;
+    const uid  = d.uid || `${kind || 'b'}@${d.x},${d.y}`;
+
+    // Gebäude-Info für spätere carry-Jobs merken
+    BUILDINGS_BY_UID.set(uid, {
+      uid,
+      id   : kind,
+      kind : kind,
+      x    : d.x,
+      y    : d.y,
+      w    : d.w,
+      h    : d.h
+    });
+
+    for (const mod of MODULES){
+      if (typeof mod.onBuildComplete === 'function'){
         try {
           mod.onBuildComplete(d);
-        } catch (e) {
-          ERR('Fehler in Modul.onBuildComplete', mod.id, e);
-        }
-      }
-    }
-  }
-
-  // Arbeitsbereich gesetzt/verschoben → an alle Module
-  function handleWorkAreaSet(ev) {
-    const d = ev?.detail || {};
-    if (!d) return;
-
-    for (const mod of MODULES) {
-      if (typeof mod.onWorkAreaSet === 'function') {
-        try {
-          mod.onWorkAreaSet(d);
-        } catch (e) {
-          ERR('Fehler in Modul.onWorkAreaSet', mod.id, e);
+        } catch(e){
+          ERR('Fehler in Modul.onBuildComplete:', mod.id, e);
         }
       }
     }
   }
 
   /**
-   * Produktions-Output:
-   *   – von Modulen als cb:prod:output gesendet:
-   *       detail: { bId, uid?, buildingUid?, kind, item, qty }
-   *   – hier: optional Carrier-Jobs erzeugen (Gebäude → HQ)
-   *   – Ressourcenzählung bleibt im Modul (Holz/Stein/Fisch)
+   * Event-Verteiler für cb:workarea:set.
+   *   – Wird aufgerufen, wenn der Arbeitsbereich eines Gebäudes gesetzt/verschoben wird.
+   *
+   * detail:
+   *   { id, uid, cx, cy, radiusTiles, x, y, w, h }
    */
-  function handleProdOutput(ev) {
+  function handleWorkAreaSet(ev){
     const d = ev?.detail || {};
     if (!d) return;
 
-    const item = d.item || d.resource || d.resId;
-    const qty  = d.qty  || d.amount  || 1;
-    if (!item) return;
-
-    enqueueCarryJobFromBuilding(d, item, qty);
-  }
-
-  // --------------------------------------------------------------------------
-  // ZENTRALER TICK
-  // --------------------------------------------------------------------------
-
-  function tick() {
-    for (const mod of MODULES) {
-      if (typeof mod.tick === 'function') {
+    for (const mod of MODULES){
+      if (typeof mod.onWorkAreaSet === 'function'){
         try {
-          mod.tick(TICK_MS);
-        } catch (e) {
-          ERR('Fehler in Modul.tick', mod.id, e);
+          mod.onWorkAreaSet(d);
+        } catch(e){
+          ERR('Fehler in Modul.onWorkAreaSet:', mod.id, e);
         }
       }
     }
   }
 
-  // --------------------------------------------------------------------------
-  // EVENT-BINDINGS EINRICHTEN
-  // --------------------------------------------------------------------------
-  window.addEventListener('cb:build:complete', handleBuildComplete, { passive: true });
-  window.addEventListener('cb:workarea:set',   handleWorkAreaSet,   { passive: true });
-  window.addEventListener('cb:prod:output',    handleProdOutput,    { passive: true });
+  // ==========================================================================
+  // EVENT-VERTEILER – PROD-OUTPUT → RES + JOB
+  // ==========================================================================
 
-  // --------------------------------------------------------------------------
+  /**
+   * Reagiert auf cb:prod:output der Module.
+   * detail:
+   *   {
+   *     bId,          // uid des Gebäudes (wie im Holz-Modul erzeugt)
+   *     kind,         // 'b.lumberjack' | 'b.quarry' | ...
+   *     item,         // 'wood' | 'stone' | 'fish'
+   *     qty,          // Menge (z.B. 1)
+   *     x?,y?,w?,h?   // optional Geometrie direkt mitgegeben
+   *   }
+   *
+   * Schritte:
+   *   1) Ressource zählen → addResource(...)
+   *   2) passenden Building-Stub bestimmen
+   *   3) carry-Job erzeugen → Carrier/Träger laufen los
+   */
+  function handleProdOutput(ev){
+    const d = ev?.detail || {};
+    if (!d) return;
+
+    const item = d.item || d.res || d.resource;
+    const qty  = Number(d.qty || 1) || 1;
+    const kind = d.kind || d.buildingKind || d.id;
+
+    if (!item){
+      WARN('cb:prod:output ohne item erhalten', d);
+      return;
+    }
+
+    // 1) Ressource zählen
+    addResource(item, qty, `${item}-cycle`, kind || TAG);
+
+    // 2) Gebäude bestimmen → zuerst über bId/uid
+    let building = null;
+
+    if (d.bId && BUILDINGS_BY_UID.has(d.bId)){
+      building = BUILDINGS_BY_UID.get(d.bId);
+    } else if (d.uid && BUILDINGS_BY_UID.has(d.uid)){
+      building = BUILDINGS_BY_UID.get(d.uid);
+    } else if (
+      typeof d.x === 'number' &&
+      typeof d.y === 'number'
+    ){
+      // Fallback: Geometrie direkt aus dem Event nehmen
+      building = {
+        uid  : d.bId || d.uid || `${kind || 'b'}@${d.x},${d.y}`,
+        id   : kind,
+        kind : kind,
+        x    : d.x,
+        y    : d.y,
+        w    : d.w || 1,
+        h    : d.h || 1
+      };
+    }
+
+    if (!building){
+      // Keine Geometrie → Ressource wird trotzdem gezählt, aber kein Job
+      LOG('cb:prod:output ohne bekannte Building-Geometrie (kein Job)', d);
+      return;
+    }
+
+    // 3) Carry-Job erzeugen
+    enqueueCarryJobFromBuilding(building, item, qty);
+  }
+
+  // ==========================================================================
+  // ZENTRALER TICK
+  // ==========================================================================
+
+  /**
+   * Zentraler Tick – wird von core/game.tick.js aufgerufen ODER
+   * optional über cb:game:tick getriggert.
+   *
+   * @param {number} dtMs – Delta-Zeit in ms (optional; fallback TICK_MS)
+   */
+  function tick(dtMs){
+    const step = Number.isFinite(dtMs) ? dtMs : TICK_MS;
+
+    for (const mod of MODULES){
+      if (typeof mod.tick === 'function'){
+        try {
+          mod.tick(step);
+        } catch (e){
+          ERR('Fehler in Modul.tick:', mod.id, e);
+        }
+      }
+    }
+  }
+
+  // ==========================================================================
+  // EVENT-BINDINGS
+  // ==========================================================================
+
+  // Gebäude fertig → Module + Building-Cache
+  window.addEventListener('cb:build:complete', handleBuildComplete);
+
+  // Arbeitsbereich gesetzt → Module
+  window.addEventListener('cb:workarea:set', handleWorkAreaSet);
+
+  // Produktions-Output → Ressource zählen + Carry-Jobs
+  window.addEventListener('cb:prod:output', handleProdOutput);
+
+  // Optional: wenn irgendwo cb:game:tick gefeuert wird → Ticks verteilen
+  window.addEventListener('cb:game:tick', (ev)=>{
+    const dtMs = ev?.detail?.dtMs;
+    tick(dtMs);
+  });
+
+  // ==========================================================================
   // EXPORT
-  // --------------------------------------------------------------------------
-  const Prod = (window.Production = window.Production || {});
+  // ==========================================================================
 
-  Prod.registerModule              = registerModule;
-  Prod.addResource                 = addResource;
-  Prod.getResourceValue            = getResourceValue;
-  Prod.tick                        = tick;
-  Prod.enqueueCarryJobFromBuilding = enqueueCarryJobFromBuilding;
-
-  // Debug für Inspector
-  Prod._state = {
-    MODULES,
-    RES_STORE
+  const ProductionAPI = {
+    registerModule,
+    addResource,
+    getResourceValue,
+    getStore,
+    tick,
+    enqueueCarryJobFromBuilding
   };
 
-  LOG('Manager geladen v25.12.11-res-core+jobs-v1');
+  window.Production = ProductionAPI;
+
+  LOG('bereit (v25.12.11-prod-core+jobs-v2)');
 })();
