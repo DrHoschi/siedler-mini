@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-stone-workarea-prod-v2
+ * Version : v25.12.11-stone-workarea-prod-drop+carry
  *
  * Zweck   :
  *   Produktions-/Deko-Logik für STEIN (Steinbruch):
@@ -9,16 +9,11 @@
  *     - Legt pro Gebäude ein eigenes "Steinfeld" an
  *     - Verteilt Steine IM Arbeitsbereich (WorkArea)
  *     - Zeichnet Steine + "arbeitenden Steinmetz" direkt auf dem HAUPT-CANVAS
- *     - Erzeugt regelmäßig Stein-Ressourcen + optional Träger-Jobs
+ *     - Erzeugt regelmäßig Stein-Ressourcen + Carry-Jobs
  *
- * Ereignisse:
- *   IN  :
- *     - cb:build:complete { id, uid?, x,y,w,h, ... }
- *     - cb:workarea:set   { id|buildingId|kind, uid, cx,cy,radiusTiles, x,y,w,h }
- *
- *   OUT :
- *     - Production.addResource('stone', +1, 'stone-cycle', uid)
- *     - optional: Production.enqueueCarryJobFromBuilding(building, 'stone', 1)
+ *   WICHTIG:
+ *     - Pro Steinbruch wird ein Ablage-Ort (dropTx, dropTy) definiert,
+ *       orientiert an der Türkachel (entrances[0]) aus der Registry.
  *
  *   API / Debug:
  *     - window.ProductionStone.fields
@@ -88,14 +83,15 @@
    *   {
    *     uid,
    *     kind,
-   *     x,y,w,h,          // Gebäude-Rechteck in Tiles
-   *     cx,cy,            // Zentrum (WorkArea)
+   *     x,y,w,h,
+   *     cx,cy,
    *     workArea:{cx,cy,radiusTiles},
+   *     dropTx, dropTy,                     // Ablage-Ort vor der Tür
    *     stones:[{tx,ty,active}],
    *     worker:{tMs,fromTx,fromTy,toTx,toTy,tNorm} | null,
-   *     cycleMs,          // Timer für Abbau-Zyklus
-   *     rng,              // deterministischer Random-Generator
-   *     building          // Original-Building-Detail (für Jobs)
+   *     cycleMs,
+   *     rng,
+   *     building
    *   }
    */
   const StoneFields = new Map();
@@ -126,6 +122,30 @@
     const r = (rng || Math.random)();
     const idx = Math.floor(r * arr.length) % arr.length;
     return arr[idx];
+  }
+
+  /* ========================================================================
+   * [Ablage-Ort ähnlich Türkachel]
+   * ====================================================================== */
+
+  function computeDropTile(building, bw, bh){
+    const entrance = (
+      Array.isArray(building.entrances) &&
+      building.entrances[0]
+    ) ? building.entrances[0] : null;
+
+    const dx = (entrance && Number.isFinite(entrance.dx))
+      ? entrance.dx
+      : Math.floor(bw / 2);
+
+    const dy = (entrance && Number.isFinite(entrance.dy))
+      ? entrance.dy
+      : bh;
+
+    return {
+      dropTx: building.x + dx,
+      dropTy: building.y + dy
+    };
   }
 
   /* ========================================================================
@@ -188,6 +208,8 @@
     const seed = hashStringToSeed(uid);
     const rng  = makeRng(seed);
 
+    const drop = computeDropTile(detail, w, h);
+
     const existing = StoneFields.get(uid);
     const field = existing || {
       uid,
@@ -199,6 +221,10 @@
         cy,
         radiusTiles: DEFAULT_RADIUS_TILES
       },
+      // Ablage-Ort vor der Tür
+      dropTx: drop.dropTx,
+      dropTy: drop.dropTy,
+
       stones   : [],
       worker   : null,
       cycleMs  : 0,
@@ -210,6 +236,8 @@
     field.x = x; field.y = y; field.w = w; field.h = h;
     field.cx = field.workArea?.cx || cx;
     field.cy = field.workArea?.cy || cy;
+    field.dropTx = drop.dropTx;
+    field.dropTy = drop.dropTy;
     field.building = detail;
 
     createRandomLayoutForField(field);
@@ -281,31 +309,33 @@
 
     // 2) Optional: Träger-Job anlegen (falls Helper vorhanden)
     try {
-      enqueueCarryJobFromBuilding(field.building || {
-        id : field.kind,
-        uid: field.uid,
-        x  : field.x,
-        y  : field.y,
-        w  : field.w,
-        h  : field.h
-      }, 'stone', 1);
+      const buildingForJob = field.building || {
+        id    : field.kind,
+        uid   : field.uid,
+        x     : field.x,
+        y     : field.y,
+        w     : field.w,
+        h     : field.h,
+        dropTx: field.dropTx,
+        dropTy: field.dropTy
+      };
+      // dropTx/dropTy sicherheitshalber am Building-Stub hinterlegen
+      buildingForJob.dropTx = field.dropTx;
+      buildingForJob.dropTy = field.dropTy;
+
+      enqueueCarryJobFromBuilding(buildingForJob, 'stone', 1);
     } catch(e){
       WARN('enqueueCarryJobFromBuilding Fehler:', e);
     }
 
-    // 3) Worker-Animation setzen: vom Gebäudecenter zum Stein und zurück
-    const bx0 = field.x | 0;
-    const by0 = field.y | 0;
-    const bw  = (field.w | 0) || 3;
-    const bh  = (field.h | 0) || 3;
-
-    const centerTx = bx0 + bw / 2;
-    const centerTy = by0 + bh / 2;
+    // 3) Worker-Animation setzen: vom Ablage-Ort / Gebäudecenter zum Stein und zurück
+    const bx0 = field.dropTx ?? (field.x + (field.w || 3) / 2);
+    const by0 = field.dropTy ?? (field.y + (field.h || 3));
 
     field.worker = {
       tMs        : 0,
-      fromTx     : centerTx,
-      fromTy     : centerTy,
+      fromTx     : bx0,
+      fromTy     : by0,
       toTx       : stone.tx,
       toTy       : stone.ty,
       tNorm      : 0,
@@ -517,5 +547,5 @@
     }
   };
 
-  LOG('Stein-Produktion geladen v25.12.10-stone-workarea-prod-v2');
+  LOG('Stein-Produktion geladen v25.12.11-stone-workarea-prod-drop+carry');
 })();
