@@ -584,109 +584,113 @@ if (window.Production && typeof window.Production.addResource === 'function') {
     degradeFieldByStone(field, qty);
   }
   
+    // ========================================================================
+  // ABBAU-LOGIK
   // ========================================================================
-  // EVENT-BINDING (build/production/workarea)
-  // ========================================================================
+  /**
+   * Wählt einen Kandidaten-Stein aus, der als nächstes abgebaut werden soll.
+   * Strategie:
+   *   - Zuerst höhere "volle" Stufen (RAW → CRACKED → RUBBLE_...)
+   *   - Innerhalb der Stufe Zufallskandidat.
+   */
+  function pickStoneForDegrade(field){
+    const stones = field.stones || [];
+    if (!stones.length) return null;
 
-  function onBuildComplete(detail){
-    try {
-      registerStoneFieldFromBuild(detail);
-    } catch(e){
-      ERR('onBuildComplete Fehler:', e);
-    }
-  }
-
-  function onWorkAreaSet(detail){
-    if (!detail) return;
-    const kind = (detail.id || '').toLowerCase();
-    if (!isStoneBuildingId(kind)) return;
-
-    const x   = detail.x | 0;
-    const y   = detail.y | 0;
-    const uid = detail.uid || `${kind}@${x},${y}`;
-
-    const field = StoneFields.get(uid);
-    if (!field){
-      return;
-    }
-
-    const radius = (typeof detail.radiusTiles === 'number')
-      ? detail.radiusTiles
-      : (field.workArea?.radiusTiles || STONE_RADIUS_MAX);
-
-    field.workArea = {
-      cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
-      cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
-      radiusTiles: radius
-    };
-
-    field.cx = field.workArea.cx;
-    field.cy = field.workArea.cy;
-
-    // neues Layout innerhalb des (neuen) Arbeitsbereiches
-    createRandomLayoutForField(field);
-
-    LOG(TAG, 'Arbeitsbereich aktualisiert:', uid, field.workArea);
-  }
-
-  function tick(dtMs){
-    // Einfache Animation für den "Steinmetz"-Marker:
-    // läuft vom Gebäudezentrum zum aktiven Stein und wieder zurück.
-    const WORKER_TRAVEL_MS = 1400;          // Hinweg
-    const WORKER_TOTAL_MS  = WORKER_TRAVEL_MS * 2; // Hin + Zurück
-
-    for (const field of StoneFields.values()){
-      const stones = field.stones || [];
-
-      // Falls es überhaupt keine sichtbaren Steine gibt → kein Worker
-      const visibleStones = stones.filter(s => s.stageIndex != null && s.stageIndex >= 0);
-
-      if (!visibleStones.length){
-        field.worker = null;
-        continue;
+    // immer zuerst "vollere" Stufen abbauen (RAW → CRACKED → ...)
+    for (let stageIndex = 0; stageIndex < STONE_STAGE.length; stageIndex++){
+      const candidatesIdx = [];
+      for (let i = 0; i < stones.length; i++){
+        const s = stones[i];
+        if (s.stageIndex === stageIndex){
+          candidatesIdx.push(i);
+        }
       }
+      if (candidatesIdx.length){
+        const idx = candidatesIdx[Math.floor(Math.random() * candidatesIdx.length)];
+        return { index: idx, stone: stones[idx] };
+      }
+    }
+    return null;
+  }
 
-      // Wenn noch kein Worker gesetzt ist → einfachen Idle-Worker
-      // (damit man Bewegung sieht, auch ohne echte Produktion).
+  /**
+   * Degradiert einen einzelnen Stein um eine Stufe:
+   *   RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → unsichtbar (-1)
+   */
+  function degradeSingleStone(field){
+    const sel = pickStoneForDegrade(field);
+    if (!sel) return null;
+
+    const stone = sel.stone;
+    if (stone.stageIndex == null || stone.stageIndex < 0) return null;
+
+    // Eine Stufe weiter degradieren
+    stone.stageIndex += 1;
+
+    if (stone.stageIndex >= STONE_STAGE.length){
+      // komplett abgetragen → nicht mehr zeichnen
+      stone.stageIndex = -1;
+    }
+
+    return sel;
+  }
+
+  /**
+   * Degradiert ein Feld um `qty` "Hits" und zählt dabei Steine ins Produktions-
+   * System ein. Wird später mit echter Produktion / Jobs verknüpft.
+   *
+   * Rückgabe: Anzahl der wirklich degradierten Steine.
+   */
+  function degradeFieldByStone(field, qty){
+    if (!field) return 0;
+
+    let remaining = (qty | 0) || 1;
+    if (remaining < 1) remaining = 1;
+
+    let lastSel = null;
+    let hits    = 0;
+
+    while (remaining-- > 0){
+      const sel = degradeSingleStone(field);
+      if (!sel) break;
+      lastSel = sel;
+      hits++;
+    }
+
+    // Worker-Animation an den zuletzt bearbeiteten Stein "snappen"
+    if (lastSel){
+      const target = lastSel.stone;
       if (!field.worker){
-        const target = pickRandom(visibleStones);
-        const bx0 = field.x | 0;
-        const by0 = field.y | 0;
-        const bw  = (field.w | 0) || 3;
-        const bh  = (field.h | 0) || 3;
-        const centerTx = bx0 + bw / 2;
-        const centerTy = by0 + bh / 2;
-
         field.worker = {
           tMs        : 0,
-          fromTx     : centerTx,
-          fromTy     : centerTy,
+          fromTx     : field.cx ?? (field.x + (field.w || 3) / 2),
+          fromTy     : field.cy ?? (field.y + (field.h || 3) / 2),
           toTx       : target.tx,
           toTy       : target.ty,
           tNorm      : 0,
           targetStone: target,
-          idle       : true    // Idle-Modus (kein echtes Abbauen)
+          idle       : false
         };
+      } else {
+        field.worker.toTx       = target.tx;
+        field.worker.toTy       = target.ty;
+        field.worker.targetStone= target;
+        field.worker.tMs        = 0;
+        field.worker.idle       = false;
       }
-
-      const w = field.worker;
-      if (!w) continue;
-
-      w.tMs += dtMs || 0;
-
-      if (w.tMs >= WORKER_TOTAL_MS){
-        // Idle-/Produktions-Zyklus fertig → Worker verschwindet kurz,
-        // und wird in der nächsten Tick-Runde neu erzeugt (oder bei
-        // echter Produktion per degradeFieldByStone gesetzt).
-        field.worker = null;
-        continue;
-      }
-
-      const t = w.tMs / WORKER_TOTAL_MS;
-      // Hinweg 0..0.5, Rückweg 0.5..1 → Ping-Pong
-      const phase = t <= 0.5 ? (t * 2) : (2 - t * 2);
-      w.tNorm = Math.max(0, Math.min(1, phase));
     }
+
+    // -----------------------------------------------------------
+    // RESSOURCEN-ZÄHLUNG: Stein hinzufügen (Schritt A)
+    // -----------------------------------------------------------
+    if (hits > 0 && window.Production && typeof window.Production.addResource === 'function'){
+      const reason = 'stone-cycle';
+      const src    = field.uid || field.id || 'stone-field';
+      window.Production.addResource('stone', hits, reason, src);
+    }
+
+    return hits;
   }
 
   // Browser-Events
