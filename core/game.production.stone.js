@@ -1,119 +1,121 @@
 /* ============================================================================
  * Datei   : core/game.production.stone.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-stone-workarea-maincanvas-depth-worker-v3
+ * Version : v25.12.10-stone-workarea-prod-v2
  *
  * Zweck   :
- *   - Deko- und Abbau-Logik für Stein (Steinbruch / Steinmetz)
- *   - Für jedes Stein-Gebäude wird ein zufälliges "Steinfeld" erzeugt:
- *       große Felsen, Geröll, kleine Haufen ...
- *   - Später: Bei jeder produzierten stone-Ressource wird EIN Fels degradert:
- *
- *       RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → entfernt
- *
- * Darstellung:
- *   - Zeichnet die Steine direkt auf dem HAUPT-CANVAS in Weltkoordinaten
- *   - KEIN OverlayHooks / kein eigenes Overlay-Canvas für Steine
- *   - Datenbasis: stones_mega_atlas.json + stones_mega_atlas.png
- *
- * Extra:
- *   - Einfacher "Steinmetz"-Marker (graue Blase), die zwischen Gebäude
- *     und einem Stein hin- und herläuft (Ping-Pong).
- *   - Läuft auch OHNE echte Produktion (cb:prod:output), damit man sofort
- *     etwas "arbeiten" sieht.
+ *   Produktions-/Deko-Logik für STEIN (Steinbruch):
+ *     - Reagiert auf cb:build:complete für Steinbruch-Gebäude
+ *     - Legt pro Gebäude ein eigenes "Steinfeld" an
+ *     - Verteilt Steine IM Arbeitsbereich (WorkArea)
+ *     - Zeichnet Steine + "arbeitenden Steinmetz" direkt auf dem HAUPT-CANVAS
+ *     - Erzeugt regelmäßig Stein-Ressourcen + optional Träger-Jobs
  *
  * Ereignisse:
  *   IN  :
  *     - cb:build:complete { id, uid?, x,y,w,h, ... }
- *     - cb:prod:output    { bId, kind, item:'stone', qty }   (optional)
- *     - cb:workarea:set   { id, uid, cx, cy, radiusTiles, x,y,w,h }
+ *     - cb:workarea:set   { id|buildingId|kind, uid, cx,cy,radiusTiles, x,y,w,h }
  *
  *   OUT :
- *     - keine (nur visuelle Darstellung + interner Abbau-Status)
+ *     - Production.addResource('stone', +1, 'stone-cycle', uid)
+ *     - optional: Production.enqueueCarryJobFromBuilding(building, 'stone', 1)
  *
- * Debug / API:
- *   - window.ProductionStone.fields
- *   - window.ProductionStone.drawOnMainCanvas(ctx, cam, tileSize)
+ *   API / Debug:
+ *     - window.ProductionStone.fields
+ *     - window.ProductionStone.drawOnMainCanvas(ctx, cam, tileSize)
  * ========================================================================== */
 
 (function(){
   'use strict';
+
+  /* ========================================================================
+   * [Imports / Helper auf globale Systeme]
+   * ====================================================================== */
 
   const TAG  = '[prod-stone]';
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
   const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
 
-  // ========================================================================
-  // KONSTANTEN
-  // ========================================================================
+  // Zentraler Produktions-Manager (für Ressourcenzählung + Jobs)
+  const Production = window.Production || {};
 
+  const addResource = (typeof Production.addResource === 'function')
+    ? Production.addResource.bind(Production)
+    : function(res, delta, reason, src){
+        (window.CBLog?.warn || console.warn)(
+          TAG,
+          'addResource-Fallback – Production.addResource fehlt',
+          { res, delta, reason, src }
+        );
+      };
+
+  const enqueueCarryJobFromBuilding =
+    (typeof Production.enqueueCarryJobFromBuilding === 'function')
+      ? Production.enqueueCarryJobFromBuilding.bind(Production)
+      : function(/*building,resId,qty*/){
+          // Fallback: noch kein Job-System / nicht wichtig
+        };
+
+  /* ========================================================================
+   * [Konstanten]
+   * ====================================================================== */
+
+  // IDs, unter denen dein Steinbruch in der Registry auftauchen kann
   const STONE_BUILDING_IDS = new Set([
     'b.quarry',
+    'b.steinbruch',
+    'steinbruch',
     'quarry',
-    'b.steinmetz',
-    'steinmetz',
-    'b.stonecutter',
-    'stonecutter'
+    'b.stone',
+    'stone'
   ]);
 
-  // Anzahl Felsen pro Feld
-  const STONES_PER_FIELD = 7;
+  const STONES_PER_FIELD   = 9;          // Anzahl Steine pro Steinbruch
+  const STONE_CYCLE_MS     = 6000;       // alle X ms wird ein Stein "abgebaut"
+  const WORKER_TRAVEL_MS   = 1400;       // Hinweg
+  const WORKER_TOTAL_MS    = WORKER_TRAVEL_MS * 2; // Hin + Zurück
 
-  // Radius-Bereich um das Gebäude / den WorkArea-Mittelpunkt
-  const STONE_RADIUS_MIN = 1.2;
-  const STONE_RADIUS_MAX = 3.0;
+  // Default-WorkArea-Radius (falls noch kein expliziter Arbeitsbereich gesetzt)
+  const DEFAULT_RADIUS_TILES = 4;
 
-  // Abbau-Stufen (Index 0 → "voll", 3 → "fast weg", -1 → unsichtbar)
-  const STONE_STAGE = [
-    'RAW_BIG',
-    'CRACKED',
-    'RUBBLE_LARGE',
-    'RUBBLE_SMALL'
-  ];
+  /* ========================================================================
+   * [State]
+   * ====================================================================== */
 
-  const STONE_ATLAS_CFG = {
-    urlJson  : 'assets/resources/stone/stones_mega_atlas_merged.json',
-    urlImage : 'assets/resources/stone/stones_mega_atlas.png',
-
-    groups   : {
-      RAW_BIG      : 'e1_rock_big_raw_',
-      CRACKED      : 'e1_rock_big_cracked_',
-      RUBBLE_LARGE : 'e1_rubble_large_',
-      RUBBLE_SMALL : 'e1_rubble_small_',
-      BLOCK_ROUGH  : 'e1_block_rough_',
-      BLOCK_CUT    : 'e1_block_cut_',
-      STACK_LOW    : 'e1_block_stack_low_',
-      STACK_HIGH   : 'e1_block_stack_high_'
-    },
-
-    resolvedFrames : null,
-    groupFrames    : null
-  };
-
-  // ========================================================================
-  // STATE
-  // ========================================================================
-
-  /** Map<uid, StoneFieldState> */
+  /**
+   * Map uid → Feld:
+   *   {
+   *     uid,
+   *     kind,
+   *     x,y,w,h,          // Gebäude-Rechteck in Tiles
+   *     cx,cy,            // Zentrum (WorkArea)
+   *     workArea:{cx,cy,radiusTiles},
+   *     stones:[{tx,ty,active}],
+   *     worker:{tMs,fromTx,fromTy,toTx,toTy,tNorm} | null,
+   *     cycleMs,          // Timer für Abbau-Zyklus
+   *     rng,              // deterministischer Random-Generator
+   *     building          // Original-Building-Detail (für Jobs)
+   *   }
+   */
   const StoneFields = new Map();
 
-  let stoneAtlas        = null;
-  let stoneAtlasImg     = null;
-  let stoneAtlasLoaded  = false;
-  let stoneAtlasLoading = false;
+  /* ========================================================================
+   * [Hilfsfunktionen – Random]
+   * ====================================================================== */
 
-  // ========================================================================
-  // HILFSFUNKTIONEN – GENERELL
-  // ========================================================================
-
-  function makeRng(seedStr){
-    let s = 0;
-    for (let i=0; i<seedStr.length; i++){
-      s = (s * 31 + seedStr.charCodeAt(i)) >>> 0;
+  function hashStringToSeed(str){
+    let h = 0;
+    for (let i = 0; i < str.length; i++){
+      h = (h * 31 + str.charCodeAt(i)) | 0;
     }
-    if (!s) s = 1;
-    return function rng(){
+    return h >>> 0;
+  }
+
+  function makeRng(seed){
+    let s = (seed >>> 0) || 1;
+    return function(){
+      // Linear Congruential Generator
       s = (s * 1664525 + 1013904223) >>> 0;
       return s / 0xFFFFFFFF;
     };
@@ -121,579 +123,360 @@
 
   function pickRandom(arr, rng){
     if (!arr || !arr.length) return null;
-    const r   = rng ? rng() : Math.random();
-    const idx = Math.floor(r * arr.length);
-    return arr[Math.max(0, Math.min(arr.length-1, idx))];
+    const r = (rng || Math.random)();
+    const idx = Math.floor(r * arr.length) % arr.length;
+    return arr[idx];
   }
 
-  function isStoneBuildingId(kind){
-    if (!kind) return false;
-    const k = String(kind).toLowerCase();
-    if (STONE_BUILDING_IDS.has(k)) return true;
-    if (!k.startsWith('b.')) return STONE_BUILDING_IDS.has('b.'+k);
-    return false;
+  /* ========================================================================
+   * [Feld-Erzeugung / Layout]
+   * ====================================================================== */
+
+  function isStoneBuildingId(id){
+    if (!id) return false;
+    return STONE_BUILDING_IDS.has(String(id).toLowerCase());
   }
 
-  // ========================================================================
-  // ATLAS-LADEN + AUFBEREITEN
-  // ========================================================================
+  function createRandomLayoutForField(field){
+    const rng = field.rng || Math.random;
+    const radius = (field.workArea?.radiusTiles) || DEFAULT_RADIUS_TILES;
 
-  function ensureStoneAtlasLoaded(){
-    if (stoneAtlasLoaded || stoneAtlasLoading) return;
-    stoneAtlasLoading = true;
+    const stones = [];
+    const cx = field.cx;
+    const cy = field.cy;
 
-    try {
-      fetch(STONE_ATLAS_CFG.urlJson)
-        .then(r => r.json())
-        .then(data => {
-          stoneAtlas = data;
-          LOG('Stone-Atlas JSON geladen:', STONE_ATLAS_CFG.urlJson);
-        })
-        .catch(err => {
-          WARN('Stone-Atlas JSON konnte nicht geladen werden:', err);
-        });
-    } catch(e){
-      WARN('Stone-Atlas JSON fetch nicht verfügbar:', e);
-    }
+    // wir verteilen Steine zufällig im Kreis um das WorkArea-Zentrum
+    for (let i = 0; i < STONES_PER_FIELD; i++){
+      let tx, ty;
+      let tries = 0;
+      while (tries++ < 20){
+        const ang  = rng() * Math.PI * 2;
+        const dist = 1.0 + rng() * (radius - 0.5);
+        tx = Math.round(cx + Math.cos(ang) * dist);
+        ty = Math.round(cy + Math.sin(ang) * dist);
 
-    try {
-      const img = new Image();
-      img.onload = function(){
-        stoneAtlasImg    = img;
-        stoneAtlasLoaded = true;
-        LOG('Stone-Atlas Bild geladen:', STONE_ATLAS_CFG.urlImage);
-      };
-      img.onerror = function(err){
-        WARN('Stone-Atlas Bild konnte nicht geladen werden:', err);
-      };
-      img.src = STONE_ATLAS_CFG.urlImage;
-    } catch(e){
-      WARN('Stone-Atlas Bild-Ladevorgang fehlgeschlagen:', e);
-    }
-  }
-
-  function ensureStoneAtlasReady(){
-    if (!stoneAtlasLoaded || !stoneAtlasImg || !stoneAtlas || !stoneAtlas.frames){
-      return false;
-    }
-
-    // 1) Einzel-Frames mit Pivot auflösen
-    if (!STONE_ATLAS_CFG.resolvedFrames){
-      const resolved = {};
-      const frames   = stoneAtlas.frames || {};
-
-      for (const [name, info] of Object.entries(frames)){
-        const f = info.frame || {};
-        const p = info.pivot || {};
-        resolved[name] = {
-          x      : f.x|0,
-          y      : f.y|0,
-          w      : f.w|0,
-          h      : f.h|0,
-          pivotX : (p.x|0) || ((f.w|0) / 2),
-          pivotY : (p.y|0) || (f.h|0)
-        };
-      }
-
-      STONE_ATLAS_CFG.resolvedFrames = resolved;
-      LOG('Stone-Atlas Frames aufgelöst (resolvedFrames).');
-    }
-
-    // 2) Gruppen (RAW_BIG, RUBBLE_...) aus Präfixen auflösen
-    if (!STONE_ATLAS_CFG.groupFrames){
-      const groupFrames = {};
-      const frames = stoneAtlas.frames || {};
-      const groupDefs = STONE_ATLAS_CFG.groups || {};
-
-      for (const name of Object.keys(frames)){
-        for (const [gName, prefix] of Object.entries(groupDefs)){
-          if (name.startsWith(prefix)){
-            if (!groupFrames[gName]) groupFrames[gName] = [];
-            groupFrames[gName].push(name);
-            break;
-          }
+        // einfache Duplikatsvermeidung
+        if (!stones.some(s => s.tx === tx && s.ty === ty)){
+          break;
         }
       }
 
-      STONE_ATLAS_CFG.groupFrames = groupFrames;
-      LOG('Stone-Atlas Gruppen aufgelöst (groupFrames).');
+      stones.push({
+        tx,
+        ty,
+        active: true  // kann noch abgebaut werden
+      });
     }
 
-    return true;
+    field.stones = stones;
   }
-
-  function drawStoneFrame(ctx, key, cx, cy, scale){
-    if (!ensureStoneAtlasReady()) return false;
-
-    const frames = STONE_ATLAS_CFG.resolvedFrames;
-    const f = frames && frames[key];
-    if (!f || !stoneAtlasImg) return false;
-
-    const s  = (typeof scale === 'number' && scale>0) ? scale : 1;
-    const dw = f.w * s;
-    const dh = f.h * s;
-
-    const dx = cx - f.pivotX * s;
-    const dy = cy - f.pivotY * s;
-
-    try {
-      ctx.drawImage(
-        stoneAtlasImg,
-        f.x, f.y, f.w, f.h,
-        dx, dy, dw, dh
-      );
-      return true;
-    } catch(e){
-      WARN('drawStoneFrame Fehler:', e);
-      return false;
-    }
-  }
-
-  // ========================================================================
-  // STEINFELDER ERZEUGEN
-  // ========================================================================
 
   function registerStoneFieldFromBuild(detail){
+    if (!detail) return;
+    const kind = (detail.id || detail.kind || '').toLowerCase();
+    if (!isStoneBuildingId(kind)) return;
+
+    const x   = detail.x | 0;
+    const y   = detail.y | 0;
+    const w   = (detail.w | 0) || 3;
+    const h   = (detail.h | 0) || 3;
+    const uid = detail.uid || `${kind}@${x},${y}`;
+
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+
+    const seed = hashStringToSeed(uid);
+    const rng  = makeRng(seed);
+
+    const existing = StoneFields.get(uid);
+    const field = existing || {
+      uid,
+      kind,
+      x, y, w, h,
+      cx, cy,
+      workArea: {
+        cx,
+        cy,
+        radiusTiles: DEFAULT_RADIUS_TILES
+      },
+      stones   : [],
+      worker   : null,
+      cycleMs  : 0,
+      rng,
+      building : detail
+    };
+
+    // falls es schon ein Field gibt, nur Basisdaten aktualisieren
+    field.x = x; field.y = y; field.w = w; field.h = h;
+    field.cx = field.workArea?.cx || cx;
+    field.cy = field.workArea?.cy || cy;
+    field.building = detail;
+
+    createRandomLayoutForField(field);
+
+    StoneFields.set(uid, field);
+
+    LOG('Steinfeld registriert:', field);
+  }
+
+  /* ========================================================================
+   * [WorkArea-Update]
+   * ====================================================================== */
+
+  function updateWorkArea(detail){
     if (!detail) return;
 
     const kind = (detail.id || detail.buildingId || detail.kind || '').toLowerCase();
     if (!isStoneBuildingId(kind)) return;
 
-    const x = detail.x | 0;
-    const y = detail.y | 0;
-    const w = (detail.w | 0) || 3;
-    const h = (detail.h | 0) || 3;
-
+    const x   = detail.x | 0;
+    const y   = detail.y | 0;
     const uid = detail.uid || `${kind}@${x},${y}`;
-    if (StoneFields.has(uid)){
+
+    const field = StoneFields.get(uid);
+    if (!field) return;
+
+    const radius = (typeof detail.radiusTiles === 'number')
+      ? detail.radiusTiles
+      : (field.workArea?.radiusTiles || DEFAULT_RADIUS_TILES);
+
+    field.workArea = {
+      cx         : (typeof detail.cx === 'number') ? detail.cx : field.cx,
+      cy         : (typeof detail.cy === 'number') ? detail.cy : field.cy,
+      radiusTiles: radius
+    };
+
+    // Feld-Zentrum an WorkArea koppeln
+    field.cx = field.workArea.cx;
+    field.cy = field.workArea.cy;
+
+    // neues Layout innerhalb des (neuen) Arbeitsbereiches
+    createRandomLayoutForField(field);
+
+    LOG('Arbeitsbereich (Stein) aktualisiert:', uid, field.workArea);
+  }
+
+  /* ========================================================================
+   * [Abbau-Logik / Ressourcenerzeugung]
+   * ====================================================================== */
+
+  function runStoneCycle(field){
+    const stones = field.stones || [];
+    const candidates = stones.filter(s => s.active);
+
+    if (!candidates.length){
+      // nichts mehr abzubauen → Worker verschwindet, Feld bleibt aber
+      field.worker = null;
       return;
     }
 
-    const cxTiles = x + w / 2;
-    const cyTiles = y + h / 2;
+    const stone = pickRandom(candidates, field.rng);
+    if (!stone) return;
 
-    const field = {
-      uid,
-      kind,
-      x, y, w, h,
-      cx : cxTiles,
-      cy : cyTiles,
-      workArea : null,
-      stones : [],
-      worker : null
-    };
+    // Stein "abgebaut" → deaktivieren
+    stone.active = false;
 
-    createRandomLayoutForField(field);
-    StoneFields.set(uid, field);
+    // 1) Ressource zählen (HUD)
+    addResource('stone', +1, 'stone-cycle', field.uid);
 
-    LOG('StoneField registriert', field);
-    ensureStoneAtlasLoaded();
-  }
+    // 2) Optional: Träger-Job anlegen (falls Helper vorhanden)
+    try {
+      enqueueCarryJobFromBuilding(field.building || {
+        id : field.kind,
+        uid: field.uid,
+        x  : field.x,
+        y  : field.y,
+        w  : field.w,
+        h  : field.h
+      }, 'stone', 1);
+    } catch(e){
+      WARN('enqueueCarryJobFromBuilding Fehler:', e);
+    }
 
-  function createRandomLayoutForField(field){
-    const rng = makeRng(field.uid);
-    field.stones.length = 0;
-
-    const count = STONES_PER_FIELD;
-
-    // Gebäudefläche in Tile-Koordinaten – damit keine Steine IM Gebäude liegen
+    // 3) Worker-Animation setzen: vom Gebäudecenter zum Stein und zurück
     const bx0 = field.x | 0;
     const by0 = field.y | 0;
     const bw  = (field.w | 0) || 3;
     const bh  = (field.h | 0) || 3;
-    const bx1 = bx0 + bw;
-    const by1 = by0 + bh;
 
-    for (let i=0; i<count; i++){
-      let tx = 0;
-      let ty = 0;
-      let placed = false;
+    const centerTx = bx0 + bw / 2;
+    const centerTy = by0 + bh / 2;
 
-      // Versuche, einen Punkt im Ring um den Mittelpunkt zu finden,
-      // der NICHT im Gebäude liegt.
-      for (let tries=0; tries<20 && !placed; tries++){
-        const angle  = rng() * Math.PI * 2;
-        const radius = STONE_RADIUS_MIN + (STONE_RADIUS_MAX - STONE_RADIUS_MIN) * rng();
+    field.worker = {
+      tMs        : 0,
+      fromTx     : centerTx,
+      fromTy     : centerTy,
+      toTx       : stone.tx,
+      toTy       : stone.ty,
+      tNorm      : 0,
+      targetStone: stone,
+      idle       : false
+    };
+  }
 
-        tx = field.cx + Math.cos(angle) * radius;
-        ty = field.cy + Math.sin(angle) * radius;
+  /* ========================================================================
+   * [Tick – Worker-Animation + Abbau-Zyklus]
+   * ====================================================================== */
 
-        // Liegt die Position im Gebäude-Rechteck? → überspringen
-        if (tx >= bx0-0.1 && tx <= bx1+0.1 &&
-            ty >= by0-0.1 && ty <= by1+0.1){
-          continue;
-        }
+  function tick(dtMs){
+    const dt = dtMs || 0;
 
-        placed = true;
+    for (const field of StoneFields.values()){
+      // Abbau-Timer
+      field.cycleMs = (field.cycleMs || 0) + dt;
+      if (field.cycleMs >= STONE_CYCLE_MS){
+        field.cycleMs -= STONE_CYCLE_MS;
+        runStoneCycle(field);
       }
 
-      if (!placed){
+      const stones = field.stones || [];
+      const visibleStones = stones.filter(s => s.active);
+
+      // Falls gar keine aktiven Steine mehr → Worker zurücksetzen
+      if (!visibleStones.length){
+        field.worker = null;
+      }
+
+      const w = field.worker;
+      if (!w) continue;
+
+      w.tMs += dt;
+
+      if (w.tMs >= WORKER_TOTAL_MS){
+        // Zyklus vorbei – Worker verschwindet.
+        field.worker = null;
         continue;
       }
 
-      const scale = 0.85 + 0.3 * rng();
-
-      let stageIndex;
-      const rStage = rng();
-      if (rStage < 0.5)       stageIndex = 0;
-      else if (rStage < 0.8)  stageIndex = 1;
-      else if (rStage < 0.95) stageIndex = 2;
-      else                    stageIndex = 3;
-
-      const variant = Math.floor(rng() * 16) & 0xFF;
-
-      field.stones.push({
-        tx,
-        ty,
-        stageIndex,
-        variant,
-        scale
-      });
+      const t = w.tMs / WORKER_TOTAL_MS;
+      // Hinweg 0..0.5, Rückweg 0.5..1 → Ping-Pong
+      const phase = t <= 0.5 ? (t * 2) : (2 - t * 2);
+      w.tNorm = Math.max(0, Math.min(1, phase));
     }
   }
 
-  // ========================================================================
-  // HAUPT-CANVAS-ZEICHNUNG (Steine + Steinmetz-Blase)
-  // ========================================================================
+  /* ========================================================================
+   * [Rendering auf dem Haupt-Canvas]
+   * ====================================================================== */
 
   function drawOnMainCanvas(ctx, cam, tileSize){
-    if (!ctx) return;
-    if (!StoneFields.size) return;
-
-    const Game = window.Game || {};
-    const ts =
-      (tileSize) ||
-      (Game.map && Game.map.tileSize) ||
-      (window.GameMap && window.GameMap._state && window.GameMap._state.map && window.GameMap._state.map.tileSize) ||
-      Game.tileSize ||
-      64;
-
-    const atlasReady = ensureStoneAtlasReady();
+    if (!ctx || !StoneFields.size) return;
+    const ts = tileSize || 64;
+    const z  = cam?.zoom || 1;
+    const ox = cam?.x    || 0;
+    const oy = cam?.y    || 0;
 
     ctx.save();
 
     for (const field of StoneFields.values()){
-      const stonesRaw = field.stones || [];
-      if (!stonesRaw.length) continue;
+      const stones = field.stones || [];
 
-      // Gebäudefläche in Tile-Koordinaten
-      const bx0 = field.x | 0;
-      const by0 = field.y | 0;
-      const bw  = (field.w | 0) || 3;
-      const bh  = (field.h | 0) || 3;
-      const bx1 = bx0 + bw;
-      const by1 = by0 + bh;
-
-      // alles oberhalb dieser Linie und im x-Bereich des Gebäudes
-      // wird als "hinter dem Gebäude" betrachtet
-      const frontY = by1 - 0.2;
-
-      // Y-Sort: von oben nach unten, damit vorn/hinten bei Steinen stimmt
-      const stones = stonesRaw.slice().sort((a,b)=> (a.ty - b.ty));
-
+      // 1) Steine zeichnen
       for (const s of stones){
-        if (s.stageIndex == null || s.stageIndex < 0) continue;
+        if (!s.active) continue;
 
-        const tx = s.tx;
-        const ty = s.ty;
+        const worldX = (s.tx + 0.5) * ts;
+        const worldY = (s.ty + 0.75) * ts; // leicht nach unten, damit es "auf" dem Boden liegt
 
-        // Steine, die im "Schatten" des Gebäudes liegen, nicht zeichnen:
-        // → sie sind "hinter" dem Gebäude und würden sonst auf der Wand kleben.
-        const behindBuilding =
-          ty < frontY &&
-          tx >= bx0 - 0.5 && tx <= bx1 + 0.5;
+        const sx = (worldX - ox) * z;
+        const sy = (worldY - oy) * z;
 
-        if (behindBuilding){
-          continue;
-        }
+        const size = ts * 0.45 * z;
 
-        // Weltkoordinaten in Pixel (ctx ist bereits mit Kamera-Transform belegt)
-        const cxPx = (tx + 0.5) * ts;
-        const cyPx = (ty + 1.0) * ts;
+        ctx.save();
+        ctx.fillStyle = 'rgba(130,130,130,0.95)';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, size * 0.8, size * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-        let drawn = false;
+        // kleine Highlight-Kante
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(230,230,230,0.9)';
+        ctx.ellipse(sx - size * 0.15, sy - size * 0.15, size * 0.25, size * 0.18, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-        if (atlasReady){
-          const stageName = STONE_STAGE[s.stageIndex] || null;
-          const groupFrames = stageName &&
-                              STONE_ATLAS_CFG.groupFrames &&
-                              STONE_ATLAS_CFG.groupFrames[stageName];
-
-          if (groupFrames && groupFrames.length){
-            const frameName = groupFrames[s.variant % groupFrames.length];
-            drawn = drawStoneFrame(ctx, frameName, cxPx, cyPx, s.scale);
-          }
-        }
-
-        if (!drawn){
-          // Fallback-Kreis
-          const r = ts * 0.35;
-          ctx.beginPath();
-          ctx.fillStyle   = '#888888';
-          ctx.strokeStyle = '#444444';
-          ctx.lineWidth   = Math.max(1.5, ts * 0.04);
-          ctx.arc(cxPx, cyPx - r * 0.2, r, 0, Math.PI*2);
-          ctx.fill();
-          ctx.stroke();
-        }
+        ctx.restore();
       }
 
-      // Optionaler "Steinmetz": graue Blase zwischen Gebäudezentrum und Ziel-Stein
-      if (field.worker){
-        const w = field.worker;
-        const tNorm = Math.max(0, Math.min(1, w.tNorm || 0));
+      // 2) Worker zeichnen (falls aktiv)
+      const w = field.worker;
+      if (w && w.tNorm >= 0 && w.tNorm <= 1){
+        const wxTile = w.fromTx + (w.toTx - w.fromTx) * w.tNorm;
+        const wyTile = w.fromTy + (w.toTy - w.fromTy) * w.tNorm;
 
-        const fromTx = w.fromTx;
-        const fromTy = w.fromTy;
-        const toTx   = w.toTx;
-        const toTy   = w.toTy;
+        const worldX = (wxTile + 0.5) * ts;
+        const worldY = (wyTile + 0.8) * ts;
 
-        const curTx = fromTx + (toTx - fromTx) * tNorm;
-        const curTy = fromTy + (toTy - fromTy) * tNorm;
+        const sx = (worldX - ox) * z;
+        const sy = (worldY - oy) * z;
 
-        const wx = (curTx + 0.5) * ts;
-        const wy = (curTy + 1.0) * ts;
+        const rBody = ts * 0.25 * z;
+        const rHead = rBody * 0.45;
+        const bob   = Math.sin(w.tNorm * Math.PI * 2) * (ts * 0.06 * z);
 
-        const rr = ts * 0.25;
+        ctx.save();
 
+        // Körper
         ctx.beginPath();
-        ctx.fillStyle   = 'rgba(160,160,160,0.9)';
-        ctx.strokeStyle = 'rgba(40,40,40,0.9)';
-        ctx.lineWidth   = Math.max(1, ts * 0.03);
-        ctx.arc(wx, wy - rr * 1.2, rr, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(230,230,230,1)';
+        ctx.ellipse(sx, sy - rBody * 0.2 + bob, rBody * 0.7, rBody, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke();
+
+        // Kopf
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(245,245,245,1)';
+        ctx.arc(sx, sy - rBody * 1.4 + bob, rHead, 0, Math.PI * 2);
+        ctx.fill();
+
+        // kleiner "Hammer" (ein Rechteck)
+        ctx.fillStyle = 'rgba(80,80,80,1)';
+        ctx.fillRect(
+          sx + rBody * 0.6,
+          sy - rBody * 0.4 + bob,
+          rBody * 0.5,
+          rBody * 0.18
+        );
+
+        ctx.restore();
       }
     }
 
     ctx.restore();
   }
 
-  // ========================================================================
-  // ABBAU-LOGIK
-  // ========================================================================
+  /* ========================================================================
+   * [Events & Registrierung]
+   * ====================================================================== */
 
-  function pickStoneForDegrade(field){
-    const stones = field.stones || [];
-    if (!stones.length) return null;
-
-    // immer zuerst "vollere" Stufen abbauen (RAW → CRACKED → ...)
-    for (let stageIndex=0; stageIndex<STONE_STAGE.length; stageIndex++){
-      const candidatesIdx = [];
-      for (let i=0; i<stones.length; i++){
-        const s = stones[i];
-        if (s.stageIndex === stageIndex){
-          candidatesIdx.push(i);
-        }
-      }
-      if (candidatesIdx.length){
-        const idx = candidatesIdx[Math.floor(Math.random() * candidatesIdx.length)];
-        return { index: idx, stone: stones[idx] };
-      }
-    }
-    return null;
-  }
-
-  function degradeSingleStone(field){
-    const sel = pickStoneForDegrade(field);
-    if (!sel) return null;
-
-    const stone = sel.stone;
-    if (stone.stageIndex == null || stone.stageIndex < 0) return null;
-
-    // Eine Stufe weiter degradieren
-    stone.stageIndex += 1;
-
-    if (stone.stageIndex >= STONE_STAGE.length){
-      // komplett abgetragen → nicht mehr zeichnen
-      stone.stageIndex = -1;
-    }
-
-    return sel;
-  }
-
-  function degradeFieldByStone(field, qty){
-    let remaining = (qty|0) || 1;
-    if (remaining < 1) remaining = 1;
-
-    let lastSel = null;
-
-    while (remaining-- > 0){
-      const sel = degradeSingleStone(field);
-      if (!sel) break;
-      lastSel = sel;
-    }
-
-    function handleStoneHit(field) {
-  // 1) Visuelle Degradation
-  degradeStoneField(field);    // dein vorhandener Code
-
-  // 2) NEU: Ressource zählen
-  if (window.Production?.addResource) {
-    window.Production.addResource('stone', 1, 'stone-cycle', 'stone');
-  }
-}
-    
-// -----------------------------------------------------------
-// RESSOURCEN-ZÄHLUNG: Stein hinzufügen (Schritt A)
-// -----------------------------------------------------------
-if (window.Production && typeof window.Production.addResource === 'function') {
-  // Menge kannst du anpassen: 1, 2, oder abh. von Feld-Stufe
-  const qty    = 1;
-  const reason = 'stone-cycle';
-  const src    = 'stone';
-
-  window.Production.addResource('stone', qty, reason, src);
-}
-    
-    // Wenn mindestens ein Stein abgetragen wurde, einfachen
-    // "Steinmetz"-Laufzyklus starten.
-    if (lastSel){
-      const bx0 = field.x | 0;
-      const by0 = field.y | 0;
-      const bw  = (field.w | 0) || 3;
-      const bh  = (field.h | 0) || 3;
-      const centerTx = bx0 + bw / 2;
-      const centerTy = by0 + bh / 2;
-
-      field.worker = {
-        tMs        : 0,
-        fromTx     : centerTx,
-        fromTy     : centerTy,
-        toTx       : lastSel.stone.tx,
-        toTy       : lastSel.stone.ty,
-        tNorm      : 0,
-        targetStone: lastSel.stone,
-        idle       : false
-      };
+  function onBuildComplete(detail){
+    try {
+      registerStoneFieldFromBuild(detail);
+    } catch(e){
+      ERR('onBuildComplete Fehler:', e);
     }
   }
 
-  function onStoneProduced(detail){
-    if (!detail) return;
-    const item = detail.item || detail.resource || detail.resId;
-    if (item !== 'stone') return;
-
-    const uid = detail.bId || detail.buildingUid || detail.uid;
-    if (!uid) return;
-
-    const field = StoneFields.get(uid);
-    if (!field) return;
-
-    const qty = detail.qty || detail.amount || 1;
-    degradeFieldByStone(field, qty);
-  }
-  
-    // ========================================================================
-  // ABBAU-LOGIK
-  // ========================================================================
-  /**
-   * Wählt einen Kandidaten-Stein aus, der als nächstes abgebaut werden soll.
-   * Strategie:
-   *   - Zuerst höhere "volle" Stufen (RAW → CRACKED → RUBBLE_...)
-   *   - Innerhalb der Stufe Zufallskandidat.
-   */
-  function pickStoneForDegrade(field){
-    const stones = field.stones || [];
-    if (!stones.length) return null;
-
-    // immer zuerst "vollere" Stufen abbauen (RAW → CRACKED → ...)
-    for (let stageIndex = 0; stageIndex < STONE_STAGE.length; stageIndex++){
-      const candidatesIdx = [];
-      for (let i = 0; i < stones.length; i++){
-        const s = stones[i];
-        if (s.stageIndex === stageIndex){
-          candidatesIdx.push(i);
-        }
-      }
-      if (candidatesIdx.length){
-        const idx = candidatesIdx[Math.floor(Math.random() * candidatesIdx.length)];
-        return { index: idx, stone: stones[idx] };
-      }
+  function onWorkAreaSet(detail){
+    try {
+      updateWorkArea(detail);
+    } catch(e){
+      ERR('onWorkAreaSet Fehler:', e);
     }
-    return null;
   }
 
-  /**
-   * Degradiert einen einzelnen Stein um eine Stufe:
-   *   RAW_BIG → CRACKED → RUBBLE_LARGE → RUBBLE_SMALL → unsichtbar (-1)
-   */
-  function degradeSingleStone(field){
-    const sel = pickStoneForDegrade(field);
-    if (!sel) return null;
-
-    const stone = sel.stone;
-    if (stone.stageIndex == null || stone.stageIndex < 0) return null;
-
-    // Eine Stufe weiter degradieren
-    stone.stageIndex += 1;
-
-    if (stone.stageIndex >= STONE_STAGE.length){
-      // komplett abgetragen → nicht mehr zeichnen
-      stone.stageIndex = -1;
-    }
-
-    return sel;
+  // Registrierung beim zentralen Produktions-Manager
+  if (window.Production && typeof window.Production.registerModule === 'function'){
+    window.Production.registerModule({
+      id: 'stone',
+      tick,
+      onBuildComplete,
+      onWorkAreaSet
+    });
+  } else {
+    WARN('Production.registerModule fehlt – Stein-Modul nicht angebunden');
   }
 
-  /**
-   * Degradiert ein Feld um `qty` "Hits" und zählt dabei Steine ins Produktions-
-   * System ein. Wird später mit echter Produktion / Jobs verknüpft.
-   *
-   * Rückgabe: Anzahl der wirklich degradierten Steine.
-   */
-  function degradeFieldByStone(field, qty){
-    if (!field) return 0;
-
-    let remaining = (qty | 0) || 1;
-    if (remaining < 1) remaining = 1;
-
-    let lastSel = null;
-    let hits    = 0;
-
-    while (remaining-- > 0){
-      const sel = degradeSingleStone(field);
-      if (!sel) break;
-      lastSel = sel;
-      hits++;
-    }
-
-    // Worker-Animation an den zuletzt bearbeiteten Stein "snappen"
-    if (lastSel){
-      const target = lastSel.stone;
-      if (!field.worker){
-        field.worker = {
-          tMs        : 0,
-          fromTx     : field.cx ?? (field.x + (field.w || 3) / 2),
-          fromTy     : field.cy ?? (field.y + (field.h || 3) / 2),
-          toTx       : target.tx,
-          toTy       : target.ty,
-          tNorm      : 0,
-          targetStone: target,
-          idle       : false
-        };
-      } else {
-        field.worker.toTx       = target.tx;
-        field.worker.toTy       = target.ty;
-        field.worker.targetStone= target;
-        field.worker.tMs        = 0;
-        field.worker.idle       = false;
-      }
-    }
-
-    // -----------------------------------------------------------
-    // RESSOURCEN-ZÄHLUNG: Stein hinzufügen (Schritt A)
-    // -----------------------------------------------------------
-    if (hits > 0 && window.Production && typeof window.Production.addResource === 'function'){
-      const reason = 'stone-cycle';
-      const src    = field.uid || field.id || 'stone-field';
-      window.Production.addResource('stone', hits, reason, src);
-    }
-
-    return hits;
-  }
-
-  // Browser-Events
+  // Fallback: direkte Browser-Events (falls Production.registerModule noch nicht greift)
   try {
     window.addEventListener('cb:build:complete', (ev)=>{
       const detail = ev.detail || {};
@@ -714,84 +497,25 @@ if (window.Production && typeof window.Production.addResource === 'function') {
       }
     }, { passive:true });
 
-    window.addEventListener('cb:prod:output', (ev)=>{
-      const detail = ev.detail || {};
-      try {
-        onStoneProduced(detail);
-      } catch(e){
-        (window.CBLog?.warn || console.warn)(
-          TAG,
-          'cb:prod:output-Listener Fehler:',
-          e
-        );
-      }
-    }, { passive:true });
-
     window.addEventListener('cb:workarea:set', (ev)=>{
       const detail = ev.detail || {};
-      try {
-        onWorkAreaSet(detail);
-      } catch(e){
-        (window.CBLog?.warn || console.warn)(
-          TAG,
-          'cb:workarea:set-Listener Fehler:',
-          e
-        );
-      }
+      updateWorkArea(detail);
     }, { passive:true });
   } catch(e){
-    (window.CBLog?.warn || console.warn)(
-      TAG,
-      'Event-Listener konnten nicht registriert werden:',
-      e
-    );
+    WARN('Browser-Event-Bindings fehlgeschlagen:', e);
   }
 
-  // ========================================================================
-  // REGISTRIERUNG BEIM Production-Manager
-  // ========================================================================
-
-  function registerWithManager(){
-    if (!window.Production || typeof window.Production.registerModule !== 'function'){
-      return false;
-    }
-    try {
-      window.Production.registerModule({
-        id             : 'stone',
-        onBuildComplete,
-        onWorkAreaSet,
-        tick,
-        drawOnMainCanvas   // <-- Main-Canvas-Zeichner
-      });
-      LOG('Produktionsmodul "stone" registriert.');
-      return true;
-    } catch(e){
-      WARN('Production.registerModule(stone) fehlgeschlagen', e);
-      return true;
-    }
-  }
-
-  if (!registerWithManager()){
-    let tries = 0;
-    const t = setInterval(()=>{
-      if (registerWithManager() || ++tries > 20) clearInterval(t);
-    }, 200);
-  }
-
-  // ========================================================================
-  // DEBUG-EXPORT
-  // ========================================================================
+  /* ========================================================================
+   * [Export / Debug]
+   * ====================================================================== */
 
   window.ProductionStone = {
-    fields        : StoneFields,
-    STONE_ATLAS_CFG,
-    STONE_STAGE,
+    fields : StoneFields,
     drawOnMainCanvas,
-    ensureAtlas   : ensureStoneAtlasReady,
-    _degradeOne   : degradeSingleStone,
-    _degradeField : degradeFieldByStone
+    _state : {
+      StoneFields
+    }
   };
 
-  LOG('Stein-Modul geladen v25.12.10-stone-workarea-maincanvas-depth-worker-v3');
-
+  LOG('Stein-Produktion geladen v25.12.10-stone-workarea-prod-v2');
 })();
