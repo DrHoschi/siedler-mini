@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-wood-workarea-maincanvas-forest-worker-v2
+ * Version : v25.12.11-wood-workarea-maincanvas-forest-worker-drop+carry
  *
  * Zweck   :
  *   Produktionslogik für Holz / Förster / Holzfäller:
@@ -9,12 +9,18 @@
  *     - Legt pro Holzfäller ein eigenes State-Objekt an
  *     - Zyklus:
  *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
- *     - Erzeugt Holz über Production.addResource('wood', ...)
+ *     - Erzeugt Holz über cb:prod:output (→ Production.addResource)
+ *     - Erzeugt zusätzlich Carry-Jobs über Production.enqueueCarryJobFromBuilding
  *
  *   Darstellung:
- *     - Zeichnet VIELE Bäume im Arbeitsbereich direkt auf dem HAUPT-CANVAS
+ *     - Zeichnet Bäume im Arbeitsbereich direkt auf dem HAUPT-CANVAS
  *       (Weltkoordinaten, laufen mit Kamera/Zoom mit)
  *     - Zeigt eine kleine Förster-Blase, die zwischen Hütte und Wald pendelt
+ *
+ *   WICHTIG:
+ *     - Pro Holzfäller wird ein Ablage-Ort (dropTx, dropTy) definiert
+ *       → orientiert sich an der Türkachel (entrance.dx, entrance.dy)
+ *       → wird im Building-Stub an enqueueCarryJobFromBuilding übergeben
  *
  *   API / Debug:
  *     - window.ProductionWood.fields
@@ -70,14 +76,6 @@
   // HILFSFUNKTIONEN – GENERELL
   // ========================================================================
 
-  function addResource(resId, delta, reason, src){
-    if (!window.Production || typeof window.Production.addResource !== 'function'){
-      WARN('Production.addResource noch nicht verfügbar – call ignoriert', resId, delta);
-      return;
-    }
-    window.Production.addResource(resId, delta, reason, src);
-  }
-
   function rand(min, max){
     return min + Math.random() * (max - min);
   }
@@ -91,6 +89,7 @@
    * {
    *   uid, kind, x,y,w,h,
    *   cx, cy, radiusTiles,
+   *   dropTx, dropTy,        // Ablage-Ort vor der Hütte (Türkachel-orientiert)
    *   phase, timer,
    *   treeProg, treeAngle, treeDist,
    *   workerPhase, workerTimer
@@ -102,6 +101,31 @@
   // STATE-HILFSFUNKTIONEN
   // ========================================================================
 
+  /**
+   * Bestimmt Ablage-Ort für Ressourcen:
+   *   - wenn möglich über entrances[0] (Türkachel) aus der Registry,
+   *   - sonst: Mitte unten vor dem Gebäude.
+   */
+  function computeDropTile(building, bw, bh){
+    const entrance = (
+      Array.isArray(building.entrances) &&
+      building.entrances[0]
+    ) ? building.entrances[0] : null;
+
+    const dx = (entrance && Number.isFinite(entrance.dx))
+      ? entrance.dx
+      : Math.floor(bw / 2);
+
+    const dy = (entrance && Number.isFinite(entrance.dy))
+      ? entrance.dy
+      : bh;  // genau eine Zeile unter der unteren Gebäudekante
+
+    return {
+      dropTx: building.x + dx,
+      dropTy: building.y + dy
+    };
+  }
+
   function createLumberjackState(building){
     const bw = Number.isFinite(building.w) ? building.w : 1;
     const bh = Number.isFinite(building.h) ? building.h : 1;
@@ -110,6 +134,9 @@
     const cy = building.y + bh / 2;
 
     const radiusTiles = building.workRadiusTiles || TREE_RADIUS_MAX_DEFAULT;
+
+    // Ablage-Ort nach Türkachel / Eingang bestimmen
+    const drop = computeDropTile(building, bw, bh);
 
     const st = {
       uid   : building.uid || ('lj-' + Date.now().toString(16)),
@@ -123,6 +150,10 @@
       cx,
       cy,
       radiusTiles,
+
+      // Ablage-Ort für Ressourcen (Holz wird dort "gedacht" abgeladen)
+      dropTx: drop.dropTx,
+      dropTy: drop.dropTy,
 
       phase     : LJ_PHASE.PLANT,
       timer     : 0,
@@ -192,13 +223,13 @@
       }
 
       case LJ_PHASE.READY: {
-        // Später könnten hier Worker-/Träger-Jobs erzeugt werden.
+        // Später könnten hier Worker-/Träger-Jobs vorbereitet werden.
         lj.timer = 0;
         lj.phase = LJ_PHASE.CUT;
         break;
       }
 
-            case LJ_PHASE.CUT: {
+      case LJ_PHASE.CUT: {
         if (lj.timer >= LJ_TIMES.CUT){
           lj.timer = 0;
           lj.phase = LJ_PHASE.PLANT;
@@ -216,8 +247,7 @@
           const centerX = bx + bw / 2;
           const centerY = by + bh / 2;
 
-          // 🔁 Nur noch PROD-OUTPUT-Event feuern
-          // → Ressourcenzählung + Jobs macht jetzt game.production.js
+          // PRODUKTIONS-EVENT → Zentrale kümmert sich um Ressourcenzählung + Jobs
           try {
             dispatchEvent(new CustomEvent('cb:prod:output', {
               detail:{
@@ -226,14 +256,42 @@
                 kind : lj.kind,       // 'b.lumberjack'
                 item : 'wood',        // Ressource
                 qty  : qty,           // Menge
-                x    : centerX,       // Gebäudecenter (für Fallback)
+                x    : centerX,       // Gebäudecenter (Fallback)
                 y    : centerY,
                 w    : bw,
-                h    : bh
+                h    : bh,
+                // Ablage-Ort im Event mitgeben (Türkachel-nah)
+                dropTx: lj.dropTx,
+                dropTy: lj.dropTy
               }
             }));
           } catch(e){
             WARN('cb:prod:output dispatch fehlgeschlagen', e);
+          }
+
+          // OPTIONAL: Direkt Carry-Job erzeugen (Holz vom Ablage-Ort → HQ)
+          if (window.Production &&
+              typeof window.Production.enqueueCarryJobFromBuilding === 'function'){
+            const buildingForJob = {
+              id     : lj.kind,
+              uid    : lj.uid,
+              x      : lj.x,
+              y      : lj.y,
+              w      : lj.w,
+              h      : lj.h,
+              // Ablage-Ort explizit am "Gebäude" hinterlegen
+              dropTx : lj.dropTx,
+              dropTy : lj.dropTy
+            };
+            try {
+              window.Production.enqueueCarryJobFromBuilding(
+                buildingForJob,
+                'wood',
+                qty
+              );
+            } catch(e){
+              WARN('enqueueCarryJobFromBuilding Fehler (wood):', e);
+            }
           }
 
           // Nach jedem vollständigen Zyklus neuen aktiven Baum im Wald wählen
@@ -324,7 +382,8 @@
       ctx.restore();
 
       // Worker-Blase
-      tickWorker(lj, TICK_MS); // kleine Eigenbewegung synchron zum Produktions-Tick
+      // (kleine Eigenbewegung – hier mit festem Schritt, dt kommt vom Renderer)
+      tickWorker(lj, 50);
 
       const rWork = ts * 0.3 * z;
       let workerX = (lj.cx * ts - ox) * z;
@@ -378,7 +437,7 @@
 
   function tick(dtMs){
     tickAllLumberjacks(dtMs);
-    // Worker-Animation hängt an TICK_MS → tickWorker wird oben im Render aufgerufen
+    // Worker-Animation wird im Renderer getaktet (tickWorker dort aufgerufen)
   }
 
   // ========================================================================
@@ -408,5 +467,5 @@
     }
   };
 
-  LOG('Holz-Produktion geladen v25.12.10-wood-workarea-maincanvas-forest-worker-v2');
+  LOG('Holz-Produktion geladen v25.12.11-wood-workarea-maincanvas-forest-worker-drop+carry');
 })();
