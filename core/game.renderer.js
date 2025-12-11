@@ -219,6 +219,11 @@
       // Fertiges Gebäude – Definition aus Registry holen
       const def = getBuildingDef(b);
 
+      // Ressourcen-Layer zeichnen (nur Platzhalter solange keine Sprites existieren)
+if (window.MapResources && MapResources.drawWorld) {
+    MapResources.drawWorld(ctx, { tileSize: ts });
+}
+      
       // Diagnose: falls Registry-Eintrag fehlt → lila Block
       if (!def) {
         ctx.fillStyle = 'magenta';
