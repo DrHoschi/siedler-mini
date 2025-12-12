@@ -200,27 +200,8 @@
   }
 
   // -------------------------------------------------------------------------
-  //  TICK + RENDER
+  //  RENDER
   // -------------------------------------------------------------------------
-  function tick(dt){
-    // Einheiten bewegen / Jobs abarbeiten
-    if (window.GameUnits?.tick){
-      try {
-        GameUnits.tick(dt);
-      } catch(e){
-        ERR('GameUnits.tick Fehler:', e);
-      }
-    }
-
-    // Bauphasen (Baustelle → fertig) 
-    if (window.GameConstruction?.tick){
-      try {
-        GameConstruction.tick(dt);
-      } catch(e){
-        ERR('GameConstruction.tick Fehler:', e);
-      }
-    }
-  }
 
   function render(){
     // 1) Terrain + Baustellen/ Gebäude-Overlay direkt aus GameMap
@@ -266,7 +247,6 @@
     if (!Number.isFinite(dt) || dt <= 0) dt = 1/60;
     lastTime = now;
 
-    try { tick(dt);   } catch(e){ ERR('tick() Fehler:', e); }
     try { render();   } catch(e){ ERR('render() Fehler:', e); }
 
     // kleines Diagnose-Event pro Frame
