@@ -255,9 +255,11 @@
   // WICHTIG:
   // Erst initialisieren, wenn die Map wirklich bereit ist
   const map = window.GameMap?._state;
-  if (!map || !map.ready || !map.grid) {
-    return; // noch nichts zeichnen
-  }
+
+// Map ist bereit, sobald das Grid existiert und Dimensionen > 0 haben
+if (!map || !map.grid || !map.rows || !map.cols) {
+  return; // noch nicht bereit → nichts tun
+}
 
   if (!State.initialized) {
     init();
