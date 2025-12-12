@@ -18,28 +18,35 @@ let __tickHandle = null;
 // ============================
 function runTick(){
   try {
+    // dt wie früher im RAF: Sekunden
+    const dt = TICK_MS / 1000;
+
     // 1) Job-Engine (Jobs generieren / prüfen)
     if (window.JobEngine?.tick){
-      JobEngine.tick();
+      JobEngine.tick(dt); // dt ist optional – wenn JobEngine es ignoriert, egal
     }
 
-    // 2) Carrier-Laufzeit (Bewegung, Pfade, Lade/Entlade-Logik)
+    // 2) Carrier-Laufzeit (Jobs zuweisen + step events)
     if (window.CarrierRuntime?.tick){
-      CarrierRuntime.tick(TICK_MS / 1000);
+      CarrierRuntime.tick(dt);
     }
 
-    // 3) Einheiten-Update (Positionsinterpolation, Animationen)
+    // 3) Einheiten-Update (Positionsinterpolation, Job-Abarbeitung)
     if (window.GameUnits?.tick){
-      GameUnits.tick(TICK_MS / 1000);
+      GameUnits.tick(dt);
     }
 
-    // 4) Produktionsgebäude (Outputs erzeugen)
+    // 4) BAUSTELLEN / Bauphasen (Baustelle 0 → 1 → 2 → fertig)
+    //    DAS war jetzt "platt", weil es nach dem Entfernen aus game.js nirgendwo mehr tickte.
+    if (window.GameConstruction?.tick){
+      GameConstruction.tick(dt);
+    }
+
+    // 5) Produktion (Module erzeugen Outputs)
+    //    Production.tick erwartet bei dir typischerweise ms oder ist tolerant – wir geben ms.
     if (window.Production?.tick){
       Production.tick(TICK_MS);
     }
-
-    // Debug / optional
-    // (window.CBLog?.info || console.log)("[tick] done");
 
   } catch(err){
     console.error("[tick] Fehler im Tick:", err);
