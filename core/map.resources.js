@@ -422,12 +422,12 @@ window.addEventListener('req:mapres:clear', ()=>{
     cfg: CFG,
     init,
     drawOnMainCanvas,
-    debugDump
+    debugDump,
 
     // Step 1
-  regen,
-  clear,
-  snapshot
+    regen,
+    clear,
+    snapshot
   };
 
   LOG('bereit', window.MapResources.version);
