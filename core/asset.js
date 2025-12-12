@@ -1,180 +1,332 @@
 /* ============================================================================
  * Datei   : core/asset.js
- * Version : v25.12.11-assets-api-min (register/get/draw + assets-ready once)
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.12.12-atlas-support (MegaAtlas + drawAtlasFrame)
  *
  * Zweck   :
- *   - Minimaler, stabiler Asset-Loader + zentrale Zeichen-API
- *   - Stellt bereit:
- *       window.Assets.registerImage(key, url)
- *       window.Assets.get(key)
- *       window.Assets.draw(ctx, key, dx, dy, dw, dh)
- *       window.Assets.ready()  -> Promise
+ *   Zentrale Asset-Schicht:
+ *   - Lädt Bilder & JSON
+ *   - Lädt "Mega-Atlas" (JSON + PNG) für Ressourcen (Bäume/Steine/Fisch)
+ *   - Bietet drawAtlasFrame(ctx, atlasName, frameName, worldX, worldY, opts)
  *
  * WICHTIG:
  *   - Debug/Checker bleibt drin
- *   - cb:assets-ready feuert genau 1×
+ *   - Robust gegen 404 / kaputte Images (Safari)
  * ========================================================================== */
+
 (function(){
   'use strict';
 
-  const TAG='[assets]';
-  if (window.__ASSETS_LOADER__) { console.info(TAG,'bereits aktiv – skip'); return; }
-  window.__ASSETS_LOADER__ = true;
+  // =========================================================================
+  // LOGGING
+  // =========================================================================
+  const TAG  = '[assets]';
+  const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
+  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
+  const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
 
-  const INFO=(...a)=>(window.CBLog?.info||console.info)(TAG, ...a);
-  const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG, ...a);
-
-  // ---------------------------------------------------------------------------
-  // STATE
-  // ---------------------------------------------------------------------------
-  const Images = new Map(); // key -> { img, url, ok, err }
-  let emitted = false;
-
-  let _readyResolve;
-  const _readyPromise = new Promise(res => { _readyResolve = res; });
-
-  function emitOnce(name, detail){
-    if (emitted) return;
-    emitted = true;
-    window.dispatchEvent(new CustomEvent(name,{ detail }));
-  }
-
+  // =========================================================================
+  // HELPERS
+  // =========================================================================
   function isDrawableImage(img){
     return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
   }
 
-  // ---------------------------------------------------------------------------
-  // API
-  // ---------------------------------------------------------------------------
-  const Assets = {
-    /**
-     * Registriert ein Image-Key → URL.
-     * Lädt sofort (lazy wäre auch möglich, aber wir wollen debug-stabil).
-     */
-    registerImage(key, url){
-      key = String(key||'').trim();
-      url = String(url||'').trim();
-      if (!key || !url) {
-        WARN('registerImage: ungültig', { key, url });
-        return null;
+  function fetchJson(url){
+    return fetch(url, { cache: 'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
+        return r.json();
+      });
+  }
+
+  function loadImage(url){
+    return new Promise((resolve, reject)=>{
+      try{
+        const img = new Image();
+        img.onload = ()=> resolve(img);
+        img.onerror = (e)=> reject(new Error(`Image load failed: ${url}`));
+        img.src = url;
+      }catch(e){
+        reject(e);
+      }
+    });
+  }
+
+  function dirOf(url){
+    const s = String(url || '');
+    const i = s.lastIndexOf('/');
+    return (i >= 0) ? s.slice(0, i+1) : '';
+  }
+
+  // Normalisiert Frame-Daten aus verschiedenen Atlas-Formaten auf:
+  // {x,y,w,h,pivotX,pivotY,anchorX,anchorY,scale}
+  function normalizeFrames(atlasJson){
+    const framesRaw = atlasJson?.frames || {};
+    const resolved  = {};
+    const names     = [];
+
+    // Default tileSize (falls ein Atlas nur [cx,cy] Koords nutzt)
+    const defW = atlasJson?.tileW || atlasJson?.meta?.tileSize?.w || 128;
+    const defH = atlasJson?.tileH || atlasJson?.meta?.tileSize?.h || 128;
+
+    for (const [name, info] of Object.entries(framesRaw)){
+      let x=0,y=0,w=defW,h=defH;
+      let pivotX = w/2, pivotY = h; // default: "Fußpunkt unten"
+      let anchorX = 0.5, anchorY = 1.0;
+      let scale = 1;
+
+      // Format A: trees_mega_atlas-style: info = [cx,cy]
+      if (Array.isArray(info)){
+        const cx = info[0] | 0;
+        const cy = info[1] | 0;
+        w = defW; h = defH;
+        x = cx * w; y = cy * h;
+        pivotX = w/2; pivotY = h;
+        anchorX = 0.5; anchorY = 1.0;
+      }
+      // Format B: stones/fish-style: info.frame / info.pivot / info.anchor
+      else {
+        const f = info.frame || info;
+        x = (f.x|0) || 0;
+        y = (f.y|0) || 0;
+        w = (f.w|0) || defW;
+        h = (f.h|0) || defH;
+
+        if (info.pivot && typeof info.pivot.x === 'number') pivotX = info.pivot.x;
+        if (info.pivot && typeof info.pivot.y === 'number') pivotY = info.pivot.y;
+
+        if (info.anchor && typeof info.anchor.x === 'number') anchorX = info.anchor.x;
+        if (info.anchor && typeof info.anchor.y === 'number') anchorY = info.anchor.y;
+
+        if (typeof info.scale === 'number') scale = info.scale;
       }
 
-      // bereits registriert?
-      if (Images.has(key)) return Images.get(key).img;
+      resolved[name] = { x,y,w,h,pivotX,pivotY,anchorX,anchorY,scale };
+      names.push(name);
+    }
 
-      const img = new Image();
-      const rec = { img, url, ok:false, err:null };
-      Images.set(key, rec);
+    return { resolved, names };
+  }
 
-      img.onload = () => { rec.ok = true; };
-      img.onerror = (e) => { rec.ok = false; rec.err = e; WARN('Image load failed:', key, url, e); };
-      img.src = url;
+  // =========================================================================
+  // ASSETS SINGLETON
+  // =========================================================================
+  const Assets = {
+    version: 'v25.12.12-atlas-support',
 
-      return img;
+    // Einfache Image-Caches (z. B. building-icons)
+    images: new Map(),
+
+    // Atlas: name -> { jsonUrl, imageUrl, json, img, frames, names, ok }
+    atlases: new Map(),
+
+    // Debug-Status
+    state: {
+      ready: false,
+      errors: []
     },
 
-    /** Holt das Image (oder null) */
-    get(key){
-      const rec = Images.get(String(key||''));
-      return rec ? rec.img : null;
+    // --------------------------------------------------------------
+    // Image API
+    // --------------------------------------------------------------
+    getImage(key){ return this.images.get(key) || null; },
+
+    async loadImage(key, url){
+      try{
+        const img = await loadImage(url);
+        this.images.set(key, img);
+        LOG('Image geladen:', key, url, img.naturalWidth+'x'+img.naturalHeight);
+        return img;
+      }catch(e){
+        this.state.errors.push(String(e?.message || e));
+        WARN('Image Fehler:', key, url, e?.message || e);
+        return null;
+      }
+    },
+
+    // --------------------------------------------------------------
+    // Atlas API
+    // --------------------------------------------------------------
+    hasAtlas(name){ return this.atlases.has(name); },
+    getAtlas(name){ return this.atlases.get(name) || null; },
+
+    /**
+     * Lädt einen Mega-Atlas.
+     * - jsonUrl MUSS stimmen (deine Pfade)
+     * - imageUrl ist OPTIONAL:
+     *   - wenn meta.image im JSON falsch ist, kannst du hier override setzen
+     */
+    async loadAtlas(name, jsonUrl, imageUrlOverride){
+      const entry = {
+        name,
+        jsonUrl,
+        imageUrl: imageUrlOverride || null,
+        json: null,
+        img: null,
+        frames: null,
+        names: null,
+        ok: false
+      };
+      this.atlases.set(name, entry);
+
+      try{
+        const json = await fetchJson(jsonUrl);
+        entry.json = json;
+
+        // Wichtig: meta.image kann bei dir abweichen → override gewinnt!
+        const imageUrl = imageUrlOverride
+          || json?.meta?.image
+          || (dirOf(jsonUrl) + `${name}.png`);
+
+        entry.imageUrl = imageUrl;
+
+        const img = await loadImage(imageUrl);
+        entry.img = img;
+
+        const norm = normalizeFrames(json);
+        entry.frames = norm.resolved;
+        entry.names  = norm.names;
+        entry.ok = true;
+
+        LOG('Atlas geladen:', name, {
+          jsonUrl,
+          imageUrl,
+          frames: entry.names.length
+        });
+
+        return entry;
+      }catch(e){
+        entry.ok = false;
+        this.state.errors.push(String(e?.message || e));
+        WARN('Atlas Fehler:', name, jsonUrl, e?.message || e);
+        return entry;
+      }
     },
 
     /**
-     * Zeichnet ein registriertes Image.
-     * return true wenn gezeichnet, sonst false.
+     * Zeichnet einen Atlas-Frame im WORLD-Space.
+     *
+     * opts:
+     *   - scale     : number (default 1)
+     *   - align     : 'anchor' | 'pivot' (default 'pivot')
+     *   - useAnchor : boolean (legacy alias für align)
      */
-    draw(ctx, key, dx, dy, dw, dh){
-      const img = Assets.get(key);
-      if (!isDrawableImage(img)) return false;
-      try {
-        ctx.drawImage(img, dx, dy, dw, dh);
+    drawAtlasFrame(ctx, atlasName, frameName, worldX, worldY, opts={}){
+      const a = this.getAtlas(atlasName);
+      if (!a || !a.ok || !isDrawableImage(a.img)) return false;
+
+      const fr = a.frames?.[frameName];
+      if (!fr) return false;
+
+      const scale = (typeof opts.scale === 'number') ? opts.scale : 1;
+      const align = opts.align || (opts.useAnchor ? 'anchor' : 'pivot');
+
+      const dw = fr.w * scale;
+      const dh = fr.h * scale;
+
+      // worldX/worldY sollen der "Fußpunkt" sein (ähnlich wie buildings),
+      // daher nutzen wir standardmäßig PIVOT (oder Anchor, wenn gewünscht).
+      let dx = worldX;
+      let dy = worldY;
+
+      if (align === 'anchor'){
+        dx = worldX - (fr.anchorX * dw);
+        dy = worldY - (fr.anchorY * dh);
+      } else {
+        dx = worldX - (fr.pivotX * scale);
+        dy = worldY - (fr.pivotY * scale);
+      }
+
+      try{
+        ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
         return true;
-      } catch (e) {
-        WARN('draw failed:', key, e);
+      }catch(e){
+        WARN('drawAtlasFrame failed:', atlasName, frameName, e?.message || e);
         return false;
       }
     },
 
-    /** Promise, wenn initiale Registrierung abgeschlossen ist */
-    ready(){ return _readyPromise; },
+    /**
+     * Hilfsfunktion: gib alle Frame-Namen zurück (optional Prefix-Filter)
+     */
+    listFrames(atlasName, prefix=''){
+      const a = this.getAtlas(atlasName);
+      if (!a || !a.names) return [];
+      if (!prefix) return a.names.slice();
+      return a.names.filter(n => String(n).startsWith(prefix));
+    },
 
-    /** Debug-Snapshot */
-    debug(){
-      const out = { images: Images.size, keys: Array.from(Images.keys()) };
-      return out;
+    pickRandomFrame(atlasName, prefix=''){
+      const list = this.listFrames(atlasName, prefix);
+      if (!list.length) return null;
+      return list[(Math.random() * list.length) | 0];
+    },
+
+    // --------------------------------------------------------------
+    // BOOT / PRELOAD
+    // --------------------------------------------------------------
+    async preload(){
+      // Deine Pfade aus der Nachricht:
+      // assets/resources/wood/trees_mega_atlas.json
+      // assets/resources/stone/stones_mega_atlas.json
+      // assets/resources/fish/fish_mega_atlas.json
+      //
+      // WICHTIG: fish-json liegt bei dir im Repo als .json (bei Upload hier .txt),
+      // wir laden im Spiel natürlich den .json Pfad.
+      const tasks = [];
+
+      // Trees: wir setzen imageUrl OVERRIDE passend zum gleichen Ordner,
+      // falls meta.image mal abweicht.
+      tasks.push(this.loadAtlas(
+        'trees_mega_atlas',
+        'assets/resources/wood/trees_mega_atlas.json',
+        'assets/resources/wood/trees_mega_atlas.png'
+      ));
+
+      // Stones: meta.image ist bereits korrekt im JSON  [oai_citation:1‡stones_mega_atlas.json](sediment://file_00000000cb30720aafc246ea388e8c07)
+      tasks.push(this.loadAtlas(
+        'stones_mega_atlas',
+        'assets/resources/stone/stones_mega_atlas.json',
+        'assets/resources/stone/stones_mega_atlas.png'
+      ));
+
+      // Fish: meta.image ist korrekt im JSON  [oai_citation:2‡fish_mega_atlas.json.txt](sediment://file_000000007ed8720abe7ae44d1239f904)
+      tasks.push(this.loadAtlas(
+        'fish_mega_atlas',
+        'assets/resources/fish/fish_mega_atlas.json',
+        'assets/resources/fish/fish_mega_atlas.png'
+      ));
+
+      await Promise.all(tasks);
+
+      this.state.ready = true;
+
+      // Debug-Event wie gehabt
+      window.dispatchEvent(new CustomEvent('cb:assets-ready', {
+        detail: {
+          ok: this.state.errors.length === 0,
+          errors: this.state.errors.slice(),
+          atlases: Array.from(this.atlases.values()).map(a => ({
+            name: a.name, ok: a.ok, frames: a.names?.length || 0, jsonUrl: a.jsonUrl, imageUrl: a.imageUrl
+          }))
+        }
+      }));
+
+      LOG('preload fertig:', {
+        ok: this.state.errors.length === 0,
+        errors: this.state.errors.length,
+        atlases: this.atlases.size
+      });
     }
   };
 
-  // Global export
+  // Global verfügbar machen
   window.Assets = Assets;
 
-  // ---------------------------------------------------------------------------
-  // MINIMAL LOAD LIST (Welt-Ressourcen) – HIER ERWEITERN WIR JETZT
-  // ---------------------------------------------------------------------------
-  function registerBasePack(){
-    // HUD-Icons existieren bereits, aber sind NICHT Weltobjekte.
-    // Für Weg A brauchen wir Welt-Sprites (Platzhalter-Pfade – du kannst später tauschen).
-    Assets.registerImage('world.tree.0',  'assets/world/trees/tree_0.png');
-    Assets.registerImage('world.tree.1',  'assets/world/trees/tree_1.png');
-    Assets.registerImage('world.tree.2',  'assets/world/trees/tree_2.png');
-    Assets.registerImage('world.tree.3',  'assets/world/trees/tree_3.png');
-
-    Assets.registerImage('world.stone.1', 'assets/world/stones/stone_1.png');
-    Assets.registerImage('world.stone.2', 'assets/world/stones/stone_2.png');
-    Assets.registerImage('world.stone.3', 'assets/world/stones/stone_3.png');
-
-    Assets.registerImage('world.fish.0',  'assets/world/fish/fish_0.png');
-    Assets.registerImage('world.fish.1',  'assets/world/fish/fish_1.png');
-    Assets.registerImage('world.fish.2',  'assets/world/fish/fish_2.png');
-    Assets.registerImage('world.fish.3',  'assets/world/fish/fish_3.png');
-    Assets.registerImage('world.fish.4',  'assets/world/fish/fish_4.png');
-
-    // Hinweis: Diese Dateien müssen existieren – sonst bleibt Fallback aktiv.
-  }
-
-  async function loadAll(){
-    // 1) Base registrieren
-    registerBasePack();
-
-    // 2) Wir "warten" kurz bis Bilder entweder geladen sind oder timeouten
-    //    (damit cb:assets-ready nicht ewig hängt)
-    const t0 = Date.now();
-    const TIMEOUT_MS = 2500;
-
-    function allSettled(){
-      for (const rec of Images.values()){
-        // complete kann auch true sein, wenn error → dann naturalWidth=0
-        if (!rec.img.complete) return false;
-      }
-      return true;
-    }
-
-    while (!allSettled() && (Date.now() - t0) < TIMEOUT_MS) {
-      await new Promise(r => setTimeout(r, 50));
-    }
-
-    // 3) Summary
-    let ok = 0, fail = 0;
-    for (const rec of Images.values()){
-      if (isDrawableImage(rec.img)) ok++; else fail++;
-    }
-
-    const detail = {
-      ok: true,
-      counts: { images: Images.size, ok, fail },
-      version: 'v25.12.11-assets-api-min',
-      errors: fail ? ['Some images missing (fallback will draw)'] : []
-    };
-
-    INFO('Assets bereit ✓', detail);
-    _readyResolve(detail);
-    emitOnce('cb:assets-ready', detail);
-  }
-
-  loadAll().catch(err=>{
-    WARN('loadAll crash', err);
-    _readyResolve({ ok:false, error:String(err) });
-    emitOnce('cb:assets-ready',{ ok:false, error:String(err) });
+  // Sofort preload starten (wie bisher: keine "Warte-UI" entfernen)
+  Assets.preload().catch(e=>{
+    ERR('preload crash:', e?.message || e);
   });
 
 })();
