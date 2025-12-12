@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-10T18:03:06.856Z",
+  "createdAt": "2025-12-12T09:41:45.914Z",
   "root": ".",
-  "count": 542,
+  "count": 547,
   "entries": [
     {
       "type": "dir",
@@ -689,29 +689,57 @@
       "size": 1021
     },
     {
+      "type": "dir",
+      "path": "assets/resources/stone/"
+    },
+    {
       "type": "file",
-      "path": "assets/resources/stone.md",
+      "path": "assets/resources/stone/stone.md",
       "size": 1733
     },
     {
       "type": "file",
-      "path": "assets/resources/stones_mega_atlas.json",
-      "size": 7684
+      "path": "assets/resources/stone/stones_mega_atlas_merged.json",
+      "size": 12516
     },
     {
       "type": "file",
-      "path": "assets/resources/stones_mega_atlas.png",
+      "path": "assets/resources/stone/stones_mega_atlas.json",
+      "size": 7692
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/stone/stones_mega_atlas.png",
       "size": 2101998
     },
     {
       "type": "file",
-      "path": "assets/resources/stones_mega_phaser.js",
-      "size": 2482
+      "path": "assets/resources/stone/stones_mega_phaser.js",
+      "size": 2494
     },
     {
       "type": "file",
-      "path": "assets/resources/stones_mega_phaser.json",
-      "size": 2236
+      "path": "assets/resources/stone/stones_mega_phaser.json",
+      "size": 2243
+    },
+    {
+      "type": "dir",
+      "path": "assets/resources/wood/"
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/wood/Read.md",
+      "size": 1
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/wood/trees_mega_atlas.json",
+      "size": 11791
+    },
+    {
+      "type": "file",
+      "path": "assets/resources/wood/trees_mega_atlas.png",
+      "size": 2010739
     },
     {
       "type": "dir",
@@ -1309,7 +1337,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 1069
+      "size": 6019
     },
     {
       "type": "file",
@@ -1323,13 +1351,8 @@
     },
     {
       "type": "file",
-      "path": "core/carrier.js",
-      "size": 7643
-    },
-    {
-      "type": "file",
       "path": "core/carrier.runtime.js",
-      "size": 1978
+      "size": 5978
     },
     {
       "type": "file",
@@ -1360,11 +1383,6 @@
       "type": "file",
       "path": "core/core.pfglue.js",
       "size": 8119
-    },
-    {
-      "type": "file",
-      "path": "core/core.production.js",
-      "size": 7385
     },
     {
       "type": "file",
@@ -1409,7 +1427,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 12826
+      "size": 13337
     },
     {
       "type": "file",
@@ -1419,27 +1437,32 @@
     {
       "type": "file",
       "path": "core/game.production.fish.js",
-      "size": 20045
+      "size": 8145
+    },
+    {
+      "type": "file",
+      "path": "core/game.production.jobs.js",
+      "size": 7323
     },
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 5374
+      "size": 11555
     },
     {
       "type": "file",
       "path": "core/game.production.stone.js",
-      "size": 22571
+      "size": 9958
     },
     {
       "type": "file",
       "path": "core/game.production.wood.js",
-      "size": 27689
+      "size": 10051
     },
     {
       "type": "file",
       "path": "core/game.renderer.js",
-      "size": 9311
+      "size": 9317
     },
     {
       "type": "file",
@@ -1449,7 +1472,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 8912
+      "size": 10106
     },
     {
       "type": "file",
@@ -1490,6 +1513,11 @@
       "type": "file",
       "path": "core/map-runtime.bridge.js",
       "size": 7226
+    },
+    {
+      "type": "file",
+      "path": "core/map.resources.js",
+      "size": 14669
     },
     {
       "type": "file",
@@ -1565,11 +1593,6 @@
       "type": "file",
       "path": "core/unit-overlay.js",
       "size": 10620
-    },
-    {
-      "type": "file",
-      "path": "core/units.js",
-      "size": 2729
     },
     {
       "type": "file",
@@ -2091,7 +2114,7 @@
     {
       "type": "file",
       "path": "tools/sprites/index-sprite-tool.html",
-      "size": 41799
+      "size": 43706
     },
     {
       "type": "file",
@@ -2602,12 +2625,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53586
+      "size": 54046
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20783
+      "size": 20995
     },
     {
       "type": "file",
@@ -2622,7 +2645,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16471
+      "size": 16671
     },
     {
       "type": "file",
