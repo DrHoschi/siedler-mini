@@ -290,7 +290,7 @@
       if (n.kind === 'stone'){ ctx.fillStyle = 'rgba(140,140,140,0.9)'; }
       if (n.kind === 'fish'){  ctx.fillStyle = 'rgba(0,120,255,0.9)'; }
       ctx.beginPath();
-      ctx.arc(wx, wy - ts*0.35, ts*0.18, 0, Math.PI*2);
+      ctx.arc(wx, wy, ts * 0.18, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
