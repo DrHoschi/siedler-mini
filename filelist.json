@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-12T09:41:45.914Z",
+  "createdAt": "2025-12-12T20:29:28.965Z",
   "root": ".",
   "count": 547,
   "entries": [
@@ -1337,7 +1337,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 6019
+      "size": 10801
     },
     {
       "type": "file",
@@ -1422,12 +1422,12 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 11856
+      "size": 11058
     },
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 13337
+      "size": 13629
     },
     {
       "type": "file",
@@ -1467,7 +1467,7 @@
     {
       "type": "file",
       "path": "core/game.tick.js",
-      "size": 1966
+      "size": 2359
     },
     {
       "type": "file",
@@ -1517,7 +1517,7 @@
     {
       "type": "file",
       "path": "core/map.resources.js",
-      "size": 14669
+      "size": 13691
     },
     {
       "type": "file",
@@ -1592,7 +1592,7 @@
     {
       "type": "file",
       "path": "core/unit-overlay.js",
-      "size": 10620
+      "size": 13387
     },
     {
       "type": "file",
@@ -1851,7 +1851,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.resources-v1.js",
-      "size": 4186
+      "size": 4937
     },
     {
       "type": "file",
@@ -2625,12 +2625,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 54046
+      "size": 54606
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20995
+      "size": 21269
     },
     {
       "type": "file",
