@@ -1,114 +1,135 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.resources-v1.js
- * Version : v25.11.01
- * Zweck   : RESSOURCEN – Tabelle + Dazubuchen (add/sub)
- * ========================================================================== */
-/* ============================================================================
- * Datei   : inspector/tabs/inspector.tab.resources-v1.js
- * Version : v1.0.0 (2025-11-01)
- * Zweck   : Ressourcenstand anfordern & anzeigen
- * Events  : → 'req:res:snapshot'
- *           ← 'cb:res:snapshot'      (detail:{ Holz:..., Stein:..., ... })
+ * Version : v25.12.12 (MapResources Tools + Res Snapshot konsistent)
+ *
+ * Zweck   :
+ *   Inspector Tab "Resources" zeigt 2 Dinge:
+ *   1) Welt-Ressourcen (MapResources)  → Bäume/Steine/Fische auf der Karte
+ *      - Snapshot / Regen / Clear
+ *   2) HUD/Inventar-Ressourcen (ResSystem/HUD) → Holz/Stein/Nahrung/Gold
+ *      - req:res:snapshot / cb:res:snapshot
+ *
+ * Events:
+ *   MapResources:
+ *     → req:mapres:snapshot
+ *     → req:mapres:regen   (detail:{seed?})
+ *     → req:mapres:clear
+ *     ← cb:mapres:snapshot
+ *     ← cb:mapres:regen
+ *     ← cb:mapres:clear
+ *     ← cb:mapres:changed  (optional)
+ *
+ *   HUD Ressourcen:
+ *     → req:res:snapshot
+ *     ← cb:res:snapshot (detail:{ Holz:..., Stein:..., ... })
  * ========================================================================== */
 (function () {
-  function renderResTab(sectionEl) {
+  'use strict';
+
+  const esc = (s)=> String(s ?? '').replace(/[&<>"]/g, c => (
+    c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;'
+  ));
+
+  function renderResourcesTab(sectionEl) {
     sectionEl.innerHTML = [
       '<div class="insp-pad">',
-      '<h3>Ressourcen</h3>',
-      '<button type="button" data-action="req">Snapshot anfordern</button>',
-      '<pre class="out">(keine Daten)</pre>',
+        '<h3>Ressourcen</h3>',
+
+        '<div class="insp-block">',
+          '<h4>Welt-Ressourcen (MapResources)</h4>',
+          '<div class="insp-row">',
+            '<button type="button" class="insp-btn" data-act="map-snap">Snapshot</button>',
+            '<button type="button" class="insp-btn" data-act="map-regen">Regen</button>',
+            '<input class="insp-input" data-act="map-seed" placeholder="Seed (optional)" style="width:140px" />',
+            '<button type="button" class="insp-btn" data-act="map-clear">Clear</button>',
+          '</div>',
+          '<pre class="out out-map">(warte …)</pre>',
+        '</div>',
+
+        '<div class="insp-block" style="margin-top:14px;">',
+          '<h4>Inventar/HUD-Ressourcen</h4>',
+          '<div class="insp-row">',
+            '<button type="button" class="insp-btn" data-act="hud-snap">Snapshot anfordern</button>',
+          '</div>',
+          '<pre class="out out-hud">(warte …)</pre>',
+        '</div>',
+
       '</div>'
     ].join('');
 
-    const out = sectionEl.querySelector('.out');
-    const reqBtn = sectionEl.querySelector('[data-action="req"]');
+    const outMap = sectionEl.querySelector('.out-map');
+    const outHud = sectionEl.querySelector('.out-hud');
 
-    const request = () => {
-      out.textContent = '(warte auf Antwort …)';
+    // ---------------------------
+    // MAPRES actions
+    // ---------------------------
+    function reqMapSnapshot(){
+      outMap.textContent = '(warte auf MapResources …)';
+      window.dispatchEvent(new CustomEvent('req:mapres:snapshot'));
+    }
+
+    function reqMapRegen(){
+      const seedStr = sectionEl.querySelector('[data-act="map-seed"]')?.value?.trim() || '';
+      const seed = seedStr ? Number(seedStr) : undefined;
+      outMap.textContent = seedStr ? `(regen mit seed=${seedStr} …)` : '(regen …)';
+      window.dispatchEvent(new CustomEvent('req:mapres:regen', { detail: { seed } }));
+    }
+
+    function reqMapClear(){
+      outMap.textContent = '(clear …)';
+      window.dispatchEvent(new CustomEvent('req:mapres:clear'));
+    }
+
+    // ---------------------------
+    // HUD actions
+    // ---------------------------
+    function reqHudSnapshot(){
+      outHud.textContent = '(warte auf HUD Snapshot …)';
       window.dispatchEvent(new CustomEvent('req:res:snapshot'));
-    };
+    }
 
-    const onSnapshot = (ev) => {
-      try {
-        const data = ev?.detail || {};
-        out.textContent = JSON.stringify(data, null, 2) || '(keine Daten)';
-      } catch (e) {
-        out.textContent = '(Fehler beim Darstellen)';
-      }
-    };
+    // Buttons
+    sectionEl.querySelector('[data-act="map-snap"]')?.addEventListener('click', reqMapSnapshot);
+    sectionEl.querySelector('[data-act="map-regen"]')?.addEventListener('click', reqMapRegen);
+    sectionEl.querySelector('[data-act="map-clear"]')?.addEventListener('click', reqMapClear);
 
-    reqBtn.addEventListener('click', request);
-    window.addEventListener('cb:res:snapshot', onSnapshot, { once: false });
+    sectionEl.querySelector('[data-act="hud-snap"]')?.addEventListener('click', reqHudSnapshot);
 
-    request();
-  }
-  window.registerInspectorTab('resources', renderResTab);
-})();
-(() => {
-  const state = { list: {} };
+    // ---------------------------
+    // Listeners
+    // ---------------------------
+    function prettyJson(obj){
+      try { return JSON.stringify(obj ?? {}, null, 2); }
+      catch { return '(Fehler beim JSON)'; }
+    }
 
-  function mount(panel){
-    panel.innerHTML = `
-      <div class="insp-toolbar">
-        <strong>Ressourcen</strong>
-        <span class="spacer"></span>
-        <input class="insp-input" id="res-name" placeholder="Name (z.B. Holz)" style="min-width:140px">
-        <input class="insp-input" id="res-amount" type="number" value="1" style="width:90px">
-        <button class="insp-btn" id="res-add">+ hinzufügen</button>
-        <button class="insp-btn" id="res-sub">– abziehen</button>
-      </div>
-      <table class="insp-table">
-        <thead><tr><th>Ressource</th><th style="width:120px">Menge</th></tr></thead>
-        <tbody id="res-body"></tbody>
-      </table>
-    `;
-
-    panel.querySelector("#res-add").addEventListener("click", ()=> applyChange(+1));
-    panel.querySelector("#res-sub").addEventListener("click", ()=> applyChange(-1));
-
-    render();
-  }
-
-  function render(){
-    const tb = document.querySelector('[data-panel="resources"] #res-body');
-    if (!tb) return;
-    tb.innerHTML = "";
-    Object.entries(state.list).forEach(([k,v])=>{
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${k}</td><td>${v}</td>`;
-      tb.appendChild(tr);
+    window.addEventListener('cb:mapres:snapshot', (e)=>{
+      outMap.textContent = prettyJson(e?.detail || {});
     });
-  }
 
-  function applyChange(sign){
-    const root = document.querySelector('[data-panel="resources"]');
-    if (!root) return;
-    const name = (root.querySelector("#res-name")?.value || "").trim();
-    const amount = Number(root.querySelector("#res-amount")?.value || 0);
-    if (!name || !Number.isFinite(amount) || amount===0) return;
-
-    const next = { ...state.list, [name]: (state.list[name]||0) + sign * Math.abs(amount) };
-    // negative vermeiden (optional):
-    if (next[name] < 0) next[name] = 0;
-
-    // global melden → HUD/Spiel + dieser Tab bekommen Update:
-    window.dispatchEvent(new CustomEvent("cb:res:change", { detail:{ list: next } }));
-  }
-
-  // Spiel/HUD-Update → Zustand übernehmen
-  window.addEventListener("cb:res:change", (e)=>{
-    state.list = e.detail?.list || {};
-    render();
-  });
-
-  function ensureMountedOnShow(){
-    window.addEventListener("cb:insp:tab:change", (e)=>{
-      if (e.detail?.tab !== "resources") return;
-      const panel = document.querySelector('[data-panel="resources"]');
-      if (!panel) return;
-      if (!panel.querySelector("#res-body")) mount(panel);
+    window.addEventListener('cb:mapres:regen', (e)=>{
+      // e.detail: { ok, seed, snap }
+      outMap.textContent = prettyJson(e?.detail?.snap || e?.detail || {});
     });
+
+    window.addEventListener('cb:mapres:clear', (e)=>{
+      outMap.textContent = prettyJson(e?.detail || {});
+    });
+
+    // optional live updates (wenn regen/clear intern cb:mapres:changed feuert)
+    window.addEventListener('cb:mapres:changed', (e)=>{
+      outMap.textContent = prettyJson(e?.detail || {});
+    });
+
+    window.addEventListener('cb:res:snapshot', (e)=>{
+      outHud.textContent = prettyJson(e?.detail || {});
+    });
+
+    // initial
+    reqMapSnapshot();
+    reqHudSnapshot();
   }
 
-  document.addEventListener("DOMContentLoaded", ensureMountedOnShow);
+  // Wichtig: Nur EIN Register. Keine Doppel-IIFEs mehr.
+  window.registerInspectorTab('resources', renderResourcesTab);
 })();
