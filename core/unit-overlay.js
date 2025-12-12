@@ -1,12 +1,13 @@
 /* ============================================================================
  * Datei   : core/unit-overlay.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-overlay-carrier-res3
+ * Version : v25.12.12-overlay-carrier-res4 (job+carry+qty, fish->food)
  *
  * Zweck   : Ressourcenkugeln über Trägern (Carrier)
  *           - Fallback-Bubble (neutral)
  *           - Trage-Bubble (Icon + Farbe der Ressource)
  *           - Auftrags-Bubble (halbtransparent + roter Rand, wenn Job bekannt)
+ *           - NEU: qty-Anzeige (klein) + robustes Job-Finding
  *
  * WICHTIG:
  *   - nutzt GameUnits / Game.getUnits() / Game.units
@@ -137,38 +138,95 @@
 
   function normalizeResId(id) {
     if (!id) return null;
-    let s = String(id);
+    let s = String(id).toLowerCase();
     s = s.replace(/^res[._]/, '');
     s = s.replace(/^resource[._]/, '');
+
+    // Vereinheitlichung: Fisch zählt später als Nahrung → hier schon als "food"
+    if (s === 'fish' || s === 'fisch') return 'food';
+
     return s || null;
   }
 
   // Ressource, die der Träger GERADE wirklich trägt
   function getCarryResId(u) {
     if (!u) return null;
+
+    // häufig: u.carrying = 'res.wood'
     if (typeof u.carrying === 'string' && u.carrying) {
       return normalizeResId(u.carrying);
     }
+
+    // oder: u.carrying = { id:'res.wood', qty: 1 }
     if (u.carrying && typeof u.carrying === 'object') {
       const c = u.carrying;
-      if (typeof c.id === 'string')  return normalizeResId(c.id);
-      if (typeof c.res === 'string') return normalizeResId(c.res);
-      if (typeof c.type === 'string')return normalizeResId(c.type);
+      if (typeof c.id === 'string')   return normalizeResId(c.id);
+      if (typeof c.res === 'string')  return normalizeResId(c.res);
+      if (typeof c.type === 'string') return normalizeResId(c.type);
+      if (typeof c.item === 'string') return normalizeResId(c.item);
     }
+
+    // einige Systeme nutzen: u.task.carry / u.task.payload
+    const tc = u?.task?.carry || u?.task?.payload || null;
+    if (tc && typeof tc === 'object') {
+      if (typeof tc.id === 'string')   return normalizeResId(tc.id);
+      if (typeof tc.res === 'string')  return normalizeResId(tc.res);
+      if (typeof tc.type === 'string') return normalizeResId(tc.type);
+      if (typeof tc.item === 'string') return normalizeResId(tc.item);
+    }
+
+    return null;
+  }
+
+  // Menge, die der Träger trägt (wenn vorhanden)
+  function getCarryQty(u) {
+    if (!u) return 0;
+    if (u.carrying && typeof u.carrying === 'object' && Number.isFinite(u.carrying.qty)) {
+      return u.carrying.qty;
+    }
+    const tc = u?.task?.carry || u?.task?.payload || null;
+    if (tc && typeof tc === 'object' && Number.isFinite(tc.qty)) return tc.qty;
+    return 0;
+  }
+
+  // Job-Objekt robust finden (wichtig für C2!)
+  function getJobObject(u) {
+    if (!u) return null;
+
+    // alt: u.task.job
+    if (u.task && u.task.job && typeof u.task.job === 'object') return u.task.job;
+
+    // neu / varianten:
+    if (u.job && typeof u.job === 'object') return u.job;
+    if (u.currentJob && typeof u.currentJob === 'object') return u.currentJob;
+    if (u._job && typeof u._job === 'object') return u._job;
+
+    // manchmal hängt es unter task.current
+    if (u.task && u.task.current && typeof u.task.current === 'object') return u.task.current;
+
     return null;
   }
 
   // Ressource, die der aktuelle Job VORsieht (Auftrag)
   function getJobResId(u) {
-    const job = u && u.task && u.task.job ? u.task.job : null;
+    const job = getJobObject(u);
     if (!job || typeof job !== 'object') return null;
 
-    const keys = ['res', 'resource', 'resourceId', 'item', 'itemId', 'type'];
+    const keys = ['res', 'resource', 'resourceId', 'item', 'itemId', 'type', 'id'];
     for (const k of keys) {
       const v = job[k];
       if (typeof v === 'string' && v) return normalizeResId(v);
     }
     return null;
+  }
+
+  // Menge, die der Job vorsieht (wenn vorhanden)
+  function getJobQty(u) {
+    const job = getJobObject(u);
+    if (!job || typeof job !== 'object') return 0;
+
+    const q = job.qty ?? job.amount ?? job.count ?? 0;
+    return Number.isFinite(q) ? q : 0;
   }
 
   function getColorForRes(resId) {
@@ -203,7 +261,25 @@
   // ---------------------------------------------------------------------------
   // ZEICHEN-HILFEN
   // ---------------------------------------------------------------------------
-  function drawCarryBubble(cx, cy, zoom, resId) {
+  function drawQtyBadge(cx, cy, zoom, qty) {
+    if (!qty || qty <= 1) return;
+
+    const r = 8 * zoom;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx + 12 * zoom, cy - 10 * zoom, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fill();
+
+    ctx.font = `${10 * zoom}px system-ui,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(String(qty), cx + 12 * zoom, cy - 10 * zoom);
+    ctx.restore();
+  }
+
+  function drawCarryBubble(cx, cy, zoom, resId, qty) {
     const col   = getColorForRes(resId);
     const emoji = getEmojiForRes(resId);
 
@@ -229,9 +305,11 @@
       ctx.fillStyle = '#3b2a15';
       ctx.fillText(emoji, cx, cy);
     }
+
+    drawQtyBadge(cx, cy, zoom, qty);
   }
 
-  function drawJobBubble(cx, cy, zoom, resId) {
+  function drawJobBubble(cx, cy, zoom, resId, qty) {
     if (!resId) return;
 
     const emoji = getEmojiForRes(resId);
@@ -252,6 +330,8 @@
       ctx.fillStyle = '#3b2a15';
       ctx.fillText(emoji, cx, cy);
     }
+
+    drawQtyBadge(cx, cy, zoom, qty);
   }
 
   function drawFallbackBubble(cx, cy, zoom) {
@@ -292,18 +372,21 @@
       const carryRes = getCarryResId(u);
       const jobRes   = getJobResId(u);
 
+      const carryQty = getCarryQty(u);
+      const jobQty   = getJobQty(u);
+
       // Grundpositionen für die Bubbles
       const yCarry = cy - 18 * zoom;   // Trage-Bubble (Hauptebene)
       const yJob   = cy - 34 * zoom;   // Auftrags-Bubble etwas höher
 
       // 1) Auftrags-Bubble: nur wenn Job bekannt & noch nichts getragen wird
       if (!carryRes && jobRes) {
-        drawJobBubble(cx, yJob, zoom, jobRes);
+        drawJobBubble(cx, yJob, zoom, jobRes, jobQty);
       }
 
       // 2) Trage-Bubble: wenn der Träger etwas in der Hand hat
       if (carryRes) {
-        drawCarryBubble(cx, yCarry, zoom, carryRes);
+        drawCarryBubble(cx, yCarry, zoom, carryRes, carryQty || jobQty);
       }
 
       // 3) Fallback: wenn wir gar nichts wissen → kleine neutrale Kugel
@@ -354,5 +437,5 @@
   // Startet automatisch, sobald das Spiel losläuft
   window.addEventListener('cb:game:start', () => start());
 
-  LOG('geladen (overlay-carrier-res3, wartet auf cb:game:start)');
+  LOG('geladen (overlay-carrier-res4, wartet auf cb:game:start)');
 })();
