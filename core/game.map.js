@@ -348,14 +348,23 @@
       }
     }
     // ---------------------------------------------------------------------
-// Ressourcen-Layer (Bäume/Steine/Fische) – Platzhalter-Darstellung
-//    → wird VOR WorkArea gezeichnet, damit WorkArea drüber liegt
+// Ressourcen-Layer (Bäume/Steine/Fische)
+//  - unterstützt beide APIs:
+//      A) MapResources.drawWorld(ctx,{tileSize})
+//      B) MapResources.drawOnMainCanvas(ctx, cam, tileSize)
 // ---------------------------------------------------------------------
-if (window.MapResources && typeof window.MapResources.drawWorld === 'function') {
+if (window.MapResources) {
   try {
-    window.MapResources.drawWorld(ctx, { tileSize: ts });
+    // bevorzugt: Atlas-Version / neue API
+    if (typeof window.MapResources.drawOnMainCanvas === 'function') {
+      window.MapResources.drawOnMainCanvas(ctx, cam, ts);
+    }
+    // fallback: alte API (Platzhalter-Kreis/Quadrat)
+    else if (typeof window.MapResources.drawWorld === 'function') {
+      window.MapResources.drawWorld(ctx, { tileSize: ts });
+    }
   } catch (e) {
-    WARN('MapResources.drawWorld Fehler:', e);
+    WARN('MapResources draw Fehler:', e);
   }
 }
     
