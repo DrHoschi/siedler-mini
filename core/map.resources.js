@@ -261,9 +261,10 @@
     //  [oai_citation:8‡game.map.js](sediment://file_00000000e47471f4ba3a10288aba09c9)
     const A = window.Assets;
 
+    // Mittelpunkt der Tile-Oberfläche, NICHT der Unterkante
     for (const n of State.nodes){
       const wx = (n.x * ts) + ts * 0.5;   // Tile center
-      const wy = (n.y * ts) + ts * 1.0;   // "Fußpunkt" unten am Tile
+      const wy = (n.y * ts) + ts * 0.8;   // "Fußpunkt" unten am Tile
 
       // Atlas-Draw, wenn vorhanden
       if (A && A.state?.ready && n.frame){
