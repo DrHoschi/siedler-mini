@@ -250,10 +250,18 @@
   // DRAW
   // =========================================================================
   function drawOnMainCanvas(ctx, cam, tileSize){
-    if (!ctx) return;
+  if (!ctx) return;
 
-    // Wenn noch nicht initialisiert: jetzt
-    if (!State.initialized) init();
+  // WICHTIG:
+  // Erst initialisieren, wenn die Map wirklich bereit ist
+  const map = window.GameMap?._state;
+  if (!map || !map.ready || !map.grid) {
+    return; // noch nichts zeichnen
+  }
+
+  if (!State.initialized) {
+    init();
+  }
 
     const ts = tileSize || (window.GameMap?.tileSize) || 64;
 
