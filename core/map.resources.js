@@ -1,460 +1,323 @@
 /* ============================================================================
  * Datei   : core/map.resources.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.11-map-resources-v1a (EXPORT-FIRST + SAFE-LOG + SAFE-AUTOINIT)
+ * Version : v25.12.12-mapresources-atlas-render (Trees/Stones/Fish)
  *
- * WICHTIGER FIX:
- *   - window.MapResources wird SOFORT exportiert (auch wenn Map noch nicht ready).
- *   - autoInit() läuft erst NACH dem Export und ist komplett try/catch-safe.
- *   - Logger-Aufrufe können das Modul NICHT mehr crashen.
+ * Zweck   :
+ *   - Hält zufällige Ressourcen-Spawns (Trees/Stones/Fish)
+ *   - Zeichnet sie im WORLD-Space auf dem Main-Canvas (über GameMap.render)
+ *   - Nutzt Mega-Atlas Frames:
+ *       stones_mega_atlas.json nutzt frame/pivot/anchor  [oai_citation:3‡stones_mega_atlas.json](sediment://file_00000000cb30720aafc246ea388e8c07)
+ *       fish_mega_atlas.json nutzt frame/pivot/anchor  [oai_citation:4‡fish_mega_atlas.json.txt](sediment://file_000000007ed8720abe7ae44d1239f904)
+ *
+ * Debug:
+ *   window.MapResources.state
+ *   window.MapResources.debugDump()
  * ========================================================================== */
 
-(function (global) {
+(function(){
   'use strict';
 
-  /* ========================================================================
-   * SAFE LOGGER (darf NIE crashen)
-   * ====================================================================== */
-  const TAG = '[map.resources]';
+  // =========================================================================
+  // LOGGING
+  // =========================================================================
+  const TAG  = '[map.resources]';
+  const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
+  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
 
-  function safeCall(fn, args) {
-    try { if (typeof fn === 'function') fn.apply(null, args); } catch (_) {}
-  }
-
-  function LOG(...a)  { safeCall(global.CBLog?.info ?? console.info,  [TAG, ...a]); }
-  function WARN(...a) { safeCall(global.CBLog?.warn ?? console.warn,  [TAG, ...a]); }
-
-  /* ========================================================================
-   * KONSTANTEN
-   * ====================================================================== */
-  const RES_TYPE_TREE  = 'tree';
-  const RES_TYPE_STONE = 'stone';
-  const RES_TYPE_FISH  = 'fish';
-
-  // Wasser-Tiles (IDs) – bei dir aktuell vermutlich 8/9 (kannst du später anpassen)
+  // =========================================================================
+  // KONFIG / FILTER
+  // =========================================================================
+  // Wasser-Tiles in deiner Map (wie bei Fish-Production bereits üblich)  [oai_citation:5‡CODES_MONOLITH_Siedler-v4.0.txt](file-service://file-5bTfqQ9UDwP1giK7J39zht)
   const WATER_TILE_IDS = new Set([8, 9]);
 
-  const TREE_FORBIDDEN_TILE_IDS = new Set([
-    // TODO: falls du Lava/Asche/Fels-Tiles sperren willst → IDs hier rein
-  ]);
+  // Basismengen (Start-Sandbox)
+  const CFG = {
+    trees: { count: 40, clusterChance: 0.45 },
+    stones:{ count: 18, clusterChance: 0.35 },
+    fish:  { count: 22, clusterChance: 0.55 },
 
-  const TREE_DENSITY  = 0.040;
-  const STONE_DENSITY = 0.015;
-  const FISH_DENSITY  = 0.030;
+    // Zeichnungs-Skalierung relativ zu tileSize:
+    // (Viele Frames sind ~128px, tileSize ist meist 64px → 0.65..0.9 wirkt gut)
+    drawScale: {
+      tree:  0.95,
+      stone: 0.85,
+      fish:  0.70
+    },
 
-  const STONE_CLUSTER_MIN = 3;
-  const STONE_CLUSTER_MAX = 7;
+    // Prefix-Filter (optional):
+    // - Trees: wenn dein Atlas Epochen hat, nimm z. B. "e1_"
+    // - Stones: "e1_" ist sicher (siehe JSON)  [oai_citation:6‡stones_mega_atlas.json](sediment://file_00000000cb30720aafc246ea388e8c07)
+    // - Fish: kein Prefix nötig (fish_raw_v01...)  [oai_citation:7‡fish_mega_atlas.json.txt](sediment://file_000000007ed8720abe7ae44d1239f904)
+    prefix: {
+      tree:  'e1_',
+      stone: 'e1_',
+      fish:  ''
+    }
+  };
 
-  const MAX_TREES_PER_MAP  = 5000;
-  const MAX_STONES_PER_MAP = 3000;
-  const MAX_FISH_PER_MAP   = 5000;
+  // =========================================================================
+  // STATE
+  // =========================================================================
+  const State = {
+    initialized: false,
+    seed: (Math.random()*1e9)|0,
 
-  const TREE_GROW_TICK_SECONDS = 20;
-  const TREE_SPREAD_RADIUS     = 3;
-  const TREE_SPREAD_PER_TICK   = 5;
+    // je Eintrag: { id, kind:'tree'|'stone'|'fish', x,y, frame, stage? }
+    nodes: [],
 
-  /* ========================================================================
-   * HILFSFUNKTIONEN
-   * ====================================================================== */
-  function makeRng(seedStr) {
-    let s = 0;
-    for (let i = 0; i < seedStr.length; i++) s = (s * 31 + seedStr.charCodeAt(i)) >>> 0;
-    if (!s) s = 1;
-    return function rng() {
-      s = (s * 1664525 + 1013904223) >>> 0;
-      return s / 0xFFFFFFFF;
+    // optional: schnelle Listen
+    trees: [],
+    stones: [],
+    fish: []
+  };
+
+  // =========================================================================
+  // RNG
+  // =========================================================================
+  function mulberry32(a){
+    return function(){
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
 
-  function clamp(v, min, max) { return v < min ? min : (v > max ? max : v); }
-
-  function dist2(ax, ay, bx, by) {
-    const dx = ax - bx, dy = ay - by;
-    return dx * dx + dy * dy;
+  // =========================================================================
+  // MAP HELPERS
+  // =========================================================================
+  function getMap(){
+    return window.GameMap || window.Map || null;
   }
 
-  function keyXY(x, y) { return `${x|0}:${y|0}`; }
-
-  function getGameMapState() {
-    const GameMap = global.GameMap;
-    const state = GameMap && GameMap._state;
-    if (!state || !state.grid) return null;
-    return state;
-  }
-
-  function getTileIdAt(tx, ty) {
-    const map = getGameMapState();
-    if (!map) return -1;
-    const x = tx | 0, y = ty | 0;
-    if (y < 0 || y >= map.rows || x < 0 || x >= map.cols) return -1;
-    const row = map.grid[y];
-    if (!row) return -1;
+  function getTileId(x,y){
+    const map = getMap();
+    const g = map?.grid;
+    if (!g) return 0;
+    const row = g[y];
+    if (!row) return 0;
     return row[x] | 0;
   }
 
-  function isWaterTileId(id) { return WATER_TILE_IDS.has(id | 0); }
+  function isInside(x,y){
+    const map = getMap();
+    const cols = map?.cols|0;
+    const rows = map?.rows|0;
+    return (x>=0 && y>=0 && x<cols && y<rows);
+  }
 
-  function isTreeAllowedTileId(id) {
-    id |= 0;
-    if (id <= 0) return false;
-    if (WATER_TILE_IDS.has(id)) return false;
-    if (TREE_FORBIDDEN_TILE_IDS.has(id)) return false;
+  function isWater(x,y){
+    return WATER_TILE_IDS.has(getTileId(x,y));
+  }
+
+  // Trees sollen NICHT auf Wasser und NICHT direkt auf Stein liegen (vereinfachtes Regelwerk)
+  function canPlaceTree(x,y){
+    if (!isInside(x,y)) return false;
+    if (isWater(x,y)) return false;
+    // optional: keine Trees direkt auf "Rock"-Tiles – später besser per Terrain-Regeln
     return true;
   }
 
-  /* ========================================================================
-   * STATE
-   * ====================================================================== */
-  const State = {
-    initialized : false,
-    seed        : 'default',
-    rows        : 0,
-    cols        : 0,
-    tileSize    : 64,
-
-    trees : [],
-    stones: [],
-    fish  : [],
-
-    occupied : {
-      [RES_TYPE_TREE]  : new Set(),
-      [RES_TYPE_STONE] : new Set(),
-      [RES_TYPE_FISH]  : new Set()
-    },
-
-    lastTreeGrowTime : 0
-  };
-
-  function resetState() {
-    State.initialized = false;
-    State.rows = State.cols = 0;
-    State.trees.length = 0;
-    State.stones.length = 0;
-    State.fish.length = 0;
-    State.occupied[RES_TYPE_TREE].clear();
-    State.occupied[RES_TYPE_STONE].clear();
-    State.occupied[RES_TYPE_FISH].clear();
-    State.lastTreeGrowTime = (performance?.now?.() ?? Date.now()) / 1000;
-  }
-
-  /* ========================================================================
-   * NODE API
-   * ====================================================================== */
-  let _idCounter = 1;
-  function nextId(type) { return `${type}-${_idCounter++}`; }
-  function markOccupied(type, tx, ty) { State.occupied[type].add(keyXY(tx, ty)); }
-  function isOccupied(type, tx, ty) { return State.occupied[type].has(keyXY(tx, ty)); }
-
-  function addNode(type, tx, ty, meta = {}) {
-    tx |= 0; ty |= 0;
-
-    if (type !== RES_TYPE_TREE && type !== RES_TYPE_STONE && type !== RES_TYPE_FISH) return null;
-
-    const map = getGameMapState();
-    if (!map) return null;
-    if (tx < 0 || ty < 0 || tx >= map.cols || ty >= map.rows) return null;
-
-    const id = getTileIdAt(tx, ty);
-
-    if (type === RES_TYPE_FISH && !isWaterTileId(id)) return null;
-    if (type === RES_TYPE_TREE && !isTreeAllowedTileId(id)) return null;
-    if (type === RES_TYPE_STONE && isWaterTileId(id)) return null;
-
-    if (isOccupied(type, tx, ty)) return null;
-
-    const node = { id: nextId(type), type, tx, ty, meta: { ...meta } };
-
-    if (type === RES_TYPE_TREE) State.trees.push(node);
-    else if (type === RES_TYPE_STONE) State.stones.push(node);
-    else State.fish.push(node);
-
-    markOccupied(type, tx, ty);
-    return node;
-  }
-
-  function removeNodeById(type, nodeId) {
-    const list =
-      type === RES_TYPE_TREE  ? State.trees :
-      type === RES_TYPE_STONE ? State.stones :
-      type === RES_TYPE_FISH  ? State.fish : null;
-
-    if (!list) return false;
-
-    const idx = list.findIndex(n => n.id === nodeId);
-    if (idx < 0) return false;
-
-    const n = list[idx];
-    list.splice(idx, 1);
-    State.occupied[type].delete(keyXY(n.tx, n.ty));
+  function canPlaceStone(x,y){
+    if (!isInside(x,y)) return false;
+    // Steine im Wasser selten – hier erstmal: komplett vermeiden
+    if (isWater(x,y)) return false;
     return true;
   }
 
-  function getListByType(type) {
-    if (type === RES_TYPE_TREE) return State.trees;
-    if (type === RES_TYPE_STONE) return State.stones;
-    if (type === RES_TYPE_FISH) return State.fish;
-    return [];
+  function canPlaceFish(x,y){
+    if (!isInside(x,y)) return false;
+    return isWater(x,y);
   }
 
-  /* ========================================================================
-   * RANDOM GENERATION
-   * ====================================================================== */
-  function buildRandomTrees(rng) {
-    const map = getGameMapState(); if (!map) return;
-    let target = clamp(Math.floor(map.cols * map.rows * TREE_DENSITY), 0, MAX_TREES_PER_MAP);
+  // =========================================================================
+  // FRAME PICKER (über Assets)
+  // =========================================================================
+  function pickFrame(kind){
+    const A = window.Assets;
 
-    let placed = 0, safety = map.cols * map.rows * 5;
-    while (placed < target && safety-- > 0) {
-      const tx = (rng() * map.cols) | 0;
-      const ty = (rng() * map.rows) | 0;
-      const id = getTileIdAt(tx, ty);
-      if (!isTreeAllowedTileId(id)) continue;
-      if (addNode(RES_TYPE_TREE, tx, ty, { stage: 'grown', variant: (rng() * 4) | 0 })) placed++;
+    if (!A || !A.state?.ready){
+      return null;
     }
-    LOG('Random Trees:', placed, '/', target);
+
+    if (kind === 'tree'){
+      // trees_mega_atlas (wir filtern epoch1 prefix)
+      const p = CFG.prefix.tree || '';
+      return A.pickRandomFrame('trees_mega_atlas', p);
+    }
+    if (kind === 'stone'){
+      const p = CFG.prefix.stone || '';
+      return A.pickRandomFrame('stones_mega_atlas', p);
+    }
+    if (kind === 'fish'){
+      const p = CFG.prefix.fish || '';
+      return A.pickRandomFrame('fish_mega_atlas', p);
+    }
+    return null;
   }
 
-  function buildRandomStoneClusters(rng) {
-    const map = getGameMapState(); if (!map) return;
-    const target = clamp(Math.floor(map.cols * map.rows * STONE_DENSITY), 0, MAX_STONES_PER_MAP);
-    if (target <= 0) return;
+  // =========================================================================
+  // SPAWN LOGIK
+  // =========================================================================
+  function spawn(kind, count, rng){
+    const map = getMap();
+    if (!map?.grid) return;
 
-    const avgCluster = (STONE_CLUSTER_MIN + STONE_CLUSTER_MAX) / 2;
-    const clusterCount = clamp(Math.floor(target / avgCluster), 1, 9999);
+    const cols = map.cols|0;
+    const rows = map.rows|0;
 
-    let placedTotal = 0;
-    for (let c = 0; c < clusterCount && placedTotal < target; c++) {
-      let cx = 0, cy = 0, tries = 100;
-      while (tries-- > 0) {
-        cx = (rng() * map.cols) | 0;
-        cy = (rng() * map.rows) | 0;
-        if (!isWaterTileId(getTileIdAt(cx, cy))) break;
-      }
-
-      const size = clamp(
-        STONE_CLUSTER_MIN + (((STONE_CLUSTER_MAX - STONE_CLUSTER_MIN + 1) * rng()) | 0),
-        STONE_CLUSTER_MIN, STONE_CLUSTER_MAX
-      );
-
-      for (let i = 0; i < size && placedTotal < target; i++) {
-        const dx = (((rng() * 3) | 0) - 1);
-        const dy = (((rng() * 3) | 0) - 1);
-        const tx = clamp(cx + dx, 0, map.cols - 1);
-        const ty = clamp(cy + dy, 0, map.rows - 1);
-
-        if (addNode(RES_TYPE_STONE, tx, ty, { size: 1 + ((rng() * 3) | 0) })) placedTotal++;
-      }
-    }
-    LOG('Random Stones:', placedTotal, '/', target);
-  }
-
-  function buildRandomFish(rng) {
-    const map = getGameMapState(); if (!map) return;
-
-    const water = [];
-    for (let y = 0; y < map.rows; y++) {
-      for (let x = 0; x < map.cols; x++) {
-        if (isWaterTileId(map.grid[y][x] | 0)) water.push({ x, y });
-      }
-    }
-    if (!water.length) { LOG('Fish: no water tiles'); return; }
-
-    const target = clamp(Math.floor(water.length * FISH_DENSITY), 0, MAX_FISH_PER_MAP);
-
-    let placed = 0, safety = water.length * 5;
-    while (placed < target && safety-- > 0) {
-      const p = water[(rng() * water.length) | 0];
-      if (addNode(RES_TYPE_FISH, p.x, p.y, { variant: (rng() * 5) | 0 })) placed++;
-    }
-    LOG('Random Fish:', placed, '/', target);
-  }
-
-  /* ========================================================================
-   * INIT / TICK
-   * ====================================================================== */
-  function init(options = {}) {
-    const map = getGameMapState();
-    if (!map || !Array.isArray(map.grid)) {
-      // Kein WARN mehr hier → niemals beim frühen Start crashen/spammen
+    function canPlace(x,y){
+      if (kind === 'tree') return canPlaceTree(x,y);
+      if (kind === 'stone') return canPlaceStone(x,y);
+      if (kind === 'fish') return canPlaceFish(x,y);
       return false;
     }
 
-    resetState();
+    // leichter Cluster-Ansatz: manchmal nahe einer existierenden Node spawnen
+    function pickBase(){
+      const list = (kind === 'tree') ? State.trees
+                 : (kind === 'stone')? State.stones
+                 : State.fish;
 
-    State.rows = map.rows | 0;
-    State.cols = map.cols | 0;
-    State.tileSize = map.tileSize || 64;
-    State.seed = String(options.seed || map.name || 'default-map');
+      if (list.length && rng() < (CFG[kind+'s']?.clusterChance ?? 0.0)){
+        const n = list[(rng()*list.length)|0];
+        return { bx:n.x, by:n.y };
+      }
+      return null;
+    }
+
+    let tries = 0;
+    let made  = 0;
+
+    while (made < count && tries < count*80){
+      tries++;
+
+      const base = pickBase();
+      let x, y;
+
+      if (base){
+        x = base.bx + ((rng()*9)|0) - 4;
+        y = base.by + ((rng()*9)|0) - 4;
+      } else {
+        x = (rng()*cols)|0;
+        y = (rng()*rows)|0;
+      }
+
+      if (!canPlace(x,y)) continue;
+
+      // keine Doppelbelegung auf derselben Tile (simpel)
+      if (State.nodes.some(n => n.x===x && n.y===y)) continue;
+
+      const frame = pickFrame(kind); // kann null sein → fallback draw
+      const node = {
+        id: `${kind}:${State.nodes.length}`,
+        kind,
+        x, y,
+        frame,
+        // vorbereitet für Wachstum / Abbau
+        stage: (kind === 'tree') ? 3 : 0
+      };
+
+      State.nodes.push(node);
+
+      if (kind === 'tree')  State.trees.push(node);
+      if (kind === 'stone') State.stones.push(node);
+      if (kind === 'fish')  State.fish.push(node);
+
+      made++;
+    }
+
+    LOG('spawn', kind, { want: count, made, tries });
+  }
+
+  function init(seed){
+    if (State.initialized) return;
+    if (typeof seed === 'number') State.seed = seed|0;
+
+    const rng = mulberry32(State.seed);
+
+    // Grundspawns
+    spawn('tree',  CFG.trees.count,  rng);
+    spawn('stone', CFG.stones.count, rng);
+    spawn('fish',  CFG.fish.count,   rng);
+
     State.initialized = true;
-    State.lastTreeGrowTime = (performance?.now?.() ?? Date.now()) / 1000;
-
-    const rng = makeRng(State.seed);
-    buildRandomTrees(rng);
-    buildRandomStoneClusters(rng);
-    buildRandomFish(rng);
-
-    LOG('init ok:', { seed: State.seed, trees: State.trees.length, stones: State.stones.length, fish: State.fish.length });
-    return true;
+    LOG('init ok', { seed: State.seed, nodes: State.nodes.length });
   }
 
-  function tick(nowSeconds) {
-    if (!State.initialized) return;
+  // =========================================================================
+  // DRAW
+  // =========================================================================
+  function drawOnMainCanvas(ctx, cam, tileSize){
+    if (!ctx) return;
 
-    const dt = nowSeconds - State.lastTreeGrowTime;
-    if (dt < TREE_GROW_TICK_SECONDS) return;
-    State.lastTreeGrowTime = nowSeconds;
+    // Wenn noch nicht initialisiert: jetzt
+    if (!State.initialized) init();
 
-    const map = getGameMapState(); if (!map) return;
-    if (!State.trees.length) return;
+    const ts = tileSize || (window.GameMap?.tileSize) || 64;
 
-    const rng = makeRng(State.seed + ':grow:' + Math.floor(nowSeconds / TREE_GROW_TICK_SECONDS));
-    let spawned = 0;
+    // Zeichnen im WORLD-Space: game.map.js setzt bereits ctx.setTransform(zoom,...)
+    //  [oai_citation:8‡game.map.js](sediment://file_00000000e47471f4ba3a10288aba09c9)
+    const A = window.Assets;
 
-    while (spawned < TREE_SPREAD_PER_TICK) {
-      const base = State.trees[(rng() * State.trees.length) | 0];
-      const angle = rng() * Math.PI * 2;
-      const r = 1 + Math.floor(rng() * TREE_SPREAD_RADIUS);
+    for (const n of State.nodes){
+      const wx = (n.x * ts) + ts * 0.5;   // Tile center
+      const wy = (n.y * ts) + ts * 1.0;   // "Fußpunkt" unten am Tile
 
-      const tx = clamp(base.tx + Math.round(Math.cos(angle) * r), 0, map.cols - 1);
-      const ty = clamp(base.ty + Math.round(Math.sin(angle) * r), 0, map.rows - 1);
+      // Atlas-Draw, wenn vorhanden
+      if (A && A.state?.ready && n.frame){
+        let atlasName = null;
+        let scale = 1;
 
-      const id = getTileIdAt(tx, ty);
-      if (!isTreeAllowedTileId(id)) continue;
+        if (n.kind === 'tree'){  atlasName = 'trees_mega_atlas';  scale = CFG.drawScale.tree; }
+        if (n.kind === 'stone'){ atlasName = 'stones_mega_atlas'; scale = CFG.drawScale.stone; }
+        if (n.kind === 'fish'){  atlasName = 'fish_mega_atlas';   scale = CFG.drawScale.fish; }
 
-      if (addNode(RES_TYPE_TREE, tx, ty, { stage: 'sapling', variant: (rng() * 4) | 0 })) spawned++;
-    }
-
-    if (spawned) LOG('tree grow +', spawned);
-  }
-
-  function drawWorld(ctx, options = {}) {
-    if (!State.initialized) return;
-    const ts = options.tileSize || State.tileSize || 64;
-
-    // Bäume – grün
-    if (State.trees.length) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,180,0,0.8)';
-      for (const t of State.trees) {
-        const x = (t.tx + 0.5) * ts;
-        const y = (t.ty + 0.5) * ts;
-        ctx.beginPath();
-        ctx.arc(x, y, ts * 0.28, 0, Math.PI * 2);
-        ctx.fill();
+        if (atlasName){
+          const ok = A.drawAtlasFrame(ctx, atlasName, n.frame, wx, wy, {
+            scale: (ts/128) * scale,   // Frames sind typ. 128-ish → auf tileSize anpassen
+            align: 'pivot'
+          });
+          if (ok) continue; // wenn gezeichnet → fertig
+        }
       }
-      ctx.restore();
-    }
 
-    // Steine – grau
-    if (State.stones.length) {
+      // Fallback (wenn Atlas fehlt)
       ctx.save();
-      ctx.fillStyle = 'rgba(140,140,140,0.9)';
-      for (const s of State.stones) {
-        ctx.fillRect(s.tx * ts + ts * 0.18, s.ty * ts + ts * 0.18, ts * 0.64, ts * 0.64);
-      }
-      ctx.restore();
-    }
-
-    // Fische – blau
-    if (State.fish.length) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,120,220,0.9)';
-      for (const f of State.fish) {
-        const x = (f.tx + 0.5) * ts;
-        const y = (f.ty + 0.5) * ts;
-        ctx.beginPath();
-        ctx.arc(x, y, ts * 0.18, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      if (n.kind === 'tree'){  ctx.fillStyle = 'rgba(0,160,0,0.8)'; }
+      if (n.kind === 'stone'){ ctx.fillStyle = 'rgba(140,140,140,0.9)'; }
+      if (n.kind === 'fish'){  ctx.fillStyle = 'rgba(0,120,255,0.9)'; }
+      ctx.beginPath();
+      ctx.arc(wx, wy - ts*0.35, ts*0.18, 0, Math.PI*2);
+      ctx.fill();
       ctx.restore();
     }
   }
 
-  function findNearest(type, pos, maxDistTiles) {
-    const list = getListByType(type);
-    if (!list.length) return null;
-    const sx = pos?.tx, sy = pos?.ty;
-    if (sx == null || sy == null) return null;
-
-    let best = null, bestD2 = Infinity;
-    const maxD2 = maxDistTiles != null ? (maxDistTiles * maxDistTiles) : Infinity;
-
-    for (const n of list) {
-      const d2 = dist2(sx, sy, n.tx, n.ty);
-      if (d2 < bestD2 && d2 <= maxD2) { bestD2 = d2; best = n; }
-    }
-    return best;
-  }
-
-  function getSnapshot() {
+  // =========================================================================
+  // API / DEBUG
+  // =========================================================================
+  function debugDump(){
     return {
-      seed: State.seed, rows: State.rows, cols: State.cols,
-      trees: State.trees.slice(), stones: State.stones.slice(), fish: State.fish.slice()
+      initialized: State.initialized,
+      seed: State.seed,
+      nodes: State.nodes.length,
+      trees: State.trees.length,
+      stones: State.stones.length,
+      fish: State.fish.length
     };
   }
 
-  /* ========================================================================
-   * EXPORT (WICHTIG: vor autoInit!)
-   * ====================================================================== */
-  global.MapResources = {
-    get state() { return State; },
-
+  window.MapResources = {
+    version: 'v25.12.12-mapresources-atlas-render',
+    state: State,
+    cfg: CFG,
     init,
-    tick,
-    drawWorld,
-
-    addNode,
-    removeNodeById,
-    findNearest,
-    getSnapshot,
-
-    TYPES: { TREE: RES_TYPE_TREE, STONE: RES_TYPE_STONE, FISH: RES_TYPE_FISH }
+    drawOnMainCanvas,
+    debugDump
   };
 
-  /* ========================================================================
-   * AUTOINIT (safe)
-   * ====================================================================== */
-  function autoInit() {
-    try {
-      if (State.initialized) return;
-      if (init()) return;
+  LOG('bereit', window.MapResources.version);
 
-      let tries = 0;
-      const t = setInterval(() => {
-        try {
-          if (State.initialized) { clearInterval(t); return; }
-          if (init()) { clearInterval(t); return; }
-          if (++tries > 40) clearInterval(t);
-        } catch (e) {
-          clearInterval(t);
-          WARN('autoInit interval crash:', e);
-        }
-      }, 250);
-    } catch (e) {
-      WARN('autoInit crash:', e);
-    }
-  }
-
-  // optional: Wachstumsticker (harmlos, tut nichts bis initialized=true)
-  (function setupAutoTick() {
-    try {
-      if (!global.requestAnimationFrame) return;
-      function loop() {
-        try {
-          const now = (performance?.now?.() ?? Date.now()) / 1000;
-          tick(now);
-        } catch (e) {
-          WARN('tick loop crash:', e);
-        }
-        global.requestAnimationFrame(loop);
-      }
-      global.requestAnimationFrame(loop);
-    } catch (e) {
-      WARN('setupAutoTick crash:', e);
-    }
-  })();
-
-  autoInit();
-  LOG('Modul geladen (v25.12.11-map-resources-v1a)');
-
-})(typeof window !== 'undefined' ? window : this);
+})();
