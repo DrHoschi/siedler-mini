@@ -88,8 +88,14 @@
   // MAP HELPERS
   // =========================================================================
   function getMap(){
-    return window.GameMap || window.Map || null;
+  // In diesem Projekt liegt der echte Map-State unter GameMap._state
+  if (window.GameMap && window.GameMap._state) {
+    return window.GameMap._state;
   }
+  // Fallback für alte Varianten
+  return window.Map || null;
+}
+  
 
   function getTileId(x,y){
     const map = getMap();
