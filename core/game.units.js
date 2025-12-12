@@ -59,6 +59,17 @@
     if (!Array.isArray(game.buildings)){
       game.buildings = [];
     }
+
+    // ---------------------------------------------------------------------
+    // KOMPATIBILITÄT (Legacy)
+    // Viele ältere Renderer/Tools erwarten eine "Game.units" Liste oder
+    // "window.__units". Wir binden deshalb unsere interne _units-Liste
+    // als gemeinsame Referenz.
+    // ---------------------------------------------------------------------
+    try{
+      game.units = _units;
+      window.__units = _units;
+    }catch{}
   }
 
   // -------------------------------------------------------------------------
@@ -349,6 +360,8 @@
     getHQPos,
     spawnInitialCarriers,
     getUnits,
+    // Legacy-Alias (game.map.js / ältere Module nutzen GameUnits.list)
+    list: _units,
     needsJob,
     assignJob,
     tick,

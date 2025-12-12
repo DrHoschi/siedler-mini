@@ -206,7 +206,12 @@
   // -------------------------------------------------------------------------
   function getUnitsForDraw(){
     if (Array.isArray(window.Game?.units)) return window.Game.units;
+    // kompatibel zu neuen/alten Units-Systemen
     if (Array.isArray(window.GameUnits?.list)) return window.GameUnits.list;
+    if (window.GameUnits && typeof window.GameUnits.getUnits === 'function') {
+      const u = window.GameUnits.getUnits();
+      if (Array.isArray(u)) return u;
+    }
     if (Array.isArray(window.__units)) return window.__units;
     return [];
   }
