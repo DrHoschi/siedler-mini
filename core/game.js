@@ -242,24 +242,13 @@
   }
 
   function loop(ts){
-    const now = ts || performance.now();
-    let dt = (now - lastTime) / 1000;
-    if (!Number.isFinite(dt) || dt <= 0) dt = 1/60;
-    lastTime = now;
+  const now = ts || performance.now();
+  lastTime = now;
 
-    try { render();   } catch(e){ ERR('render() Fehler:', e); }
+  try { render(); } catch(e){ ERR('render() Fehler:', e); }
 
-    // kleines Diagnose-Event pro Frame
-    try {
-      window.dispatchEvent(new CustomEvent('cb:game:tick', {
-        detail:{ dt, time: now }
-      }));
-    } catch(e){
-      // nicht kritisch
-    }
-
-    requestAnimationFrame(loop);
-  }
+  requestAnimationFrame(loop);
+}
 
   // -------------------------------------------------------------------------
   //  BUILD-PLACEMENT – cb:build:place → Game.buildings + Jobs + Construction
