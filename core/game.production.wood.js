@@ -1,25 +1,16 @@
 /* ============================================================================
  * Datei   : core/game.production.wood.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-wood-workarea-maincanvas-forest-worker-v2
+ * Version : v25.12.12-wood-workarea-maincanvas-forest-worker-v3-output-only
  *
- * Zweck   :
- *   Produktionslogik für Holz / Förster / Holzfäller:
- *     - Reagiert auf cb:build:complete für b.lumberjack
- *     - Legt pro Holzfäller ein eigenes State-Objekt an
- *     - Zyklus:
- *         PLANT -> GROW -> READY -> CUT -> (Holz erzeugen) -> wieder PLANT
- *     - Erzeugt Holz über Production.addResource('wood', ...)
+ * Ziel dieser Version:
+ *   ✅ Modul macht NUR noch lokalen Zyklus + Deko/Animation
+ *   ✅ Output NUR noch über cb:prod:output (Zählen/Jobs macht game.production.js)
+ *   ❌ Keine Production.addResource(...) mehr
+ *   ❌ Keine enqueueCarryJob... mehr
  *
- *   Darstellung:
- *     - Zeichnet VIELE Bäume im Arbeitsbereich direkt auf dem HAUPT-CANVAS
- *       (Weltkoordinaten, laufen mit Kamera/Zoom mit)
- *     - Zeigt eine kleine Förster-Blase, die zwischen Hütte und Wald pendelt
- *
- *   API / Debug:
- *     - window.ProductionWood.fields
- *     - window.ProductionWood.drawOnMainCanvas(ctx, cam, tileSize)
- *     - window.ProductionWood._state
+ * OUT:
+ *   - cb:prod:output { bId, kind, item:'wood', qty, x,y,w,h }
  * ========================================================================== */
 
 (function(){
@@ -49,34 +40,23 @@
   };
 
   const LJ_TIMES = {
-    PLANT : 2000,  // 2 s Setzling pflanzen
-    GROW  : 8000,  // 8 s wachsen
-    CUT   : 2000,  // 2 s fällen
-    REST  : 1000   // Reserve / später nutzbar
+    PLANT : 2000,
+    GROW  : 8000,
+    CUT   : 2000,
+    REST  : 1000
   };
 
-  // Wie viele Bäume pro Holzfäller-Feld gezeichnet werden sollen
   const TREES_PER_FIELD = 10;
 
-  // Radius-Bereich für den Wald-Ring um die Hütte
   const TREE_RADIUS_MIN         = 1.0;
   const TREE_RADIUS_MAX_DEFAULT = 3.0;
 
-  // Worker-Animation (Förster-Bubble)
-  const WORKER_WALK_TIME = 2000;   // ms Hinweg
-  const WORKER_REST_TIME = 1000;   // ms Pause am Baum / an der Hütte
+  const WORKER_WALK_TIME = 2000;
+  const WORKER_REST_TIME = 1000;
 
   // ========================================================================
-  // HILFSFUNKTIONEN – GENERELL
+  // HILFSFUNKTIONEN
   // ========================================================================
-
-  function addResource(resId, delta, reason, src){
-    if (!window.Production || typeof window.Production.addResource !== 'function'){
-      WARN('Production.addResource noch nicht verfügbar – call ignoriert', resId, delta);
-      return;
-    }
-    window.Production.addResource(resId, delta, reason, src);
-  }
 
   function rand(min, max){
     return min + Math.random() * (max - min);
@@ -86,21 +66,7 @@
   // STATE
   // ========================================================================
 
-  /**
-   * Pro Holzfäller-Gebäude ein State-Objekt:
-   * {
-   *   uid, kind, x,y,w,h,
-   *   cx, cy, radiusTiles,
-   *   phase, timer,
-   *   treeProg, treeAngle, treeDist,
-   *   workerPhase, workerTimer
-   * }
-   */
   const Lumberjacks = new Map();
-
-  // ========================================================================
-  // STATE-HILFSFUNKTIONEN
-  // ========================================================================
 
   function createLumberjackState(building){
     const bw = Number.isFinite(building.w) ? building.w : 1;
@@ -111,7 +77,7 @@
 
     const radiusTiles = building.workRadiusTiles || TREE_RADIUS_MAX_DEFAULT;
 
-    const st = {
+    return {
       uid   : building.uid || ('lj-' + Date.now().toString(16)),
       kind  : building.id  || LUMBERJACK_ID,
 
@@ -133,8 +99,6 @@
       workerPhase : 'toTree',
       workerTimer : 0
     };
-
-    return st;
   }
 
   function getOrCreateLumberjack(building){
@@ -156,7 +120,6 @@
     lj.cy          = detail.cy ?? lj.cy;
     lj.radiusTiles = detail.radiusTiles || lj.radiusTiles;
 
-    // Baum-Position neu auswürfeln
     recomputeTreePos(lj);
   }
 
@@ -166,7 +129,39 @@
   }
 
   // ========================================================================
-  // TICK-LOGIK – BAUM-ZYKLUS
+  // OUTPUT (EINZIGER GLOBALER OUTPUT)
+  // ========================================================================
+
+  function emitProdOutput(lj, item, qty){
+    const bx = lj.x | 0;
+    const by = lj.y | 0;
+    const bw = (lj.w | 0) || 3;
+    const bh = (lj.h | 0) || 3;
+
+    const centerX = bx + bw / 2;
+    const centerY = by + bh / 2;
+
+    try{
+      dispatchEvent(new CustomEvent('cb:prod:output', {
+        detail:{
+          bId  : lj.uid,
+          uid  : lj.uid,
+          kind : lj.kind,
+          item : item,
+          qty  : qty,
+          x    : centerX,
+          y    : centerY,
+          w    : bw,
+          h    : bh
+        }
+      }));
+    } catch(e){
+      WARN('cb:prod:output dispatch fehlgeschlagen', e);
+    }
+  }
+
+  // ========================================================================
+  // TICK – PRODUKTION
   // ========================================================================
 
   function tickLumberjack(lj, dtMs){
@@ -192,79 +187,42 @@
       }
 
       case LJ_PHASE.READY: {
-        // Später könnten hier Worker-/Träger-Jobs erzeugt werden.
         lj.timer = 0;
         lj.phase = LJ_PHASE.CUT;
         break;
       }
 
-            case LJ_PHASE.CUT: {
+      case LJ_PHASE.CUT: {
         if (lj.timer >= LJ_TIMES.CUT){
           lj.timer = 0;
           lj.phase = LJ_PHASE.PLANT;
           lj.treeProg = 0;
-          lj.cycle = (lj.cycle || 0) + 1;
 
           const qty = 1;
+          emitProdOutput(lj, 'wood', qty);
 
-          // Geometrie des Gebäudes
-          const bx = lj.x | 0;
-          const by = lj.y | 0;
-          const bw = (lj.w | 0) || 3;
-          const bh = (lj.h | 0) || 3;
-
-          const centerX = bx + bw / 2;
-          const centerY = by + bh / 2;
-
-          // 🔁 Nur noch PROD-OUTPUT-Event feuern
-          // → Ressourcenzählung + Jobs macht jetzt game.production.js
-          try {
-            dispatchEvent(new CustomEvent('cb:prod:output', {
-              detail:{
-                bId  : lj.uid,        // entspricht uid aus cb:build:complete
-                uid  : lj.uid,        // fallback, falls bId anders heißt
-                kind : lj.kind,       // 'b.lumberjack'
-                item : 'wood',        // Ressource
-                qty  : qty,           // Menge
-                x    : centerX,       // Gebäudecenter (für Fallback)
-                y    : centerY,
-                w    : bw,
-                h    : bh
-              }
-            }));
-          } catch(e){
-            WARN('cb:prod:output dispatch fehlgeschlagen', e);
-          }
-
-          // Nach jedem vollständigen Zyklus neuen aktiven Baum im Wald wählen
           recomputeTreePos(lj);
         }
         break;
       }
 
-      case LJ_PHASE.IDLE:
       default:
         break;
     }
   }
 
   function tickAllLumberjacks(dtMs){
-    if (!Lumberjacks.size) return;
     for (const lj of Lumberjacks.values()){
-      try {
-        tickLumberjack(lj, dtMs);
-      } catch(e){
-        ERR('Fehler in tickLumberjack für', lj.uid, e);
-      }
+      try { tickLumberjack(lj, dtMs); }
+      catch(e){ ERR('tickLumberjack Fehler', lj.uid, e); }
     }
   }
 
   // ========================================================================
-  // FÖRSTER-WORKER (graue Blase, die zwischen Hütte und Baum pendelt)
+  // TICK – WORKER-BUBBLE (lokal, rein visuell)
   // ========================================================================
 
   function tickWorker(lj, dtMs){
-    // sehr einfache Fake-Animation: Timer hochzählen, Phase wechseln
     lj.workerTimer += dtMs;
 
     if (lj.workerPhase === 'toTree' && lj.workerTimer >= WORKER_WALK_TIME){
@@ -284,11 +242,8 @@
 
   function tickAllWorkers(dtMs){
     for (const lj of Lumberjacks.values()){
-      try {
-        tickWorker(lj, dtMs);
-      } catch(e){
-        ERR('Fehler in tickWorker für', lj.uid, e);
-      }
+      try { tickWorker(lj, dtMs); }
+      catch(e){ ERR('tickWorker Fehler', lj.uid, e); }
     }
   }
 
@@ -304,7 +259,7 @@
     const oy = cam.y   || 0;
 
     for (const lj of Lumberjacks.values()){
-      // Wald-Baum
+      // Baum
       const angle = lj.treeAngle;
       const dist  = lj.treeDist;
 
@@ -323,23 +278,25 @@
       ctx.fill();
       ctx.restore();
 
-      // Worker-Blase
-      tickWorker(lj, TICK_MS); // kleine Eigenbewegung synchron zum Produktions-Tick
-
+      // Worker-Bubble (rein visuell)
       const rWork = ts * 0.3 * z;
-      let workerX = (lj.cx * ts - ox) * z;
-      let workerY = (lj.cy * ts - oy) * z;
+
+      let hutX = (lj.cx * ts - ox) * z;
+      let hutY = (lj.cy * ts - oy) * z;
+
+      let workerX = hutX;
+      let workerY = hutY;
 
       if (lj.workerPhase === 'toTree'){
-        workerX = (workerX + sx) / 2;
-        workerY = (workerY + sy) / 2;
+        workerX = (hutX + sx) / 2;
+        workerY = (hutY + sy) / 2;
       } else if (lj.workerPhase === 'atTree'){
         workerX = sx;
         workerY = sy;
       } else if (lj.workerPhase === 'toHut'){
-        workerX = (workerX + sx) / 2;
-        workerY = (workerY + sy) / 2;
-      } // atHut: bleibt an der Hütte
+        workerX = (hutX + sx) / 2;
+        workerY = (hutY + sy) / 2;
+      }
 
       const bob = Math.sin(Date.now() / 300) * (rWork * 0.15);
 
@@ -358,7 +315,7 @@
   }
 
   // ========================================================================
-  // EVENT-HANDLER (build/workarea)
+  // EVENTS / REGISTRIERUNG
   // ========================================================================
 
   function onBuildComplete(detail){
@@ -372,18 +329,10 @@
     updateWorkArea(detail);
   }
 
-  // ========================================================================
-  // TICK-EINBINDUNG
-  // ========================================================================
-
   function tick(dtMs){
     tickAllLumberjacks(dtMs);
-    // Worker-Animation hängt an TICK_MS → tickWorker wird oben im Render aufgerufen
+    tickAllWorkers(dtMs);
   }
-
-  // ========================================================================
-  // REGISTRIERUNG BEIM PRODUKTIONS-MANAGER
-  // ========================================================================
 
   if (window.Production && typeof window.Production.registerModule === 'function'){
     window.Production.registerModule({
@@ -403,10 +352,8 @@
   window.ProductionWood = {
     fields : Lumberjacks,
     drawOnMainCanvas,
-    _state : {
-      Lumberjacks
-    }
+    _state : { Lumberjacks }
   };
 
-  LOG('Holz-Produktion geladen v25.12.10-wood-workarea-maincanvas-forest-worker-v2');
+  LOG('Holz-Produktion geladen v25.12.12-wood...output-only');
 })();
