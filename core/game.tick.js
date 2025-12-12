@@ -25,17 +25,17 @@ function runTick(){
 
     // 2) Carrier-Laufzeit (Bewegung, Pfade, Lade/Entlade-Logik)
     if (window.CarrierRuntime?.tick){
-      CarrierRuntime.tick();
+      CarrierRuntime.tick(TICK_MS / 1000);
     }
 
     // 3) Einheiten-Update (Positionsinterpolation, Animationen)
     if (window.GameUnits?.tick){
-      GameUnits.tick();
+      GameUnits.tick(TICK_MS / 1000);
     }
 
     // 4) Produktionsgebäude (Outputs erzeugen)
     if (window.Production?.tick){
-      Production.tick();
+      Production.tick(TICK_MS);
     }
 
     // Debug / optional
