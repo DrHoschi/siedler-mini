@@ -1,26 +1,15 @@
 /* ============================================================================
  * Datei   : core/game.production.fish.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.10-fish-workarea-water-maincanvas-final-v2
+ * Version : v25.12.12-fish-workarea-water-maincanvas-v3-output-only
  *
- * Zweck   :
- *   Produktions-/Deko-Logik für Fisch (Fischerhütte):
- *     - Reagiert auf cb:build:complete für Fischer-Gebäude
- *     - Legt pro Gebäude ein eigenes "Fischfeld" an
- *     - Verteilt Fische IM Arbeitsbereich (WorkArea)
- *     - Fische dürfen NUR auf Wasser-Tiles (ID 8 oder 9) liegen
- *     - Zeichnet Fische + "arbeitenden Fischer" direkt auf dem HAUPT-CANVAS
+ * Ziel dieser Version:
+ *   ✅ Modul macht WorkArea/Deko/Fische-Rendering + lokalen Fang-Zyklus
+ *   ✅ Output NUR noch über cb:prod:output (Zählen/Jobs macht game.production.js)
+ *   ❌ Keine Production.addResource(...) mehr
  *
- *   Ereignisse:
- *     IN  :
- *       - cb:build:complete { id, uid?, x,y,w,h, ... }
- *       - cb:workarea:set   { id|buildingId|kind, uid, cx,cy,radiusTiles, x,y,w,h }
- *     OUT :
- *       - optional später Prod-Events; aktuell nur Ressourcenzählung intern
- *
- *   API / Debug:
- *     - window.ProductionFish.fields
- *     - window.ProductionFish.drawOnMainCanvas(ctx, cam, tileSize)
+ * OUT:
+ *   - cb:prod:output { bId, kind, item:'fish', qty, x,y,w,h }
  * ========================================================================== */
 
 (function(){
@@ -31,98 +20,89 @@
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
   const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
 
-  // ------------------------------------------------------------------------
-  // KONSTANTEN
-  // ------------------------------------------------------------------------
-
   const FISH_BUILDING_IDS = new Set([
-    'b.fish',
-    'b.fishery',
-    'b.fisher',
-    'b.fischer',
-    'fish',
-    'fishery',
-    'fisher',
-    'fischer'
+    'b.fish','b.fishery','b.fisher','b.fischer','fish','fishery','fisher','fischer'
   ]);
 
   const FISH_PER_FIELD   = 10;
   const FISH_RADIUS_MIN  = 2.0;
   const FISH_RADIUS_MAX  = 6.0;
 
+  // Produktionstakt (einfacher Stub, bis echte Worker-Logik kommt)
+  const FISH_CYCLE_MS    = 7000;
+
   const WATER_TILE_IDS = new Set([8, 9]);
 
-  const FISH_ATLAS_CFG = {
-    urlJson  : 'assets/resources/fish/fish_mega_atlas.json',
-    urlImage : 'assets/resources/fish/fish_mega_atlas.png',
-    resolvedFrames : null,
-    frameNames     : null
-  };
+  const FishFields = new Map();
+
+  function rand(min, max){ return min + Math.random() * (max - min); }
 
   // ------------------------------------------------------------------------
-  // STATE
+  // Map / Tile Zugriff (best effort; wenn unbekannt -> keine harte Blockade)
   // ------------------------------------------------------------------------
-
-  const FishFields = new Map(); // Map<uid, FieldState>
-
-  let fishAtlas    = null;
-  let fishAtlasImg = null;
-  let fishAtlasLoaded = false;
-
-  // ------------------------------------------------------------------------
-  // HILFS-FUNKTIONEN
-  // ------------------------------------------------------------------------
-
-  function addResource(resId, delta, reason, src){
-    if (!window.Production || typeof window.Production.addResource !== 'function'){
-      WARN('Production.addResource fehlt – Fisch-Output wird nicht gezählt');
-      return;
+  function getTileIdAt(tx, ty){
+    // Diese Hooks sind absichtlich defensiv, weil wir nicht wissen,
+    // wie dein Map-API in v4.0 final heißt.
+    try{
+      if (window.GameMap && typeof window.GameMap.getTileId === 'function'){
+        return window.GameMap.getTileId(tx, ty);
+      }
+      if (window.Map && typeof window.Map.getTileId === 'function'){
+        return window.Map.getTileId(tx, ty);
+      }
+      if (window.Game && window.Game.map && typeof window.Game.map.getTileId === 'function'){
+        return window.Game.map.getTileId(tx, ty);
+      }
+    }catch(e){
+      // ignorieren
     }
-    window.Production.addResource(resId, delta, reason, src);
+    return null; // unbekannt
   }
 
-  function rand(min, max){
-    return min + Math.random() * (max - min);
+  function isWaterTile(tx, ty){
+    const id = getTileIdAt(tx, ty);
+    if (id === null) {
+      // Wenn wir die Map nicht abfragen können, blocken wir nicht hart,
+      // damit das Modul nicht "tot" ist.
+      return true;
+    }
+    return WATER_TILE_IDS.has(id);
   }
 
   // ------------------------------------------------------------------------
-  // ATLAS-LADEN (optional)
+  // OUTPUT
   // ------------------------------------------------------------------------
+  function emitProdOutput(field, item, qty){
+    const bx = field.x | 0;
+    const by = field.y | 0;
+    const bw = (field.w | 0) || 3;
+    const bh = (field.h | 0) || 3;
 
-  function loadFishAtlasOnce(){
-    if (fishAtlasLoaded) return;
-    fishAtlasLoaded = true;
+    const centerX = bx + bw / 2;
+    const centerY = by + bh / 2;
 
-    // Fallback: falls fetch nicht verfügbar ist, einfach abbrechen
-    if (typeof fetch !== 'function'){
-      WARN('fetch nicht verfügbar – Fish-Atlas wird nicht geladen');
-      return;
+    try{
+      dispatchEvent(new CustomEvent('cb:prod:output', {
+        detail:{
+          bId  : field.uid,
+          uid  : field.uid,
+          kind : field.kind,
+          item : item,
+          qty  : qty,
+          x    : centerX,
+          y    : centerY,
+          w    : bw,
+          h    : bh
+        }
+      }));
+    }catch(e){
+      WARN('cb:prod:output dispatch fehlgeschlagen', e);
     }
-
-    fetch(FISH_ATLAS_CFG.urlJson)
-      .then(r => r.json())
-      .then(json => {
-        fishAtlas = json;
-        fishAtlasImg = new Image();
-        fishAtlasImg.onload = () => {
-          LOG('Fish-Atlas geladen');
-        };
-        fishAtlasImg.src = FISH_ATLAS_CFG.urlImage;
-
-        // Frame-Namen cache’n
-        const frames = json.frames || {};
-        FISH_ATLAS_CFG.resolvedFrames = frames;
-        FISH_ATLAS_CFG.frameNames     = Object.keys(frames);
-      })
-      .catch(err => {
-        ERR('Fish-Atlas konnte nicht geladen werden:', err);
-      });
   }
 
   // ------------------------------------------------------------------------
   // FIELD-STATE
   // ------------------------------------------------------------------------
-
   function createFishField(building){
     const bw = Number.isFinite(building.w) ? building.w : 1;
     const bh = Number.isFinite(building.h) ? building.h : 1;
@@ -137,7 +117,7 @@
       fishes.push({
         angle : rand(0, Math.PI * 2),
         dist  : rand(FISH_RADIUS_MIN, radiusTiles),
-        phase : rand(0, Math.PI * 2)  // für Wellenbewegung
+        phase : rand(0, Math.PI * 2)
       });
     }
 
@@ -151,7 +131,10 @@
       cx,
       cy,
       radiusTiles,
-      fishes
+      fishes,
+
+      // NEU: lokaler Fang-Timer
+      cycleMs: 0
     };
   }
 
@@ -175,38 +158,45 @@
   }
 
   // ------------------------------------------------------------------------
-  // PRODUKTIONS-OUTPUT (FISCH FANGEN)
+  // PRODUKTIONS-TICK
   // ------------------------------------------------------------------------
-
-  function handleFishCaught(tile, school){
-    // 1) Visueller Effekt / Animation (Stub, kann später ausgebaut werden)
-    animateFishCatch(tile, school);
-
-    // 2) Ressource zählen
-    addResource('fish', 1, 'fish-cycle', 'fish');
-  }
-
-  function animateFishCatch(tile, school){
-    // Platzhalter – hier könntest du später eine Sprung-/Splash-Animation einbauen.
-    LOG('Fish caught at tile', tile, 'in school', school);
-  }
-
-  // ------------------------------------------------------------------------
-  // TICK / ANIMATION
-  // ------------------------------------------------------------------------
-
   function tick(dtMs){
+    const dt = dtMs || 0;
+
     for (const field of FishFields.values()){
+      // Animation
       for (const f of field.fishes){
-        f.phase += dtMs / 1000; // einfache Bewegung
+        f.phase += dt / 1000;
+      }
+
+      // Fang-Zyklus
+      field.cycleMs += dt;
+      if (field.cycleMs >= FISH_CYCLE_MS){
+        field.cycleMs -= FISH_CYCLE_MS;
+
+        // Wir wählen einen "Fisch" und prüfen best-effort Wasser
+        const f = field.fishes[Math.floor(Math.random() * field.fishes.length)];
+        const ang = f.angle;
+        const dist = f.dist;
+
+        const tx = Math.round(field.cx + Math.cos(ang) * dist);
+        const ty = Math.round(field.cy + Math.sin(ang) * dist);
+
+        if (isWaterTile(tx, ty)){
+          // Output: Fish (Zählen/Jobs macht zentral)
+          emitProdOutput(field, 'fish', 1);
+        } else {
+          // Wenn zufällig Land getroffen: wir überspringen diesen Zyklus einfach.
+          // (Später: echtes Sampling nur auf Wasser)
+          LOG('Fang übersprungen (kein Wasser an Tile)', tx, ty);
+        }
       }
     }
   }
 
   // ------------------------------------------------------------------------
-  // RENDERING
+  // RENDERING (Deko)
   // ------------------------------------------------------------------------
-
   function drawOnMainCanvas(ctx, cam, tileSize){
     if (!ctx || !FishFields.size) return;
     const ts = tileSize || 64;
@@ -238,24 +228,21 @@
   }
 
   // ------------------------------------------------------------------------
-  // EVENTS (build/workarea)
+  // EVENTS
   // ------------------------------------------------------------------------
-
   function onBuildComplete(detail){
-    if (!detail || !FISH_BUILDING_IDS.has(detail.id)) return;
+    if (!detail) return;
+    const id = String(detail.id || '').toLowerCase();
+    if (!FISH_BUILDING_IDS.has(id)) return;
+
     const st = getOrCreateFishField(detail);
     FishFields.set(st.uid, st);
-    loadFishAtlasOnce();
   }
 
   function onWorkAreaSet(detail){
     if (!detail) return;
     updateWorkArea(detail);
   }
-
-  // ------------------------------------------------------------------------
-  // REGISTRIERUNG BEIM PRODUKTIONS-MANAGER
-  // ------------------------------------------------------------------------
 
   if (window.Production && typeof window.Production.registerModule === 'function'){
     window.Production.registerModule({
@@ -268,17 +255,11 @@
     WARN('Production.registerModule fehlt – Fisch-Modul nicht angebunden');
   }
 
-  // ------------------------------------------------------------------------
-  // EXPORT / DEBUG
-  // ------------------------------------------------------------------------
-
   window.ProductionFish = {
     fields : FishFields,
     drawOnMainCanvas,
-    _state : {
-      FishFields
-    }
+    _state : { FishFields }
   };
 
-  LOG('Fisch-Produktion geladen v25.12.10-fish-workarea-water-maincanvas-final-v2');
+  LOG('Fisch-Produktion geladen v25.12.12-fish...output-only');
 })();
