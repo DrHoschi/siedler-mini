@@ -312,6 +312,96 @@ if (!map || !map.grid || !map.rows || !map.cols) {
     }
   }
 
+  // ============================================================================
+// STEP 1 – Debug/Tools API: regen / clear / snapshot + Events für Inspector
+// ============================================================================
+
+function _resetState(keepSeed = true){
+  const seed = State.seed;
+
+  State.initialized = false;
+  State.nodes.length  = 0;
+  State.trees.length  = 0;
+  State.stones.length = 0;
+  State.fish.length   = 0;
+
+  if (keepSeed) State.seed = seed;
+}
+
+function snapshot(options = {}){
+  const limit = Number.isFinite(options.limit) ? options.limit : 200;
+  const nodes = State.nodes.slice(0, Math.max(0, limit)).map(n => ({
+    id: n.id,
+    kind: n.kind,
+    x: n.x, y: n.y,
+    frame: n.frame || null,
+    stage: n.stage ?? null
+  }));
+
+  return {
+    version: window.MapResources?.version || 'unknown',
+    initialized: State.initialized,
+    seed: State.seed,
+    counts: {
+      nodes: State.nodes.length,
+      trees: State.trees.length,
+      stones: State.stones.length,
+      fish: State.fish.length
+    },
+    sample: nodes,
+    note: (State.nodes.length > limit) ? `sample limited to ${limit}` : 'full list (<= limit)'
+  };
+}
+
+// WICHTIG: init() darf NICHT "initialized=true" setzen, wenn Map noch nicht ready ist.
+// => Wir erzwingen init nur, wenn getMap() grid/rows/cols hat.
+// (Falls du das schon anders gelöst hast: passt trotzdem.)
+function _mapIsReady(){
+  const map = getMap();
+  return !!(map && map.grid && map.rows && map.cols);
+}
+
+function regen(seed){
+  if (Number.isFinite(seed)) State.seed = seed | 0;
+
+  // hart zurücksetzen
+  _resetState(true);
+
+  // Falls Map schon ready: sofort neu spawnen
+  if (_mapIsReady()){
+    init(State.seed);
+    window.dispatchEvent(new CustomEvent('cb:mapres:changed', { detail: snapshot() }));
+    return true;
+  }
+
+  // Wenn Map noch nicht ready: wir warten bis zum nächsten Frame (render ruft drawOnMainCanvas eh auf)
+  // drawOnMainCanvas wird dann init() triggern.
+  window.dispatchEvent(new CustomEvent('cb:mapres:changed', { detail: snapshot({limit:50}) }));
+  return false;
+}
+
+function clear(){
+  _resetState(true);
+  State.initialized = true; // damit draw nicht jedes Frame wieder init() macht
+  window.dispatchEvent(new CustomEvent('cb:mapres:changed', { detail: snapshot() }));
+}
+
+// Events: Inspector kann damit arbeiten (ohne Console)
+window.addEventListener('req:mapres:snapshot', ()=>{
+  window.dispatchEvent(new CustomEvent('cb:mapres:snapshot', { detail: snapshot() }));
+});
+
+window.addEventListener('req:mapres:regen', (e)=>{
+  const seed = e?.detail?.seed;
+  const ok = regen(seed);
+  window.dispatchEvent(new CustomEvent('cb:mapres:regen', { detail: { ok, seed: State.seed, snap: snapshot() } }));
+});
+
+window.addEventListener('req:mapres:clear', ()=>{
+  clear();
+  window.dispatchEvent(new CustomEvent('cb:mapres:clear', { detail: snapshot() }));
+});
+  
   // =========================================================================
   // API / DEBUG
   // =========================================================================
@@ -333,6 +423,11 @@ if (!map || !map.grid || !map.rows || !map.cols) {
     init,
     drawOnMainCanvas,
     debugDump
+
+    // Step 1
+  regen,
+  clear,
+  snapshot
   };
 
   LOG('bereit', window.MapResources.version);
