@@ -141,6 +141,20 @@
   addEventListener('cb:hud-ready',      () => validateResourcesOnce('hud-ready'));
   addEventListener('cb:game:start',     () => validateResourcesOnce('game-start'));
 
+  // On-Demand Snapshot (Inspector fragt aktiv an)
+  addEventListener('req:res:snapshot', () => {
+    try {
+      const store = (window.RegistryValues = window.RegistryValues || {});
+      emit('cb:res:snapshot', { resources: store });
+      // HUD hört auf cb:res:change → initiale Werte pushen
+      try {
+        Object.keys(store).forEach((res)=>{
+          emit('cb:res:change', { res, value: Number(store[res] || 0), reason:'snapshot', src: TAG });
+        });
+      } catch(_){/* ignore */}
+    } catch(e){ WARN('req:res:snapshot fehlgeschlagen', e); }
+  });
+
   // Falls die Registry bereits bereit ist (Reload / Hot-Start)
   if (window.Registry?.__ready) setTimeout(() => validateResourcesOnce('late-init'), 0);
 
