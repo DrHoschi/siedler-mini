@@ -1,7 +1,8 @@
+
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-buildsprites+units2
+ * Version : v25.12.13-carrier-fallback
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -12,6 +13,64 @@
   const TAG  = '[map]';
   const LOG  = (...a)=> (window.CBLog?.info ?? console.info)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+
+
+  // -------------------------------------------------------------------------
+  // Carrier-Sprite (Fallback) – lazy geladen über core/asset.js (Atlas-System)
+  // -------------------------------------------------------------------------
+  const CARRIER_ATLAS_NAME = 'carrier';
+  const CARRIER_ATLAS_JSON = 'assets/characters/carrier.json';
+  const CARRIER_ATLAS_PNG  = 'assets/characters/carrier.png';
+
+  // Lazy-Load Status (damit wir render() nicht mit loadAtlas spammen)
+  let _carrierAtlasWanted  = false;
+  let _carrierAtlasPromise = null;
+  let _carrierFrameName    = null; // wird nach dem Laden gewählt
+
+  function ensureCarrierAtlasRequested(){
+    const Assets = window.Assets;
+    if (!Assets || typeof Assets.getAtlas !== 'function' || typeof Assets.loadAtlas !== 'function') return;
+
+    const a = Assets.getAtlas(CARRIER_ATLAS_NAME);
+    if (a && a.ok) {
+      // Frame-Auswahl nur einmal
+      if (!_carrierFrameName && typeof Assets.listFrames === 'function'){
+        const names = Assets.listFrames(CARRIER_ATLAS_NAME) || [];
+        // bevorzugt ein Idle-Frame, sonst einfach das erste
+        _carrierFrameName =
+          names.find(n => /idle/i.test(n)) ||
+          names.find(n => /stand/i.test(n)) ||
+          names[0] ||
+          null;
+      }
+      return;
+    }
+
+    if (_carrierAtlasWanted) return;
+    _carrierAtlasWanted = true;
+
+    try{
+      _carrierAtlasPromise = Assets.loadAtlas(CARRIER_ATLAS_NAME, CARRIER_ATLAS_JSON, CARRIER_ATLAS_PNG)
+        .then(()=>{
+          const a2 = Assets.getAtlas(CARRIER_ATLAS_NAME);
+          if (a2 && a2.ok && !_carrierFrameName && typeof Assets.listFrames === 'function'){
+            const names = Assets.listFrames(CARRIER_ATLAS_NAME) || [];
+            _carrierFrameName =
+              names.find(n => /idle/i.test(n)) ||
+              names.find(n => /stand/i.test(n)) ||
+              names[0] ||
+              null;
+          }
+          LOG('Carrier-Atlas geladen ✓', { atlas: CARRIER_ATLAS_NAME, frame: _carrierFrameName });
+        })
+        .catch((e)=>{
+          WARN('Carrier-Atlas konnte nicht geladen werden:', e?.message || e);
+        });
+    }catch(e){
+      WARN('Carrier-Atlas loadAtlas Fehler:', e?.message || e);
+    }
+  }
+
 
   // -------------------------------------------------------------------------
   // STATE
@@ -396,26 +455,62 @@ if (window.GameWorkArea) {
 }
     
     // ---------------------------------------------------------------------
-    // Einheiten-Fallback: Carrier als weiße Punkte
+    // Einheiten: Fallback zeigt Carrier-Sprite (Atlas) – sonst Punkt
     // ---------------------------------------------------------------------
     const units = getUnitsForDraw();
+    if (units.length){
+      // Lazy request, damit beim ersten Render schnell ein Punkt kommt
+      ensureCarrierAtlasRequested();
 
-    // Wenn UnitOverlay läuft, zeichnet es (optional) Unit-Bodies & Bubbles selbst.
-    // Damit vermeiden wir Doppelzeichnungen im Main-Renderer.
-    const _uoRunning = !!(window.UnitOverlay && typeof window.UnitOverlay.isRunning==='function' && window.UnitOverlay.isRunning());
+      const Assets = window.Assets;
+      const canDrawCarrier =
+        !!Assets &&
+        typeof Assets.getAtlas === 'function' &&
+        typeof Assets.drawAtlasFrame === 'function' &&
+        (Assets.getAtlas(CARRIER_ATLAS_NAME)?.ok) &&
+        !!_carrierFrameName;
 
-    if (!_uoRunning && units.length){
       ctx.save();
-      ctx.fillStyle   = 'rgba(255,255,255,0.95)';
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-      for (const u of units){
-        const ux = (u.x || 0) * ts + ts/2;
-        const uy = (u.y || 0) * ts + ts/2;
-        ctx.beginPath();
-        ctx.arc(ux, uy, 6, 0, Math.PI*2);
-        ctx.fill();
-        ctx.stroke();
+
+      if (!canDrawCarrier){
+        // Fallback: Punkt (wie bisher)
+        ctx.fillStyle   = 'rgba(255,255,255,0.95)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        for (const u of units){
+          const ux = (u.x || 0) * ts + ts/2;
+          const uy = (u.y || 0) * ts + ts/2;
+          ctx.beginPath();
+          ctx.arc(ux, uy, 6, 0, Math.PI*2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else {
+        // Sprite-Fallback: Carrier
+        for (const u of units){
+          const ux = (u.x || 0) * ts + ts/2;      // Fußpunkt X (Tile-Mitte)
+          const uy = (u.y || 0) * ts + ts * 0.95; // Fußpunkt Y (nahe Tile-Unterkante)
+
+          // grobe Skalierung: Carrier-Frames sind typ. 64px hoch → auf TileSize skalieren
+          const atlas = Assets.getAtlas(CARRIER_ATLAS_NAME);
+          const fr = atlas?.frames?.[_carrierFrameName];
+          const baseW = fr?.w || 64;
+          const scale = (baseW > 0) ? (ts / baseW) : 1;
+
+          // drawAtlasFrame benutzt Pivot/Anchor aus dem Atlas.
+          // worldX/worldY sind "Fußpunkt" – dadurch stehen Units schön auf dem Boden.
+          const ok = Assets.drawAtlasFrame(ctx, CARRIER_ATLAS_NAME, _carrierFrameName, ux, uy, { scale });
+          if (!ok){
+            // falls ein Frame mal fehlt → Punkt
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.arc(ux, uy - ts*0.45, 6, 0, Math.PI*2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
       }
+
       ctx.restore();
     }
   }
