@@ -437,95 +437,151 @@ if (window.GameWorkArea) {
     WARN('WorkArea-Draw Fehler:', e);
   }
 }
-    
-    
-    // ---------------------------------------------------------------------
-    // Einheiten: erst Sprite versuchen, sonst Fallback-Punkte
-    // ---------------------------------------------------------------------
-    const units = getUnitsForDraw();
-    if (units.length){
-      const Assets = window.Assets;
-      const atlasOk = !!(Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'
-                      && Assets.getAtlas(CARRIER_ATLAS)?.ok);
 
-      // dt für einfache Animation (ohne kompletten Anim-Controller)
-      const dt = _unitsGetDt();
+  // ---------------------------------------------------------------------
+  // Einheiten: Sprite (Atlas) – pro Unit über Registry definierbar
+  //
+  // Ziel:
+  //   - Nicht mehr "alles ist Carrier", sondern pro Unit ein eigener AtlasKey.
+  //   - Wenn ein Atlas (noch) nicht geladen ist → Fallback-Punkt (Debug).
+  //
+  // Voraussetzung:
+  //   - Registry lädt data/units.json (Option B).
+  //   - In units.json kann optional atlasKey gesetzt werden:
+  //       "atlasKey": "carrier_atlas"  (oder woodcutter_atlas, ...)
+  //   - Assets muss den AtlasKey kennen und laden (Preload/Manifest).
+  // ---------------------------------------------------------------------
+  const units = getUnitsForDraw();
+  if (units.length){
+    const Assets   = window.Assets;
+    const Registry = window.Registry;
 
-      if (atlasOk){
-        const a = Assets.getAtlas(CARRIER_ATLAS);
-        ctx.save();
+    // dt für einfache Animation (ohne kompletten Anim-Controller)
+    const dt = _unitsGetDt();
 
-        for (const u of units){
-          // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
-          const tx = (u.x || 0);
-          const ty = (u.y || 0);
+    // --- kleine Helpers --------------------------------------------------
+    const resolveUnitId = (u)=> (u?.kind || u?.type || u?.unitId || u?.defId || u?.id || '');
 
-          // Richtung schätzen: bei Task Richtung zur Zielposition, sonst letzte Richtung behalten
-          let dir = u._dir || 'S';
-          const target = u.task?.target || u.task?.dest || u.task?.source;
-          if (target && Number.isFinite(target.x) && Number.isFinite(target.y)){
-            dir = _dir4FromDelta((target.x - tx), (target.y - ty));
-            u._dir = dir;
+    const getUnitDef = (id)=>{
+      if (!id || !Registry) return null;
+      try{
+        if (typeof Registry.getUnit === 'function') return Registry.getUnit(id) || null;
+        if (Registry.units && Registry.units[id]) return Registry.units[id];
+        if (typeof Registry.list === 'function'){
+          const list = Registry.list('units');
+          if (Array.isArray(list)){
+            return list.find(x => x?.id === id) || null;
           }
+        }
+      }catch(_e){ /* ignore */ }
+      return null;
+    };
 
-          // moving?
-          const moving = !!u.task && (Math.hypot((target?.x ?? tx) - tx, (target?.y ?? ty) - ty) > 0.01);
+    const getAtlasKey = (def, id)=>{
+      // erlaubt mehrere Feldnamen, damit wir in units.json flexibel bleiben
+      const k = def?.atlasKey || def?.spriteAtlasKey || def?.atlas || def?.spriteAtlas || '';
+      return k || CARRIER_ATLAS; // Default = Carrier-Fallback
+    };
 
-          // anim time pro unit
-          u._animT = (u._animT || 0) + dt;
-          const fps = 6;
+    const getDebugColor = (def)=>{
+      const role = String(def?.role || '');
+      if (role.startsWith('transport')) return 'rgba(255,255,255,0.95)';
+      if (role.startsWith('build'))     return 'rgba(255,220,120,0.95)';
+      if (role.startsWith('produce'))   return 'rgba(120,255,140,0.95)';
+      if (role.startsWith('military'))  return 'rgba(255,120,120,0.95)';
+      if (role.startsWith('explore'))   return 'rgba(120,220,255,0.95)';
+      return 'rgba(230,230,230,0.95)';
+    };
 
-          const set = moving ? CARRIER_SPRITES.walk : CARRIER_SPRITES.idle;
-          const frames = set[dir] || set.S;
-          const frameName = _pickAnimFrame(frames, u._animT, fps) || frames?.[0];
+    // Cache für Atlas-OK (pro Key nur einmal prüfen)
+    const atlasOkCache = Object.create(null);
+    const isAtlasOk = (key)=>{
+      if (!key) key = CARRIER_ATLAS;
+      if (atlasOkCache[key] !== undefined) return atlasOkCache[key];
+      const ok = !!(Assets
+        && typeof Assets.getAtlas === 'function'
+        && typeof Assets.drawAtlasFrame === 'function'
+        && Assets.getAtlas(key)?.ok);
+      atlasOkCache[key] = ok;
+      return ok;
+    };
 
-          // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
-          const wx = tx * ts + ts/2;
-          const wy = ty * ts + ts - 2;
+    ctx.save();
 
-          // Skalierung: wir targeten ca. 1.4 Tiles Höhe
-          let scale = 1;
-          const fr = a.frames?.[frameName];
+    for (const u of units){
+      const uid   = resolveUnitId(u);
+      const def   = getUnitDef(uid);
+      const aKey  = getAtlasKey(def, uid);
+
+      // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
+      const tx = (u.x || 0);
+      const ty = (u.y || 0);
+
+      // Richtung schätzen: bei Task Richtung zur Zielposition, sonst letzte Richtung behalten
+      let dir = u._dir || 'S';
+      const target = u?.task?.target || u?.task?.dest || u?.task?.source || null;
+      if (target && Number.isFinite(target.x) && Number.isFinite(target.y)){
+        dir = _dir4FromDelta((target.x - tx), (target.y - ty));
+        u._dir = dir;
+      }
+
+      // moving?
+      const moving = !!(target && (Math.hypot((target.x - tx), (target.y - ty)) > 0.01));
+
+      // anim time pro unit
+      u._animT = (u._animT || 0) + dt;
+      const fps = 6;
+
+      // aktuell: gleiche Frame-Namen-Konvention wie Carrier (frame_r_c).
+      // Wenn deine Worker-Atlanten gleich exportiert sind, funktioniert das sofort.
+      const set       = moving ? CARRIER_SPRITES.walk : CARRIER_SPRITES.idle;
+      const frames    = set[dir] || set.S;
+      const frameName = _pickAnimFrame(frames, u._animT, fps) || frames?.[0];
+
+      // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
+      const wx = tx * ts + ts/2;
+      const wy = ty * ts + ts - 2;
+
+      if (isAtlasOk(aKey) && frameName){
+        // Skalierung: wir targeten ca. 1.4 Tiles Höhe
+        let scale = 1;
+        try{
+          const a = Assets.getAtlas(aKey);
+          const fr = a?.frames?.[frameName];
           if (fr && fr.h){
             const desiredH = ts * 1.4;
             scale = desiredH / fr.h;
           }
+        }catch(_e){ /* ignore */ }
 
-          // Zeichnen (Pivot-Align): Fußpunkt aus Atlas-Pivot
-          const ok = Assets.drawAtlasFrame(ctx, CARRIER_ATLAS, frameName, wx, wy, { scale, align:'pivot' });
-          if (!ok){
-            // Fallback: Punkt
-            ctx.fillStyle   = 'rgba(255,255,255,0.95)';
-            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-            ctx.beginPath();
-            ctx.arc(wx, wy - ts/2, 6, 0, Math.PI*2);
-            ctx.fill();
-            ctx.stroke();
-          }
-        }
-
-        ctx.restore();
-      } else {
-        // reiner Fallback: weiße Punkte
-        ctx.save();
-        ctx.fillStyle   = 'rgba(255,255,255,0.95)';
-        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        for (const u of units){
-          const ux = (u.x || 0) * ts + ts/2;
-          const uy = (u.y || 0) * ts + ts/2;
+        const ok = Assets.drawAtlasFrame(ctx, aKey, frameName, wx, wy, { scale, align:'pivot' });
+        if (!ok){
+          // Fallback: Punkt
+          ctx.fillStyle   = getDebugColor(def);
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)';
           ctx.beginPath();
-          ctx.arc(ux, uy, 6, 0, Math.PI*2);
+          ctx.arc(wx, wy - ts/2, 6, 0, Math.PI*2);
           ctx.fill();
           ctx.stroke();
         }
-        ctx.restore();
+      } else {
+        // Fallback: Punkt (Atlas fehlt/noch nicht geladen)
+        ctx.fillStyle   = getDebugColor(def);
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.beginPath();
+        ctx.arc(wx, wy - ts/2, 6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
       }
     }
 
+    ctx.restore();
   }
 
-  // -------------------------------------------------------------------------
-  // EXPORT
+}
+
+// -------------------------------------------------------------------------
+// EXPORT
   // -------------------------------------------------------------------------
   window.GameMap = { init, render, _state: Mod };
 
