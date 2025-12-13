@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-13T10:50:29.453Z",
+  "createdAt": "2025-12-13T14:34:16.259Z",
   "root": ".",
-  "count": 515,
+  "count": 517,
   "entries": [
     {
       "type": "dir",
@@ -1447,7 +1447,7 @@
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 13280
+      "size": 16750
     },
     {
       "type": "file",
@@ -1552,7 +1552,7 @@
     {
       "type": "file",
       "path": "core/production.res-validate.js",
-      "size": 6123
+      "size": 8291
     },
     {
       "type": "file",
@@ -2481,27 +2481,37 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1986
+      "size": 1903
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 54607
+      "size": 51337
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 21270
+      "size": 19972
+    },
+    {
+      "type": "file",
+      "path": "game.production.js",
+      "size": 16750
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 16671
+      "size": 16759
     },
     {
       "type": "file",
       "path": "package.json",
       "size": 180
+    },
+    {
+      "type": "file",
+      "path": "production.res-validate.js",
+      "size": 6693
     },
     {
       "type": "file",
