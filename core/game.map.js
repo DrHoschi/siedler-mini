@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-units-color-dots-v1
+ * Version : v25.11.29-buildsprites+units2
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -394,31 +394,40 @@ if (window.GameWorkArea) {
     WARN('WorkArea-Draw Fehler:', e);
   }
 }
-    
+
     // ---------------------------------------------------------------------
-    // Einheiten-Fallback: farbige Punkte nach Unit-Typ
+    // Einheiten-Fallback: Units als Punkte (farblich nach Typ)
     // ---------------------------------------------------------------------
     const units = getUnitsForDraw();
     if (units.length){
       ctx.save();
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+
+      // Farb-Regeln (super simpel, damit wir sofort sehen, *welche* Units da sind)
+      // Hinweis: Wir setzen fillStyle pro Unit, damit unterschiedliche Typen sichtbar sind.
+      function _unitColor(u){
+        const id = (u.type || u.unitType || u.unitId || u.kind || u.id || '').toString();
+        // Falls deine Units den Typ NICHT im Objekt tragen, bleiben sie weiß.
+        if (id === 'u.carrier')   return { fill: 'rgba(255,255,255,0.95)', stroke: 'rgba(0,0,0,0.70)' };
+        if (id === 'u.builder')   return { fill: 'rgba(255,215,0,0.95)',   stroke: 'rgba(0,0,0,0.70)' }; // gold
+        if (id === 'u.villager')  return { fill: 'rgba(0,255,0,0.80)',     stroke: 'rgba(0,0,0,0.70)' }; // grün
+        if (id === 'u.lumberjack')return { fill: 'rgba(139,69,19,0.90)',   stroke: 'rgba(0,0,0,0.70)' }; // braun
+        if (id === 'u.fisher')    return { fill: 'rgba(0,170,255,0.90)',   stroke: 'rgba(0,0,0,0.70)' }; // blau
+        if (id === 'u.stonecutter')return{ fill: 'rgba(180,180,180,0.95)', stroke: 'rgba(0,0,0,0.70)' }; // grau
+        return { fill: 'rgba(255,255,255,0.95)', stroke: 'rgba(0,0,0,0.70)' };
+      }
 
       for (const u of units){
-        // Typ-Kodierung (Carrier bleibt weiß, damit bestehendes Debug gleich wirkt)
-        const t = String(u.type || u.unitId || '').toLowerCase();
+        // Positions-Fallbacks: einige Module nutzen x/y, andere tx/ty
+        const uxT = (u.x ?? u.tx ?? 0);
+        const uyT = (u.y ?? u.ty ?? 0);
 
-        let fill = 'rgba(255,255,255,0.95)'; // carrier
-        if (t.includes('builder'))   fill = 'rgba(255,220,120,0.95)';
-        if (t.includes('villager'))  fill = 'rgba(180,255,180,0.95)';
-        if (t.includes('lumber'))    fill = 'rgba(200,255,200,0.95)';
-        if (t.includes('fisher'))    fill = 'rgba(160,220,255,0.95)';
-        if (t.includes('stone'))     fill = 'rgba(210,210,210,0.95)';
-        if (t === 'worker')          fill = 'rgba(180,255,180,0.95)';
+        const ux = uxT * ts + ts/2;
+        const uy = uyT * ts + ts/2;
 
-        ctx.fillStyle = fill;
+        const col = _unitColor(u);
+        ctx.fillStyle   = col.fill;
+        ctx.strokeStyle = col.stroke;
 
-        const ux = (u.x || 0) * ts + ts/2;
-        const uy = (u.y || 0) * ts + ts/2;
         ctx.beginPath();
         ctx.arc(ux, uy, 6, 0, Math.PI*2);
         ctx.fill();
@@ -427,9 +436,8 @@ if (window.GameWorkArea) {
 
       ctx.restore();
     }
-
-    }
   }
+
 
   // -------------------------------------------------------------------------
   // EXPORT
