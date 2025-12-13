@@ -19,8 +19,8 @@
   // Carrier-Sprite (Fallback) – lazy geladen über core/asset.js (Atlas-System)
   // -------------------------------------------------------------------------
   const CARRIER_ATLAS_NAME = 'carrier';
-  const CARRIER_ATLAS_JSON = 'assets/characters/porter.json';
-  const CARRIER_ATLAS_PNG  = 'assets/characters/porter.png';
+  const CARRIER_ATLAS_JSON = 'assets/characters/carrier.json';
+  const CARRIER_ATLAS_PNG  = 'assets/characters/carrier.png';
 
   // Lazy-Load Status (damit wir render() nicht mit loadAtlas spammen)
   let _carrierAtlasWanted  = false;
