@@ -39,7 +39,7 @@
   /** optional Referenz aufs Game-Objekt (für spätere Erweiterungen) */
   let _game = null;
 
-  const SPEED_TILES_PER_SEC = 2.0;
+  const SPEED_TILES_PER_SEC = 0.8;
 
   // -------------------------------------------------------------------------
   // HELFER
