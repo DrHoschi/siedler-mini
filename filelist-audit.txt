@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 491
+Gesamt Dateien: 460
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -46,16 +46,12 @@ Gesamt Dateien: 491
  - filelist-audit.txt
  - filelist.json
  - filelist.txt
- - index.demo.html
- - index.demo1.html
  - index.html
- - index.Inspector.html
  - package.json
  - Projekt_Masterliste.md
  - README.md
  - STRUKTUR_SPICKZETTEL.md
  - STRUKTUR_SPICKZETTEL.mmd
- - ui-hud-test.html
 
 ## Mögliche Tippfehler/Readme ohne .md
  - assets/buildings/lumberjack/Readme

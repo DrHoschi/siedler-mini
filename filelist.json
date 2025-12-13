@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-12T21:50:52.815Z",
+  "createdAt": "2025-12-13T10:50:29.453Z",
   "root": ".",
-  "count": 547,
+  "count": 515,
   "entries": [
     {
       "type": "dir",
@@ -1422,7 +1422,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 11058
+      "size": 13300
     },
     {
       "type": "file",
@@ -1447,7 +1447,7 @@
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 11555
+      "size": 13280
     },
     {
       "type": "file",
@@ -1472,7 +1472,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 10642
+      "size": 10667
     },
     {
       "type": "file",
@@ -1552,7 +1552,7 @@
     {
       "type": "file",
       "path": "core/production.res-validate.js",
-      "size": 5396
+      "size": 6123
     },
     {
       "type": "file",
@@ -1851,7 +1851,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.resources-v1.js",
-      "size": 4937
+      "size": 12151
     },
     {
       "type": "file",
@@ -2374,138 +2374,9 @@
       "size": 12371
     },
     {
-      "type": "dir",
-      "path": "ui/inspector/"
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/events.scan.js",
-      "size": 1547
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector_tab_architecture.md",
-      "size": 4621
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector-hooks.js",
-      "size": 1221
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.api-bridge.js",
-      "size": 3021
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.api-compat.js",
-      "size": 4578
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.api-compat.restore.js",
-      "size": 2865
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.api-core-shim.js",
-      "size": 2770
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.build.js",
-      "size": 15261
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.button-bind.js",
-      "size": 874
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.compat.js",
-      "size": 754
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.core.final.js",
-      "size": 9053
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.core.js",
-      "size": 7250
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.diag.js",
-      "size": 12460
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.ensure-button.js",
-      "size": 3638
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.ensure-host.js",
-      "size": 3634
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.fix-runtime.js",
-      "size": 5178
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.force-close.hotfix.js",
-      "size": 3949
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.force-toggle.js",
-      "size": 4997
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.layer.js",
-      "size": 24749
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.logs.js",
-      "size": 14221
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.paths.js",
-      "size": 12063
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.resources.js",
-      "size": 15252
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.tests.js",
-      "size": 15458
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/overlay.hooks.js",
-      "size": 4540
-    },
-    {
       "type": "file",
       "path": "ui/build-menu.js",
       "size": 3828
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector.standalone.js",
-      "size": 7805
     },
     {
       "type": "file",
@@ -2584,16 +2455,6 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-inspector-bridge.js",
-      "size": 1582
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-inspector.js",
-      "size": 5087
-    },
-    {
-      "type": "file",
       "path": "ui/ui-layout.js",
       "size": 2636
     },
@@ -2634,23 +2495,8 @@
     },
     {
       "type": "file",
-      "path": "index.demo.html",
-      "size": 14435
-    },
-    {
-      "type": "file",
-      "path": "index.demo1.html",
-      "size": 14560
-    },
-    {
-      "type": "file",
       "path": "index.html",
       "size": 16671
-    },
-    {
-      "type": "file",
-      "path": "index.Inspector.html",
-      "size": 7626
     },
     {
       "type": "file",
@@ -2676,11 +2522,6 @@
       "type": "file",
       "path": "STRUKTUR_SPICKZETTEL.mmd",
       "size": 3239
-    },
-    {
-      "type": "file",
-      "path": "ui-hud-test.html",
-      "size": 827
     }
   ]
 }
