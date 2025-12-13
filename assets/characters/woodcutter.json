@@ -1,6 +1,6 @@
 {
   "meta": {
-    "image": "woodcutter.png",
+    "image": "assets/characters/woodcutter.png",
     "size": { "w": 384, "h": 192 },
     "frameSize": { "w": 64, "h": 64 }
   },
