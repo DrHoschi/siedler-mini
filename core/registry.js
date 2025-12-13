@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/registry.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.02-registry-v2-workarea
+ * Version : v25.12.13-registry-v3-units-resources
  *
  * Zweck   :
  *   - Zentrale Datenbank für Buildings & Kategorien
@@ -40,13 +40,21 @@
   const state = {
     iconsBase     : '',
     categories    : [],
-    buildingsList : [],             // Array der Gebäude
-    buildingsById : Object.create(null) // Map: id → Def
+    buildingsList : [],                 // Array der Gebäude
+    buildingsById : Object.create(null),// Map: id → Building-Def
+
+    // Ressourcen (data/resources.json)
+    resourcesList : [],                 // Array [{id,...}]
+    resourcesById : Object.create(null),// Map: id → Resource-Def
+
+    // Units (data/units.json)
+    unitsList     : [],                 // Array [{id,...}]
+    unitsById     : Object.create(null) // Map: id → Unit-Def
   };
 
   // Registry-Objekt vorbereiten
   const Registry = {
-    version : 'v25.12.02',
+    version : 'v25.12.13',
 
     // Nur Leseflags
     __ready : false,
@@ -63,8 +71,30 @@
       if (t === 'categories' || t === 'category') {
         return state.categories.slice();
       }
-      // andere Typen kannst du später ergänzen (resources, units, ...)
+      if (t === 'resources' || t === 'resource') {
+        return state.resourcesList.slice();
+      }
+      if (t === 'units' || t === 'unit') {
+        return state.unitsList.slice();
+      }
+      // andere Typen kannst du später ergänzen
       return [];
+    },
+
+    getResource(id){
+      return state.resourcesById[id] || null;
+    },
+
+    getUnit(id){
+      return state.unitsById[id] || null;
+    },
+
+    resources(){
+      return state.resourcesList.slice();
+    },
+
+    units(){
+      return state.unitsList.slice();
     },
 
     /* -----------------------------------------------------------------------
@@ -78,7 +108,14 @@
       if ((t === 'categories' || t === 'category') && id) {
         return state.categories.find(c => c.id === id) || null;
       }
-      return null;
+            if (t === 'resources' || t === 'resource') {
+        return state.resourcesById[id] || null;
+      }
+      if (t === 'units' || t === 'unit') {
+        return state.unitsById[id] || null;
+      }
+
+return null;
     },
 
     /* -----------------------------------------------------------------------
@@ -119,6 +156,16 @@
     get(){ return state.buildingsById; }
   });
 
+  // Für Altcode: Registry.resources[id] → Resource-Def
+  Object.defineProperty(Registry, 'resources', {
+    get(){ return state.resourcesById; }
+  });
+
+  // Für Altcode: Registry.units[id] → Unit-Def
+  Object.defineProperty(Registry, 'units', {
+    get(){ return state.unitsById; }
+  });
+
   // global machen
   window.Registry = Registry;
 
@@ -148,7 +195,7 @@
 
     const detail = {
       version    : Registry.version,
-      counts     : { buildings: state.buildingsList.length, categories: state.categories.length },
+      counts     : { buildings: state.buildingsList.length, categories: state.categories.length, resources: state.resourcesList.length, units: state.unitsList.length },
       iconsBase  : state.iconsBase
     };
 
@@ -175,19 +222,101 @@
       state.buildingsById[b.id] = b;
     }
   }
+  /* -----------------------------------------------------------------------
+   * applyResourcesPayload(payload)
+   *  - data/resources.json ist ein Object: { wood:{...}, stone:{...}, ... }
+   *  - Wir normalisieren zu: resourcesList [{id,...}] + resourcesById Map
+   * -------------------------------------------------------------------- */
+  function applyResourcesPayload(payload){
+    state.resourcesList = [];
+    state.resourcesById = Object.create(null);
+
+    if (!payload || typeof payload !== 'object') {
+      WARN('resources.json ungültig – nutze leere Ressourcen-Registry');
+      return;
+    }
+
+    const list = [];
+    for (const [id, def] of Object.entries(payload)) {
+      if (!id) continue;
+      const item = Object.assign({ id }, def || {});
+      list.push(item);
+      state.resourcesById[id] = item;
+    }
+
+    list.sort((a,b)=>{
+      const ao = (typeof a.order === 'number') ? a.order : 9999;
+      const bo = (typeof b.order === 'number') ? b.order : 9999;
+      if (ao !== bo) return ao - bo;
+      const an = String(a.name || a.id || '');
+      const bn = String(b.name || b.id || '');
+      return an.localeCompare(bn);
+    });
+
+    state.resourcesList = list;
+  }
+
+  /* -----------------------------------------------------------------------
+   * applyUnitsPayload(payload)
+   *  - data/units.json ist ein Array [{id,name,...}, ...]
+   * -------------------------------------------------------------------- */
+  function applyUnitsPayload(payload){
+    state.unitsList = [];
+    state.unitsById = Object.create(null);
+
+    if (!Array.isArray(payload)) {
+      WARN('units.json ungültig – nutze leere Units-Registry');
+      return;
+    }
+
+    const list = payload.filter(Boolean).slice();
+    for (const u of list) {
+      if (!u || !u.id) continue;
+      state.unitsById[u.id] = u;
+    }
+
+    list.sort((a,b)=>{
+      const ao = (typeof a.order === 'number') ? a.order : 9999;
+      const bo = (typeof b.order === 'number') ? b.order : 9999;
+      if (ao !== bo) return ao - bo;
+      const an = String(a.name || a.id || '');
+      const bn = String(b.name || b.id || '');
+      return an.localeCompare(bn);
+    });
+
+    state.unitsList = list;
+  }
+
 
   /* =============================== [INIT] =================================== */
 
   async function init(){
     try {
+      // buildings sind Pflicht (Build-Menü etc.)
       const buildingsJson = await loadJSON('data/buildings.json');
       applyBuildingsPayload(buildingsJson);
+
+      // resources/units sind optional – wir warnen nur, damit Boot nicht blockiert
+      const [resR, unitR] = await Promise.allSettled([
+        loadJSON('data/resources.json'),
+        loadJSON('data/units.json')
+      ]);
+
+      if (resR.status === 'fulfilled') {
+        applyResourcesPayload(resR.value);
+      } else {
+        WARN('Konnte resources.json nicht laden:', resR.reason?.message || resR.reason);
+      }
+
+      if (unitR.status === 'fulfilled') {
+        applyUnitsPayload(unitR.value);
+      } else {
+        WARN('Konnte units.json nicht laden:', unitR.reason?.message || unitR.reason);
+      }
+
       emitReady();
     } catch (e) {
-      // Genau hier kam bei dir bisher das "string did not match the expected pattern"
-      // → entweder kaputtes JSON oder die URL lieferte HTML / etwas anderes.
       ERR('Fehler beim Laden:', e?.message || e);
-      // Kein emitReady → Boot bleibt absichtlich stehen, damit du den Fehler siehst.
     }
   }
 
