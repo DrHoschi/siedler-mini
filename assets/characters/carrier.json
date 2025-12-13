@@ -1,6 +1,6 @@
 {
   "meta": {
-    "image": "porter.png",
+    "image": "carrier.png",
     "size": { "w": 384, "h": 256 },
     "frameSize": { "w": 64, "h": 64 }
   },
