@@ -127,6 +127,15 @@
 
       // Snapshot senden → HUD/Inspector sehen aktuellen Stand sofort
       emit('cb:res:snapshot', { resources: store });
+      // Zusätzlich: Initiale Werte als einzelne Change-Events pushen,
+      // damit HUD/Inspector auch ohne Snapshot-Handler sofort korrekt anzeigen.
+      try {
+        Object.keys(store||{}).forEach((id)=>{
+          emit('cb:res:change', { res:id, value: Number(store[id]||0), delta:0, origin:'res-validate:init' });
+        });
+      } catch (e) {
+        WARN('Konnte initiale cb:res:change Events nicht senden:', e?.message || e);
+      }
       LOG(`Validierung abgeschlossen (${Object.keys(store).length} Ressourcen).`);
       done = true;
     } catch (e) {
@@ -140,20 +149,6 @@
   addEventListener('cb:boot:ready',     () => validateResourcesOnce('boot-ready'));
   addEventListener('cb:hud-ready',      () => validateResourcesOnce('hud-ready'));
   addEventListener('cb:game:start',     () => validateResourcesOnce('game-start'));
-
-  // On-Demand Snapshot (Inspector fragt aktiv an)
-  addEventListener('req:res:snapshot', () => {
-    try {
-      const store = (window.RegistryValues = window.RegistryValues || {});
-      emit('cb:res:snapshot', { resources: store });
-      // HUD hört auf cb:res:change → initiale Werte pushen
-      try {
-        Object.keys(store).forEach((res)=>{
-          emit('cb:res:change', { res, value: Number(store[res] || 0), reason:'snapshot', src: TAG });
-        });
-      } catch(_){/* ignore */}
-    } catch(e){ WARN('req:res:snapshot fehlgeschlagen', e); }
-  });
 
   // Falls die Registry bereits bereit ist (Reload / Hot-Start)
   if (window.Registry?.__ready) setTimeout(() => validateResourcesOnce('late-init'), 0);
