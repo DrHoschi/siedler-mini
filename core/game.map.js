@@ -216,6 +216,51 @@
     return [];
   }
 
+
+  // -------------------------------------------------------------------------
+  // Units – Visualisierung (Debug/Platzhalter)
+  //  - Ziel: Alle Units (nicht nur Carrier) sofort im Spiel sichtbar machen.
+  //  - Später können hier echte Sprites genutzt werden; aktuell: farbige Marker
+  //    + 1-2 Buchstaben Label (z.B. CA, BU, VI, LU, FI, ST ...)
+  // -------------------------------------------------------------------------
+  const UNIT_COLORS = {
+    'u.carrier'     : '#ffffff',
+    'u.builder'     : '#ffd84a',
+    'u.villager'    : '#7CFF7C',
+    'u.lumberjack'  : '#d49a55',
+    'u.fisher'      : '#5bc0ff',
+    'u.stonecutter' : '#c0c0c0',
+    'u.stonemason'  : '#c0c0c0'
+  };
+
+  function unitTypeOf(u){
+    const t = u?.type ?? u?.unitType ?? u?.kind ?? u?.role;
+    return (t ? String(t) : 'u.unknown');
+  }
+
+  function unitLabelOf(type){
+    const s = String(type || '').replace(/^u\./,'').replace(/[^a-z0-9]+/gi,' ').trim();
+    if (!s) return '?';
+    const parts = s.split(/\s+/g).filter(Boolean);
+    // 2 Buchstaben: entweder 1. Buchstabe von 2 Wörtern oder die ersten 2 eines Wortes
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0].slice(0,2).toUpperCase();
+  }
+
+  function hashHue(str){
+    // sehr einfacher stabiler Hash → 0..359
+    let h = 0;
+    const s = String(str || '');
+    for (let i=0;i<s.length;i++){
+      h = (h*31 + s.charCodeAt(i)) >>> 0;
+    }
+    return h % 360;
+  }
+
+  function unitColorOf(type){
+    return UNIT_COLORS[type] || `hsl(${hashHue(type)}, 70%, 60%)`;
+  }
+
   // -------------------------------------------------------------------------
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
@@ -394,50 +439,57 @@ if (window.GameWorkArea) {
     WARN('WorkArea-Draw Fehler:', e);
   }
 }
-
+    
     // ---------------------------------------------------------------------
-    // Einheiten-Fallback: Units als Punkte (farblich nach Typ)
+    // Einheiten-Fallback: Units als farbige Marker (Debug/Platzhalter)
     // ---------------------------------------------------------------------
     const units = getUnitsForDraw();
     if (units.length){
+      const showLabels = (window.__UNIT_LABELS__ !== false); // default: true
+      const r   = 6 / (zoom || 1);   // Marker konstant in Screen-Pixeln halten
+      const fs  = Math.max(7, Math.round(9 / (zoom || 1))); // FontSize
       ctx.save();
-
-      // Farb-Regeln (super simpel, damit wir sofort sehen, *welche* Units da sind)
-      // Hinweis: Wir setzen fillStyle pro Unit, damit unterschiedliche Typen sichtbar sind.
-      function _unitColor(u){
-        const id = (u.type || u.unitType || u.unitId || u.kind || u.id || '').toString();
-        // Falls deine Units den Typ NICHT im Objekt tragen, bleiben sie weiß.
-        if (id === 'u.carrier')   return { fill: 'rgba(255,255,255,0.95)', stroke: 'rgba(0,0,0,0.70)' };
-        if (id === 'u.builder')   return { fill: 'rgba(255,215,0,0.95)',   stroke: 'rgba(0,0,0,0.70)' }; // gold
-        if (id === 'u.villager')  return { fill: 'rgba(0,255,0,0.80)',     stroke: 'rgba(0,0,0,0.70)' }; // grün
-        if (id === 'u.lumberjack')return { fill: 'rgba(139,69,19,0.90)',   stroke: 'rgba(0,0,0,0.70)' }; // braun
-        if (id === 'u.fisher')    return { fill: 'rgba(0,170,255,0.90)',   stroke: 'rgba(0,0,0,0.70)' }; // blau
-        if (id === 'u.stonecutter')return{ fill: 'rgba(180,180,180,0.95)', stroke: 'rgba(0,0,0,0.70)' }; // grau
-        return { fill: 'rgba(255,255,255,0.95)', stroke: 'rgba(0,0,0,0.70)' };
-      }
+      ctx.lineJoin   = 'round';
+      ctx.lineCap    = 'round';
+      ctx.textAlign  = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font       = `${fs}px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif`;
 
       for (const u of units){
-        // Positions-Fallbacks: einige Module nutzen x/y, andere tx/ty
-        const uxT = (u.x ?? u.tx ?? 0);
-        const uyT = (u.y ?? u.ty ?? 0);
+        const type  = unitTypeOf(u);
+        const label = unitLabelOf(type);
+        const col   = unitColorOf(type);
 
-        const ux = uxT * ts + ts/2;
-        const uy = uyT * ts + ts/2;
+        const ux = (u.x || 0) * ts + ts/2;
+        const uy = (u.y || 0) * ts + ts/2;
 
-        const col = _unitColor(u);
-        ctx.fillStyle   = col.fill;
-        ctx.strokeStyle = col.stroke;
-
+        // Marker
         ctx.beginPath();
-        ctx.arc(ux, uy, 6, 0, Math.PI*2);
+        ctx.fillStyle   = col;
+        ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+        ctx.lineWidth   = 2 / (zoom || 1);
+        ctx.arc(ux, uy, r, 0, Math.PI*2);
         ctx.fill();
         ctx.stroke();
-      }
 
+        // Label (optional)
+        if (showLabels){
+          // erst Stroke, dann Fill für Lesbarkeit
+          ctx.lineWidth   = 3 / (zoom || 1);
+          ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+          ctx.fillStyle   = 'rgba(255,255,255,0.95)';
+          try{
+            ctx.strokeText(label, ux, uy);
+            ctx.fillText(label, ux, uy);
+          }catch(e){
+            // strokeText kann in seltenen Fällen zicken – dann nur fillText
+            ctx.fillText(label, ux, uy);
+          }
+        }
+      }
       ctx.restore();
     }
   }
-
 
   // -------------------------------------------------------------------------
   // EXPORT
