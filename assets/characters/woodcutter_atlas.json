@@ -1,0 +1,284 @@
+{
+  "meta": {
+    "image": "woodcutter.png",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    },
+    "tool": "sprite-atlas-tool",
+    "toolVersion": "v25.12.09",
+    "exportedAt": "2025-12-13T23:08:59.252Z"
+  },
+  "frames": {
+    "frame_0_0": {
+      "x": 22,
+      "y": 10,
+      "w": 165,
+      "h": 205,
+      "anchorX": 105,
+      "anchorY": 215,
+      "scale": 1
+    },
+    "frame_0_1": {
+      "x": 187,
+      "y": 10,
+      "w": 165,
+      "h": 205,
+      "anchorX": 270,
+      "anchorY": 215,
+      "scale": 1
+    },
+    "frame_0_2": {
+      "x": 352,
+      "y": 10,
+      "w": 165,
+      "h": 205,
+      "anchorX": 435,
+      "anchorY": 215,
+      "scale": 1
+    },
+    "frame_0_3": {
+      "x": 517,
+      "y": 10,
+      "w": 165,
+      "h": 205,
+      "anchorX": 600,
+      "anchorY": 215,
+      "scale": 1
+    },
+    "frame_0_4": {
+      "x": 682,
+      "y": 10,
+      "w": 165,
+      "h": 205,
+      "anchorX": 765,
+      "anchorY": 215,
+      "scale": 1
+    },
+    "frame_0_5": {
+      "x": 847,
+      "y": 10,
+      "w": 165,
+      "h": 205,
+      "anchorX": 930,
+      "anchorY": 215,
+      "scale": 1
+    },
+    "frame_1_0": {
+      "x": 22,
+      "y": 215,
+      "w": 165,
+      "h": 205,
+      "anchorX": 105,
+      "anchorY": 420,
+      "scale": 1
+    },
+    "frame_1_1": {
+      "x": 187,
+      "y": 215,
+      "w": 165,
+      "h": 205,
+      "anchorX": 270,
+      "anchorY": 420,
+      "scale": 1
+    },
+    "frame_1_2": {
+      "x": 352,
+      "y": 215,
+      "w": 165,
+      "h": 205,
+      "anchorX": 435,
+      "anchorY": 420,
+      "scale": 1
+    },
+    "frame_1_3": {
+      "x": 517,
+      "y": 215,
+      "w": 165,
+      "h": 205,
+      "anchorX": 600,
+      "anchorY": 420,
+      "scale": 1
+    },
+    "frame_1_4": {
+      "x": 682,
+      "y": 215,
+      "w": 165,
+      "h": 205,
+      "anchorX": 765,
+      "anchorY": 420,
+      "scale": 1
+    },
+    "frame_1_5": {
+      "x": 847,
+      "y": 215,
+      "w": 165,
+      "h": 205,
+      "anchorX": 930,
+      "anchorY": 420,
+      "scale": 1
+    },
+    "frame_2_0": {
+      "x": 22,
+      "y": 420,
+      "w": 165,
+      "h": 205,
+      "anchorX": 105,
+      "anchorY": 625,
+      "scale": 1
+    },
+    "frame_2_1": {
+      "x": 187,
+      "y": 420,
+      "w": 165,
+      "h": 205,
+      "anchorX": 270,
+      "anchorY": 625,
+      "scale": 1
+    },
+    "frame_2_2": {
+      "x": 352,
+      "y": 420,
+      "w": 165,
+      "h": 205,
+      "anchorX": 435,
+      "anchorY": 625,
+      "scale": 1
+    },
+    "frame_2_3": {
+      "x": 517,
+      "y": 420,
+      "w": 165,
+      "h": 205,
+      "anchorX": 600,
+      "anchorY": 625,
+      "scale": 1
+    },
+    "frame_2_4": {
+      "x": 682,
+      "y": 420,
+      "w": 165,
+      "h": 205,
+      "anchorX": 765,
+      "anchorY": 625,
+      "scale": 1
+    },
+    "frame_2_5": {
+      "x": 847,
+      "y": 420,
+      "w": 165,
+      "h": 205,
+      "anchorX": 930,
+      "anchorY": 625,
+      "scale": 1
+    },
+    "frame_3_0": {
+      "x": 22,
+      "y": 625,
+      "w": 165,
+      "h": 205,
+      "anchorX": 105,
+      "anchorY": 830,
+      "scale": 1
+    },
+    "frame_3_1": {
+      "x": 187,
+      "y": 625,
+      "w": 165,
+      "h": 205,
+      "anchorX": 270,
+      "anchorY": 830,
+      "scale": 1
+    },
+    "frame_3_2": {
+      "x": 352,
+      "y": 625,
+      "w": 165,
+      "h": 205,
+      "anchorX": 435,
+      "anchorY": 830,
+      "scale": 1
+    },
+    "frame_3_3": {
+      "x": 517,
+      "y": 625,
+      "w": 165,
+      "h": 205,
+      "anchorX": 600,
+      "anchorY": 830,
+      "scale": 1
+    },
+    "frame_3_4": {
+      "x": 682,
+      "y": 625,
+      "w": 165,
+      "h": 205,
+      "anchorX": 765,
+      "anchorY": 830,
+      "scale": 1
+    },
+    "frame_3_5": {
+      "x": 847,
+      "y": 625,
+      "w": 165,
+      "h": 205,
+      "anchorX": 930,
+      "anchorY": 830,
+      "scale": 1
+    },
+    "frame_4_0": {
+      "x": 22,
+      "y": 830,
+      "w": 165,
+      "h": 205,
+      "anchorX": 105,
+      "anchorY": 1035,
+      "scale": 1
+    },
+    "frame_4_1": {
+      "x": 187,
+      "y": 830,
+      "w": 165,
+      "h": 205,
+      "anchorX": 270,
+      "anchorY": 1035,
+      "scale": 1
+    },
+    "frame_4_2": {
+      "x": 352,
+      "y": 830,
+      "w": 165,
+      "h": 205,
+      "anchorX": 435,
+      "anchorY": 1035,
+      "scale": 1
+    },
+    "frame_4_3": {
+      "x": 517,
+      "y": 830,
+      "w": 165,
+      "h": 205,
+      "anchorX": 600,
+      "anchorY": 1035,
+      "scale": 1
+    },
+    "frame_4_4": {
+      "x": 682,
+      "y": 830,
+      "w": 165,
+      "h": 205,
+      "anchorX": 765,
+      "anchorY": 1035,
+      "scale": 1
+    },
+    "frame_4_5": {
+      "x": 847,
+      "y": 830,
+      "w": 165,
+      "h": 205,
+      "anchorX": 930,
+      "anchorY": 1035,
+      "scale": 1
+    }
+  }
+}

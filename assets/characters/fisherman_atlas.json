@@ -1,0 +1,158 @@
+{
+  "meta": {
+    "image": "fisherman.png",
+    "size": {
+      "w": 1024,
+      "h": 1536
+    },
+    "tool": "sprite-atlas-tool",
+    "toolVersion": "v25.12.09",
+    "exportedAt": "2025-12-13T23:17:27.483Z"
+  },
+  "frames": {
+    "frame_0_0": {
+      "x": 40,
+      "y": 15,
+      "w": 240,
+      "h": 380,
+      "anchorX": 160,
+      "anchorY": 395,
+      "scale": 1
+    },
+    "frame_0_1": {
+      "x": 280,
+      "y": 15,
+      "w": 240,
+      "h": 380,
+      "anchorX": 400,
+      "anchorY": 395,
+      "scale": 1
+    },
+    "frame_0_2": {
+      "x": 520,
+      "y": 15,
+      "w": 240,
+      "h": 380,
+      "anchorX": 640,
+      "anchorY": 395,
+      "scale": 1
+    },
+    "frame_0_3": {
+      "x": 760,
+      "y": 15,
+      "w": 240,
+      "h": 380,
+      "anchorX": 880,
+      "anchorY": 395,
+      "scale": 1
+    },
+    "frame_1_0": {
+      "x": 40,
+      "y": 395,
+      "w": 240,
+      "h": 380,
+      "anchorX": 160,
+      "anchorY": 775,
+      "scale": 1
+    },
+    "frame_1_1": {
+      "x": 280,
+      "y": 395,
+      "w": 240,
+      "h": 380,
+      "anchorX": 400,
+      "anchorY": 775,
+      "scale": 1
+    },
+    "frame_1_2": {
+      "x": 520,
+      "y": 395,
+      "w": 240,
+      "h": 380,
+      "anchorX": 640,
+      "anchorY": 775,
+      "scale": 1
+    },
+    "frame_1_3": {
+      "x": 760,
+      "y": 395,
+      "w": 240,
+      "h": 380,
+      "anchorX": 880,
+      "anchorY": 775,
+      "scale": 1
+    },
+    "frame_2_0": {
+      "x": 40,
+      "y": 775,
+      "w": 240,
+      "h": 380,
+      "anchorX": 160,
+      "anchorY": 1155,
+      "scale": 1
+    },
+    "frame_2_1": {
+      "x": 280,
+      "y": 775,
+      "w": 240,
+      "h": 380,
+      "anchorX": 400,
+      "anchorY": 1155,
+      "scale": 1
+    },
+    "frame_2_2": {
+      "x": 520,
+      "y": 775,
+      "w": 240,
+      "h": 380,
+      "anchorX": 640,
+      "anchorY": 1155,
+      "scale": 1
+    },
+    "frame_2_3": {
+      "x": 760,
+      "y": 775,
+      "w": 240,
+      "h": 380,
+      "anchorX": 880,
+      "anchorY": 1155,
+      "scale": 1
+    },
+    "frame_3_0": {
+      "x": 40,
+      "y": 1155,
+      "w": 240,
+      "h": 380,
+      "anchorX": 160,
+      "anchorY": 1535,
+      "scale": 1
+    },
+    "frame_3_1": {
+      "x": 280,
+      "y": 1155,
+      "w": 240,
+      "h": 380,
+      "anchorX": 400,
+      "anchorY": 1535,
+      "scale": 1
+    },
+    "frame_3_2": {
+      "x": 520,
+      "y": 1155,
+      "w": 240,
+      "h": 380,
+      "anchorX": 640,
+      "anchorY": 1535,
+      "scale": 1
+    },
+    "frame_3_3": {
+      "x": 760,
+      "y": 1155,
+      "w": 240,
+      "h": 380,
+      "anchorX": 880,
+      "anchorY": 1535,
+      "scale": 1
+    }
+  }
+}

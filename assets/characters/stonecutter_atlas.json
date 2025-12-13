@@ -1,0 +1,158 @@
+{
+  "meta": {
+    "image": "stonecutter.png",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    },
+    "tool": "sprite-atlas-tool",
+    "toolVersion": "v25.12.09",
+    "exportedAt": "2025-12-13T23:13:00.422Z"
+  },
+  "frames": {
+    "frame_0_0": {
+      "x": 40,
+      "y": 10,
+      "w": 240,
+      "h": 250,
+      "anchorX": 160,
+      "anchorY": 260,
+      "scale": 1
+    },
+    "frame_0_1": {
+      "x": 280,
+      "y": 10,
+      "w": 240,
+      "h": 250,
+      "anchorX": 400,
+      "anchorY": 260,
+      "scale": 1
+    },
+    "frame_0_2": {
+      "x": 520,
+      "y": 10,
+      "w": 240,
+      "h": 250,
+      "anchorX": 640,
+      "anchorY": 260,
+      "scale": 1
+    },
+    "frame_0_3": {
+      "x": 760,
+      "y": 10,
+      "w": 240,
+      "h": 250,
+      "anchorX": 880,
+      "anchorY": 260,
+      "scale": 1
+    },
+    "frame_1_0": {
+      "x": 40,
+      "y": 260,
+      "w": 240,
+      "h": 250,
+      "anchorX": 160,
+      "anchorY": 510,
+      "scale": 1
+    },
+    "frame_1_1": {
+      "x": 280,
+      "y": 260,
+      "w": 240,
+      "h": 250,
+      "anchorX": 400,
+      "anchorY": 510,
+      "scale": 1
+    },
+    "frame_1_2": {
+      "x": 520,
+      "y": 260,
+      "w": 240,
+      "h": 250,
+      "anchorX": 640,
+      "anchorY": 510,
+      "scale": 1
+    },
+    "frame_1_3": {
+      "x": 760,
+      "y": 260,
+      "w": 240,
+      "h": 250,
+      "anchorX": 880,
+      "anchorY": 510,
+      "scale": 1
+    },
+    "frame_2_0": {
+      "x": 40,
+      "y": 510,
+      "w": 240,
+      "h": 250,
+      "anchorX": 160,
+      "anchorY": 760,
+      "scale": 1
+    },
+    "frame_2_1": {
+      "x": 280,
+      "y": 510,
+      "w": 240,
+      "h": 250,
+      "anchorX": 400,
+      "anchorY": 760,
+      "scale": 1
+    },
+    "frame_2_2": {
+      "x": 520,
+      "y": 510,
+      "w": 240,
+      "h": 250,
+      "anchorX": 640,
+      "anchorY": 760,
+      "scale": 1
+    },
+    "frame_2_3": {
+      "x": 760,
+      "y": 510,
+      "w": 240,
+      "h": 250,
+      "anchorX": 880,
+      "anchorY": 760,
+      "scale": 1
+    },
+    "frame_3_0": {
+      "x": 40,
+      "y": 760,
+      "w": 240,
+      "h": 250,
+      "anchorX": 160,
+      "anchorY": 1010,
+      "scale": 1
+    },
+    "frame_3_1": {
+      "x": 280,
+      "y": 760,
+      "w": 240,
+      "h": 250,
+      "anchorX": 400,
+      "anchorY": 1010,
+      "scale": 1
+    },
+    "frame_3_2": {
+      "x": 520,
+      "y": 760,
+      "w": 240,
+      "h": 250,
+      "anchorX": 640,
+      "anchorY": 1010,
+      "scale": 1
+    },
+    "frame_3_3": {
+      "x": 760,
+      "y": 760,
+      "w": 240,
+      "h": 250,
+      "anchorX": 880,
+      "anchorY": 1010,
+      "scale": 1
+    }
+  }
+}
