@@ -8,7 +8,8 @@
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.builder",
     "role": "build",
-    "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas."
+    "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas.",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.carrier",
@@ -19,7 +20,8 @@
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "carrier.basic",
     "sprite_carry": "assets/characters/carrier.png",
-    "role": "transport"
+    "role": "transport",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.fisher",
@@ -29,7 +31,8 @@
     "capacity": 1,
     "sprite": "assets/characters/fisherman.png",
     "aiProfile": "worker.fisher",
-    "role": "produce.fish"
+    "role": "produce.fish",
+    "atlasKey": "fisherman_atlas"
   },
   {
     "id": "u.forester",
@@ -40,7 +43,8 @@
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.forester",
     "role": "regrow.trees",
-    "notes": "Optional: pflanzt nach."
+    "notes": "Optional: pflanzt nach.",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.hunter",
@@ -51,7 +55,8 @@
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.hunter",
     "role": "produce.meat",
-    "notes": "Optional (wenn Nahrung über Jagd)."
+    "notes": "Optional (wenn Nahrung über Jagd).",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.lumberjack",
@@ -61,7 +66,8 @@
     "capacity": 1,
     "sprite": "assets/characters/woodcutter.png",
     "aiProfile": "worker.lumberjack",
-    "role": "produce.wood"
+    "role": "produce.wood",
+    "atlasKey": "woodcutter_atlas"
   },
   {
     "id": "u.scout",
@@ -72,7 +78,8 @@
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "npc.scout",
     "role": "explore",
-    "notes": "Optional: erkundet Karte / Fog-of-war später."
+    "notes": "Optional: erkundet Karte / Fog-of-war später.",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.stonecutter",
@@ -82,7 +89,8 @@
     "capacity": 1,
     "sprite": "assets/characters/stonecutter.png",
     "aiProfile": "worker.stonecutter",
-    "role": "produce.stone"
+    "role": "produce.stone",
+    "atlasKey": "stonecutter_atlas"
   },
   {
     "id": "u.villager",
@@ -93,7 +101,8 @@
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.villager",
     "role": "worker.pool",
-    "notes": "Freier Arbeiter; kann später Jobs übernehmen."
+    "notes": "Freier Arbeiter; kann später Jobs übernehmen.",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.baker",
@@ -103,7 +112,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.baker",
-    "role": "process.bread"
+    "role": "process.bread",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.charcoal_burner",
@@ -113,7 +123,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.charcoal",
-    "role": "process.charcoal"
+    "role": "process.charcoal",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.farmer",
@@ -123,7 +134,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.farmer",
-    "role": "produce.grain"
+    "role": "produce.grain",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.miller",
@@ -133,7 +145,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.miller",
-    "role": "process.flour"
+    "role": "process.flour",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.miner",
@@ -143,7 +156,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.miner",
-    "role": "produce.ore/coal"
+    "role": "produce.ore/coal",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.smelter",
@@ -153,7 +167,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.smelter",
-    "role": "process.metal"
+    "role": "process.metal",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.toolmaker",
@@ -163,7 +178,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.toolmaker",
-    "role": "process.tools"
+    "role": "process.tools",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.archer",
@@ -173,7 +189,8 @@
     "capacity": 0,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.archer",
-    "role": "ranged"
+    "role": "ranged",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.guard",
@@ -183,7 +200,8 @@
     "capacity": 0,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.guard",
-    "role": "defend"
+    "role": "defend",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.knight",
@@ -193,7 +211,8 @@
     "capacity": 0,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.knight",
-    "role": "elite"
+    "role": "elite",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.soldier",
@@ -203,7 +222,8 @@
     "capacity": 0,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.soldier",
-    "role": "attack/defend"
+    "role": "attack/defend",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.sailor",
@@ -213,7 +233,8 @@
     "capacity": 0,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "navy.sailor",
-    "role": "ship.crew"
+    "role": "ship.crew",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.trader",
@@ -223,7 +244,8 @@
     "capacity": 5,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "trade.trader",
-    "role": "trade"
+    "role": "trade",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.engineer",
@@ -233,7 +255,8 @@
     "capacity": 1,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "civic.engineer",
-    "role": "infrastructure"
+    "role": "infrastructure",
+    "atlasKey": "carrier_atlas"
   },
   {
     "id": "u.scholar",
@@ -243,6 +266,7 @@
     "capacity": 0,
     "sprite": "assets/characters/carrier.png",
     "aiProfile": "civic.scholar",
-    "role": "research"
+    "role": "research",
+    "atlasKey": "carrier_atlas"
   }
 ]
