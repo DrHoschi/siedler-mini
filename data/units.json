@@ -42,16 +42,16 @@
     "epoche": 1,
     "speed": 1.6,
     "capacity": 1,
-    "aiProfile": "worker.builder",
-    "sprite": "assets/characters/builder.png"
+    "sprite": "",
+    "aiProfile": "worker.builder"
   },
   {
     "id": "u.villager",
     "name": "Dorfbewohner",
     "epoche": 1,
     "speed": 1.6,
-    "capacity": 1,
-    "aiProfile": "worker.villager",
-    "sprite": "assets/characters/villager.png"
+    "capacity": 0,
+    "sprite": "",
+    "aiProfile": "villager.basic"
   }
 ]
