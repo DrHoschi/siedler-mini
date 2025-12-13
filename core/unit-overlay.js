@@ -56,6 +56,28 @@
   let lastH = 0;
   let running = false;
   let rafId   = 0;
+  // ---------------------------------------------------------------------------
+  // RENDER-OPTIONEN (Debug)
+  // ---------------------------------------------------------------------------
+  /**
+   * Wenn true, zeichnet das Overlay zusätzlich einen "Unit-Body" (Sprite-Fallback),
+   * damit man Units sofort visuell erkennt. (Bubbles bleiben darüber.)
+   *
+   * Hinweis:
+   *  - Wir versuchen zuerst einen echten Carrier-Sprite aus dem Asset-System zu zeichnen.
+   *  - Wenn das Asset-System nicht verfügbar ist (oder kein Bild gefunden wird),
+   *    zeichnen wir ein kleines Fallback-Symbol (Punkt).
+   */
+  let DRAW_BODIES = true;
+
+  /** Wenn true, blendet kleine Debug-Texte ein (unit id / type). */
+  let DEBUG_LABELS = false;
+
+  // Einmal-Log (damit Konsole nicht spammt)
+  let _BODY_LOG_ONCE = false;
+  let _BODY_MODE     = 'auto';
+
+
 
   // ---------------------------------------------------------------------------
   // HILFSFUNKTIONEN – DOM & GRÖSSE
@@ -257,6 +279,86 @@
 
     return { sx, sy, ts, zoom };
   }
+  // ---------------------------------------------------------------------------
+  // HILFSFUNKTIONEN – UNIT BODY (Sprite-Fallback)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Versucht, einen Carrier (oder generischen Unit-Body) als Sprite zu zeichnen.
+   * Wir testen mehrere mögliche Asset-APIs, damit es robust bleibt,
+   * selbst wenn sich dein Asset-System später weiterentwickelt.
+   *
+   * @returns {boolean} true wenn etwas gezeichnet wurde
+   */
+  function drawUnitBody(cx, cy, ts, zoom, u) {
+    // 1) Erst versuchen wir, das bestehende Asset-System zu nutzen.
+    //    (Wir wissen nicht 100% wie die API heißt – daher "try/catch" und mehrere Kandidaten.)
+    try {
+      const A =
+        window.Assets ||
+        window.Asset ||
+        window.CoreAssets ||
+        window.GameAssets ||
+        null;
+
+      // a) drawChar / drawUnit API (falls vorhanden)
+      if (A && typeof A.drawChar === 'function') {
+        try { A.drawChar(ctx, 'u.carrier', cx, cy); _BODY_MODE='drawChar:u.carrier'; if(!_BODY_LOG_ONCE){_BODY_LOG_ONCE=true; LOG('Unit-Body: nutzt Assets.drawChar(u.carrier)');} return true; } catch (_) {}
+        try { A.drawChar(ctx, 'carrier', cx, cy); _BODY_MODE='drawChar:carrier'; if(!_BODY_LOG_ONCE){_BODY_LOG_ONCE=true; LOG('Unit-Body: nutzt Assets.drawChar(carrier)');} return true; } catch (_) {}
+        try { A.drawChar({ ctx, id: 'u.carrier', x: cx, y: cy, dir: 'S', anim: 'idle', zoom }); _BODY_MODE='drawChar:obj'; if(!_BODY_LOG_ONCE){_BODY_LOG_ONCE=true; LOG('Unit-Body: nutzt Assets.drawChar({...})');} return true; } catch (_) {}
+      }
+      if (A && typeof A.drawUnit === 'function') {
+        try { A.drawUnit(ctx, 'u.carrier', cx, cy, { zoom }); return true; } catch (_) {}
+        try { A.drawUnit(ctx, 'carrier', cx, cy, { zoom }); return true; } catch (_) {}
+      }
+
+      // b) Direkter Image-Zugriff (falls eure Preloader-Map Images hält)
+      const img =
+        (A && (A.images?.['u.carrier'] || A.images?.carrier || A.img?.carrier)) ||
+        window.__ASSET_IMAGES__?.carrier ||
+        window.__ASSET_IMAGES__?.['u.carrier'] ||
+        null;
+
+      if (img && img.width && img.height) {
+        // Wir zeichnen es zentriert auf dem Tile.
+        const size = Math.max(8, ts * zoom * 0.90);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.translate(cx, cy);
+        ctx.drawImage(img, -size/2, -size/2, size, size);
+        _BODY_MODE='image'; if(!_BODY_LOG_ONCE){_BODY_LOG_ONCE=true; LOG('Unit-Body: nutzt direktes Image (carrier)');}
+        ctx.restore();
+        return true;
+      }
+    } catch (_) {
+      // Absichtlich still – wir fallen auf Debug-Fallback zurück.
+    }
+
+    // 2) Fallback: einfacher Punkt (damit NIE "unsichtbar")
+    drawUnitBodyFallback(cx, cy, ts, zoom, u);
+    return true;
+  }
+
+  function drawUnitBodyFallback(cx, cy, ts, zoom, u) {
+    if(!_BODY_LOG_ONCE){ _BODY_LOG_ONCE=true; _BODY_MODE='fallback-dot'; LOG('Unit-Body: Fallback-Punkt (kein Carrier-Sprite gefunden)'); }
+    const r = Math.max(2.2, (ts * zoom) * 0.12);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = Math.max(1, r * 0.35);
+    ctx.fill();
+    ctx.stroke();
+
+    if (DEBUG_LABELS) {
+      ctx.font = `${Math.max(10, 10*zoom)}px system-ui`;
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      ctx.fillText(String(u?.type || 'unit'), cx + r + 3, cy - r - 3);
+    }
+    ctx.restore();
+  }
+
 
   // ---------------------------------------------------------------------------
   // ZEICHEN-HILFEN
@@ -375,6 +477,13 @@
       const carryQty = getCarryQty(u);
       const jobQty   = getJobQty(u);
 
+
+      // --- Unit-Body (Sprite-Fallback) --------------------------------------
+      if (DRAW_BODIES) {
+        // Zeichne zuerst den Körper (damit die Bubbles oben drüber liegen)
+        drawUnitBody(cx, cy, ts, zoom, u);
+      }
+
       // Grundpositionen für die Bubbles
       const yCarry = cy - 18 * zoom;   // Trage-Bubble (Hauptebene)
       const yJob   = cy - 34 * zoom;   // Auftrags-Bubble etwas höher
@@ -431,7 +540,11 @@
   window.UnitOverlay = {
     start,
     stop,
-    isRunning: () => running
+    isRunning: () => running,
+
+    // Debug/Dev-Optionen (ohne Inspector-Kopplung – optional später verlinken)
+    setDrawBodies: (v) => { DRAW_BODIES = !!v; },
+    setDebugLabels: (v) => { DEBUG_LABELS = !!v; }
   };
 
   // Startet automatisch, sobald das Spiel losläuft
@@ -439,3 +552,4 @@
 
   LOG('geladen (overlay-carrier-res4, wartet auf cb:game:start)');
 })();
+
