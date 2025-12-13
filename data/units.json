@@ -38,6 +38,18 @@
     "defaultFrame": "frame_0_0"
   },
   {
+    "id": "u.fisherman",
+    "name": "Fischer (Alias)",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "sprite": "assets/characters/fisherman.png",
+    "aiProfile": "worker.fisher",
+    "role": "produce.fish",
+    "atlasKey": "fisherman_atlas",
+    "defaultFrame": "frame_0_0"
+  },
+  {
     "id": "u.forester",
     "name": "Förster",
     "epoche": 1,
@@ -101,6 +113,18 @@
     "defaultFrame": "frame_0_0"
   },
   {
+    "id": "u.stonemason",
+    "name": "Steinmetz (Alias)",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "sprite": "assets/characters/stonecutter.png",
+    "aiProfile": "worker.stonecutter",
+    "role": "produce.stone",
+    "atlasKey": "stonecutter_atlas",
+    "defaultFrame": "frame_0_0"
+  },
+  {
     "id": "u.villager",
     "name": "Dorfbewohner",
     "epoche": 1,
@@ -111,6 +135,18 @@
     "role": "worker.pool",
     "notes": "Freier Arbeiter; kann später Jobs übernehmen.",
     "atlasKey": "carrier_atlas",
+    "defaultFrame": "frame_0_0"
+  },
+  {
+    "id": "u.woodcutter",
+    "name": "Holzfäller (Alias)",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "sprite": "assets/characters/woodcutter.png",
+    "aiProfile": "worker.lumberjack",
+    "role": "produce.wood",
+    "atlasKey": "woodcutter_atlas",
     "defaultFrame": "frame_0_0"
   },
   {
