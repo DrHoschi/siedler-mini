@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.11-carrier-jobs-fix4
+ * Version : v25.12.13-units-spawn-registry-v1
  *
  * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
@@ -86,35 +86,132 @@
     return _hqPos ? { tx: _hqPos.tx, ty: _hqPos.ty } : null;
   }
 
-  function _spawnCarrierAt(tx, ty) {
+  
+  // -------------------------------------------------------------------------
+  // SPAWN
+  // -------------------------------------------------------------------------
+  // NOTE:
+  //  - Wir erweitern das System "vorsichtig": Carrier bleiben 100% kompatibel
+  //    (type === 'carrier' ist weiterhin die Bedingung für Job-Zuweisung).
+  //  - Weitere Units (builder/villager/worker) werden bereits als Daten-Typen
+  //    angelegt, bekommen aber noch keine komplexe AI hier drin.
+  //
+  // Datenquelle:
+  //  - Primär: Registry.getUnit('u.carrier') etc. (data/units.json)
+  //  - Fallback: Defaults in diesem Modul
+  // -------------------------------------------------------------------------
+
+  /** Standard-Startpaket beim Platzieren des HQ (kann per window.START_UNITS überschrieben werden) */
+  const DEFAULT_START_UNITS = Object.freeze({
+    'u.carrier': 2,
+    'u.builder': 1
+    // optional später:
+    // 'u.villager': 2
+  });
+
+  function _getUnitDef(unitId){
+    // Registry-API ist je nach Patchstand unterschiedlich – wir sind tolerant.
+    if (window.Registry){
+      if (typeof window.Registry.getUnit === 'function'){
+        return window.Registry.getUnit(unitId) || null;
+      }
+      // Fallback: einige Registry-Versionen haben Registry.get('units', id)
+      if (typeof window.Registry.get === 'function'){
+        return window.Registry.get('units', unitId) || null;
+      }
+      // Fallback: Map
+      if (window.Registry.units && window.Registry.units[unitId]){
+        return window.Registry.units[unitId];
+      }
+    }
+    return null;
+  }
+
+  function _typeFromUnitId(unitId){
+    // Carrier bleibt "carrier"
+    if (unitId === 'u.carrier') return 'carrier';
+    // Builder bekommt eigenen Typ (für spätere Baustellen-Logik)
+    if (unitId === 'u.builder') return 'builder';
+    // Rest erstmal als "worker" (später: role/job-System)
+    return 'worker';
+  }
+
+  function _spawnUnitAt(unitId, tx, ty){
+    const def = _getUnitDef(unitId);
+    const type = _typeFromUnitId(unitId);
+
     const unit = {
-      id   : _units.length + 1,
-      type : 'carrier',
-      x    : tx,
-      y    : ty,
-      task : null,
+      id      : _units.length + 1,
+      unitId  : unitId,      // z.B. 'u.carrier'
+      type    : type,        // z.B. 'carrier' | 'builder' | 'worker'
+      name    : def?.name || unitId,
+
+      // Position in Tile-Koordinaten (wie bisher)
+      x       : tx,
+      y       : ty,
+
+      // Carrier-Task (nur Carrier nutzt das aktiv, aber Feld bleibt für Debug)
+      task    : null,
+
+      // Carry-Info (Overlay / Debug)
       carrying   : null,
+      carryQty   : 0,
+
+      // Bewegungsparameter (werden später von Renderer/Runtime genutzt)
+      speed      : Number(def?.speed) || (type === 'carrier' ? 2.0 : 1.6),
+      capacity   : Number(def?.capacity) || 1,
+      aiProfile  : def?.aiProfile || (type === 'carrier' ? 'carrier.basic' : 'worker.generic'),
+
+      // interne Hilfsziele
       _idleTarget: null
     };
+
     _units.push(unit);
     return unit;
   }
 
-  function spawnInitialCarriers(count){
+  // Legacy-API (ältere Module rufen das noch auf)
+  function _spawnCarrierAt(tx, ty){
+    return _spawnUnitAt('u.carrier', tx, ty);
+  }
+
+  /**
+   * Spawnt eine beliebige Unit-Mischung am HQ.
+   *
+   * plan Beispiel:
+   *   { 'u.carrier': 2, 'u.builder': 1, 'u.villager': 2 }
+   *
+   * Falls eine Unit-ID nicht in data/units.json existiert, wird sie trotzdem
+   * als generischer Typ angelegt (damit Debug nicht „hart“ bricht).
+   */
+  function spawnInitialUnits(plan){
     if (!_hqPos){
-      WARN('spawnInitialCarriers ohne HQPos aufgerufen');
+      WARN('spawnInitialUnits ohne HQPos aufgerufen');
       return;
     }
-    count = count | 0;
-    if (count <= 0) return;
 
-    for (let i = 0; i < count; i++){
-      const jitterX = _rand(-0.3, 0.3);
-      const jitterY = _rand(-0.3, 0.3);
-      _spawnCarrierAt(_hqPos.tx + jitterX, _hqPos.ty + jitterY);
+    const p = plan && typeof plan === 'object' ? plan : DEFAULT_START_UNITS;
+
+    let total = 0;
+    for (const [unitId, rawCount] of Object.entries(p)){
+      const count = (rawCount | 0);
+      if (count <= 0) continue;
+
+      for (let i = 0; i < count; i++){
+        const jitterX = _rand(-0.3, 0.3);
+        const jitterY = _rand(-0.3, 0.3);
+        _spawnUnitAt(unitId, _hqPos.tx + jitterX, _hqPos.ty + jitterY);
+        total++;
+      }
     }
 
-    LOG('Start-Carrier gespawnt', { count, hq: _hqPos });
+    LOG('Start-Units gespawnt', { total, plan: p, hq: _hqPos });
+  }
+
+  // Legacy: bisherige Funktion bleibt, ruft aber intern spawnInitialUnits auf.
+  function spawnInitialCarriers(count){
+    const n = (count | 0);
+    spawnInitialUnits({ 'u.carrier': n });
   }
 
   function getUnits(){
@@ -349,7 +446,7 @@
     const ty = (d.y ?? d.ty ?? 0) + h / 2;
 
     setHQPos({ tx, ty });
-    spawnInitialCarriers(3);
+    spawnInitialUnits(window.START_UNITS || null);
   });
 
   // -------------------------------------------------------------------------
@@ -359,6 +456,7 @@
     setHQPos,
     getHQPos,
     spawnInitialCarriers,
+    spawnInitialUnits,
     getUnits,
     // Legacy-Alias (game.map.js / ältere Module nutzen GameUnits.list)
     list: _units,

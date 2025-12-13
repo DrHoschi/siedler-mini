@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-buildsprites+units2
+ * Version : v25.12.13-units-color-dots-v1
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -396,14 +396,27 @@ if (window.GameWorkArea) {
 }
     
     // ---------------------------------------------------------------------
-    // Einheiten-Fallback: Carrier als weiße Punkte
+    // Einheiten-Fallback: farbige Punkte nach Unit-Typ
     // ---------------------------------------------------------------------
     const units = getUnitsForDraw();
     if (units.length){
       ctx.save();
-      ctx.fillStyle   = 'rgba(255,255,255,0.95)';
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+
       for (const u of units){
+        // Typ-Kodierung (Carrier bleibt weiß, damit bestehendes Debug gleich wirkt)
+        const t = String(u.type || u.unitId || '').toLowerCase();
+
+        let fill = 'rgba(255,255,255,0.95)'; // carrier
+        if (t.includes('builder'))   fill = 'rgba(255,220,120,0.95)';
+        if (t.includes('villager'))  fill = 'rgba(180,255,180,0.95)';
+        if (t.includes('lumber'))    fill = 'rgba(200,255,200,0.95)';
+        if (t.includes('fisher'))    fill = 'rgba(160,220,255,0.95)';
+        if (t.includes('stone'))     fill = 'rgba(210,210,210,0.95)';
+        if (t === 'worker')          fill = 'rgba(180,255,180,0.95)';
+
+        ctx.fillStyle = fill;
+
         const ux = (u.x || 0) * ts + ts/2;
         const uy = (u.y || 0) * ts + ts/2;
         ctx.beginPath();
@@ -411,7 +424,10 @@ if (window.GameWorkArea) {
         ctx.fill();
         ctx.stroke();
       }
+
       ctx.restore();
+    }
+
     }
   }
 
