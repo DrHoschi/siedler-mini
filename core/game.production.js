@@ -377,26 +377,137 @@
 
   function _bindResRequests(){
     try{
+      // -------------------------------------------------------------------
+      // Hinweis zur Kompatibilität (wichtig!)
+      // -------------------------------------------------------------------
+      // Im Projekt sind (historisch) zwei Payload-Formate im Umlauf:
+      //
+      // A) "Single"-Format (klassisch):
+      //    req:res:add { res:'wood', delta:+20 }
+      //    req:res:set { res:'wood', value:200 }
+      //
+      // B) "Map"-Format (Inspector-Tab v25.12.12b):
+      //    req:res:add { wood:+20, stone:+20, ... }
+      //    req:res:set { wood:200, stone:50, ... }
+      //
+      // Der Inspector sendet bewusst Format B, damit man mehrere Ressourcen
+      // auf einmal schicken kann, ohne extra Felder (res/delta) zu brauchen.
+      // -------------------------------------------------------------------
+
+      const DEV_START_IDS = new Set(['wood','stone','food','gold','fish']);
+      const DEF_RESET_VAL = 20;
+
+      const emitSnap = (src='req:res:snapshot')=>{
+        // Snapshot ist primär für Inspector (JSON-Ausgabe).
+        // HUD reagiert auf cb:res:change (kommt aus addResource).
+        const store = getStore();
+        const copy = {};
+        for (const [k,v] of Object.entries(store||{})) copy[k] = Number(v||0);
+        try{ window.dispatchEvent(new CustomEvent('cb:res:snapshot', { detail:{ resources: copy, src } })); }catch{}
+        try{ document.dispatchEvent(new CustomEvent('cb:res:snapshot', { detail:{ resources: copy, src } })); }catch{}
+      };
+
+      const listDefinedIds = ()=>{
+        // Registry → definitions → ids
+        try{
+          const R = window.Registry ?? {};
+          if (typeof R.list === 'function'){
+            const list = R.list('resources');
+            if (Array.isArray(list)) return list.map(r=>r.id).filter(Boolean);
+          }
+        }catch(_){}
+        // Fallback: Keys aus aktuellem Store
+        try{
+          return Object.keys(getStore() || {});
+        }catch(_){}
+        return [];
+      };
+
+      const isObject = (x)=> !!x && typeof x === 'object' && !Array.isArray(x);
+
+      // -------------------- req:res:add --------------------
       addEventListener('req:res:add', (ev)=>{
         const d = ev?.detail || {};
-        const res = _normResId(d.res || d.id || d.key);
-        const delta = Number(d.delta ?? d.qty ?? d.amount ?? 0);
-        if (!res || !Number.isFinite(delta) || delta === 0) return;
-        addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:add');
+
+        // Format A (single)
+        if (d && (d.res || d.id || d.key)){
+          const res = _normResId(d.res || d.id || d.key);
+          const delta = Number(d.delta ?? d.qty ?? d.amount ?? 0);
+          if (!res || !Number.isFinite(delta) || delta === 0) return;
+          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:add');
+          return;
+        }
+
+        // Format B (map)
+        if (!isObject(d)) return;
+        for (const [k,v] of Object.entries(d)){
+          const delta = Number(v);
+          if (!Number.isFinite(delta) || delta === 0) continue;
+          const res = _normResId(k);
+          if (!res) continue;
+          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:add(map)');
+        }
       });
 
+      // -------------------- req:res:set --------------------
       addEventListener('req:res:set', (ev)=>{
         const d = ev?.detail || {};
-        const res = _normResId(d.res || d.id || d.key);
-        const value = Number(d.value);
-        if (!res || !Number.isFinite(value)) return;
-        const old = getResourceValue(res);
-        const delta = value - old;
-        if (!Number.isFinite(delta) || delta === 0) return;
-        addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:set');
+
+        // Format A (single)
+        if (d && (d.res || d.id || d.key)){
+          const res = _normResId(d.res || d.id || d.key);
+          const value = Number(d.value);
+          if (!res || !Number.isFinite(value)) return;
+          const old = getResourceValue(res);
+          const delta = value - old;
+          if (!Number.isFinite(delta) || delta === 0) return;
+          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:set');
+          return;
+        }
+
+        // Format B (map)
+        if (!isObject(d)) return;
+        for (const [k,v] of Object.entries(d)){
+          const value = Number(v);
+          if (!Number.isFinite(value)) continue;
+          const res = _normResId(k);
+          if (!res) continue;
+          const old = getResourceValue(res);
+          const delta = value - old;
+          if (!Number.isFinite(delta) || delta === 0) continue;
+          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:set(map)');
+        }
       });
+
+      // -------------------- req:res:snapshot --------------------
+      addEventListener('req:res:snapshot', (ev)=>{
+        const d = ev?.detail || {};
+        emitSnap(d.src || 'req:res:snapshot');
+      });
+
+      // -------------------- req:res:reset --------------------
+      // Setzt Basis-Ressourcen auf z.B. 20 und alle anderen auf 0.
+      // (So bist du beim Testen nicht blockiert, aber es bleibt "aufgeräumt".)
+      addEventListener('req:res:reset', (ev)=>{
+        const d = ev?.detail || {};
+        const base = Number.isFinite(Number(d.value)) ? Number(d.value) : DEF_RESET_VAL;
+
+        const ids = new Set([ ...listDefinedIds(), ...Array.from(DEV_START_IDS) ]);
+        for (const id of ids){
+          const res = _normResId(id);
+          if (!res) continue;
+          const target = DEV_START_IDS.has(res) ? base : 0;
+          const old = getResourceValue(res);
+          const delta = target - old;
+          if (!Number.isFinite(delta) || delta === 0) continue;
+          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:reset');
+        }
+
+        emitSnap(d.src || 'req:res:reset');
+      });
+
     }catch(e){
-      WARN('Konnte req:res:add/set nicht binden', e);
+      WARN('Konnte req:res:add/set/snapshot/reset nicht binden', e);
     }
   }
 
