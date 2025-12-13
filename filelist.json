@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-13T21:17:50.789Z",
+  "createdAt": "2025-12-13T22:02:18.939Z",
   "root": ".",
   "count": 519,
   "entries": [
@@ -243,7 +243,7 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/fisherman.PNG",
+      "path": "assets/characters/fisherman.png",
       "size": 2054262
     },
     {
@@ -253,7 +253,7 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/hunter.PNG",
+      "path": "assets/characters/hunter.png",
       "size": 1213953
     },
     {
@@ -278,7 +278,7 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/stonecutter.PNG",
+      "path": "assets/characters/stonecutter.png",
       "size": 1468681
     },
     {
@@ -1342,7 +1342,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 12261
+      "size": 14365
     },
     {
       "type": "file",
@@ -1432,7 +1432,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 17647
+      "size": 19843
     },
     {
       "type": "file",
@@ -1710,7 +1710,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 5789
+      "size": 6390
     },
     {
       "type": "dir",
@@ -2491,17 +2491,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1955
+      "size": 1887
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51526
+      "size": 51769
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20037
+      "size": 20156
     },
     {
       "type": "file",
