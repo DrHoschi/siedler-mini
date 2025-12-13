@@ -16,9 +16,9 @@
     "epoche": 1,
     "speed": 2.0,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "carrier.basic",
-    "sprite_carry": "assets/characters/porter_walk_carry.png",
+    "sprite_carry": "assets/characters/carrier.png",
     "role": "transport"
   },
   {
