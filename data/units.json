@@ -1,22 +1,25 @@
 [
   {
+    "id": "u.builder",
+    "name": "Bauarbeiter",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.builder",
+    "role": "build",
+    "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas."
+  },
+  {
     "id": "u.carrier",
     "name": "Träger",
     "epoche": 1,
     "speed": 2.0,
     "capacity": 1,
     "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "carrier.basic",
     "sprite_carry": "assets/characters/porter_walk_carry.png",
-    "aiProfile": "carrier.basic"
-  },
-  {
-    "id": "u.lumberjack",
-    "name": "Holzfäller",
-    "epoche": 1,
-    "speed": 1.6,
-    "capacity": 1,
-    "sprite": "assets/characters/woodcutter.png",
-    "aiProfile": "worker.lumberjack"
+    "role": "transport"
   },
   {
     "id": "u.fisher",
@@ -25,7 +28,51 @@
     "speed": 1.6,
     "capacity": 1,
     "sprite": "assets/characters/fisherman.png",
-    "aiProfile": "worker.fisher"
+    "aiProfile": "worker.fisher",
+    "role": "produce.fish"
+  },
+  {
+    "id": "u.forester",
+    "name": "Förster",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.forester",
+    "role": "regrow.trees",
+    "notes": "Optional: pflanzt nach."
+  },
+  {
+    "id": "u.hunter",
+    "name": "Jäger",
+    "epoche": 1,
+    "speed": 1.7,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.hunter",
+    "role": "produce.meat",
+    "notes": "Optional (wenn Nahrung über Jagd)."
+  },
+  {
+    "id": "u.lumberjack",
+    "name": "Holzfäller",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "sprite": "assets/characters/woodcutter.png",
+    "aiProfile": "worker.lumberjack",
+    "role": "produce.wood"
+  },
+  {
+    "id": "u.scout",
+    "name": "Späher",
+    "epoche": 1,
+    "speed": 2.2,
+    "capacity": 0,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "npc.scout",
+    "role": "explore",
+    "notes": "Optional: erkundet Karte / Fog-of-war später."
   },
   {
     "id": "u.stonecutter",
@@ -34,24 +81,168 @@
     "speed": 1.6,
     "capacity": 1,
     "sprite": "assets/characters/stonecutter.png",
-    "aiProfile": "worker.stonecutter"
-  },
-  {
-    "id": "u.builder",
-    "name": "Bauarbeiter",
-    "epoche": 1,
-    "speed": 1.6,
-    "capacity": 1,
-    "sprite": "",
-    "aiProfile": "worker.builder"
+    "aiProfile": "worker.stonecutter",
+    "role": "produce.stone"
   },
   {
     "id": "u.villager",
     "name": "Dorfbewohner",
     "epoche": 1,
     "speed": 1.6,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.villager",
+    "role": "worker.pool",
+    "notes": "Freier Arbeiter; kann später Jobs übernehmen."
+  },
+  {
+    "id": "u.baker",
+    "name": "Bäcker",
+    "epoche": 2,
+    "speed": 1.4,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.baker",
+    "role": "process.bread"
+  },
+  {
+    "id": "u.charcoal_burner",
+    "name": "Köhler",
+    "epoche": 2,
+    "speed": 1.4,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.charcoal",
+    "role": "process.charcoal"
+  },
+  {
+    "id": "u.farmer",
+    "name": "Bauer",
+    "epoche": 2,
+    "speed": 1.5,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.farmer",
+    "role": "produce.grain"
+  },
+  {
+    "id": "u.miller",
+    "name": "Müller",
+    "epoche": 2,
+    "speed": 1.4,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.miller",
+    "role": "process.flour"
+  },
+  {
+    "id": "u.miner",
+    "name": "Bergmann",
+    "epoche": 2,
+    "speed": 1.4,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.miner",
+    "role": "produce.ore/coal"
+  },
+  {
+    "id": "u.smelter",
+    "name": "Schmelzer",
+    "epoche": 2,
+    "speed": 1.3,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.smelter",
+    "role": "process.metal"
+  },
+  {
+    "id": "u.toolmaker",
+    "name": "Werkzeugmacher",
+    "epoche": 2,
+    "speed": 1.3,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "worker.toolmaker",
+    "role": "process.tools"
+  },
+  {
+    "id": "u.archer",
+    "name": "Bogenschütze",
+    "epoche": 3,
+    "speed": 1.7,
     "capacity": 0,
-    "sprite": "",
-    "aiProfile": "villager.basic"
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "military.archer",
+    "role": "ranged"
+  },
+  {
+    "id": "u.guard",
+    "name": "Wache",
+    "epoche": 3,
+    "speed": 1.6,
+    "capacity": 0,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "military.guard",
+    "role": "defend"
+  },
+  {
+    "id": "u.knight",
+    "name": "Ritter",
+    "epoche": 3,
+    "speed": 1.9,
+    "capacity": 0,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "military.knight",
+    "role": "elite"
+  },
+  {
+    "id": "u.soldier",
+    "name": "Soldat",
+    "epoche": 3,
+    "speed": 1.7,
+    "capacity": 0,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "military.soldier",
+    "role": "attack/defend"
+  },
+  {
+    "id": "u.sailor",
+    "name": "Seemann",
+    "epoche": 4,
+    "speed": 1.6,
+    "capacity": 0,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "navy.sailor",
+    "role": "ship.crew"
+  },
+  {
+    "id": "u.trader",
+    "name": "Händler",
+    "epoche": 4,
+    "speed": 1.6,
+    "capacity": 5,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "trade.trader",
+    "role": "trade"
+  },
+  {
+    "id": "u.engineer",
+    "name": "Ingenieur",
+    "epoche": 5,
+    "speed": 1.5,
+    "capacity": 1,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "civic.engineer",
+    "role": "infrastructure"
+  },
+  {
+    "id": "u.scholar",
+    "name": "Gelehrter",
+    "epoche": 5,
+    "speed": 1.4,
+    "capacity": 0,
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "aiProfile": "civic.scholar",
+    "role": "research"
   }
 ]
