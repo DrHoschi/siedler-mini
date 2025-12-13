@@ -138,7 +138,7 @@
   // ASSETS SINGLETON
   // =========================================================================
   const Assets = {
-    version: 'v25.12.13-atlas+char-support',
+    version: 'v25.12.13d-atlas+char-multiimg',
 
     // Einfache Image-Caches (z. B. building-icons)
     images: new Map(),
@@ -186,7 +186,7 @@
       const entry = {
         name,
         jsonUrl,
-        imageUrl: imageUrlOverride || null,
+        imageUrl: (Array.isArray(imageUrlOverride) ? (imageUrlOverride[0] || null) : (imageUrlOverride || null)),
         json: null,
         img: null,
         frames: null,
@@ -200,14 +200,43 @@
         entry.json = json;
 
         // Wichtig: meta.image kann bei dir abweichen → override gewinnt!
-        const imageUrl = imageUrlOverride
-          || json?.meta?.image
-          || (dirOf(jsonUrl) + `${name}.png`);
+// Zusätzlich unterstützen wir mehrere mögliche Image-Pfade (z.B. .png vs .PNG),
+// damit GitHub Pages (case-sensitiv) nicht alles lahmlegt.
+const overrideList = Array.isArray(imageUrlOverride)
+  ? imageUrlOverride.filter(Boolean)
+  : (imageUrlOverride ? [imageUrlOverride] : []);
 
-        entry.imageUrl = imageUrl;
+const metaImage = json?.meta?.image ? (dirOf(jsonUrl) + json.meta.image) : null;
 
-        const img = await loadImage(imageUrl);
-        entry.img = img;
+// Kandidaten-Reihenfolge:
+// 1) explizite Overrides (einzeln oder Liste)
+// 2) meta.image (relativ zum JSON-Ordner)
+// 3) Default: <jsonDir>/<name>.png
+const imageCandidates = [
+  ...overrideList,
+  metaImage,
+  (dirOf(jsonUrl) + `${name}.png`)
+].filter(Boolean);
+
+// Wir versuchen nacheinander zu laden (robust gegen Case-Probleme/alte Pfade).
+let img = null;
+let pickedUrl = null;
+for (const cand of imageCandidates){
+  try{
+    img = await loadImage(cand);
+    pickedUrl = cand;
+    break;
+  }catch(e){
+    // weiter probieren
+  }
+}
+
+if (!img) {
+  throw new Error(`Image load failed for atlas '${name}'. Tried: ${imageCandidates.join(', ')}`);
+}
+
+entry.imageUrl = pickedUrl;
+entry.img = img;
 
         const norm = normalizeFrames(json);
         entry.frames = norm.resolved;
@@ -331,6 +360,38 @@
         'carrier_atlas',
         'assets/characters/carrier_atlas.json',
         'assets/characters/carrier.png'
+      ));
+
+      // Characters / Units: weitere Worker (optional – laden nur wenn Dateien existieren)
+      // Hinweis: Viele deiner Dateien liegen im Repo teils als .PNG (groß) – wir geben daher Kandidatenlisten an.
+      tasks.push(this.loadAtlas(
+        'builder_atlas',
+        'assets/characters/builder_atlas.json',
+        ['assets/characters/builder.png','assets/characters/builder.PNG']
+      ));
+
+      tasks.push(this.loadAtlas(
+        'woodcutter_atlas',
+        'assets/characters/woodcutter_atlas.json',
+        ['assets/characters/woodcutter.png','assets/characters/woodcutter.PNG']
+      ));
+
+      tasks.push(this.loadAtlas(
+        'fisherman_atlas',
+        'assets/characters/fisherman_atlas.json',
+        ['assets/characters/fisherman.png','assets/characters/fisherman.PNG']
+      ));
+
+      tasks.push(this.loadAtlas(
+        'stonecutter_atlas',
+        'assets/characters/stonecutter_atlas.json',
+        ['assets/characters/stonecutter.png','assets/characters/stonecutter.PNG']
+      ));
+
+      tasks.push(this.loadAtlas(
+        'hunter_atlas',
+        'assets/characters/hunter_atlas.json',
+        ['assets/characters/hunter.png','assets/characters/hunter.PNG']
       ));
 
       await Promise.all(tasks);
