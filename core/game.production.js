@@ -377,139 +377,116 @@
 
   function _bindResRequests(){
     try{
-      // -------------------------------------------------------------------
-      // Hinweis zur Kompatibilität (wichtig!)
-      // -------------------------------------------------------------------
-      // Im Projekt sind (historisch) zwei Payload-Formate im Umlauf:
-      //
-      // A) "Single"-Format (klassisch):
-      //    req:res:add { res:'wood', delta:+20 }
-      //    req:res:set { res:'wood', value:200 }
-      //
-      // B) "Map"-Format (Inspector-Tab v25.12.12b):
-      //    req:res:add { wood:+20, stone:+20, ... }
-      //    req:res:set { wood:200, stone:50, ... }
-      //
-      // Der Inspector sendet bewusst Format B, damit man mehrere Ressourcen
-      // auf einmal schicken kann, ohne extra Felder (res/delta) zu brauchen.
-      // -------------------------------------------------------------------
-
-      const DEV_START_IDS = new Set(['wood','stone','food','gold','fish']);
-      const DEF_RESET_VAL = 20;
-
-      const emitSnap = (src='req:res:snapshot')=>{
-        // Snapshot ist primär für Inspector (JSON-Ausgabe).
-        // HUD reagiert auf cb:res:change (kommt aus addResource).
-        const store = getStore();
-        const copy = {};
-        for (const [k,v] of Object.entries(store||{})) copy[k] = Number(v||0);
-        try{ window.dispatchEvent(new CustomEvent('cb:res:snapshot', { detail:{ resources: copy, src } })); }catch{}
-        try{ document.dispatchEvent(new CustomEvent('cb:res:snapshot', { detail:{ resources: copy, src } })); }catch{}
-      };
-
-      const listDefinedIds = ()=>{
-        // Registry → definitions → ids
-        try{
-          const R = window.Registry ?? {};
-          if (typeof R.list === 'function'){
-            const list = R.list('resources');
-            if (Array.isArray(list)) return list.map(r=>r.id).filter(Boolean);
-          }
-        }catch(_){}
-        // Fallback: Keys aus aktuellem Store
-        try{
-          return Object.keys(getStore() || {});
-        }catch(_){}
-        return [];
-      };
-
-      const isObject = (x)=> !!x && typeof x === 'object' && !Array.isArray(x);
-
-      // -------------------- req:res:add --------------------
+      // ------------------------------------------------------------------
+      // req:res:add
+      //  - Single: {res:'wood', delta:20}  (compat)
+      //  - Map   : {wood:+20, stone:+20}  (Inspector-Tab nutzt dieses Format)
+      // ------------------------------------------------------------------
       addEventListener('req:res:add', (ev)=>{
         const d = ev?.detail || {};
+        const reason = d.reason || 'inspector';
+        const src    = d.src    || 'req:res:add';
 
-        // Format A (single)
-        if (d && (d.res || d.id || d.key)){
-          const res = _normResId(d.res || d.id || d.key);
-          const delta = Number(d.delta ?? d.qty ?? d.amount ?? 0);
-          if (!res || !Number.isFinite(delta) || delta === 0) return;
-          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:add');
+        // (1) Single-Format
+        const res1 = _normResId(d.res || d.id || d.key);
+        const delta1 = Number(d.delta ?? d.qty ?? d.amount);
+        if (res1 && Number.isFinite(delta1) && delta1 !== 0){
+          addResource(res1, delta1, reason, src);
           return;
         }
 
-        // Format B (map)
-        if (!isObject(d)) return;
-        for (const [k,v] of Object.entries(d)){
-          const delta = Number(v);
-          if (!Number.isFinite(delta) || delta === 0) continue;
+        // (2) Map-Format
+        let did = false;
+        for (const k of Object.keys(d)){
+          if (k === 'reason' || k === 'src') continue;
           const res = _normResId(k);
-          if (!res) continue;
-          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:add(map)');
+          const delta = Number(d[k]);
+          if (!res || !Number.isFinite(delta) || delta === 0) continue;
+          addResource(res, delta, reason, src);
+          did = true;
         }
+        if (!did) return;
       });
 
-      // -------------------- req:res:set --------------------
+      // ------------------------------------------------------------------
+      // req:res:set
+      //  - Single: {res:'wood', value:200}
+      //  - Map   : {wood:200, stone:50}
+      // ------------------------------------------------------------------
       addEventListener('req:res:set', (ev)=>{
         const d = ev?.detail || {};
+        const reason = d.reason || 'inspector';
+        const src    = d.src    || 'req:res:set';
 
-        // Format A (single)
-        if (d && (d.res || d.id || d.key)){
-          const res = _normResId(d.res || d.id || d.key);
-          const value = Number(d.value);
-          if (!res || !Number.isFinite(value)) return;
-          const old = getResourceValue(res);
-          const delta = value - old;
-          if (!Number.isFinite(delta) || delta === 0) return;
-          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:set');
+        const res1 = _normResId(d.res || d.id || d.key);
+        const value1 = Number(d.value);
+        if (res1 && Number.isFinite(value1)){
+          const old = getResourceValue(res1);
+          const delta = value1 - old;
+          if (Number.isFinite(delta) && delta !== 0){
+            addResource(res1, delta, reason, src);
+          }
           return;
         }
 
-        // Format B (map)
-        if (!isObject(d)) return;
-        for (const [k,v] of Object.entries(d)){
-          const value = Number(v);
-          if (!Number.isFinite(value)) continue;
+        let did = false;
+        for (const k of Object.keys(d)){
+          if (k === 'reason' || k === 'src') continue;
           const res = _normResId(k);
-          if (!res) continue;
+          const value = Number(d[k]);
+          if (!res || !Number.isFinite(value)) continue;
           const old = getResourceValue(res);
           const delta = value - old;
           if (!Number.isFinite(delta) || delta === 0) continue;
-          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:set(map)');
+          addResource(res, delta, reason, src);
+          did = true;
+        }
+        if (!did) return;
+      });
+
+      // ------------------------------------------------------------------
+      // req:res:snapshot  → cb:res:snapshot {resources}
+      // ------------------------------------------------------------------
+      addEventListener('req:res:snapshot', ()=>{
+        try{
+          const store = getStore();
+          // shallow clone, damit UI nicht versehentlich live mutiert
+          const snap = Object.assign({}, store);
+          window.dispatchEvent(new CustomEvent('cb:res:snapshot', { detail: { resources: snap }}));
+        }catch(e){
+          WARN('req:res:snapshot fehlgeschlagen', e);
         }
       });
 
-      // -------------------- req:res:snapshot --------------------
-      addEventListener('req:res:snapshot', (ev)=>{
-        const d = ev?.detail || {};
-        emitSnap(d.src || 'req:res:snapshot');
-      });
-
-      // -------------------- req:res:reset --------------------
-      // Setzt Basis-Ressourcen auf z.B. 20 und alle anderen auf 0.
-      // (So bist du beim Testen nicht blockiert, aber es bleibt "aufgeräumt".)
+      // ------------------------------------------------------------------
+      // req:res:reset  (detail:{value?:20})
+      // Setzt DEV-Startwerte auf value (Default 20), Rest 0.
+      // ------------------------------------------------------------------
       addEventListener('req:res:reset', (ev)=>{
-        const d = ev?.detail || {};
-        const base = Number.isFinite(Number(d.value)) ? Number(d.value) : DEF_RESET_VAL;
-
-        const ids = new Set([ ...listDefinedIds(), ...Array.from(DEV_START_IDS) ]);
-        for (const id of ids){
-          const res = _normResId(id);
-          if (!res) continue;
-          const target = DEV_START_IDS.has(res) ? base : 0;
-          const old = getResourceValue(res);
-          const delta = target - old;
-          if (!Number.isFinite(delta) || delta === 0) continue;
-          addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:reset');
+        try{
+          const d = ev?.detail || {};
+          const v = Number.isFinite(Number(d.value)) ? Number(d.value) : 20;
+          const store = getStore();
+          const ids = ['wood','stone','food','gold','fish'];
+          // Erst: alle bekannten Keys auf 0
+          Object.keys(store).forEach((k)=>{ store[k] = 0; });
+          // Dann: Dev-Keys setzen
+          ids.forEach((id)=>{ store[id] = v; });
+          // UI seed
+          ids.forEach((id)=>{
+            window.dispatchEvent(new CustomEvent('cb:res:change', { detail:{ res:id, value: store[id], reason:'reset', src:'req:res:reset' }}));
+          });
+          // Snapshot
+          window.dispatchEvent(new CustomEvent('cb:res:snapshot', { detail:{ resources: Object.assign({}, store) }}));
+        }catch(e){
+          WARN('req:res:reset fehlgeschlagen', e);
         }
-
-        emitSnap(d.src || 'req:res:reset');
       });
-
     }catch(e){
-      WARN('Konnte req:res:add/set/snapshot/reset nicht binden', e);
+      WARN('Konnte req:res:* nicht binden', e);
     }
   }
+
 
   _bindResRequests();
 
