@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/asset.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.12-atlas-support (MegaAtlas + drawAtlasFrame)
+ * Version : v25.12.13-builder-atlas-safe-preload
  *
  * Zweck   :
  *   Zentrale Asset-Schicht:
@@ -333,13 +333,13 @@
         'assets/characters/carrier.png'
       ));
 
-      const __results = await Promise.allSettled(tasks);
-      for (const r of __results){
-        if (r.status === 'rejected') {
-          this.state.errors.push(String(r.reason?.message || r.reason));
-          WARN('preload task rejected:', r.reason?.message || r.reason);
-        }
-      }
+tasks.push(this.loadAtlas(
+        'builder_atlas',
+        'assets/characters/builder_atlas.json',
+        'assets/characters/builder.png'
+      ));
+
+      await Promise.allSettled(tasks);
 
       this.state.ready = true;
 
