@@ -1,8 +1,7 @@
-
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-carrier-fallback
+ * Version : v25.12.13-units-sprites
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -13,64 +12,6 @@
   const TAG  = '[map]';
   const LOG  = (...a)=> (window.CBLog?.info ?? console.info)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
-
-
-  // -------------------------------------------------------------------------
-  // Carrier-Sprite (Fallback) – lazy geladen über core/asset.js (Atlas-System)
-  // -------------------------------------------------------------------------
-  const CARRIER_ATLAS_NAME = 'carrier';
-  const CARRIER_ATLAS_JSON = 'assets/characters/carrier.json';
-  const CARRIER_ATLAS_PNG  = 'assets/characters/carrier.png';
-
-  // Lazy-Load Status (damit wir render() nicht mit loadAtlas spammen)
-  let _carrierAtlasWanted  = false;
-  let _carrierAtlasPromise = null;
-  let _carrierFrameName    = null; // wird nach dem Laden gewählt
-
-  function ensureCarrierAtlasRequested(){
-    const Assets = window.Assets;
-    if (!Assets || typeof Assets.getAtlas !== 'function' || typeof Assets.loadAtlas !== 'function') return;
-
-    const a = Assets.getAtlas(CARRIER_ATLAS_NAME);
-    if (a && a.ok) {
-      // Frame-Auswahl nur einmal
-      if (!_carrierFrameName && typeof Assets.listFrames === 'function'){
-        const names = Assets.listFrames(CARRIER_ATLAS_NAME) || [];
-        // bevorzugt ein Idle-Frame, sonst einfach das erste
-        _carrierFrameName =
-          names.find(n => /idle/i.test(n)) ||
-          names.find(n => /stand/i.test(n)) ||
-          names[0] ||
-          null;
-      }
-      return;
-    }
-
-    if (_carrierAtlasWanted) return;
-    _carrierAtlasWanted = true;
-
-    try{
-      _carrierAtlasPromise = Assets.loadAtlas(CARRIER_ATLAS_NAME, CARRIER_ATLAS_JSON, CARRIER_ATLAS_PNG)
-        .then(()=>{
-          const a2 = Assets.getAtlas(CARRIER_ATLAS_NAME);
-          if (a2 && a2.ok && !_carrierFrameName && typeof Assets.listFrames === 'function'){
-            const names = Assets.listFrames(CARRIER_ATLAS_NAME) || [];
-            _carrierFrameName =
-              names.find(n => /idle/i.test(n)) ||
-              names.find(n => /stand/i.test(n)) ||
-              names[0] ||
-              null;
-          }
-          LOG('Carrier-Atlas geladen ✓', { atlas: CARRIER_ATLAS_NAME, frame: _carrierFrameName });
-        })
-        .catch((e)=>{
-          WARN('Carrier-Atlas konnte nicht geladen werden:', e?.message || e);
-        });
-    }catch(e){
-      WARN('Carrier-Atlas loadAtlas Fehler:', e?.message || e);
-    }
-  }
-
 
   // -------------------------------------------------------------------------
   // STATE
@@ -275,7 +216,50 @@
     return [];
   }
 
+  
   // -------------------------------------------------------------------------
+  // Units: Sprite-Mapping (Carrier) – nutzt Assets.drawAtlasFrame()
+  // -------------------------------------------------------------------------
+  const CARRIER_ATLAS = 'carrier_atlas';
+
+  // Preview-Layout: 9 Spalten pro Reihe (0..8):
+  //   [0..1]=N, [2..3]=E, [4]=Center, [5..6]=S, [7..8]=W
+  // Reihen:
+  //   0 = Idle (Front), 1 = Idle (Side), 2 = Walk (Front), 3 = Walk (Side), 4 = Handover (optional)
+  const CARRIER_SPRITES = {
+    idle: {
+      N: ['frame_0_0','frame_0_1'],
+      E: ['frame_1_2','frame_1_3'],
+      S: ['frame_0_5','frame_0_6'],
+      W: ['frame_1_7','frame_1_8']
+    },
+    walk: {
+      N: ['frame_2_0','frame_2_1'],
+      E: ['frame_3_2','frame_3_3'],
+      S: ['frame_2_5','frame_2_6'],
+      W: ['frame_3_7','frame_3_8']
+    }
+  };
+
+  let _unitsAnimLastT = 0;
+  function _unitsGetDt(){
+    const now = performance.now();
+    const dt = _unitsAnimLastT ? Math.min(0.05, (now - _unitsAnimLastT) / 1000) : 0;
+    _unitsAnimLastT = now;
+    return dt;
+  }
+
+  function _dir4FromDelta(dx, dy){
+    if (Math.abs(dx) > Math.abs(dy)) return (dx >= 0) ? 'E' : 'W';
+    return (dy >= 0) ? 'S' : 'N';
+  }
+
+  function _pickAnimFrame(arr, t, fps){
+    if (!arr || !arr.length) return null;
+    const i = Math.floor(t * fps) % arr.length;
+    return arr[i];
+  }
+// -------------------------------------------------------------------------
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
   function init(Game){
@@ -454,26 +438,76 @@ if (window.GameWorkArea) {
   }
 }
     
+    
     // ---------------------------------------------------------------------
-    // Einheiten: Fallback zeigt Carrier-Sprite (Atlas) – sonst Punkt
+    // Einheiten: erst Sprite versuchen, sonst Fallback-Punkte
     // ---------------------------------------------------------------------
     const units = getUnitsForDraw();
     if (units.length){
-      // Lazy request, damit beim ersten Render schnell ein Punkt kommt
-      ensureCarrierAtlasRequested();
-
       const Assets = window.Assets;
-      const canDrawCarrier =
-        !!Assets &&
-        typeof Assets.getAtlas === 'function' &&
-        typeof Assets.drawAtlasFrame === 'function' &&
-        (Assets.getAtlas(CARRIER_ATLAS_NAME)?.ok) &&
-        !!_carrierFrameName;
+      const atlasOk = !!(Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'
+                      && Assets.getAtlas(CARRIER_ATLAS)?.ok);
 
-      ctx.save();
+      // dt für einfache Animation (ohne kompletten Anim-Controller)
+      const dt = _unitsGetDt();
 
-      if (!canDrawCarrier){
-        // Fallback: Punkt (wie bisher)
+      if (atlasOk){
+        const a = Assets.getAtlas(CARRIER_ATLAS);
+        ctx.save();
+
+        for (const u of units){
+          // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
+          const tx = (u.x || 0);
+          const ty = (u.y || 0);
+
+          // Richtung schätzen: bei Task Richtung zur Zielposition, sonst letzte Richtung behalten
+          let dir = u._dir || 'S';
+          const target = u.task?.target || u.task?.dest || u.task?.source;
+          if (target && Number.isFinite(target.x) && Number.isFinite(target.y)){
+            dir = _dir4FromDelta((target.x - tx), (target.y - ty));
+            u._dir = dir;
+          }
+
+          // moving?
+          const moving = !!u.task && (Math.hypot((target?.x ?? tx) - tx, (target?.y ?? ty) - ty) > 0.01);
+
+          // anim time pro unit
+          u._animT = (u._animT || 0) + dt;
+          const fps = 6;
+
+          const set = moving ? CARRIER_SPRITES.walk : CARRIER_SPRITES.idle;
+          const frames = set[dir] || set.S;
+          const frameName = _pickAnimFrame(frames, u._animT, fps) || frames?.[0];
+
+          // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
+          const wx = tx * ts + ts/2;
+          const wy = ty * ts + ts - 2;
+
+          // Skalierung: wir targeten ca. 1.4 Tiles Höhe
+          let scale = 1;
+          const fr = a.frames?.[frameName];
+          if (fr && fr.h){
+            const desiredH = ts * 1.4;
+            scale = desiredH / fr.h;
+          }
+
+          // Zeichnen (Pivot-Align): Fußpunkt aus Atlas-Pivot
+          const ok = Assets.drawAtlasFrame(ctx, CARRIER_ATLAS, frameName, wx, wy, { scale, align:'pivot' });
+          if (!ok){
+            // Fallback: Punkt
+            ctx.fillStyle   = 'rgba(255,255,255,0.95)';
+            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.arc(wx, wy - ts/2, 6, 0, Math.PI*2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
+
+        ctx.restore();
+      } else {
+        // reiner Fallback: weiße Punkte
+        ctx.save();
         ctx.fillStyle   = 'rgba(255,255,255,0.95)';
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         for (const u of units){
@@ -484,35 +518,10 @@ if (window.GameWorkArea) {
           ctx.fill();
           ctx.stroke();
         }
-      } else {
-        // Sprite-Fallback: Carrier
-        for (const u of units){
-          const ux = (u.x || 0) * ts + ts/2;      // Fußpunkt X (Tile-Mitte)
-          const uy = (u.y || 0) * ts + ts * 0.95; // Fußpunkt Y (nahe Tile-Unterkante)
-
-          // grobe Skalierung: Carrier-Frames sind typ. 64px hoch → auf TileSize skalieren
-          const atlas = Assets.getAtlas(CARRIER_ATLAS_NAME);
-          const fr = atlas?.frames?.[_carrierFrameName];
-          const baseW = fr?.w || 64;
-          const scale = (baseW > 0) ? (ts / baseW) : 1;
-
-          // drawAtlasFrame benutzt Pivot/Anchor aus dem Atlas.
-          // worldX/worldY sind "Fußpunkt" – dadurch stehen Units schön auf dem Boden.
-          const ok = Assets.drawAtlasFrame(ctx, CARRIER_ATLAS_NAME, _carrierFrameName, ux, uy, { scale });
-          if (!ok){
-            // falls ein Frame mal fehlt → Punkt
-            ctx.fillStyle = 'rgba(255,255,255,0.95)';
-            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-            ctx.beginPath();
-            ctx.arc(ux, uy - ts*0.45, 6, 0, Math.PI*2);
-            ctx.fill();
-            ctx.stroke();
-          }
-        }
+        ctx.restore();
       }
-
-      ctx.restore();
     }
+
   }
 
   // -------------------------------------------------------------------------
@@ -521,4 +530,3 @@ if (window.GameWorkArea) {
   window.GameMap = { init, render, _state: Mod };
 
 })();
-

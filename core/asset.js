@@ -100,6 +100,31 @@
         if (info.anchor && typeof info.anchor.y === 'number') anchorY = info.anchor.y;
 
         if (typeof info.scale === 'number') scale = info.scale;
+        // ------------------------------------------------------------
+        // Zusätzliche Atlas-Formate (Exporter / Preview-Tool):
+        // 1) pivotX/pivotY direkt am Frame-Objekt (Pixel, lokal im Frame)
+        if (typeof info.pivotX === 'number') pivotX = info.pivotX;
+        if (typeof info.pivotY === 'number') pivotY = info.pivotY;
+
+        // 2) anchorX/anchorY als "globaler Pivot" in Sheet-Koordinaten.
+        //    Viele Preview-Exporter speichern den Fußpunkt absolut im Sheet
+        //    (z.B. anchorX = x + pivotX, anchorY = y + pivotY).
+        //    Wir erkennen das daran, dass anchorX/anchorY deutlich > 1 sind.
+        if (typeof info.anchorX === 'number' && typeof info.anchorY === 'number') {
+          const ax = info.anchorX;
+          const ay = info.anchorY;
+
+          if (ax > 1 || ay > 1) {
+            // Global → lokal: pivot = anchor - (frame top-left)
+            pivotX = ax - x;
+            pivotY = ay - y;
+          } else {
+            // Normalisiert (0..1) → Anchor-Align möglich
+            anchorX = ax;
+            anchorY = ay;
+          }
+        }
+
       }
 
       resolved[name] = { x,y,w,h,pivotX,pivotY,anchorX,anchorY,scale };
@@ -113,7 +138,7 @@
   // ASSETS SINGLETON
   // =========================================================================
   const Assets = {
-    version: 'v25.12.12-atlas-support',
+    version: 'v25.12.13-atlas+char-support',
 
     // Einfache Image-Caches (z. B. building-icons)
     images: new Map(),
@@ -296,6 +321,16 @@
         'fish_mega_atlas',
         'assets/resources/fish/fish_mega_atlas.json',
         'assets/resources/fish/fish_mega_atlas.png'
+      ));
+
+
+      // Characters / Units: Carrier (Träger)
+      // Hinweis: JSON kann meta.image="carrier.png" enthalten, deshalb geben wir
+      // imageUrl explizit mit an, damit es immer stimmt.
+      tasks.push(this.loadAtlas(
+        'carrier_atlas',
+        'assets/characters/carrier_atlas.json',
+        'assets/characters/carrier.png'
       ));
 
       await Promise.all(tasks);
