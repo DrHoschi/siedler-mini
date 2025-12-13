@@ -237,7 +237,7 @@
     if (t.phase === 'pickup'){
       t.pickupTimer -= dt;
       if (t.pickupTimer <= 0){
-        u.carrying = t.job?.res || 'res.wood';
+        u.carrying = String(t.job?.res || 'wood').replace(/^res\./,'');
         t.phase    = 'go_target';
       }
       return;

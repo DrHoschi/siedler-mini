@@ -39,6 +39,16 @@
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
   const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
 
+  // -------------------------------------------------------------------------
+  // DEV/TEST-DEFAULTS
+  // -------------------------------------------------------------------------
+  // Damit man beim Testen nicht sofort blockiert (Bauen/Produktion), geben wir
+  // Epoche-1-Basis-Ressourcen standardmäßig einen Startwert.
+  // Hinweis: Nur für FEHLENDE Einträge – vorhandene Werte werden nie überschrieben.
+  const DEV_START_DEFAULT = 20;
+  const DEV_START_IDS     = new Set(['wood','stone','food','gold','fish']);
+
+
   /* ========================= [HILFSFUNKTIONEN] ============================ */
 
   /**
@@ -73,7 +83,7 @@
     const missing = [];
     for (const id of ids) {
       if (store[id] == null) {
-        store[id] = 0;
+        store[id] = DEV_START_IDS.has(id) ? DEV_START_DEFAULT : 0;
         missing.push(id);
       }
     }
@@ -93,7 +103,9 @@
   function validateResourcesOnce(origin) {
     if (done) return;
     try {
-      const ids = getDefinedResourceIDs();
+      let ids = getDefinedResourceIDs();
+      // HUD-Fallback nutzt u.a. 'food' → sicherstellen, dass Keys existieren.
+      ids = Array.from(new Set([...(ids||[]), ...Array.from(DEV_START_IDS)]));
       if (!ids.length) {
         WARN('Keine Ressourcen-Definitionen gefunden (noch zu früh?) – Ursprung:', origin);
         return;

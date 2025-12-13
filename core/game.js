@@ -289,10 +289,65 @@
     // -----------------------------------------------------------------------
     const needs = (d.needs && typeof d.needs === 'object')
       ? { ...d.needs }
-      : { wood: 2, stone: 1 };   // Fallback, bis echte Kosten angebunden sind
+      : (() => {
+          // 1) Wenn keine needs mitgeliefert wurden: aus Registry-Kosten ableiten
+          try{
+            const def = window.Registry?.get?.('buildings', id);
+            const cost = def?.cost;
+            if (Array.isArray(cost) && cost.length){
+              const out = {};
+              cost.forEach(c=>{
+                const k = String(c?.id || '').trim();
+                const q = Number(c?.qty ?? c?.amount ?? 0) | 0;
+                if (k && q > 0) out[k] = (out[k]||0) + q;
+              });
+              if (Object.keys(out).length) return out;
+            }
+          }catch(e){}
+          // 2) Letzter Fallback
+          return { wood: 2, stone: 1 };
+        })();
 
     const delivered = {};
     Object.keys(needs).forEach(k => { delivered[k] = 0; });
+
+    // -----------------------------------------------------------------------
+    // Ressourcen-Check + „Reservierung“ (ein Store: Production/RegistryValues)
+    // -----------------------------------------------------------------------
+    try{
+      const Prod = window.Production;
+      if (Prod && typeof Prod.getResourceValue === 'function' && typeof Prod.addResource === 'function'){
+        const missing = {};
+        let ok = true;
+        Object.keys(needs).forEach((k)=>{
+          const need = (needs[k] | 0);
+          if (need <= 0) return;
+          const have = Number(Prod.getResourceValue(k) || 0);
+          if (have < need){
+            ok = false;
+            missing[k] = { need, have, missing: (need - have) };
+          }
+        });
+
+        if (!ok){
+          // Deny-Event (UI/Inspector kann das später hübsch anzeigen)
+          const detail = { buildingId:id, x, y, needs, missing, reason:'notenough' };
+          try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
+          try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
+          WARN('Nicht genug Ressourcen für Bau', detail);
+          return;
+        }
+
+        // Reservieren (= vom Bestand abziehen). Lieferungen erhöhen den Bestand NICHT,
+        // da wir aktuell kein zweites Lager-System wollen.
+        Object.keys(needs).forEach((k)=>{
+          const need = (needs[k] | 0);
+          if (need > 0) Prod.addResource(k, -need, 'build:reserve', id);
+        });
+      }
+    }catch(e){
+      WARN('Ressourcen-Reserve fehlgeschlagen', e);
+    }
 
     // Einfaches Building-Objekt – GameConstruction arbeitet direkt mit Game.buildings
     const building = {

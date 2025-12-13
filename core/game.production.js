@@ -358,6 +358,51 @@
   });
 
   // ==========================================================================
+  
+  // ==========================================================================
+  // DEV/INSPECTOR-REQUESTS (Ressourcen manipulieren)
+  // ==========================================================================
+  // Damit du im Inspector Ressourcen „dazubuchen“ kannst, ohne ein zweites
+  // Warenhaus-System zu brauchen, unterstützen wir zwei Requests:
+  //   - req:res:add { res, delta, reason?, src? }
+  //   - req:res:set { res, value, reason?, src? }
+  //
+  // Beide schreiben AUSSCHLIESSLICH in den selben Store (RegistryValues) über
+  // addResource(), sodass HUD/Inspector/Engine immer konsistent bleiben.
+
+  function _normResId(v){
+    const s = String(v || '').trim();
+    return s.replace(/^res\./,''); // toleriert alte Prefixe
+  }
+
+  function _bindResRequests(){
+    try{
+      addEventListener('req:res:add', (ev)=>{
+        const d = ev?.detail || {};
+        const res = _normResId(d.res || d.id || d.key);
+        const delta = Number(d.delta ?? d.qty ?? d.amount ?? 0);
+        if (!res || !Number.isFinite(delta) || delta === 0) return;
+        addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:add');
+      });
+
+      addEventListener('req:res:set', (ev)=>{
+        const d = ev?.detail || {};
+        const res = _normResId(d.res || d.id || d.key);
+        const value = Number(d.value);
+        if (!res || !Number.isFinite(value)) return;
+        const old = getResourceValue(res);
+        const delta = value - old;
+        if (!Number.isFinite(delta) || delta === 0) return;
+        addResource(res, delta, d.reason || 'inspector', d.src || 'req:res:set');
+      });
+    }catch(e){
+      WARN('Konnte req:res:add/set nicht binden', e);
+    }
+  }
+
+  _bindResRequests();
+
+
   // EXPORT
   // ==========================================================================
 
