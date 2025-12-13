@@ -35,5 +35,23 @@
     "capacity": 1,
     "sprite": "assets/characters/stonecutter.png",
     "aiProfile": "worker.stonecutter"
+  },
+  {
+    "id": "u.builder",
+    "name": "Bauarbeiter",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "aiProfile": "worker.builder",
+    "sprite": "assets/characters/builder.png"
+  },
+  {
+    "id": "u.villager",
+    "name": "Dorfbewohner",
+    "epoche": 1,
+    "speed": 1.6,
+    "capacity": 1,
+    "aiProfile": "worker.villager",
+    "sprite": "assets/characters/villager.png"
   }
 ]
