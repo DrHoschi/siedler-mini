@@ -5,7 +5,7 @@
     "epoche": 1,
     "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.builder",
     "role": "build",
     "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas."
@@ -37,7 +37,7 @@
     "epoche": 1,
     "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.forester",
     "role": "regrow.trees",
     "notes": "Optional: pflanzt nach."
@@ -48,7 +48,7 @@
     "epoche": 1,
     "speed": 1.7,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.hunter",
     "role": "produce.meat",
     "notes": "Optional (wenn Nahrung über Jagd)."
@@ -69,7 +69,7 @@
     "epoche": 1,
     "speed": 2.2,
     "capacity": 0,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "npc.scout",
     "role": "explore",
     "notes": "Optional: erkundet Karte / Fog-of-war später."
@@ -90,7 +90,7 @@
     "epoche": 1,
     "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.villager",
     "role": "worker.pool",
     "notes": "Freier Arbeiter; kann später Jobs übernehmen."
@@ -101,7 +101,7 @@
     "epoche": 2,
     "speed": 1.4,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.baker",
     "role": "process.bread"
   },
@@ -111,7 +111,7 @@
     "epoche": 2,
     "speed": 1.4,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.charcoal",
     "role": "process.charcoal"
   },
@@ -121,7 +121,7 @@
     "epoche": 2,
     "speed": 1.5,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.farmer",
     "role": "produce.grain"
   },
@@ -131,7 +131,7 @@
     "epoche": 2,
     "speed": 1.4,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.miller",
     "role": "process.flour"
   },
@@ -141,7 +141,7 @@
     "epoche": 2,
     "speed": 1.4,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.miner",
     "role": "produce.ore/coal"
   },
@@ -151,7 +151,7 @@
     "epoche": 2,
     "speed": 1.3,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.smelter",
     "role": "process.metal"
   },
@@ -161,7 +161,7 @@
     "epoche": 2,
     "speed": 1.3,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "worker.toolmaker",
     "role": "process.tools"
   },
@@ -171,7 +171,7 @@
     "epoche": 3,
     "speed": 1.7,
     "capacity": 0,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.archer",
     "role": "ranged"
   },
@@ -181,7 +181,7 @@
     "epoche": 3,
     "speed": 1.6,
     "capacity": 0,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.guard",
     "role": "defend"
   },
@@ -191,7 +191,7 @@
     "epoche": 3,
     "speed": 1.9,
     "capacity": 0,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.knight",
     "role": "elite"
   },
@@ -201,7 +201,7 @@
     "epoche": 3,
     "speed": 1.7,
     "capacity": 0,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "military.soldier",
     "role": "attack/defend"
   },
@@ -211,7 +211,7 @@
     "epoche": 4,
     "speed": 1.6,
     "capacity": 0,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "navy.sailor",
     "role": "ship.crew"
   },
@@ -221,7 +221,7 @@
     "epoche": 4,
     "speed": 1.6,
     "capacity": 5,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "trade.trader",
     "role": "trade"
   },
@@ -231,7 +231,7 @@
     "epoche": 5,
     "speed": 1.5,
     "capacity": 1,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "civic.engineer",
     "role": "infrastructure"
   },
@@ -241,7 +241,7 @@
     "epoche": 5,
     "speed": 1.4,
     "capacity": 0,
-    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite": "assets/characters/carrier.png",
     "aiProfile": "civic.scholar",
     "role": "research"
   }
