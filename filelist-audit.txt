@@ -1,12 +1,10 @@
 # Audit-Ergebnis
-Gesamt Dateien: 462
+Gesamt Dateien: 464
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
  - assets/characters/hunter.PNG
- - assets/characters/porter.PNG
  - assets/characters/stonecutter.PNG
- - assets/characters/woodcutter.PNG
  - assets/icons/icons_spritesheet_256.PNG
  - assets/items/items_master_sprite.PNG
  - assets/items/items.PNG

@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-13T14:34:16.259Z",
+  "createdAt": "2025-12-13T21:17:50.789Z",
   "root": ".",
-  "count": 517,
+  "count": 519,
   "entries": [
     {
       "type": "dir",
@@ -203,13 +203,28 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/carrier.json",
-      "size": 588
+      "path": "assets/characters/carrier_atlas.json",
+      "size": 8858
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/carrier_muster.json",
+      "size": 584
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/carrier_Muster.png",
+      "size": 144260
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/carrier-Test.json",
+      "size": 841
     },
     {
       "type": "file",
       "path": "assets/characters/carrier.png",
-      "size": 144260
+      "size": 1955268
     },
     {
       "type": "file",
@@ -253,16 +268,6 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/porter.json",
-      "size": 836
-    },
-    {
-      "type": "file",
-      "path": "assets/characters/porter.PNG",
-      "size": 1955268
-    },
-    {
-      "type": "file",
       "path": "assets/characters/Readme",
       "size": 105
     },
@@ -279,11 +284,11 @@
     {
       "type": "file",
       "path": "assets/characters/woodcutter.json",
-      "size": 745
+      "size": 763
     },
     {
       "type": "file",
-      "path": "assets/characters/woodcutter.PNG",
+      "path": "assets/characters/woodcutter.png",
       "size": 1449088
     },
     {
@@ -1337,7 +1342,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 10801
+      "size": 12261
     },
     {
       "type": "file",
@@ -1427,7 +1432,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 13845
+      "size": 17647
     },
     {
       "type": "file",
@@ -1472,7 +1477,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 10667
+      "size": 15581
     },
     {
       "type": "file",
@@ -1517,7 +1522,7 @@
     {
       "type": "file",
       "path": "core/map.resources.js",
-      "size": 13691
+      "size": 13693
     },
     {
       "type": "file",
@@ -1562,7 +1567,7 @@
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 6555
+      "size": 10274
     },
     {
       "type": "file",
@@ -1592,7 +1597,7 @@
     {
       "type": "file",
       "path": "core/unit-overlay.js",
-      "size": 13387
+      "size": 18218
     },
     {
       "type": "file",
@@ -1705,7 +1710,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 862
+      "size": 5789
     },
     {
       "type": "dir",
@@ -1867,6 +1872,11 @@
       "type": "file",
       "path": "inspector/tabs/inspector.tab.ui-v1.js",
       "size": 13186
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.units-v1.js",
+      "size": 7069
     },
     {
       "type": "dir",
@@ -2481,17 +2491,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1903
+      "size": 1955
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51337
+      "size": 51526
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19972
+      "size": 20037
     },
     {
       "type": "file",
@@ -2501,7 +2511,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16759
+      "size": 16843
     },
     {
       "type": "file",
