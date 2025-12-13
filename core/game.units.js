@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-units-spawn-registry-v1
+ * Version : v25.12.13-units-spawn-bridge1
  *
  * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
@@ -86,137 +86,166 @@
     return _hqPos ? { tx: _hqPos.tx, ty: _hqPos.ty } : null;
   }
 
-  
-  // -------------------------------------------------------------------------
-  // SPAWN
-  // -------------------------------------------------------------------------
-  // NOTE:
-  //  - Wir erweitern das System "vorsichtig": Carrier bleiben 100% kompatibel
-  //    (type === 'carrier' ist weiterhin die Bedingung für Job-Zuweisung).
-  //  - Weitere Units (builder/villager/worker) werden bereits als Daten-Typen
-  //    angelegt, bekommen aber noch keine komplexe AI hier drin.
-  //
-  // Datenquelle:
-  //  - Primär: Registry.getUnit('u.carrier') etc. (data/units.json)
-  //  - Fallback: Defaults in diesem Modul
-  // -------------------------------------------------------------------------
-
-  /** Standard-Startpaket beim Platzieren des HQ (kann per window.START_UNITS überschrieben werden) */
-  const DEFAULT_START_UNITS = Object.freeze({
-    'u.carrier': 2,
-    'u.builder': 1
-    // optional später:
-    // 'u.villager': 2
-  });
-
-  function _getUnitDef(unitId){
-    // Registry-API ist je nach Patchstand unterschiedlich – wir sind tolerant.
-    if (window.Registry){
-      if (typeof window.Registry.getUnit === 'function'){
-        return window.Registry.getUnit(unitId) || null;
-      }
-      // Fallback: einige Registry-Versionen haben Registry.get('units', id)
-      if (typeof window.Registry.get === 'function'){
-        return window.Registry.get('units', unitId) || null;
-      }
-      // Fallback: Map
-      if (window.Registry.units && window.Registry.units[unitId]){
-        return window.Registry.units[unitId];
-      }
-    }
-    return null;
-  }
-
-  function _typeFromUnitId(unitId){
-    // Carrier bleibt "carrier"
-    if (unitId === 'u.carrier') return 'carrier';
-    // Builder bekommt eigenen Typ (für spätere Baustellen-Logik)
-    if (unitId === 'u.builder') return 'builder';
-    // Rest erstmal als "worker" (später: role/job-System)
-    return 'worker';
-  }
-
-  function _spawnUnitAt(unitId, tx, ty){
-    const def = _getUnitDef(unitId);
-    const type = _typeFromUnitId(unitId);
-
+  function _spawnCarrierAt(tx, ty) {
     const unit = {
-      id      : _units.length + 1,
-      unitId  : unitId,      // z.B. 'u.carrier'
-      type    : type,        // z.B. 'carrier' | 'builder' | 'worker'
-      name    : def?.name || unitId,
-
-      // Position in Tile-Koordinaten (wie bisher)
-      x       : tx,
-      y       : ty,
-
-      // Carrier-Task (nur Carrier nutzt das aktiv, aber Feld bleibt für Debug)
-      task    : null,
-
-      // Carry-Info (Overlay / Debug)
+      id   : _units.length + 1,
+      type : 'carrier',
+      x    : tx,
+      y    : ty,
+      task : null,
       carrying   : null,
-      carryQty   : 0,
-
-      // Bewegungsparameter (werden später von Renderer/Runtime genutzt)
-      speed      : Number(def?.speed) || (type === 'carrier' ? 2.0 : 1.6),
-      capacity   : Number(def?.capacity) || 1,
-      aiProfile  : def?.aiProfile || (type === 'carrier' ? 'carrier.basic' : 'worker.generic'),
-
-      // interne Hilfsziele
       _idleTarget: null
     };
-
     _units.push(unit);
     return unit;
   }
 
-  // Legacy-API (ältere Module rufen das noch auf)
-  function _spawnCarrierAt(tx, ty){
-    return _spawnUnitAt('u.carrier', tx, ty);
-  }
+  
+  // -------------------------------------------------------------------------
+  // GENERIC SPAWN (Worker/Villager etc.)
+  // -------------------------------------------------------------------------
 
   /**
-   * Spawnt eine beliebige Unit-Mischung am HQ.
-   *
-   * plan Beispiel:
-   *   { 'u.carrier': 2, 'u.builder': 1, 'u.villager': 2 }
-   *
-   * Falls eine Unit-ID nicht in data/units.json existiert, wird sie trotzdem
-   * als generischer Typ angelegt (damit Debug nicht „hart“ bricht).
+   * Normalisiert Unit-IDs:
+   *  - akzeptiert 'u.carrier' oder 'carrier'
+   *  - akzeptiert auch 'u_builder' / 'u.builder' Varianten
    */
-  function spawnInitialUnits(plan){
-    if (!_hqPos){
-      WARN('spawnInitialUnits ohne HQPos aufgerufen');
-      return;
-    }
-
-    const p = plan && typeof plan === 'object' ? plan : DEFAULT_START_UNITS;
-
-    let total = 0;
-    for (const [unitId, rawCount] of Object.entries(p)){
-      const count = (rawCount | 0);
-      if (count <= 0) continue;
-
-      for (let i = 0; i < count; i++){
-        const jitterX = _rand(-0.3, 0.3);
-        const jitterY = _rand(-0.3, 0.3);
-        _spawnUnitAt(unitId, _hqPos.tx + jitterX, _hqPos.ty + jitterY);
-        total++;
-      }
-    }
-
-    LOG('Start-Units gespawnt', { total, plan: p, hq: _hqPos });
+  function _normUnitId(unitId){
+    if (!unitId) return '';
+    let s = String(unitId).trim();
+    // unify separators
+    s = s.replace(/\s+/g,'');
+    s = s.replace(/^unit[._]/i,'u.');
+    s = s.replace(/^u[._-]/i,'u.');
+    s = s.replace(/_/g,'.');
+    // if plain role like 'carrier' → map to 'u.carrier'
+    if (!s.includes('.')) s = 'u.' + s;
+    return s.toLowerCase();
   }
 
-  // Legacy: bisherige Funktion bleibt, ruft aber intern spawnInitialUnits auf.
-  function spawnInitialCarriers(count){
-    const n = (count | 0);
-    spawnInitialUnits({ 'u.carrier': n });
+  function _isCarrierId(unitId){
+    const id = _normUnitId(unitId);
+    return id === 'u.carrier' || id === 'u.porter' || id === 'u.träger' || id === 'u.traeger';
+  }
+
+  function _spawnUnitAt(unitId, tx, ty) {
+    // Carrier bleibt kompatibel zum bestehenden Job-System
+    if (_isCarrierId(unitId)) {
+      const u = _spawnCarrierAt(tx, ty);
+      u.kind = 'u.carrier'; // zusätzlich: Registry-ID
+      return u;
+    }
+
+    // Worker/Villager/Jobs später – aktuell nur als "Punkt" sichtbar
+    const kind = _normUnitId(unitId) || 'u.unknown';
+    const unit = {
+      id   : _units.length + 1,
+      type : 'worker',
+      kind : kind,          // <-- wichtig: Registry-ID ('u.lumberjack', ...)
+      x    : tx,
+      y    : ty,
+      task : null,
+      carrying   : null,
+      _idleTarget: null
+    };
+    _units.push(unit);
+    return unit;
+  }
+
+function spawnInitialCarriers(count){
+    if (!_hqPos){
+      WARN('spawnInitialCarriers ohne HQPos aufgerufen');
+      return;
+    }
+    count = count | 0;
+    if (count <= 0) return;
+
+    for (let i = 0; i < count; i++){
+      const jitterX = _rand(-0.3, 0.3);
+      const jitterY = _rand(-0.3, 0.3);
+      _spawnUnitAt('u.carrier', _hqPos.tx + jitterX, _hqPos.ty + jitterY);
+    }
+
+    LOG('Start-Carrier gespawnt', { count, hq: _hqPos });
+    _emitChanged('spawnInitialCarriers');
   }
 
   function getUnits(){
     return _units;
   }
+
+  /* -----------------------------------------------------------------------
+   * spawn(unitId, count, opts)
+   *  - unitId: Registry-ID (z.B. 'u.carrier', 'u.builder', ...)
+   *  - count : Anzahl (default 1)
+   *  - opts  : { at:'hq' | {tx,ty} | {x,y} }
+   *
+   * Events:
+   *  - Listener: req:units:spawn  detail:{ unitId|id, count?, at? }
+   *  - Listener: req:units:clear  detail:{}
+   *  - Listener: req:units:snapshot detail:{}
+   *  - Emitter : cb:units:changed  detail:{ reason, counts, total }
+   *  - Emitter : cb:units:snapshot detail:{ units:[...], counts, hq }
+   * -------------------------------------------------------------------- */
+
+  function _pickSpawnBase(at){
+    // 1) explizit übergeben?
+    if (at && typeof at === 'object') {
+      const tx = _coord(at, 'tx', _coord(at,'x', NaN));
+      const ty = _coord(at, 'ty', _coord(at,'y', NaN));
+      if (Number.isFinite(tx) && Number.isFinite(ty)) return { tx, ty };
+    }
+    // 2) HQ
+    if (_hqPos) return { tx: _hqPos.tx, ty: _hqPos.ty };
+    // 3) fallback
+    return { tx: 0, ty: 0 };
+  }
+
+  function _counts(){
+    const out = Object.create(null);
+    for (const u of _units){
+      const k = (u.kind || (u.type === 'carrier' ? 'u.carrier' : u.type) || 'unknown');
+      out[k] = (out[k] || 0) + 1;
+    }
+    return out;
+  }
+
+  function _emitChanged(reason){
+    const detail = { reason: reason || 'changed', counts: _counts(), total: _units.length };
+    try { window.dispatchEvent(new CustomEvent('cb:units:changed', { detail })); } catch {}
+    try { document.dispatchEvent(new CustomEvent('cb:units:changed', { detail })); } catch {}
+  }
+
+  function spawn(unitId, count, opts){
+    count = (count == null ? 1 : (count|0));
+    if (count <= 0) return [];
+
+    const at = opts?.at ?? opts ?? null;
+    const base = _pickSpawnBase(at);
+
+    const arr = [];
+    for (let i=0; i<count; i++){
+      const jitterX = _rand(-0.25, 0.25);
+      const jitterY = _rand(-0.25, 0.25);
+      arr.push(_spawnUnitAt(unitId, base.tx + jitterX, base.ty + jitterY));
+    }
+    _emitChanged('spawn:'+String(unitId||''));
+    return arr;
+  }
+
+  function clear(){
+    if (!_units.length) return;
+    _units.length = 0;
+    _emitChanged('clear');
+  }
+
+  function snapshot(){
+    const detail = { units: _units.slice(), counts: _counts(), hq: getHQPos() };
+    try { window.dispatchEvent(new CustomEvent('cb:units:snapshot', { detail })); } catch {}
+    try { document.dispatchEvent(new CustomEvent('cb:units:snapshot', { detail })); } catch {}
+    return detail;
+  }
+
 
   // -------------------------------------------------------------------------
   // JOB HANDLING
@@ -446,8 +475,29 @@
     const ty = (d.y ?? d.ty ?? 0) + h / 2;
 
     setHQPos({ tx, ty });
-    spawnInitialUnits(window.START_UNITS || null);
+    spawnInitialCarriers(3);
+    _emitChanged('hq:placed');
   });
+
+  // -------------------------------------------------------------------------
+  // Inspector / Debug Events (optional, aber super praktisch)
+  // -------------------------------------------------------------------------
+  window.addEventListener('req:units:spawn', (ev)=>{
+    const d = ev?.detail || {};
+    const unitId = d.unitId || d.id || d.kind || '';
+    const count  = (d.count == null ? 1 : (d.count|0));
+    const at     = d.at || d.pos || d.hq || null; // 'hq' oder {tx,ty}
+    spawn(unitId, count, { at });
+  });
+
+  window.addEventListener('req:units:clear', ()=>{
+    clear();
+  });
+
+  window.addEventListener('req:units:snapshot', ()=>{
+    snapshot();
+  });
+
 
   // -------------------------------------------------------------------------
   // EXPORT
@@ -456,8 +506,11 @@
     setHQPos,
     getHQPos,
     spawnInitialCarriers,
-    spawnInitialUnits,
     getUnits,
+    spawn,
+    clear,
+    snapshot,
+
     // Legacy-Alias (game.map.js / ältere Module nutzen GameUnits.list)
     list: _units,
     needsJob,
