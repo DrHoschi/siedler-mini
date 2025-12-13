@@ -333,11 +333,34 @@
         'assets/characters/carrier.png'
       ));
 
+// Characters / Units: Builder
 tasks.push(this.loadAtlas(
-        'builder_atlas',
-        'assets/characters/builder_atlas.json',
-        'assets/characters/builder.png'
-      ));
+  'builder_atlas',
+  'assets/characters/builder_atlas.json',
+  'assets/characters/builder.png'
+));
+
+// Characters / Units: Woodcutter
+tasks.push(this.loadAtlas(
+  'woodcutter_atlas',
+  'assets/characters/woodcutter_atlas.json',
+  'assets/characters/woodcutter.png'
+));
+
+// Characters / Units: Fisherman
+tasks.push(this.loadAtlas(
+  'fisherman_atlas',
+  'assets/characters/fisherman_atlas.json',
+  'assets/characters/fisherman.png'
+));
+
+// Characters / Units: Stonecutter
+tasks.push(this.loadAtlas(
+  'stonecutter_atlas',
+  'assets/characters/stonecutter_atlas.json',
+  'assets/characters/stonecutter.png'
+));
+      
 
       await Promise.allSettled(tasks);
 
