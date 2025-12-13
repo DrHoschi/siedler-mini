@@ -1,8 +1,8 @@
 {
   "meta": {
     "image": "carrier.png",
-    "size": { "w": 384, "h": 256 },
-    "frameSize": { "w": 64, "h": 64 }
+    "size": { "w": 1024, "h": 1024 },
+    "frameSize": { "w": 111, "h": 160 }
   },
   "animations": {
     "idle": {
