@@ -41,7 +41,157 @@
       "fisher",
       "u.fisherman",
       "fisherman"
-    ]
+    ],
+    "anims": {
+      "idle": {
+        "fps": 2,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      },
+      "walk": {
+        "fps": 6,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      },
+      "work": {
+        "fps": 4,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      },
+      "carry": {
+        "fps": 6,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      }
+    }
   },
   {
     "id": "u.forester",
@@ -98,7 +248,157 @@
       "stonemason",
       "u.stonecutter",
       "stonecutter"
-    ]
+    ],
+    "anims": {
+      "idle": {
+        "fps": 2,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      },
+      "walk": {
+        "fps": 6,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      },
+      "work": {
+        "fps": 4,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      },
+      "carry": {
+        "fps": 6,
+        "dirs": {
+          "E": [
+            "frame_0_0",
+            "frame_0_1"
+          ],
+          "SE": [
+            "frame_1_0",
+            "frame_1_1"
+          ],
+          "S": [
+            "frame_2_0",
+            "frame_2_1"
+          ],
+          "SW": [
+            "frame_3_0",
+            "frame_3_1"
+          ],
+          "W": [
+            "frame_4_0",
+            "frame_4_1"
+          ],
+          "NW": [
+            "frame_5_0",
+            "frame_5_1"
+          ],
+          "N": [
+            "frame_6_0",
+            "frame_6_1"
+          ],
+          "NE": [
+            "frame_7_0",
+            "frame_7_1"
+          ]
+        }
+      }
+    }
   },
   {
     "id": "u.villager",
