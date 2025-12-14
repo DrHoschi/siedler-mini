@@ -26,18 +26,6 @@
     "defaultFrame": "frame_0_0"
   },
   {
-    "id": "u.fisher",
-    "name": "Fischer",
-    "epoche": 1,
-    "speed": 1.6,
-    "capacity": 1,
-    "sprite": "assets/characters/fisherman.png",
-    "aiProfile": "worker.fisher",
-    "role": "produce.fish",
-    "atlasKey": "fisherman_atlas",
-    "defaultFrame": "frame_0_0"
-  },
-  {
     "id": "u.fisherman",
     "name": "Fischer (Alias)",
     "epoche": 1,
@@ -47,7 +35,13 @@
     "aiProfile": "worker.fisher",
     "role": "produce.fish",
     "atlasKey": "fisherman_atlas",
-    "defaultFrame": "frame_0_0"
+    "defaultFrame": "frame_0_0",
+    "aliases": [
+      "u.fisher",
+      "fisher",
+      "u.fisherman",
+      "fisherman"
+    ]
   },
   {
     "id": "u.forester",
@@ -76,18 +70,6 @@
     "defaultFrame": "frame_0_0"
   },
   {
-    "id": "u.lumberjack",
-    "name": "Holzfäller",
-    "epoche": 1,
-    "speed": 1.6,
-    "capacity": 1,
-    "sprite": "assets/characters/woodcutter.png",
-    "aiProfile": "worker.lumberjack",
-    "role": "produce.wood",
-    "atlasKey": "woodcutter_atlas",
-    "defaultFrame": "frame_0_0"
-  },
-  {
     "id": "u.scout",
     "name": "Späher",
     "epoche": 1,
@@ -110,19 +92,13 @@
     "aiProfile": "worker.stonecutter",
     "role": "produce.stone",
     "atlasKey": "stonecutter_atlas",
-    "defaultFrame": "frame_0_0"
-  },
-  {
-    "id": "u.stonemason",
-    "name": "Steinmetz (Alias)",
-    "epoche": 1,
-    "speed": 1.6,
-    "capacity": 1,
-    "sprite": "assets/characters/stonecutter.png",
-    "aiProfile": "worker.stonecutter",
-    "role": "produce.stone",
-    "atlasKey": "stonecutter_atlas",
-    "defaultFrame": "frame_0_0"
+    "defaultFrame": "frame_0_0",
+    "aliases": [
+      "u.stonemason",
+      "stonemason",
+      "u.stonecutter",
+      "stonecutter"
+    ]
   },
   {
     "id": "u.villager",
@@ -147,7 +123,13 @@
     "aiProfile": "worker.lumberjack",
     "role": "produce.wood",
     "atlasKey": "woodcutter_atlas",
-    "defaultFrame": "frame_0_0"
+    "defaultFrame": "frame_0_0",
+    "aliases": [
+      "u.lumberjack",
+      "lumberjack",
+      "u.woodcutter",
+      "woodcutter"
+    ]
   },
   {
     "id": "u.baker",
