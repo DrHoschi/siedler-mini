@@ -259,6 +259,30 @@
     const i = Math.floor(t * fps) % arr.length;
     return arr[i];
   }
+
+  // -------------------------------------------------------------------------
+  // Units: einfache, stabile Anim-Zeit (unabhängig von dt/Render-Frequenz)
+  // -------------------------------------------------------------------------
+  function _hash01(str){
+    // kleiner String-Hash → 0..1 (stabil)
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    // >>>0 → uint32
+    return (h >>> 0) / 4294967295;
+  }
+
+  function _unitAnimTime(u, kind, idx, tNow){
+    // Seed pro Unit nur einmal bestimmen (stabil)
+    if (u._animSeed == null){
+      const key = String(kind || 'u.unknown') + '#' + String(u.id || u.uid || idx || 0);
+      u._animSeed = _hash01(key) * 10; // 0..10s Offset
+    }
+    return tNow + u._animSeed;
+  }
+
 // -------------------------------------------------------------------------
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
@@ -451,7 +475,7 @@ if (window.GameWorkArea) {
       const carrierOk = hasAssets && !!Assets.getAtlas(CARRIER_ATLAS)?.ok;
 
       // dt für einfache Animation (ohne kompletten Anim-Controller)
-      const dt = _unitsGetDt();
+      const tNow = performance.now() / 1000; // Sekunden
 
       // Registry-Helper (Option B)
       const _getUnitDef = (kind)=>{
@@ -463,14 +487,23 @@ if (window.GameWorkArea) {
         return null;
       };
 
+      const _normalizeUnitId = (raw)=>{
+        if (!raw) return null;
+        let k = String(raw).toLowerCase().trim();
+        // häufige Varianten vereinheitlichen: u_builder → u.builder, builder → u.builder
+        k = k.replace(/_/g, '.');
+        if (!k.startsWith('u.')) k = 'u.' + k;
+        return k;
+      };
+
       const _getUnitKind = (u)=>{
         // Best effort – je nach Runtime können die Felder anders heißen
         const cand = [
           u?.kind, u?.type, u?.unitKind, u?.unitType, u?.defId, u?.template,
-          (typeof u?.id === 'string' && u.id.startsWith('u.')) ? u.id : null
+          (typeof u?.id === 'string' && (u.id.startsWith('u.') || u.id.startsWith('u_'))) ? u.id : null
         ];
         for (const k of cand){
-          if (typeof k === 'string' && k.length) return k;
+          if (typeof k === 'string' && k.length) return _normalizeUnitId(k);
         }
         return null;
       };
@@ -482,7 +515,9 @@ if (window.GameWorkArea) {
 
       ctx.save();
 
+      let __ui = 0;
       for (const u of units){
+        const ui = __ui++;
         // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
         const tx = (u.x || 0);
         const ty = (u.y || 0);
@@ -498,12 +533,12 @@ if (window.GameWorkArea) {
         // moving?
         const moving = !!u.task && (Math.hypot((target?.x ?? tx) - tx, (target?.y ?? ty) - ty) > 0.01);
 
-        // anim time pro unit
-        u._animT = (u._animT || 0) + dt;
-
         // Registry → AtlasKey (falls vorhanden)
         const kind = _getUnitKind(u);
         const def  = _getUnitDef(kind) || {};
+
+        // Anim-Zeit (stabil): benutzt performance.now(), mit Seed pro Unit
+        const animT = _unitAnimTime(u, kind, ui, tNow);
 
         // atlasKey kann direkt am Def stehen oder aus sprite.* kommen
         const desiredAtlasKey =
@@ -535,8 +570,8 @@ if (window.GameWorkArea) {
             const cycle = moving ? 'walk' : 'idle';
             const frames = CARRIER_SPRITES[cycle]?.[dir] || CARRIER_SPRITES[cycle]?.S;
             if (frames && frames.length){
-              const idx = Math.floor(u._animT * fps) % frames.length;
-              frameName = frames[idx];
+              const frameIdx = Math.floor(animT * fps) % frames.length;
+              frameName = frames[frameIdx];
             }
             // falls Mapping nicht passt: erstes Frame
             if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
@@ -581,7 +616,7 @@ if (window.GameWorkArea) {
               }
             }
 
-            frameName = _pickAnimFrame(frames, u._animT, fps);
+            frameName = _pickAnimFrame(frames, animT, fps);
 
             // Safety: wenn Frame nicht existiert → zurückfallen
             if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
