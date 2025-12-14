@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/asset.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-builder-atlas-safe-preload
+ * Version : v25.12.14-assets-status+inspector
  *
  * Zweck   :
  *   Zentrale Asset-Schicht:
@@ -24,6 +24,19 @@
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
   const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
+
+  // --------------------------------------------------------------------------
+  // Globaler Asset-Status (für Inspector/Debug)
+  // --------------------------------------------------------------------------
+  function ensureAssetStatus(){
+    // Wird vom Inspector-Tab "Assets" gelesen, um ok:true/false anzuzeigen.
+    // Struktur:
+    //   window.AssetStatus.atlas[atlasKey] = { ok, frames, jsonUrl, imageUrl, err? }
+    window.AssetStatus = window.AssetStatus || {};
+    window.AssetStatus.atlas = window.AssetStatus.atlas || {};
+    return window.AssetStatus;
+  }
+
 
   // =========================================================================
   // HELPERS
@@ -182,10 +195,15 @@
      * - imageUrl ist OPTIONAL:
      *   - wenn meta.image im JSON falsch ist, kannst du hier override setzen
      */
-    async loadAtlas(name, jsonUrl, imageUrlOverride){
+    async loadAtlas(name, jsonUrlOrList, imageUrlOverride){
+      // jsonUrlOrList kann string ODER Array sein (Candidate-Loading)
+      // Beispiel: [['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],'assets/characters/woodcutter.json']
+      const candidates = Array.isArray(jsonUrlOrList) ? jsonUrlOrList : [jsonUrlOrList];
+
       const entry = {
         name,
-        jsonUrl,
+        jsonUrl: candidates[0] || '',
+        jsonUrlTried: candidates.slice(),
         imageUrl: imageUrlOverride || null,
         json: null,
         img: null,
@@ -195,58 +213,79 @@
       };
       this.atlases.set(name, entry);
 
-      try{
-        // jsonUrl kann String ODER Array von Kandidaten sein (robust gegen Dateinamen-Varianten).
-        const jsonCandidates = Array.isArray(jsonUrl) ? jsonUrl : [jsonUrl];
-        let json = null;
-        let jsonUrlUsed = null;
-        let lastErr = null;
-        for (const u of jsonCandidates){
+      let lastErr = null;
+
+      // Wir probieren die Kandidaten nacheinander, bis einer klappt.
+      for (const jsonUrl of candidates){
+        if (!jsonUrl) continue;
+        entry.jsonUrl = jsonUrl;
+
+        try{
+          const json = await fetchJson(jsonUrl);
+          entry.json = json;
+
+          // Wichtig: meta.image kann abweichen → override gewinnt!
+          const imageUrl = imageUrlOverride
+            || json?.meta?.image
+            || (dirOf(jsonUrl) + `${name}.png`);
+
+          entry.imageUrl = imageUrl;
+
+          const img = await loadImage(imageUrl);
+          entry.img = img;
+
+          const norm = normalizeFrames(json);
+          entry.frames = norm.resolved;
+          entry.names  = norm.names;
+          entry.ok = true;
+
+          LOG('Atlas geladen:', name, {
+            jsonUrl: entry.jsonUrl,
+            imageUrl: entry.imageUrl,
+            frames: entry.names.length
+          });
+
+          // Inspector/Debug: Atlas-Ladezustand persistieren
           try{
-            json = await fetchJson(u);
-            jsonUrlUsed = u;
-            break;
-          }catch(e){
-            lastErr = e;
-          }
+            const st = ensureAssetStatus();
+            st.atlas[name] = {
+              ok: true,
+              frames: entry.names?.length || 0,
+              jsonUrl: entry.jsonUrl,
+              jsonTried: candidates.slice(),
+              imageUrl: entry.imageUrl,
+              err: ''
+            };
+          }catch(_e){}
+
+          return entry;
+        }catch(e){
+          lastErr = e;
+          // Nächsten Kandidaten versuchen (wichtig für "unkaputtbar" bei umbenannten Dateien)
         }
-        if (!json){
-          // wir lassen den Fehler nach außen laufen – wird oben im catch abgefangen
-          throw lastErr || new Error('Atlas JSON nicht gefunden: ' + String(jsonUrlCandidates?.[0] || jsonUrl));
-        }
-        entry.jsonUrl = jsonUrlUsed || jsonUrl;
-        entry.json = json;
-        entry.json = json;
-
-        // Wichtig: meta.image kann bei dir abweichen → override gewinnt!
-        const imageUrl = imageUrlOverride
-          || json?.meta?.image
-          || (dirOf((jsonUrlUsed || (Array.isArray(jsonUrl)? jsonUrl[0] : jsonUrl))) + `${name}.png`);
-
-        entry.imageUrl = imageUrl;
-
-        const img = await loadImage(imageUrl);
-        entry.img = img;
-
-        const norm = normalizeFrames(json);
-        entry.frames = norm.resolved;
-        entry.names  = norm.names;
-        entry.ok = true;
-
-        LOG('Atlas geladen:', name, {
-          jsonUrl: entry.jsonUrl,
-          imageUrl,
-          frames: entry.names.length
-        });
-
-        return entry;
-      }catch(e){
-        entry.ok = false;
-        this.state.errors.push(String(e?.message || e));
-        WARN('Atlas Fehler:', name, jsonUrl, e?.message || e);
-        return entry;
       }
-    },
+
+      // Alle Kandidaten sind fehlgeschlagen
+      entry.ok = false;
+      const msg = String(lastErr?.message || lastErr || 'unknown');
+      this.state.errors.push(msg);
+      WARN('Atlas Fehler:', name, candidates, msg);
+
+      // Inspector/Debug: Fehlerstatus persistieren (404/JSON/PNG)
+      try{
+        const st = ensureAssetStatus();
+        st.atlas[name] = {
+          ok: false,
+          frames: 0,
+          jsonUrl: entry.jsonUrl || (candidates[candidates.length-1] || ''),
+          jsonTried: candidates.slice(),
+          imageUrl: entry.imageUrl || imageUrlOverride || '',
+          err: msg
+        };
+      }catch(_e){}
+
+      return entry;
+    }},
 
     /**
      * Zeichnet einen Atlas-Frame im WORLD-Space.
@@ -348,35 +387,35 @@
       // imageUrl explizit mit an, damit es immer stimmt.
       tasks.push(this.loadAtlas(
         'carrier_atlas',
-        ['assets/characters/carrier_atlas.json', 'assets/characters/carrier.json'],
+        'assets/characters/carrier_atlas.json',
         'assets/characters/carrier.png'
       ));
 
 // Characters / Units: Builder
 tasks.push(this.loadAtlas(
   'builder_atlas',
-  ['assets/characters/builder_atlas.json', 'assets/characters/builder.json'],
+  'assets/characters/builder_atlas.json',
   'assets/characters/builder.png'
 ));
 
 // Characters / Units: Woodcutter
 tasks.push(this.loadAtlas(
   'woodcutter_atlas',
-  ['assets/characters/woodcutter_atlas.json', 'assets/characters/woodcutter.json'],
+  ['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],
   'assets/characters/woodcutter.png'
 ));
 
 // Characters / Units: Fisherman
 tasks.push(this.loadAtlas(
   'fisherman_atlas',
-  ['assets/characters/fisherman_atlas.json', 'assets/characters/fisherman.json'],
+  ['assets/characters/fisherman_atlas.json','assets/characters/fisherman.json'],
   'assets/characters/fisherman.png'
 ));
 
 // Characters / Units: Stonecutter
 tasks.push(this.loadAtlas(
   'stonecutter_atlas',
-  ['assets/characters/stonecutter_atlas.json', 'assets/characters/stonecutter.json'],
+  ['assets/characters/stonecutter_atlas.json','assets/characters/stonecutter.json'],
   'assets/characters/stonecutter.png'
 ));
       
