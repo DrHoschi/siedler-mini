@@ -267,10 +267,36 @@
       return;
     }
 
+    // Normalisiert Unit-IDs ähnlich wie GameUnits._normUnitId()
+    function _normUnitId(unitId){
+      if (!unitId) return '';
+      let s = String(unitId).trim();
+      // unify separators (u_builder -> u.builder)
+      s = s.replace(/_/g, '.');
+      // if plain role like 'carrier' → map to 'u.carrier'
+      if (!s.includes('.')) s = 'u.' + s;
+      return s.toLowerCase();
+    }
+
     for (const u of payload){
       if (!u || !u.id) continue;
-      state.unitsById[u.id] = u;
+
+      // 1) Canonical ID
+      state.unitsById[_normUnitId(u.id)] = u;
       state.unitsList.push(u);
+
+      // 2) Aliases (optional): erlauben z.B. u.lumberjack → u.woodcutter
+      //    Format in data/units.json:
+      //      "aliases": ["u.lumberjack", "lumberjack", ...]
+      const aliases = u.aliases || u.alias || u.ids || null;
+      if (Array.isArray(aliases)){
+        for (const a of aliases){
+          const key = _normUnitId(a);
+          if (!key) continue;
+          // Alias zeigt auf gleiche Definition (kein Kopieren!)
+          state.unitsById[key] = u;
+        }
+      }
     }
 
     // sortiert nach name, dann id (nur für UI/Inspector)

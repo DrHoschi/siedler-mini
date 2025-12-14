@@ -196,13 +196,32 @@
       this.atlases.set(name, entry);
 
       try{
-        const json = await fetchJson(jsonUrl);
+        // jsonUrl kann String ODER Array von Kandidaten sein (robust gegen Dateinamen-Varianten).
+        const jsonCandidates = Array.isArray(jsonUrl) ? jsonUrl : [jsonUrl];
+        let json = null;
+        let jsonUrlUsed = null;
+        let lastErr = null;
+        for (const u of jsonCandidates){
+          try{
+            json = await fetchJson(u);
+            jsonUrlUsed = u;
+            break;
+          }catch(e){
+            lastErr = e;
+          }
+        }
+        if (!json){
+          // wir lassen den Fehler nach außen laufen – wird oben im catch abgefangen
+          throw lastErr || new Error('Atlas JSON nicht gefunden: ' + String(jsonUrlCandidates?.[0] || jsonUrl));
+        }
+        entry.jsonUrl = jsonUrlUsed || jsonUrl;
+        entry.json = json;
         entry.json = json;
 
         // Wichtig: meta.image kann bei dir abweichen → override gewinnt!
         const imageUrl = imageUrlOverride
           || json?.meta?.image
-          || (dirOf(jsonUrl) + `${name}.png`);
+          || (dirOf((jsonUrlUsed || (Array.isArray(jsonUrl)? jsonUrl[0] : jsonUrl))) + `${name}.png`);
 
         entry.imageUrl = imageUrl;
 
@@ -215,7 +234,7 @@
         entry.ok = true;
 
         LOG('Atlas geladen:', name, {
-          jsonUrl,
+          jsonUrl: entry.jsonUrl,
           imageUrl,
           frames: entry.names.length
         });
@@ -329,35 +348,35 @@
       // imageUrl explizit mit an, damit es immer stimmt.
       tasks.push(this.loadAtlas(
         'carrier_atlas',
-        'assets/characters/carrier_atlas.json',
+        ['assets/characters/carrier_atlas.json', 'assets/characters/carrier.json'],
         'assets/characters/carrier.png'
       ));
 
 // Characters / Units: Builder
 tasks.push(this.loadAtlas(
   'builder_atlas',
-  'assets/characters/builder_atlas.json',
+  ['assets/characters/builder_atlas.json', 'assets/characters/builder.json'],
   'assets/characters/builder.png'
 ));
 
 // Characters / Units: Woodcutter
 tasks.push(this.loadAtlas(
   'woodcutter_atlas',
-  'assets/characters/woodcutter_atlas.json',
+  ['assets/characters/woodcutter_atlas.json', 'assets/characters/woodcutter.json'],
   'assets/characters/woodcutter.png'
 ));
 
 // Characters / Units: Fisherman
 tasks.push(this.loadAtlas(
   'fisherman_atlas',
-  'assets/characters/fisherman_atlas.json',
+  ['assets/characters/fisherman_atlas.json', 'assets/characters/fisherman.json'],
   'assets/characters/fisherman.png'
 ));
 
 // Characters / Units: Stonecutter
 tasks.push(this.loadAtlas(
   'stonecutter_atlas',
-  'assets/characters/stonecutter_atlas.json',
+  ['assets/characters/stonecutter_atlas.json', 'assets/characters/stonecutter.json'],
   'assets/characters/stonecutter.png'
 ));
       
