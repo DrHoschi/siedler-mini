@@ -24,7 +24,13 @@
   const DIR8_EN = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
 
   /** 8er-Richtungen (Deutsche Tokens) im Uhrzeigersinn, Start bei O */
-  const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
+  
+  /**
+   * EMPFEHLUNG: Nutze intern EN-Tokens (N,NE,E,SE,S,SW,W,NW).
+   * DE-Tokens (NO,SO,O) werden über DIR_ALIASES automatisch unterstützt,
+   * können aber bei externen Tools leichter zu Verwechslungen führen.
+   */
+const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
 
   /**
    * Richtungs-Aliase (DE <-> EN), damit alte und neue Atlanten funktionieren.
@@ -53,9 +59,10 @@
 
     /**
      * Wenn true: Richtung aus TILE-Delta in SCREEN-Delta umrechnen (Isometric).
-     * Das behebt sehr oft "läuft seitlich/rückwärts", wenn Sprites nach Bildschirmrichtung benannt sind.
+     * ACHTUNG: Nur aktivieren, wenn deine Bewegungs-Deltas (dx/dy) im TILE-Raum sind.
+     * In unserem aktuellen 2D-Grid-Setup mit isometrischen Bildern wollen wir SCREEN-Richtungen direkt nutzen -> false.
      */
-    isoProject: true,
+    isoProject: false,
 
     /**
      * Optionaler globaler Offset (in 45°-Schritten) auf die berechnete Richtung.
