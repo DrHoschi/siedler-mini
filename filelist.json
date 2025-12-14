@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-14T15:15:04.351Z",
+  "createdAt": "2025-12-14T22:06:45.686Z",
   "root": ".",
-  "count": 526,
+  "count": 528,
   "entries": [
     {
       "type": "dir",
@@ -299,17 +299,22 @@
     {
       "type": "file",
       "path": "assets/characters/woodcutter_atlas.json",
-      "size": 4757
+      "size": 11568
     },
     {
       "type": "file",
       "path": "assets/characters/woodcutter.json",
+      "size": 11568
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/woodcutter.old.json",
       "size": 763
     },
     {
       "type": "file",
       "path": "assets/characters/woodcutter.png",
-      "size": 1449088
+      "size": 423416
     },
     {
       "type": "dir",
@@ -1371,6 +1376,11 @@
     },
     {
       "type": "file",
+      "path": "core/building.stock.js",
+      "size": 10433
+    },
+    {
+      "type": "file",
       "path": "core/camera.js",
       "size": 14547
     },
@@ -1452,7 +1462,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 22311
+      "size": 25227
     },
     {
       "type": "file",
@@ -1467,12 +1477,12 @@
     {
       "type": "file",
       "path": "core/game.production.jobs.js",
-      "size": 12086
+      "size": 8559
     },
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 16750
+      "size": 19322
     },
     {
       "type": "file",
@@ -1522,7 +1532,7 @@
     {
       "type": "file",
       "path": "core/job.engine.js",
-      "size": 8500
+      "size": 8794
     },
     {
       "type": "file",
@@ -1622,7 +1632,7 @@
     {
       "type": "file",
       "path": "core/unit.anim.js",
-      "size": 8728
+      "size": 14254
     },
     {
       "type": "file",
@@ -1632,7 +1642,7 @@
     {
       "type": "file",
       "path": "core/worker.production.js",
-      "size": 10210
+      "size": 10341
     },
     {
       "type": "dir",
@@ -1740,7 +1750,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 7514
+      "size": 13205
     },
     {
       "type": "dir",
@@ -1856,7 +1866,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.build-v1.js",
-      "size": 6474
+      "size": 17102
     },
     {
       "type": "file",
@@ -2531,12 +2541,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52210
+      "size": 52511
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20349
+      "size": 20464
     },
     {
       "type": "file",
@@ -2546,7 +2556,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 17042
+      "size": 16892
     },
     {
       "type": "file",
