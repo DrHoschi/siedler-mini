@@ -218,4 +218,11 @@
     console.warn('[insp/assets] registerInspectorTab fehlt (Adapter nicht geladen?)');
   }
 
+  // ---------------------------------------------------------------------------
+// OPTIONAL: Globaler Debug-Hook (damit typeof window.InspectorAssetsTab === "object")
+// ---------------------------------------------------------------------------
+window.InspectorAssetsTab = window.InspectorAssetsTab || {};
+window.InspectorAssetsTab.getAtlasStatus = () => (window.AssetStatus?.atlas || {});
+window.InspectorAssetsTab.dump = () => Object.entries(window.AssetStatus?.atlas || {}).map(([k,v]) => ({ name:k, ...v }));
+  
 })();
