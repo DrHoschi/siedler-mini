@@ -1,43 +1,135 @@
 /* ============================================================================
  * Datei   : core/unit.anim.js
+ * Projekt : Neue Siedler – Epoche 1
  * Version : v25.12.14-unit-anim-v1
- * Zweck   : Zentrale Frame-Auswahl für Units (idle/walk/work/carry) + 8 dirs.
+ *
+ * Zweck:
+ *   Zentrale, datengetriebene Animations-/Frame-Auswahl für Units:
+ *     - actions: idle / walk / work / carry   (später erweiterbar)
+ *     - directions: 8 Richtungen (N,NE,E,SE,S,SW,W,NW) mit Fallback auf 4-dir
+ *
+ * Warum:
+ *   Wir wollen NICHT überall im Code hart Frames verdrahten, sondern genau EINEN
+ *   Ort haben, der aus (action, dir, time) -> frameName bestimmt.
+ *
+ * Erwartete Daten (optional) in data/units.json:
+ *   {
+ *     "id": "u.woodcutter",
+ *     "atlasKey": "woodcutter_atlas",
+ *     "defaultFrame": "frame_0_0",
+ *     "anims": {
+ *       "idle": { "fps": 2, "dirs": { "S":["frame_0_0","frame_0_1"] } },
+ *       "walk": { "fps": 6, "dirs": { "S":["frame_1_0","frame_1_1"] } },
+ *       "work": { "fps": 4, "dirs": { "S":["frame_2_0","frame_2_1"] } },
+ *       "carry":{ "fps": 6, "dirs": { "S":["frame_3_0","frame_3_1"] } }
+ *     }
+ *   }
+ *
+ * Fallbacks:
+ *   - Wenn eine Diagonale fehlt (NE/SE/SW/NW), wird auf E/W/N/S reduziert.
+ *   - Wenn anims fehlen, wird defaultFrame oder "frame_0_0" genutzt.
+ *
+ * Debug:
+ *   window.UnitAnim.getFrameForUnit(unit) -> { atlasKey, frame, action, dir }
  * ========================================================================== */
 (function(){
   'use strict';
 
-  const DIR8 = ['N','NE','E','SE','S','SW','W','NW'];
+  const TAG = '[unit.anim]';
+  const LOG = (...a)=> (window.CBLog?.ok ?? console.log)(TAG, ...a);
+  const WARN= (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
+  const DIR8 = ['E','SE','S','SW','W','NW','N','NE']; // Reihenfolge passend zu atan2° (0°=E, 90°=S)
+  const DIR4 = ['E','S','W','N'];
+
+  // -------------------------------------------------------------------------
+  // Helpers: Direction
+  // -------------------------------------------------------------------------
   function dir8FromDelta(dx, dy){
-    // dy+: nach unten = S
-    const a = Math.atan2(dy, dx); // -pi..pi
+    // Hinweis: dy+ bedeutet "nach unten" (Screen/Tile Koordinaten) => 90° = S
+    const a = Math.atan2(dy, dx);          // -pi..pi
     const deg = (a * 180 / Math.PI + 360) % 360;
     const idx = Math.round(deg / 45) % 8;
-    return DIR8[idx];
+    return DIR8[idx] || 'S';
   }
 
+  function dir4FromDir8(d){
+    if (d === 'NE' || d === 'SE') return 'E';
+    if (d === 'NW' || d === 'SW') return 'W';
+    if (d === 'N') return 'N';
+    if (d === 'S') return 'S';
+    // E/W
+    if (d === 'E' || d === 'W') return d;
+    return 'S';
+  }
+
+  // -------------------------------------------------------------------------
+  // Helpers: Frames
+  // -------------------------------------------------------------------------
   function pickFrame(frames, tSec, fps){
-    if (!frames || !frames.length) return null;
-    const i = Math.floor(tSec * (fps || 2)) % frames.length;
-    return frames[i];
+    if (!Array.isArray(frames) || frames.length === 0) return null;
+    const f = Math.max(0.1, Number(fps) || 2);
+    const i = Math.floor(tSec * f) % frames.length;
+    return frames[i] || null;
   }
 
   function bestDirFallback(dir, dirsMap){
-    if (!dirsMap) return null;
+    if (!dirsMap || typeof dirsMap !== 'object') return null;
     if (dirsMap[dir]) return dir;
 
-    // Diagonalen auf Cardinale runterbrechen
-    const fallbacks = {
-      NE:['E','N'], SE:['E','S'], SW:['W','S'], NW:['W','N'],
-      N:['N','W','E','S'], E:['E','N','S','W'], S:['S','E','W','N'], W:['W','N','S','E']
-    };
-    for (const d of (fallbacks[dir] || ['S','E','W','N'])){
-      if (dirsMap[d]) return d;
-    }
-    // irgendwas, was existiert:
-    return Object.keys(dirsMap)[0] || null;
+    // Diagonalen auf Cardinale reduzieren
+    const d4 = dir4FromDir8(dir);
+    if (dirsMap[d4]) return d4;
+
+    // Als letzte Rettung: irgendeine existierende Richtung
+    const keys = Object.keys(dirsMap);
+    return keys[0] || null;
   }
 
+
+  // -------------------------------------------------------------------------
+  // Auto-Fallback (ohne anims im units.json):
+  //   Viele Atlanten nutzen Namensschema "frame_<row>_<col>".
+  //   Wir picken bevorzugt row0 (idle) und row1 (walk), jeweils die ersten 2–4 Frames.
+  // -------------------------------------------------------------------------
+  function _numKeySort(a, b){
+    const pa = a.split('_').map(x=>parseInt(x,10)).filter(Number.isFinite);
+    const pb = b.split('_').map(x=>parseInt(x,10)).filter(Number.isFinite);
+    for (let i=0;i<Math.max(pa.length,pb.length);i++){
+      const da = pa[i] ?? 0;
+      const db = pb[i] ?? 0;
+      if (da !== db) return da - db;
+    }
+    return a.localeCompare(b);
+  }
+
+  function autoFramesForAction(atlasKey, action){
+    const A = window.Assets?.getAtlas?.(atlasKey);
+    const keys = Object.keys(A?.frames || {});
+    if (!keys.length) return null;
+
+    // bevorzugte Reihen je nach Action
+    const preferRow = (action === 'walk' || action === 'carry') ? 1 : 0;
+
+    const row = keys
+      .filter(k => k.startsWith('frame_' + preferRow + '_'))
+      .sort(_numKeySort);
+
+    if (row.length >= 2) return row.slice(0, Math.min(4, row.length));
+
+    // fallback: row0
+    const row0 = keys
+      .filter(k => k.startsWith('frame_0_'))
+      .sort(_numKeySort);
+
+    if (row0.length >= 2) return row0.slice(0, Math.min(4, row0.length));
+
+    // last resort: erste Frames overall
+    return keys.sort(_numKeySort).slice(0, Math.min(4, keys.length));
+  }
+  // -------------------------------------------------------------------------
+  // Helpers: Registry / Unit-Def
+  // -------------------------------------------------------------------------
   function normUnitId(k){
     k = String(k || '').trim();
     if (!k) return '';
@@ -46,58 +138,104 @@
   }
 
   function getUnitDef(u){
-    const raw = u?.kind || u?.type || u?.id;
-    const id = normUnitId(raw);
-    return window.Registry?.getUnit?.(id) || window.Registry?.units?.[id] || null;
+    const raw = u?.kind || u?.type || u?.id || u?.unitKind || u?.unitType;
+    const id  = normUnitId(raw);
+    const R   = window.Registry;
+    if (!R || !id) return null;
+
+    // Registry kann getUnit(...) haben oder ein plain units-Objekt sein
+    if (typeof R.getUnit === 'function') return R.getUnit(id);
+    if (typeof R.get === 'function') return R.get('units', id);
+    if (R.units && R.units[id]) return R.units[id];
+    return null;
   }
 
+  // -------------------------------------------------------------------------
+  // Action Heuristik (kann von WorkArea/Jobs überschrieben werden)
+  // -------------------------------------------------------------------------
   function getAction(u){
-    // WorkArea/Worker setzt das:
-    if (u?.__animState) return String(u.__animState);
-    // einfache Heuristik:
-    if (u?.task && u.task.type) {
-      if (u.task.type === 'carry' || u.task.type === 'deliver') return 'walk';
-      if (u.task.type === 'work') return 'work';
-    }
+    // Explizit (WorkArea/Worker-Loop setzt z.B. "work")
+    if (u && typeof u.__animState === 'string' && u.__animState.length) return u.__animState;
+
+    // Task-Heuristik (best effort)
+    const t = u?.task?.type || u?.task?.kind || u?.task?.action || '';
+    if (t === 'work') return 'work';
+    if (t === 'carry' || t === 'deliver' || t === 'pickup') return 'walk';
+
+    // Velocity -> walk
+    const vx = Number(u?.vx || 0);
+    const vy = Number(u?.vy || 0);
+    if (Math.abs(vx) + Math.abs(vy) > 1e-4) return 'walk';
+
     return 'idle';
   }
 
   function getDir(u){
-    // Wenn wir vx/vy haben: perfekt.
+    // vx/vy ist der beste Weg zu 8-dir
     const vx = Number(u?.vx || 0);
     const vy = Number(u?.vy || 0);
     if (Math.abs(vx) + Math.abs(vy) > 1e-4) return dir8FromDelta(vx, vy);
 
-    // sonst: lastDir behalten (stabil)
+    // sonst: lastDir
     return u?.__lastDir || 'S';
   }
 
+  // -------------------------------------------------------------------------
+  // Public: Frame für Unit bestimmen
+  // -------------------------------------------------------------------------
   function getFrameForUnit(u, nowMs){
     const def = getUnitDef(u);
     if (!def) return null;
 
-    const atlasKey = def.atlasKey;
+    const atlasKey = def.atlasKey || def.spriteAtlasKey || def.sprite?.atlasKey || def.sprite?.atlas || null;
     const anims = def.anims || {};
     const action = getAction(u);
     const dir = getDir(u);
 
-    const a = anims[action] || anims.idle;
-    if (!a) return { atlasKey, frame: def.defaultFrame || 'frame_0_0' };
-
-    const useDir = bestDirFallback(dir, a.dirs);
-    const frames = useDir ? a.dirs[useDir] : null;
-
-    // Seed, damit nicht alle synchron zappeln
+    // anim wählen: action -> fallback idle
+    const a = anims[action] || anims.idle || null;
+    // Zeit (sek) + Seed (damit nicht alle synchron zappeln)
     const seed = (Number(u?.id || 0) * 0.1337) % 10;
-    const t = ((nowMs || performance.now()) / 1000) + seed;
+    const t = (((nowMs ?? (performance.now?.() ?? Date.now())) / 1000) + seed);
 
-    const frame = pickFrame(frames, t, a.fps || 2) || def.defaultFrame || 'frame_0_0';
+    let frame = null;
+    let usedDir = dir;
 
-    // lastDir merken
-    u.__lastDir = useDir || dir || 'S';
+    if (a && a.dirs){
+      // Datengetrieben (anims in units.json)
+      usedDir = bestDirFallback(dir, a.dirs) || dir;
+      const frames = a.dirs[usedDir] || null;
+      frame = pickFrame(frames, t, a.fps || 2);
+    } else {
+      // Auto-Fallback (ohne anims): versuche sinnvolle Frames aus dem Atlas zu ziehen
+      const auto = autoFramesForAction(atlasKey, action);
+      if (auto && auto.length){
+        // Ohne definierte dirs setzen wir usedDir stabil auf S
+        usedDir = 'S';
+        const fps = (action === 'walk' || action === 'carry') ? 6 : 2;
+        frame = pickFrame(auto, t, fps);
+      }
+    }
+
+    if (!frame){
+      frame = def.defaultFrame || def.sprite?.defaultFrame || 'frame_0_0';
+    }
+
+    // lastDir merken (stabil für idle)
+    u.__lastDir = usedDir || dir || 'S';
 
     return { atlasKey, frame, action, dir: u.__lastDir };
   }
 
-  window.UnitAnim = { getFrameForUnit, normUnitId, dir8FromDelta };
+  // -------------------------------------------------------------------------
+  // EXPORT
+  // -------------------------------------------------------------------------
+  window.UnitAnim = {
+    getFrameForUnit,
+    normUnitId,
+    dir8FromDelta,
+    dir4FromDir8
+  };
+
+  LOG('geladen v25.12.14-unit-anim-v1');
 })();
