@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-units-spawn-bridge1
+ * Version : v25.12.14-units-workers-spawnloop1
  *
  * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
@@ -99,44 +99,6 @@
     _units.push(unit);
     return unit;
   }
-// -------------------------------------------------------------------------
-// SPAWN-META (Home/Building/Role) — damit Worker "wissen", wohin sie gehören
-// -------------------------------------------------------------------------
-function _applySpawnMeta(u, opts){
-  // opts kann sein:
-  //  - { at:{tx,ty}, homeUid:'b.lumberjack-..', homeKind:'b.lumberjack', role:'woodcutter' }
-  //  - oder "flach" / alternative Keys (weil wir im Projekt viele Varianten hatten)
-  if (!u || !opts || typeof opts !== 'object') return;
-
-  // 1) Home/Building UID (wichtig für WorkArea-Zuordnung)
-  const homeUid =
-    opts.homeUid || opts.homeBuildingUid || opts.buildingUid || opts.bUid ||
-    opts.home?.uid || opts.home?.buildingUid || opts.building?.uid || null;
-
-  if (homeUid){
-    u.homeUid = homeUid;
-    u.homeBuildingUid = homeUid; // Alias (damit ältere Stellen auch funktionieren)
-  }
-
-  // 2) Home-Position (falls du explizit einen Spawn am Entrance willst)
-  const hx = opts.homeX ?? opts.homeTx ?? opts.home?.x ?? opts.home?.tx;
-  const hy = opts.homeY ?? opts.homeTy ?? opts.home?.y ?? opts.home?.ty;
-  if (Number.isFinite(hx) && Number.isFinite(hy)){
-    u._homePos = { x: +hx, y: +hy };
-  }
-
-  // 3) Home-Kind (b.lumberjack / b.fisher etc.)
-  const homeKind = opts.homeKind || opts.buildingKind || opts.bKind || opts.home?.kind || opts.building?.kind || null;
-  if (homeKind) u.homeKind = String(homeKind);
-
-  // 4) Role (woodcutter/stonemason/fisherman/builder etc.)
-  const role = opts.role || opts.unitRole || opts.job || null;
-  if (role) u.role = String(role);
-
-  // 5) Flags
-  if (opts.noWander === true) u.noWander = true;
-}
-
 
   
   // -------------------------------------------------------------------------
@@ -265,9 +227,7 @@ function spawnInitialCarriers(count){
     for (let i=0; i<count; i++){
       const jitterX = _rand(-0.25, 0.25);
       const jitterY = _rand(-0.25, 0.25);
-      const u = _spawnUnitAt(unitId, base.tx + jitterX, base.ty + jitterY);
-      _applySpawnMeta(u, opts);
-      arr.push(u);
+      arr.push(_spawnUnitAt(unitId, base.tx + jitterX, base.ty + jitterY));
     }
     _emitChanged('spawn:'+String(unitId||''));
     return arr;
@@ -475,154 +435,121 @@ function spawnInitialCarriers(count){
 
     _moveTowards(u, u._idleTarget, dt);
   }
-// -------------------------------------------------------------------------
-// WORKER-AI (minimal): innerhalb des Arbeitsbereichs herum laufen + "arbeiten"
-// -------------------------------------------------------------------------
-// Ziel: Ohne extra Job-System für Worker sehen wir sofort, dass:
-//  - Worker am Gebäude spawnen
-//  - Worker im Arbeitsbereich (WorkArea) laufen/arbeiten
-//
-// Wichtig: Das ist absichtlich "leichtgewichtig" und robust:
-//  - Wenn kein WorkArea existiert: Worker macht nur Mini-Wanderungen um Home
-//  - Produktion/Carry-Jobs bleiben im Production-Modul — Worker ist (erstmal) Visualisierung + Grundlage.
-const WORKER_SPEED_TILES_PER_SEC = 0.65;  // bewusst etwas langsamer als Carrier
-const WORKER_WORK_SEC            = 0.75;  // "kurzer Arbeitspuls" am Ziel
 
-function _moveTowardsWithSpeed(u, target, dt, speed){
-  if (!target) return false;
-
-  const dx   = target.x - u.x;
-  const dy   = target.y - u.y;
-  const dist = Math.hypot(dx, dy);
-
-  if (!(dist > 0.0001)) return true;
-
-  const step = (speed || SPEED_TILES_PER_SEC) * dt;
-  if (step >= dist){
-    u.x = target.x;
-    u.y = target.y;
-    return true;
-  }
-
-  const nx = u.x + dx / dist * step;
-  const ny = u.y + dy / dist * step;
-
-  if (Number.isFinite(nx)) u.x = nx;
-  if (Number.isFinite(ny)) u.y = ny;
-
-  return dist <= step;
-}
-
-function _getWorkAreaForWorker(u){
-  const bUid = u.homeUid || u.homeBuildingUid || u.home?.uid || null;
-  if (!bUid) return null;
-
-  // GameWorkArea ist bei dir ein globales Modul (window.GameWorkArea)
-  const gwa = window.GameWorkArea || window.WorkArea || null;
-  if (!gwa) return null;
-
-  // Wir unterstützen mehrere Namen (weil wir im Projekt mehrfach umbenannt haben):
-  const fn =
-    gwa.getAreaFor || gwa.getFor || gwa.getWorkAreaFor || gwa.getWorkAreaByBuildingUid ||
-    null;
-
-  if (typeof fn !== 'function') return null;
-
-  try { return fn.call(gwa, bUid) || null; } catch { return null; }
-}
-
-function _pickPointInCircle(cx, cy, r){
-  const ang = Math.random() * Math.PI * 2;
-  const rad = Math.sqrt(Math.random()) * r; // sqrt => gleichmäßiger verteilt
-  return { x: cx + Math.cos(ang) * rad, y: cy + Math.sin(ang) * rad };
-}
-
-function _ensureHomePos(u){
-  if (u._homePos && Number.isFinite(u._homePos.x) && Number.isFinite(u._homePos.y)) return;
-  // Wenn nicht gesetzt: Spawn-Position als Home merken (einmalig)
-  u._homePos = { x: u.x, y: u.y };
-}
-
-function _planWorkerCycle(u){
-  _ensureHomePos(u);
-
-  // WorkArea ermitteln
-  const area = _getWorkAreaForWorker(u);
-
-  // Ziel bestimmen
-  let target = null;
-  if (area){
-    // erwartete Struktur aus deinem WorkArea-Modul:
-    //  { cx, cy, r } oder { center:{x,y}, radiusTiles }
-    const cx = area.cx ?? area.center?.x ?? area.x ?? u._homePos.x;
-    const cy = area.cy ?? area.center?.y ?? area.y ?? u._homePos.y;
-    const r  = Math.max(0.75, area.r ?? area.radius ?? area.radiusTiles ?? 3);
-    target = _pickPointInCircle(cx, cy, r);
-  } else {
-    // Fallback: um Home herum
-    target = _pickPointInCircle(u._homePos.x, u._homePos.y, 1.25);
-  }
-
-  // Aufgabe: hinlaufen → arbeiten → zurück
-  u.task = {
-    type: 'worker-walk',
-    to  : target,
-    _phase: 'toWork'
+  // -------------------------------------------------------------------------
+  // WORKER (einfacher Loop: Home -> WorkArea-Punkt -> kurze Work-Pause -> Home)
+  // -------------------------------------------------------------------------
+  const WORKER_BY_BUILDING = {
+    'b.lumberjack': 'u.woodcutter',
+    'b.woodcutter': 'u.woodcutter',
+    'b.quarry'    : 'u.stonecutter',
+    'b.stonecutter': 'u.stonecutter',
+    'b.fisher'    : 'u.fisherman',
+    'b.fisherman' : 'u.fisherman'
+    // später: weitere Gebäude/Jobs
   };
-}
 
-function _tickWorker(u, dt){
-  if (!u || u.noWander) return;
-
-  // Wenn gar keine Task: neuen Zyklus planen
-  if (!u.task){
-    _planWorkerCycle(u);
-    return;
+  function _getBuildingIdFromDetail(d){
+    return String(d?.id || d?.buildingId || d?.kind || '').trim();
   }
 
-  // 1) Laufen zum Arbeitsziel
-  if (u.task.type === 'worker-walk'){
-    const done = _moveTowardsWithSpeed(u, u.task.to, dt, WORKER_SPEED_TILES_PER_SEC);
-    if (done){
-      // am Ziel angekommen → kurz arbeiten
-      u.task = {
-        type: 'worker-work',
-        t   : WORKER_WORK_SEC,
-        _phase: 'work'
-      };
+  function _getWorkerUnitIdForBuilding(buildingId){
+    return WORKER_BY_BUILDING[buildingId] || null;
+  }
+
+  function _pickWorkPoint(area){
+    // area: {cx,cy,radiusTiles,...}
+    const cx = area?.cx ?? area?.x ?? 0;
+    const cy = area?.cy ?? area?.y ?? 0;
+    const r  = Math.max(0.25, area?.radiusTiles ?? area?.r ?? 4);
+
+    const ang = Math.random() * Math.PI * 2;
+    const rr  = Math.random() * r;
+
+    return {
+      x: cx + Math.cos(ang) * rr,
+      y: cy + Math.sin(ang) * rr
+    };
+  }
+
+  function _ensureWorkerAI(u){
+    if (u._ai) return u._ai;
+    u._ai = {
+      mode      : 'toWork',  // 'toWork' | 'work' | 'toHome'
+      timer     : 0,
+      target    : null
+    };
+    return u._ai;
+  }
+
+  function _tickWorker(u, dt){
+    // Falls das WorkArea-Modul nicht existiert, bleiben Worker einfach idle.
+    const WA = window.GameWorkArea;
+    if (!WA){
+      return;
     }
-    return;
-  }
 
-  // 2) Arbeitspause (rein visuell)
-  if (u.task.type === 'worker-work'){
-    u.task.t -= dt;
-    if (u.task.t <= 0){
-      _ensureHomePos(u);
-      u.task = {
-        type: 'worker-return',
-        to  : { x: u._homePos.x, y: u._homePos.y },
-        _phase: 'return'
-      };
+    const ai = _ensureWorkerAI(u);
+
+    // UID: idealerweise aus WorkArea.makeUid(detail) beim Spawn gesetzt
+    const uid = u.homeUid || u.homeBuildingUid || u.homeUidKey || null;
+
+    // WorkArea holen (wenn sie noch nicht existiert, versuchen wir sie anzulegen,
+    // sofern wir minimale Gebäudedaten am Unit haben).
+    let area = uid ? (WA.getAreaFor?.(uid) || null) : null;
+    if (!area && u.homeDetail){
+      area = WA.getOrCreateAreaFor?.(u.homeDetail) || null;
+      u.homeUid = u.homeUid || (WA.makeUid?.(u.homeDetail) || uid);
     }
-    return;
-  }
 
-  // 3) Zurück zum Gebäude
-  if (u.task.type === 'worker-return'){
-    const done = _moveTowardsWithSpeed(u, u.task.to, dt, WORKER_SPEED_TILES_PER_SEC);
-    if (done){
+    // Keine WorkArea → nichts tun
+    if (!area){
       u.task = null;
+      return;
     }
-    return;
-  }
 
-  // Unbekannte Task-Typen für Worker? -> sicherheitshalber zurücksetzen
-  if (u.type === 'worker'){
-    u.task = null;
-  }
-}
+    // Home (Gebäude-Mitte) merken (Fallback: area center)
+    const home = {
+      x: (Number.isFinite(u.homeX) ? u.homeX : (area.cx ?? 0)),
+      y: (Number.isFinite(u.homeY) ? u.homeY : (area.cy ?? 0))
+    };
 
+    // State Machine
+    if (ai.mode === 'toWork'){
+      if (!ai.target){
+        ai.target = _pickWorkPoint(area);
+      }
+
+      u.task = { type:'walk', target:{ x: ai.target.x, y: ai.target.y } };
+      const arrived = _moveTowards(u, ai.target, dt);
+      if (arrived){
+        u.task = null;
+        ai.mode  = 'work';
+        ai.timer = 0.75 + Math.random() * 1.0; // kleine Work-Pause
+        ai.target = null;
+      }
+      return;
+    }
+
+    if (ai.mode === 'work'){
+      u.task = null;
+      ai.timer -= dt;
+      if (ai.timer <= 0){
+        ai.mode = 'toHome';
+      }
+      return;
+    }
+
+    // toHome
+    u.task = { type:'walk', target:{ x: home.x, y: home.y } };
+    const arrivedHome = _moveTowards(u, home, dt);
+    if (arrivedHome){
+      u.task = null;
+      ai.mode = 'toWork';
+      ai.target = null;
+      ai.timer = 0;
+    }
+  }
 
 
   function tick(dt){
@@ -632,22 +559,20 @@ function _tickWorker(u, dt){
     }
 
     for (const u of _units){
-  // Carrier: bleibt 1:1 wie bisher (Job-System)
-  if (u.type === 'carrier'){
-    if (u.task){
-      _tickTask(u, dt);
-    } else {
-      _tickIdle(u, dt);
-    }
-    continue;
-  }
+      if (u.type === 'carrier'){
+        if (u.task){
+          _tickTask(u, dt);
+        } else {
+          _tickIdle(u, dt);
+        }
+        continue;
+      }
 
-  // Worker: minimaler "WorkArea-Wander" (damit sie sichtbar arbeiten)
-  if (u.type === 'worker'){
-    _tickWorker(u, dt);
-    continue;
-  }
-}
+      // Worker-Loop (Holzfäller/Fischer/Steinmetz etc.)
+      if (u.type === 'worker'){
+        _tickWorker(u, dt);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -675,6 +600,50 @@ function _tickWorker(u, dt){
     spawnInitialCarriers(3);
     _emitChanged('hq:placed');
   });
+
+  // Gebäude-Finish → Worker automatisch spawnen (Holzfäller / Fischer / Steinmetz)
+  // Hinweis: Das ist bewusst simpel gehalten (1 Worker pro Gebäude),
+  // damit wir schnell sichtbar testen können. Später kommt Job-Zuweisung.
+  window.addEventListener('cb:build:complete', (ev)=>{
+    const d = ev?.detail || {};
+    const buildingId = _getBuildingIdFromDetail(d);
+    const workerUnitId = _getWorkerUnitIdForBuilding(buildingId);
+    if (!workerUnitId) return;
+
+    // WorkArea anlegen (falls noch nicht passiert)
+    try{ window.GameWorkArea?.getOrCreateAreaFor?.(d); }catch(_e){}
+
+    const uid = window.GameWorkArea?.makeUid?.(d) || d.uid || `${buildingId}@${(d.x|0)},${(d.y|0)}`;
+
+    // Doppelt vermeiden (Reload / mehrfaches Event)
+    const normWorker = _normUnitId(workerUnitId);
+    if (_units.some(u => u.type==='worker' && u.homeUid===uid && u.kind===normWorker)){
+      return;
+    }
+
+    const w = d.w ?? 1;
+    const h = d.h ?? 1;
+    const cx = (d.x ?? 0) + w/2;
+    const cy = (d.y ?? 0) + h/2;
+
+    const spawned = spawn(workerUnitId, 1, { at:{ tx: cx, ty: cy } });
+    const u = spawned && spawned[0];
+    if (!u) return;
+
+    u.homeUid    = uid;
+    u.homeX      = cx;
+    u.homeY      = cy;
+    u.homeDetail = { id: buildingId, uid, x: d.x, y: d.y, w: d.w, h: d.h };
+
+    // AI initialisieren (damit er sofort losläuft)
+    u._ai = null;
+    _ensureWorkerAI(u);
+
+    LOG('Worker gespawnt', { buildingId, worker: u.kind, homeUid: uid, x: u.x, y: u.y });
+    _emitChanged('worker:spawn:'+buildingId);
+  });
+
+
 
   // -------------------------------------------------------------------------
   // Inspector / Debug Events (optional, aber super praktisch)
@@ -723,4 +692,3 @@ function _tickWorker(u, dt){
 
   LOG('Units geladen → Jobfähig (fix4, deliver + job:done)');
 })();
-
