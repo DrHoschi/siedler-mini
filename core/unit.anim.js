@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/unit.anim.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-unit-anim-v1
+ * Version : v25.12.14-unit-anim-v2
  *
  * Zweck:
  *   Zentrale, datengetriebene Animations-/Frame-Auswahl für Units:
@@ -127,6 +127,68 @@
     // last resort: erste Frames overall
     return keys.sort(_numKeySort).slice(0, Math.min(4, keys.length));
   }
+
+  // -------------------------------------------------------------------------
+  // Auto-Dir-Fallback (ohne anims im units.json):
+  //   Wenn ein Atlas mindestens 8 "frame_<row>_<col>"-Zeilen besitzt, nehmen wir an:
+  //     - row 0..7 sind die 8 Richtungen in DIR8-Reihenfolge
+  //     - cols sind Anim-Frames (0..n)
+  //   Dadurch bekommen wir DIREKTIONEN auch ohne explizite anims.* Daten.
+  // -------------------------------------------------------------------------
+  function autoDirsForAction(atlasKey, action){
+    const A = window.Assets?.getAtlas?.(atlasKey);
+    const frames = A?.frames || {};
+    const keys = Object.keys(frames);
+    if (!keys.length) return null;
+
+    // frame_<row>_<col> parsen
+    const rows = new Map(); // row -> [{k,row,col}]
+    for (const k of keys){
+      const m = /^frame_(\d+)_(\d+)$/.exec(k);
+      if (!m) continue;
+      const r = parseInt(m[1], 10);
+      const c = parseInt(m[2], 10);
+      if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+      if (!rows.has(r)) rows.set(r, []);
+      rows.get(r).push({ k, r, c });
+    }
+    if (rows.size < 4) return null;
+
+    const sortedRows = Array.from(rows.keys()).sort((a,b)=>a-b);
+
+    // 8-dir bevorzugt, sonst 4-dir
+    let use = null; // '8' | '4'
+    if (sortedRows.length >= 8) use = '8';
+    else if (sortedRows.length >= 4) use = '4';
+    else return null;
+
+    const fps =
+      (action === 'walk' || action === 'carry') ? 6 :
+      (action === 'work') ? 4 : 2;
+
+    const dirs = {};
+    const dirList = (use === '8') ? DIR8 : DIR4;
+    const neededRows = (use === '8') ? 8 : 4;
+
+    // Heuristik: wir nehmen die ersten 8/4 numerischen rows (meist 0..7/0..3).
+    for (let i=0; i<neededRows; i++){
+      const rowIdx = sortedRows[i];
+      const dir = dirList[i];
+      const items = rows.get(rowIdx) || [];
+      items.sort((a,b)=>a.c - b.c);
+
+      // Frames je Action:
+      // - idle/work: eher kurz (max 2)
+      // - walk/carry: etwas länger (max 4)
+      const maxN = (action === 'walk' || action === 'carry') ? 4 : 2;
+      const arr = items.map(x=>x.k).slice(0, Math.min(maxN, items.length));
+      if (arr.length) dirs[dir] = arr;
+    }
+
+    if (!Object.keys(dirs).length) return null;
+    return { fps, dirs };
+  }
+
   // -------------------------------------------------------------------------
   // Helpers: Registry / Unit-Def
   // -------------------------------------------------------------------------
@@ -206,16 +268,27 @@
       usedDir = bestDirFallback(dir, a.dirs) || dir;
       const frames = a.dirs[usedDir] || null;
       frame = pickFrame(frames, t, a.fps || 2);
+    
     } else {
-      // Auto-Fallback (ohne anims): versuche sinnvolle Frames aus dem Atlas zu ziehen
-      const auto = autoFramesForAction(atlasKey, action);
-      if (auto && auto.length){
-        // Ohne definierte dirs setzen wir usedDir stabil auf S
-        usedDir = 'S';
-        const fps = (action === 'walk' || action === 'carry') ? 6 : 2;
-        frame = pickFrame(auto, t, fps);
+      // Auto-Fallback (ohne anims):
+      //  1) Wenn der Atlas wie "8-dir in rows" aussieht, nutzen wir autoDirsForAction()
+      //  2) sonst: alte Heuristik (autoFramesForAction) ohne Richtungen
+      const autoDir = autoDirsForAction(atlasKey, action);
+      if (autoDir && autoDir.dirs){
+        usedDir = bestDirFallback(dir, autoDir.dirs) || dir;
+        const frames = autoDir.dirs[usedDir] || null;
+        frame = pickFrame(frames, t, autoDir.fps || 2);
+      } else {
+        const auto = autoFramesForAction(atlasKey, action);
+        if (auto && auto.length){
+          // Ohne definierte dirs setzen wir usedDir stabil auf S
+          usedDir = 'S';
+          const fps = (action === 'walk' || action === 'carry') ? 6 : 2;
+          frame = pickFrame(auto, t, fps);
+        }
       }
     }
+
 
     if (!frame){
       frame = def.defaultFrame || def.sprite?.defaultFrame || 'frame_0_0';
@@ -237,5 +310,5 @@
     dir4FromDir8
   };
 
-  LOG('geladen v25.12.14-unit-anim-v1');
+  LOG('geladen v25.12.14-unit-anim-v2');
 })();
