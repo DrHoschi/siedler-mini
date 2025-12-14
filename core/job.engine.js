@@ -73,6 +73,15 @@
     return Queue.slice();
   }
 
+  // ------------------------------------------------------------------
+  // Debug/Komfort: Alias für Konsole/Inspector
+  // Viele von uns tippen intuitiv JobEngine.list().
+  // ------------------------------------------------------------------
+  function list(){
+    return getQueue();
+  }
+
+
   // Nur für Abwärtskompatibilität – JobEngine ist passiv
   function start() {
     LOG('JobEngine bereit (passiv – CarrierRuntime holt Jobs aus Queue)');
