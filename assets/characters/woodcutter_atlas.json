@@ -1,60 +1,6 @@
 {
   "frames": {
     "frame_0_0": {
-      "x": 440,
-      "y": 350,
-      "w": 140,
-      "h": 270,
-      "anchorX": 510,
-      "anchorY": 620,
-      "scale": 1
-    },
-    "frame_0_1": {
-      "x": 325,
-      "y": 620,
-      "w": 140,
-      "h": 270,
-      "anchorX": 395,
-      "anchorY": 890,
-      "scale": 1
-    },
-    "frame_0_2": {
-      "x": 350,
-      "y": 350,
-      "w": 90,
-      "h": 270,
-      "anchorX": 395,
-      "anchorY": 620,
-      "scale": 1
-    },
-    "frame_0_3": {
-      "x": 275,
-      "y": 80,
-      "w": 150,
-      "h": 270,
-      "anchorX": 350,
-      "anchorY": 350,
-      "scale": 1
-    },
-    "frame_0_4": {
-      "x": 425,
-      "y": 80,
-      "w": 150,
-      "h": 270,
-      "anchorX": 500,
-      "anchorY": 350,
-      "scale": 1
-    },
-    "frame_0_5": {
-      "x": 575,
-      "y": 80,
-      "w": 150,
-      "h": 270,
-      "anchorX": 650,
-      "anchorY": 350,
-      "scale": 1
-    },
-    "frame_0_6": {
       "x": 580,
       "y": 350,
       "w": 90,
@@ -70,6 +16,60 @@
       "h": 270,
       "anchorX": 628,
       "anchorY": 890,
+      "scale": 1
+    },
+    "frame_2_0": {
+      "x": 440,
+      "y": 350,
+      "w": 140,
+      "h": 270,
+      "anchorX": 510,
+      "anchorY": 620,
+      "scale": 1
+    },
+    "frame_3_0": {
+      "x": 325,
+      "y": 620,
+      "w": 140,
+      "h": 270,
+      "anchorX": 395,
+      "anchorY": 890,
+      "scale": 1
+    },
+    "frame_4_0": {
+      "x": 350,
+      "y": 350,
+      "w": 90,
+      "h": 270,
+      "anchorX": 395,
+      "anchorY": 620,
+      "scale": 1
+    },
+    "frame_5_0": {
+      "x": 275,
+      "y": 80,
+      "w": 150,
+      "h": 270,
+      "anchorX": 350,
+      "anchorY": 350,
+      "scale": 1
+    },
+    "frame_6_0": {
+      "x": 425,
+      "y": 80,
+      "w": 150,
+      "h": 270,
+      "anchorX": 500,
+      "anchorY": 350,
+      "scale": 1
+    },
+    "frame_7_0": {
+      "x": 575,
+      "y": 80,
+      "w": 150,
+      "h": 270,
+      "anchorX": 650,
+      "anchorY": 350,
       "scale": 1
     },
     "Idle_NW_0_0": {
@@ -132,15 +132,6 @@
       "w": 140,
       "h": 270,
       "anchorX": 395,
-      "anchorY": 890,
-      "scale": 1
-    },
-    "frame_reserve_2_1": {
-      "x": 470,
-      "y": 620,
-      "w": 80,
-      "h": 270,
-      "anchorX": 500,
       "anchorY": 890,
       "scale": 1
     },
