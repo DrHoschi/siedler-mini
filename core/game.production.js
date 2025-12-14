@@ -57,6 +57,16 @@
    */
   const BUILDINGS_BY_UID = new Map();
 
+  /**
+   * Carry-Job Meta: jobId -> { res, qty, reason, src, buildingUid, buildingKind }
+   *
+   * Wird genutzt, um (optional) Ressourcen erst BEI Lieferung am HQ zu zählen.
+   * Standard bleibt unverändert: wer enqueueCarryJobFromBuilding ohne Option aufruft,
+   * bekommt KEIN Delivery-Accounting (damit es keine Doppelzählung gibt).
+   */
+  const CARRY_META_BY_JOBID = new Map();
+
+
   // ==========================================================================
   // HILFSFUNKTIONEN – RESSOURCEN
   // ==========================================================================
@@ -173,7 +183,7 @@
    *   from = DropTile (vor der Tür)
    *   to   = HQ tile (falls verfügbar), sonst null (CarrierRuntime kann ggf. fallbacken)
    */
-  function enqueueCarryJobFromBuilding(building, resId, qty = 1){
+  function enqueueCarryJobFromBuilding(building, resId, qty = 1, opts = null){
     if (!window.JobEngine) return;
     if (!building) return;
 
@@ -186,8 +196,14 @@
     const hq = getHQTile();
     const to = hq ? { x: hq.x, y: hq.y } : null;
 
+    // Optionen (additiv):
+    //   - accountOnDeliver: wenn true → addResource erst bei cb:job:done (carry)
+    //   - reason/src: werden als Meta gespeichert und beim Delivery-Accounting genutzt
+    const o = opts || {};
+    const accountOnDeliver = !!o.accountOnDeliver;
+
     const job = {
-      id   : 'job-carry-' + Date.now().toString(16),
+      id   : 'job-carry-' + Date.now().toString(16) + '-' + Math.random().toString(16).slice(2,6),
       type : 'carry',
       res  : res,
       qty  : qty,
@@ -199,6 +215,19 @@
       eng.push(job);
     } else if (typeof eng.add === 'function'){
       eng.add(job);
+    }
+
+    // Delivery-Accounting: Meta merken, damit wir bei cb:job:done genau diesen Job
+    // sauber verbuchen können (ohne Doppelzählung für "alte" Produktionsmodule).
+    if (accountOnDeliver){
+      CARRY_META_BY_JOBID.set(job.id, {
+        res,
+        qty : Number(qty || 1) || 1,
+        reason: o.reason || 'carry:deliver',
+        src   : o.src    || (building?.kind || building?.uid || TAG),
+        buildingUid : building?.uid || null,
+        buildingKind: building?.kind || building?.id || null
+      });
     }
 
     LOG('carry-job erzeugt', job);
@@ -344,13 +373,48 @@
     }
   }
 
+  
   // ==========================================================================
+  // DELIVERY-ACCOUNTING (D4)
+  // ==========================================================================
+  // Optionale Logik: Für bestimmte Carry-Jobs zählen wir Ressourcen NICHT beim
+  // Produzieren, sondern erst, wenn der Carrier am Ziel (HQ) abliefert.
+  //
+  // Aktivierung pro Job: enqueueCarryJobFromBuilding(..., {accountOnDeliver:true})
+  //
+  // Vorteil:
+  //   - Worker-Produktion kann "am Gebäude" entstehen und erst nach Transport
+  //     im globalen Store landen (Settlers-Feeling).
+  //   - Alte Module bleiben kompatibel (keine Doppelzählung).
+  //
+  function handleJobDoneCarry(ev){
+    const d = ev?.detail || {};
+    if (!d || d.type !== 'carry') return;
+
+    const jobId = d.jobId;
+    if (!jobId) return;
+
+    const meta = CARRY_META_BY_JOBID.get(jobId);
+    if (!meta) return; // Job war nicht für Delivery-Accounting markiert
+
+    // Meta entfernen, damit wir niemals doppelt zählen (auch bei doppelten Events).
+    CARRY_META_BY_JOBID.delete(jobId);
+
+    try{
+      addResource(meta.res, meta.qty || 1, meta.reason || 'carry:deliver', meta.src || TAG);
+    }catch(e){
+      WARN('Delivery-Accounting addResource fehlgeschlagen', e);
+    }
+  }
+
+// ==========================================================================
   // EVENT-BINDINGS
   // ==========================================================================
 
   window.addEventListener('cb:build:complete', handleBuildComplete);
   window.addEventListener('cb:workarea:set', handleWorkAreaSet);
   window.addEventListener('cb:prod:output', handleProdOutput);
+  window.addEventListener('cb:job:done', handleJobDoneCarry);
 
   window.addEventListener('cb:game:tick', (ev)=>{
     const dtMs = ev?.detail?.dtMs;

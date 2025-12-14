@@ -188,7 +188,11 @@
     // Zentrales Production-System bevorzugen
     if (window.Production && typeof window.Production.enqueueCarryJobFromBuilding === 'function') {
       try {
-        window.Production.enqueueCarryJobFromBuilding(building, item, 1);
+        window.Production.enqueueCarryJobFromBuilding(building, item, 1, {
+        accountOnDeliver: true,
+        reason: 'worker:prod',
+        src: building?.kind || building?.uid || 'worker'
+      });
         LOG('Output erzeugt → Carry-Job enqueued', { item, b: building.kind || building.uid, worker: worker.kind || worker.id });
         return;
       } catch (e) {
