@@ -163,6 +163,7 @@ class PathHeatmap {
     this._startLoop();
 
     console.info('[PathOverlay] init ✓', { tile:this.tile, cols:this.cols, rows:this.rows });
+    try{ window.dispatchEvent(new CustomEvent('cb:paths:ready',{detail:{version:PO.VERSION, tile:this.tile, cols:this.cols, rows:this.rows}})); }catch(e){}
   }
 
   teardown(){
@@ -320,6 +321,23 @@ class PathHeatmap {
   window.addEventListener('cb:path:overlay:off', ()=>inst.toggle(false));
   window.addEventListener('cb:path:heatmap:on',  ()=>inst.setHeatmap(true));
   window.addEventListener('cb:path:heatmap:off', ()=>inst.setHeatmap(false));
+
+  // Trampelpfade: bei jedem Tile-Step einer Unit "Intensity" erhöhen.
+  // Hinweis: Das funktioniert sofort für Carrier/Worker, sobald irgendwo cb:unit:step emittiert wird.
+  window.addEventListener('cb:unit:step', (ev)=>{
+    const d = ev?.detail || {};
+    const tx = Number.isFinite(d.tx) ? d.tx : Math.floor(d.x || 0);
+    const ty = Number.isFinite(d.ty) ? d.ty : Math.floor(d.y || 0);
+
+    // Gewichtung: Carrier etwas stärker (weil oft laufen), Worker normal.
+    const type = String(d.type || '').toLowerCase();
+    const kind = String(d.kind || '').toLowerCase();
+    const amt  = (type === 'carrier' || kind.includes('carrier')) ? 2 : 1;
+
+    inst.mark(tx, ty, amt);
+  });
+
+
 
   console.info('[PathOverlay] bindings ready', PO.VERSION);
 })();

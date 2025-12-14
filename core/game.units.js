@@ -319,6 +319,36 @@ function spawnInitialCarriers(count){
     };
   }
 
+
+  // -------------------------------------------------------------------------
+  // STEP-EVENTS (für Trampelpfade / Debug)
+  //   - feuert NUR wenn eine Unit ein neues Tile betritt (nicht pro Frame)
+  //   - Detail enthält tile tx/ty + Unit-Infos
+  // -------------------------------------------------------------------------
+  function _maybeEmitUnitStep(u){
+    if (!u) return;
+    const tx = Math.floor(u.x);
+    const ty = Math.floor(u.y);
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
+
+    if (u._lastStepTx === tx && u._lastStepTy === ty) return;
+    u._lastStepTx = tx;
+    u._lastStepTy = ty;
+
+    try{
+      window.dispatchEvent(new CustomEvent('cb:unit:step', {
+        detail: {
+          id   : u.id,
+          kind : u.kind,
+          type : u.type,
+          tx, ty,
+          x    : u.x,
+          y    : u.y
+        }
+      }));
+    }catch(e){ /* silent */ }
+  }
+
   function _moveTowards(u, target, dt){
     if (!target) return false;
 
@@ -334,6 +364,7 @@ function spawnInitialCarriers(count){
     if (step >= dist){
       u.x = target.x;
       u.y = target.y;
+      _maybeEmitUnitStep(u);
       return true;
     }
 
@@ -342,6 +373,8 @@ function spawnInitialCarriers(count){
 
     if (Number.isFinite(nx)) u.x = nx;
     if (Number.isFinite(ny)) u.y = ny;
+
+    _maybeEmitUnitStep(u);
 
     return dist <= step;
   }
