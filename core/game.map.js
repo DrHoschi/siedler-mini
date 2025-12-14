@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-units-idle-anim
+ * Version : v25.12.13-units-sprites
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -259,96 +259,6 @@
     const i = Math.floor(t * fps) % arr.length;
     return arr[i];
   }
-
-  // -------------------------------------------------------------------------
-  // Units: Generic Simple Animation (Idle/Walk) – datengetrieben + safe Fallback
-  // -------------------------------------------------------------------------
-
-  /**
-   * Liest eine Anim-Def aus dem Unit-Def (Registry/data/units.json).
-   * Unterstützte Pfade (Best-Effort):
-   *   def.anims.idle / def.anim.idle
-   *   def.sprite.anims.idle / def.sprite.anim.idle
-   */
-  function _getAnimDef(def, name){
-    if (!def || !name) return null;
-    return (
-      def.anims?.[name] ||
-      def.anim?.[name] ||
-      def.sprite?.anims?.[name] ||
-      def.sprite?.anim?.[name] ||
-      null
-    );
-  }
-
-  /**
-   * Extrahiert Frame-Arrays aus einer Anim-Def.
-   * Unterstützt:
-   *   - anim = ["frame_0_0","frame_0_1",...]
-   *   - anim.frames = [...]
-   *   - anim.frames = { N:[...],E:[...],S:[...],W:[...] }
-   *   - anim.N / anim.E / ...
-   */
-  function _getAnimFrames(anim, dir){
-    if (!anim) return null;
-
-    if (Array.isArray(anim)) return anim;
-
-    if (Array.isArray(anim.frames)) return anim.frames;
-
-    if (anim.frames && typeof anim.frames === 'object'){
-      const byDir =
-        anim.frames?.[dir] ||
-        anim.frames?.S || anim.frames?.E || anim.frames?.W || anim.frames?.N;
-      if (Array.isArray(byDir)) return byDir;
-    }
-
-    const direct =
-      anim?.[dir] ||
-      anim?.S || anim?.E || anim?.W || anim?.N;
-    if (Array.isArray(direct)) return direct;
-
-    return null;
-  }
-
-  function _frameRC(name){
-    const m = String(name || '').match(/^frame_(\d+)_(\d+)$/);
-    return m ? { r: Number(m[1]), c: Number(m[2]) } : null;
-  }
-
-  function _sortFrameNames(list){
-    return list.sort((a,b)=>{
-      const A = _frameRC(a);
-      const B = _frameRC(b);
-      if (A && B){
-        if (A.r !== B.r) return A.r - B.r;
-        return A.c - B.c;
-      }
-      return String(a).localeCompare(String(b));
-    });
-  }
-
-  /**
-   * Auto-Fallback: Nimmt aus einem Atlas "wahrscheinlich passende" Idle-Frames.
-   * 1) Wenn frame_0_* existiert → erste N Frames aus Reihe 0.
-   * 2) Sonst: erste N Frames (sortiert).
-   */
-  function _autoIdleFrames(atlas, maxFrames){
-    const max = Math.max(1, Number(maxFrames) || 2);
-    const keys = Object.keys(atlas?.frames || {});
-    if (!keys.length) return [];
-
-    const row0 = keys.filter(k => /^frame_0_\d+$/.test(k));
-    if (row0.length >= 2){
-      _sortFrameNames(row0);
-      return row0.slice(0, Math.min(max, row0.length));
-    }
-
-    _sortFrameNames(keys);
-    return keys.slice(0, Math.min(max, keys.length));
-  }
-
-
 // -------------------------------------------------------------------------
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
@@ -633,55 +543,55 @@ if (window.GameWorkArea) {
             if (!frameName) frameName = 'frame_0_4'; // Center als safe-default
             if (frameName && !(a.frames && a.frames[frameName])) frameName = _pickFirstFrame(a);
           } else {
-            // --------------------------------------------------------------
-            // Generische Units (nicht-Carrier):
-            //   - einfache Idle-Animation (Frame-Cycling)
-            //   - datengetrieben über data/units.json (anims/idleFrames)
-            //   - mit Safe-Auto-Fallback, falls (noch) keine Anim-Def vorhanden
+            // -----------------------------------------------------------------
+            // Nicht-Carrier-Units: einfache Idle-Animation (Frame-Cycling)
             //
-            // Später erweitern wir das um:
-            //   - Richtungen (N/E/S/W) + Walk/Cary
-            //   - Tool/Resource Attachments über Attachpoints
-            // --------------------------------------------------------------
-            const state = moving ? 'walk' : 'idle';
+            // Ziel:
+            //  - Units wirken nicht mehr "starr", auch wenn wir noch keine
+            //    vollständigen Richtung-/Walk-/Carry-States implementiert haben.
+            //
+            // Datenquellen (in dieser Reihenfolge):
+            //  1) def.idleFrames (Array von Frame-Namen)
+            //  2) def.anims?.idle?.frames
+            //  3) def.sprite?.idleFrames / def.sprite?.anims?.idle?.frames
+            //
+            // Fallback:
+            //  - Wenn nichts definiert ist: versuche frame_0_0 + frame_0_1
+            //  - sonst: nimm die ersten Frames (sortiert) als Mini-Zyklus
+            // -----------------------------------------------------------------
+            const animIdle = def.anims?.idle || def.sprite?.anims?.idle || null;
+            const fps = Number(def.idleFps ?? animIdle?.fps ?? 2) || 2;
 
-            // 1) Anim-Def aus Unit-Def lesen (anims/anim)
-            const anim = _getAnimDef(def, state) || _getAnimDef(def, 'idle');
-
-            // 2) Frames: entweder direkt im Def (idleFrames/walkFrames), oder aus anim.frames
             let frames =
-              def?.[state + 'Frames'] ||
-              def?.sprite?.[state + 'Frames'] ||
-              (state === 'idle' ? (def?.idleFrames || def?.sprite?.idleFrames) : null) ||
-              _getAnimFrames(anim, dir) ||
+              def.idleFrames ||
+              animIdle?.frames ||
+              def.sprite?.idleFrames ||
               null;
 
-            // 3) FPS: aus Anim-Def, sonst sinnvoller Default
-            let fps =
-              Number(anim?.fps) ||
-              Number(def?.[state + 'Fps']) ||
-              Number(def?.idleFps) ||
-              (moving ? 6 : 2);
+            if (!frames || !frames.length){
+              const keys = Object.keys(a.frames || {});
+              const has00 = keys.includes('frame_0_0');
+              const has01 = keys.includes('frame_0_1');
 
-            // 4) Safe-Fallback, wenn keinerlei Frames definiert sind:
-            //    → nehme erste Frames aus Reihe 0 (frame_0_*) oder sortiertes erstes Segment
-            if (!Array.isArray(frames) || !frames.length){
-              frames = _autoIdleFrames(a, moving ? 4 : 2);
+              if (has00 && has01){
+                frames = ['frame_0_0', 'frame_0_1'];
+              } else {
+                const sorted = keys.slice().sort();
+                frames = sorted.slice(0, Math.min(4, sorted.length));
+              }
             }
 
-            // 5) Frame picken (falls Pick fehlschlägt → defaultFrame)
-            frameName =
-              _pickAnimFrame(frames, u._animT, fps) ||
-              def.defaultFrame ||
-              def.sprite?.defaultFrame ||
-              'frame_0_0';
+            frameName = _pickAnimFrame(frames, u._animT, fps);
 
-            // 6) Validieren: existiert im Atlas?
-            if (frameName && !(a.frames && a.frames[frameName])) {
-              const df = def.defaultFrame || def.sprite?.defaultFrame || null;
-              if (df && a.frames?.[df]) frameName = df;
-              else frameName = _pickFirstFrame(a);
+            // Safety: wenn Frame nicht existiert → zurückfallen
+            if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
+
+            // Wenn anim nicht möglich war, nutze expliziten defaultFrame oder erstes Frame
+            if (!frameName){
+              frameName = def.defaultFrame || def.sprite?.defaultFrame || _pickFirstFrame(a);
             }
+
+            if (frameName && !(a.frames && a.frames[frameName])) frameName = _pickFirstFrame(a);
           }
 
           // Skalierung: wir targeten ca. 1.4 Tiles Höhe
