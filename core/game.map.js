@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-units-anim-b3
+ * Version : v25.12.13-units-sprites
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -259,6 +259,30 @@
     const i = Math.floor(t * fps) % arr.length;
     return arr[i];
   }
+
+  // -------------------------------------------------------------------------
+  // Units: einfache, stabile Anim-Zeit (unabhängig von dt/Render-Frequenz)
+  // -------------------------------------------------------------------------
+  function _hash01(str){
+    // kleiner String-Hash → 0..1 (stabil)
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    // >>>0 → uint32
+    return (h >>> 0) / 4294967295;
+  }
+
+  function _unitAnimTime(u, kind, idx, tNow){
+    // Seed pro Unit nur einmal bestimmen (stabil)
+    if (u._animSeed == null){
+      const key = String(kind || 'u.unknown') + '#' + String(u.id || u.uid || idx || 0);
+      u._animSeed = _hash01(key) * 10; // 0..10s Offset
+    }
+    return tNow + u._animSeed;
+  }
+
 // -------------------------------------------------------------------------
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
@@ -451,7 +475,7 @@ if (window.GameWorkArea) {
       const carrierOk = hasAssets && !!Assets.getAtlas(CARRIER_ATLAS)?.ok;
 
       // dt für einfache Animation (ohne kompletten Anim-Controller)
-      const dt = _unitsGetDt();
+      const tNow = performance.now() / 1000; // Sekunden
 
       // Registry-Helper (Option B)
       const _getUnitDef = (kind)=>{
@@ -463,14 +487,23 @@ if (window.GameWorkArea) {
         return null;
       };
 
+      const _normalizeUnitId = (raw)=>{
+        if (!raw) return null;
+        let k = String(raw).toLowerCase().trim();
+        // häufige Varianten vereinheitlichen: u_builder → u.builder, builder → u.builder
+        k = k.replace(/_/g, '.');
+        if (!k.startsWith('u.')) k = 'u.' + k;
+        return k;
+      };
+
       const _getUnitKind = (u)=>{
         // Best effort – je nach Runtime können die Felder anders heißen
         const cand = [
           u?.kind, u?.type, u?.unitKind, u?.unitType, u?.defId, u?.template,
-          (typeof u?.id === 'string' && u.id.startsWith('u.')) ? u.id : null
+          (typeof u?.id === 'string' && (u.id.startsWith('u.') || u.id.startsWith('u_'))) ? u.id : null
         ];
         for (const k of cand){
-          if (typeof k === 'string' && k.length) return k;
+          if (typeof k === 'string' && k.length) return _normalizeUnitId(k);
         }
         return null;
       };
@@ -482,7 +515,9 @@ if (window.GameWorkArea) {
 
       ctx.save();
 
+      let __ui = 0;
       for (const u of units){
+        const ui = __ui++;
         // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
         const tx = (u.x || 0);
         const ty = (u.y || 0);
@@ -498,12 +533,12 @@ if (window.GameWorkArea) {
         // moving?
         const moving = !!u.task && (Math.hypot((target?.x ?? tx) - tx, (target?.y ?? ty) - ty) > 0.01);
 
-        // anim time pro unit
-        u._animT = (u._animT || 0) + dt;
-
         // Registry → AtlasKey (falls vorhanden)
         const kind = _getUnitKind(u);
         const def  = _getUnitDef(kind) || {};
+
+        // Anim-Zeit (stabil): benutzt performance.now(), mit Seed pro Unit
+        const animT = _unitAnimTime(u, kind, ui, tNow);
 
         // atlasKey kann direkt am Def stehen oder aus sprite.* kommen
         const desiredAtlasKey =
@@ -523,7 +558,7 @@ if (window.GameWorkArea) {
         const wy = ty * ts + ts - 2;
 
         if (hasAssets && atlasKey){
-          let a = Assets.getAtlas(atlasKey);
+          const a = Assets.getAtlas(atlasKey);
 
           // Frame wählen:
           // - Wenn Carrier-Atlas: nutze bestehende Mapping + einfache Animation
@@ -535,58 +570,94 @@ if (window.GameWorkArea) {
             const cycle = moving ? 'walk' : 'idle';
             const frames = CARRIER_SPRITES[cycle]?.[dir] || CARRIER_SPRITES[cycle]?.S;
             if (frames && frames.length){
-              const idx = Math.floor(u._animT * fps) % frames.length;
-              frameName = frames[idx];
+              const frameIdx = Math.floor(animT * fps) % frames.length;
+              frameName = frames[frameIdx];
             }
             // falls Mapping nicht passt: erstes Frame
             if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
             if (!frameName) frameName = 'frame_0_4'; // Center als safe-default
             if (frameName && !(a.frames && a.frames[frameName])) frameName = _pickFirstFrame(a);
           } else {
-            // -------------------------------------------------------------
-            // NEU (B3): Zentrale datengetriebene Animationsauswahl
-            //   - nutzt core/unit.anim.js (window.UnitAnim)
-            //   - actions: idle / walk / work / carry
-            //   - dirs:    8 Richtungen (mit Fallback auf 4-dir)
+            // -----------------------------------------------------------------
+            // Nicht-Carrier-Units: Frame-Auswahl über UnitAnim (8-dir, datadriven)
             //
-            // Hinweise:
-            //   - WorkArea/Worker-Loop kann u.__animState = 'work' setzen
-            //   - Wenn nichts gesetzt ist, nutzen wir eine Heuristik (moving -> walk)
-            //   - Richtung kommt bevorzugt aus u.vx/u.vy (hier best-effort gesetzt)
-            // -------------------------------------------------------------
-            const UA = window.UnitAnim;
-            const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-
-            // Falls WorkArea/Jobs keinen State setzen: Heuristik
-            if (!u.__animState || u.__animState === 'idle' || u.__animState === 'walk') {
-              u.__animState = moving ? 'walk' : 'idle';
-            }
-
-            // Richtungsvector (8-dir): für Renderer reichen Target-Deltas
-            if (moving && target && Number.isFinite(target.x) && Number.isFinite(target.y)) {
-              u.vx = (target.x - tx);
-              u.vy = (target.y - ty);
-            } else {
-              u.vx = 0;
-              u.vy = 0;
-            }
-
-            if (UA && typeof UA.getFrameForUnit === 'function') {
-              const pick = UA.getFrameForUnit(u, nowMs);
-
-              // Wenn UnitAnim einen anderen Atlas vorschlägt (z.B. korrekt normalisiert),
-              // und der Atlas geladen ist, dann umschalten.
-              if (pick?.atlasKey && Assets.getAtlas(pick.atlasKey)?.ok) {
-                atlasKey = pick.atlasKey;
-                a = Assets.getAtlas(atlasKey);
+            // Warum?
+            //  - Wir wollen *nicht* mehr stur def.defaultFrame (meist "frame_0_0") zeichnen.
+            //  - UnitAnim kann (a) dir8 + (b) idle/walk/carry/work + (c) Auto-Fallbacks.
+            // -----------------------------------------------------------------
+            if (window.UnitAnim && typeof window.UnitAnim.getFrameForUnit === 'function') {
+              // Richtung 8-dir aus Task ableiten (falls vorhanden). Das hilft insbesondere
+              // bei Units, die ohne vx/vy "direkt" über x/y bewegt werden.
+              const tgt8 = target;
+              if (tgt8 && Number.isFinite(tgt8.x) && Number.isFinite(tgt8.y)) {
+                const dx8 = (tgt8.x - tx);
+                const dy8 = (tgt8.y - ty);
+                u._dir8 = window.UnitAnim.dir8FromDelta(dx8, dy8);
               }
 
-              // Frame übernehmen (und validieren)
-              frameName = pick?.frame || def.defaultFrame || def.sprite?.defaultFrame || 'frame_0_0';
-              if (frameName && !(a.frames && a.frames[frameName])) frameName = _pickFirstFrame(a);
-            } else {
-              // Fallback: wie vorher (statisches defaultFrame)
-              frameName = def.defaultFrame || def.sprite?.defaultFrame || 'frame_0_0';
+              // Anim-State nur setzen, wenn nichts "stärkeres" vorgegeben wurde
+              // (Worker-Loop setzt z.B. work/carry explizit).
+              if (!u.__animState || u.__animState === 'idle' || u.__animState === 'walk') {
+                u.__animState = moving ? 'walk' : 'idle';
+              }
+
+              const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
+              frameName = info?.frame || null;
+
+              // Safety
+              if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
+            }
+
+            // Wenn UnitAnim nicht verfügbar oder kein passender Frame gefunden wurde:
+            if (!frameName) {
+              // -----------------------------------------------------------------
+              // Nicht-Carrier-Units: einfache Idle-Animation (Frame-Cycling)
+              //
+              // Ziel:
+              //  - Units wirken nicht mehr "starr", auch wenn wir noch keine
+              //    vollständigen Richtung-/Walk-/Carry-States implementiert haben.
+              //
+              // Datenquellen (in dieser Reihenfolge):
+              //  1) def.idleFrames (Array von Frame-Namen)
+              //  2) def.anims?.idle?.frames
+              //  3) def.sprite?.idleFrames / def.sprite?.anims?.idle?.frames
+              //
+              // Fallback:
+              //  - Wenn nichts definiert ist: versuche frame_0_0 + frame_0_1
+              //  - sonst: nimm die ersten Frames (sortiert) als Mini-Zyklus
+              // -----------------------------------------------------------------
+              const animIdle = def.anims?.idle || def.sprite?.anims?.idle || null;
+              const fps = Number(def.idleFps ?? animIdle?.fps ?? 2) || 2;
+
+              let frames =
+                def.idleFrames ||
+                animIdle?.frames ||
+                def.sprite?.idleFrames ||
+                null;
+
+              if (!frames || !frames.length){
+                const keys = Object.keys(a.frames || {});
+                const has00 = keys.includes('frame_0_0');
+                const has01 = keys.includes('frame_0_1');
+
+                if (has00 && has01){
+                  frames = ['frame_0_0', 'frame_0_1'];
+                } else {
+                  const sorted = keys.slice().sort();
+                  frames = sorted.slice(0, Math.min(4, sorted.length));
+                }
+              }
+
+              frameName = _pickAnimFrame(frames, animT, fps);
+
+              // Safety: wenn Frame nicht existiert → zurückfallen
+              if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
+
+              // Wenn anim nicht möglich war, nutze expliziten defaultFrame oder erstes Frame
+              if (!frameName){
+                frameName = def.defaultFrame || def.sprite?.defaultFrame || _pickFirstFrame(a);
+              }
+
               if (frameName && !(a.frames && a.frames[frameName])) frameName = _pickFirstFrame(a);
             }
           }

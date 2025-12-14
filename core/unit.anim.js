@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/unit.anim.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-unit-anim-v2
+ * Version : v25.12.14-unit-anim-v3
  *
  * Zweck:
  *   Zentrale, datengetriebene Animations-/Frame-Auswahl für Units:
@@ -233,12 +233,37 @@
   }
 
   function getDir(u){
-    // vx/vy ist der beste Weg zu 8-dir
+    // 8-dir bevorzugt:
+    //  1) vx/vy (echte Bewegung)
+    //  2) Task-Ziel (wenn Movement ohne vx/vy implementiert ist)
+    //  3) gespeicherte Richtung (u._dir8 / u.__lastDir / u._dir)
     const vx = Number(u?.vx || 0);
     const vy = Number(u?.vy || 0);
-    if (Math.abs(vx) + Math.abs(vy) > 1e-4) return dir8FromDelta(vx, vy);
+    if (Math.abs(vx) > 1e-6 || Math.abs(vy) > 1e-6){
+      return dir8FromDelta(vx, vy);
+    }
 
-    // sonst: lastDir
+    // Viele unserer Worker bewegen sich "teleport-weise" pro Tick (x/y werden direkt gesetzt),
+    // ohne vx/vy zu pflegen. Dann nehmen wir die Richtung zum aktuellen Task-Ziel.
+    const tgt = u?.task?.target || u?.task?.dest || u?.task?.to || u?.task?.goal || null;
+    const ux = Number(u?.x);
+    const uy = Number(u?.y);
+    if (tgt && Number.isFinite(tgt.x) && Number.isFinite(tgt.y) && Number.isFinite(ux) && Number.isFinite(uy)){
+      const dx = Number(tgt.x) - ux;
+      const dy = Number(tgt.y) - uy;
+      if (Math.hypot(dx, dy) > 1e-3){
+        return dir8FromDelta(dx, dy);
+      }
+    }
+
+    // bereits gespeicherte Richtungen akzeptieren
+    if (typeof u?._dir8 === 'string' && u._dir8) return u._dir8;
+    if (typeof u?._dir === 'string' && u._dir){
+      // _dir kann 4-dir sein – wir mappen grob auf 8-dir
+      const d = u._dir.toUpperCase();
+      if (d === 'E' || d === 'W' || d === 'N' || d === 'S') return d;
+    }
+
     return u?.__lastDir || 'S';
   }
 
@@ -310,5 +335,5 @@
     dir4FromDir8
   };
 
-  LOG('geladen v25.12.14-unit-anim-v2');
+  LOG('geladen v25.12.14-unit-anim-v3');
 })();
