@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-13T22:02:18.939Z",
+  "createdAt": "2025-12-14T07:28:38.266Z",
   "root": ".",
-  "count": 519,
+  "count": 523,
   "entries": [
     {
       "type": "dir",
@@ -193,6 +193,11 @@
     },
     {
       "type": "file",
+      "path": "assets/characters/builder_atlas.json",
+      "size": 5497
+    },
+    {
+      "type": "file",
       "path": "assets/characters/builder.json",
       "size": 743
     },
@@ -238,6 +243,11 @@
     },
     {
       "type": "file",
+      "path": "assets/characters/fisherman_atlas.json",
+      "size": 2651
+    },
+    {
+      "type": "file",
       "path": "assets/characters/fisherman.json",
       "size": 833
     },
@@ -273,6 +283,11 @@
     },
     {
       "type": "file",
+      "path": "assets/characters/stonecutter_atlas.json",
+      "size": 2645
+    },
+    {
+      "type": "file",
       "path": "assets/characters/stonecutter.json",
       "size": 746
     },
@@ -280,6 +295,11 @@
       "type": "file",
       "path": "assets/characters/stonecutter.png",
       "size": 1468681
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/woodcutter_atlas.json",
+      "size": 4757
     },
     {
       "type": "file",
@@ -1342,7 +1362,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 14365
+      "size": 12927
     },
     {
       "type": "file",
@@ -1432,7 +1452,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 19843
+      "size": 20095
     },
     {
       "type": "file",
@@ -1710,7 +1730,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 6390
+      "size": 8096
     },
     {
       "type": "dir",
@@ -2491,7 +2511,7 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1887
+      "size": 1783
     },
     {
       "type": "file",
