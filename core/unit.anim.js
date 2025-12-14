@@ -1,247 +1,434 @@
-/* ============================================================
-   core/unit.anim.js
-   v4.1 - Unit Animation & Direction Resolver (ISO-friendly)
-   ------------------------------------------------------------
-   Ziel:
-   - Unit-Frames daten-/atlas-getrieben auswählen (idle/walk/work/carry)
-   - Richtungen robust bestimmen (auch wenn vx/vy fehlt) aus:
-       1) task.to / task.dest / task.target (falls vorhanden)
-       2) lastMove (intern gesetzt)
-       3) fallback: 'S'
-   - Deutsche Richtungs-Tokens unterstützen: N, NO, O, SO, S, SW, W, NW
-   - Fix für "läuft rückwärts": per-atlas Default-Offset (woodcutter_atlas = 180°)
-     -> weil Sprite-Richtungsreihenfolge/Bewegungsvektor im aktuellen Build
-        effektiv um 180° gedreht interpretiert wurde.
-   ------------------------------------------------------------
-   WICHTIG:
-   - Carrier werden i. d. R. separat gerendert -> UnitAnim betrifft primär Worker.
-   - Du kannst live tunen:
-        UnitAnim.setTuning({ offsetSteps: 4 }) // 180° drehen
-        UnitAnim.setTuning({ offsetSteps: 0 }) // zurück
-   ============================================================ */
-
+/* ============================================================================
+ * core/unit.anim.js
+ * v4.1-patch: prefixed-atlas + 8dir + iso-friendly direction mapping
+ * ----------------------------------------------------------------------------
+ * Ziel:
+ *  - Unterstützt ZWEI Atlas-Stile parallel:
+ *    (A) "Grid/Legacy":   Idle_NO_0_0 / Walk_SO_2_0 / frame_3_1 ...
+ *    (B) "Prefixed":      woodcutter_N_walk_0 / carrier_SW_walk_3 ...
+ *  - Automatische Erkennung der vorhandenen Keys im Atlas (kein manuelles Umbenennen nötig)
+ *  - Optionales ISO-Projection-Tuning, damit "N/E/S/W" zur Bildschirmrichtung passt
+ *
+ * WICHTIG:
+ *  - Diese Datei ist bewusst standalone (keine Imports), damit sie in deinem Setup robust bleibt.
+ *  - Debug/Checker bleibt drin (TUNING.debug)
+ * ========================================================================== */
 (() => {
-  // ------------------------------------------------------------
+  "use strict";
+
+  // ---------------------------------------------------------------------------
   // Konstanten / Defaults
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------------------------
 
-  // Richtungs-Order (8-dir) für Winkel->Token Mapping.
-  // Definition: dx>0 => Osten ("O"), dy>0 => Süden ("S") (Screen/Y-down)
-  const DIR_TOKENS = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
+  /** 8er-Richtungen (Englische Tokens) im Uhrzeigersinn, Start bei E */
+  const DIR8_EN = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
 
-  // Globales Tuning (kann zur Laufzeit überschrieben werden)
+  /** 8er-Richtungen (Deutsche Tokens) im Uhrzeigersinn, Start bei O */
+  const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
+
+  /**
+   * Richtungs-Aliase (DE <-> EN), damit alte und neue Atlanten funktionieren.
+   * NO = NE, SO = SE, O = E
+   */
+  const DIR_ALIASES = {
+    NO: "NE",
+    SO: "SE",
+    O: "E",
+    NE: "NO",
+    SE: "SO",
+    E: "O",
+  };
+
+  /** Standard-FPS pro Action (nur genutzt, wenn mehrere Frames vorhanden sind). */
+  const ACTION_FPS = {
+    idle: 2,
+    walk: 6,
+    work: 6,
+    carry: 6,
+  };
+
+  /** Globales Tuning (kann per UnitAnim.setTuning überschrieben werden). */
   const TUNING = {
-    // Offset in 45°-Schritten (0..7). 4 = 180° Drehung.
+    debug: false,
+
+    /**
+     * Wenn true: Richtung aus TILE-Delta in SCREEN-Delta umrechnen (Isometric).
+     * Das behebt sehr oft "läuft seitlich/rückwärts", wenn Sprites nach Bildschirmrichtung benannt sind.
+     */
+    isoProject: true,
+
+    /**
+     * Optionaler globaler Offset (in 45°-Schritten) auf die berechnete Richtung.
+     * Beispiel: offsetSteps: 1 -> 45° Drehung.
+     */
     offsetSteps: 0,
 
-    // Wenn true, wird dx/dy invertiert (nur falls notwendig)
-    invertDx: false,
-    invertDy: false,
-
-    // Debug-Flag: loggt Richtungen/Frames sporadisch
-    debug: false,
+    /**
+     * Optional pro AtlasKey überschreiben (z.B. nur für woodcutter_atlas):
+     * perAtlas: { woodcutter_atlas: { isoProject:true, offsetSteps: 1 } }
+     */
+    perAtlas: {},
   };
 
-  // Per-Atlas Defaults (nur anwenden, wenn der User nicht global tuned)
-  // woodcutter läuft "rückwärts" => 180° drehen (4 steps).
-  const ATLAS_DEFAULTS = {
-    "woodcutter_atlas": { offsetSteps: 4 },
-  };
+  // ---------------------------------------------------------------------------
+  // Hilfsfunktionen (allgemein)
+  // ---------------------------------------------------------------------------
 
-  // ------------------------------------------------------------
-  // Hilfsfunktionen
-  // ------------------------------------------------------------
-
-  function _clampInt(v, a, b) {
-    v = (v | 0);
-    return v < a ? a : (v > b ? b : v);
+  function _clampInt(v, min, max) {
+    v = v | 0;
+    if (v < min) return min;
+    if (v > max) return max;
+    return v;
   }
 
+  function _normAction(a) {
+    a = (a || "idle").toString().toLowerCase();
+    if (a === "run") return "walk";
+    return a;
+  }
+
+  /** Einheitstyp/Kind ermitteln (robust gegen verschiedene Datenstände). */
   function _getUnitKind(u) {
-    return (u && (u.kind || u.type || u.id)) || "";
+    return u?.kind || u?.type || u?.id || "u.unknown";
   }
 
+  /** AtlasKey aus Registry lesen (fallbacks bleiben drin). */
   function _getAtlasKeyForUnit(u) {
-    // Registry kann existieren (dein Projekt)
-    const kRaw = _getUnitKind(u);
-    const k = (String(kRaw).includes("u.") ? String(kRaw) : ("u." + String(kRaw))).replace(/_/g,".").toLowerCase();
-
-    // 1) Registry.getUnit(k)
-    try {
-      const def = window.Registry?.getUnit?.(k) || window.Registry?.units?.[k];
-      if (def?.atlasKey) return def.atlasKey;
-    } catch(e) {}
-
-    // 2) direkte Felder an Unit (falls vorhanden)
-    if (u && u.atlasKey) return u.atlasKey;
-    if (u && u.atlas) return u.atlas;
-
-    return "";
+    const kind = _getUnitKind(u);
+    const reg = window.Registry?.getUnit?.(kind) || window.Registry?.units?.[kind] || null;
+    return reg?.atlasKey || "carrier_atlas";
   }
 
+  /** Anim-Action aus Unit-State ableiten. */
   function _getActionForUnit(u) {
-    // Minimal: falls AI/state gesetzt wurde
-    const s = (u && (u.__animState || u.animState || u.state)) || "idle";
-    const norm = String(s).toLowerCase();
-    if (norm.includes("walk") || norm.includes("move")) return "walk";
-    if (norm.includes("work") || norm.includes("mine") || norm.includes("chop") || norm.includes("fish")) return "work";
-    if (norm.includes("carry") || norm.includes("haul")) return "carry";
-    return "idle";
+    // Von außen kannst du u.__animState setzen (idle/walk/work/carry)
+    return _normAction(u?.__animState || u?.state || "idle");
   }
 
-  function _getMoveVectorFromTask(u) {
-    const t = u && (u.task || u._task || u.aiTask);
-    if (!t) return null;
+  /**
+   * Delta bestimmen:
+   * - bevorzugt u.vx/u.vy (falls vorhanden)
+   * - sonst task.target vs u.x/u.y
+   */
+  function _getDelta(u) {
+    const vx = Number(u?.vx || 0);
+    const vy = Number(u?.vy || 0);
+    if (Math.abs(vx) > 1e-6 || Math.abs(vy) > 1e-6) return { dx: vx, dy: vy };
 
-    // mögliche Felder in deinem Projekt:
-    // t.to {x,y} / t.dest {x,y} / t.target {x,y} / t.tx,t.ty
-    const cand = t.to || t.dest || t.target || null;
-    if (cand && typeof cand.x === "number" && typeof cand.y === "number") {
-      return { dx: (cand.x - (u.x || 0)), dy: (cand.y - (u.y || 0)) };
+    const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? u?.x ?? 0);
+    const ty = Number(u?.task?.to?.y ?? u?.task?.target?.y ?? u?.targetY ?? u?.toY ?? u?.y ?? 0);
+    const ux = Number(u?.x ?? 0);
+    const uy = Number(u?.y ?? 0);
+
+    return { dx: tx - ux, dy: ty - uy };
+  }
+
+  /**
+   * Optional: TILE-Delta -> SCREEN-Delta (Isometric).
+   * Typischer ISO-Project:
+   *   sx = dx - dy
+   *   sy = dx + dy
+   */
+  function _isoProjectDelta(dx, dy) {
+    return { dx: dx - dy, dy: dx + dy };
+  }
+
+  /**
+   * Richtung (8er) aus dx/dy bestimmen.
+   * Gibt einen Index (0..7) zurück.
+   */
+  function _dirIndex8FromDelta(dx, dy) {
+    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return -1;
+
+    // atan2 liefert Winkel in [-pi..pi], 0=+x (E), +90°=+y (S)
+    const ang = Math.atan2(dy, dx);
+    let deg = (ang * 180) / Math.PI; // [-180..180]
+    if (deg < 0) deg += 360;         // [0..360)
+
+    const idx = Math.round(deg / 45) % 8;
+    return idx;
+  }
+
+  /**
+   * Richtungs-Token (EN oder DE) aus Unit bestimmen.
+   * - Wenn Unit steht (dx/dy ~ 0): letztes dir token verwenden (u.__lastDir) oder Default "S"
+   */
+  function _getDirTokenForUnit(u, atlasKey, schemeHint) {
+    const per = TUNING.perAtlas?.[atlasKey] || {};
+    const isoProject = (per.isoProject ?? TUNING.isoProject) === true;
+    const offsetSteps = (per.offsetSteps ?? TUNING.offsetSteps) | 0;
+
+    let { dx, dy } = _getDelta(u);
+    if (isoProject) {
+      const p = _isoProjectDelta(dx, dy);
+      dx = p.dx;
+      dy = p.dy;
     }
-    if (typeof t.tx === "number" && typeof t.ty === "number") {
-      return { dx: (t.tx - (u.x || 0)), dy: (t.ty - (u.y || 0)) };
+
+    let idx = _dirIndex8FromDelta(dx, dy);
+    if (idx === -1) {
+      // idle -> behalte letzte Richtung
+      const last = u?.__lastDir;
+      return last || "S";
     }
+
+    idx = (idx + offsetSteps) % 8;
+    if (idx < 0) idx += 8;
+
+    // schemeHint kann von Atlas-Erkennung kommen
+    const scheme = schemeHint || "en";
+    const tok = scheme === "de" ? DIR8_DE[idx] : DIR8_EN[idx];
+
+    u.__lastDir = tok;
+    return tok;
+  }
+
+  /** Prüft: gibt es frameKey exakt im Atlas? */
+  function _hasFrame(atlas, key) {
+    return !!(atlas && atlas.frames && atlas.frames[key]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto-Detection: Prefixed-Atlas Index (woodcutter_N_walk_0, ...)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Prefixed-Key-Regex:
+   *   <prefix>_<DIR>_<action>_<idx>
+   * prefix = "woodcutter" etc (kein '_' erlaubt, damit es eindeutig bleibt)
+   */
+  const RX_PREFIXED = /^([^_]+)_(N|NE|E|SE|S|SW|W|NW|NO|SO|O)_(walk|idle|work|carry)_(\d+)$/i;
+
+  /**
+   * Baut einen Index:
+   *  {
+   *    prefix: "woodcutter",
+   *    scheme: "en" | "de",
+   *    actions: { walk: { N: ["woodcutter_N_walk_0", ...], ... }, ... }
+   *  }
+   */
+  function _buildPrefixedIndex(atlas) {
+    const frames = atlas?.frames ? Object.keys(atlas.frames) : [];
+    let prefix = null;
+    const actions = {};
+    const seenDirs = new Set();
+
+    for (const k of frames) {
+      const m = k.match(RX_PREFIXED);
+      if (!m) continue;
+
+      prefix = prefix || m[1];
+      const dir = m[2].toUpperCase();
+      const act = m[3].toLowerCase();
+      const idx = parseInt(m[4], 10) | 0;
+
+      (actions[act] ||= {});
+      (actions[act][dir] ||= []);
+      actions[act][dir].push({ key: k, i: idx });
+
+      seenDirs.add(dir);
+    }
+
+    if (!prefix) return null;
+
+    // Scheme: wenn NO/SO/O vorkommen -> "de", sonst "en"
+    let scheme = "en";
+    for (const d of seenDirs) {
+      if (d === "NO" || d === "SO" || d === "O") { scheme = "de"; break; }
+    }
+
+    // Sortieren nach idx
+    for (const act of Object.keys(actions)) {
+      for (const dir of Object.keys(actions[act])) {
+        actions[act][dir].sort((a, b) => a.i - b.i);
+        actions[act][dir] = actions[act][dir].map(o => o.key);
+      }
+    }
+
+    return { prefix, scheme, actions };
+  }
+
+  // Cache: atlasKey -> prefIndex|null
+  const _prefCache = new Map();
+
+  function _getPrefIndex(atlasKey, atlas) {
+    if (_prefCache.has(atlasKey)) return _prefCache.get(atlasKey);
+    const idx = _buildPrefixedIndex(atlas);
+    _prefCache.set(atlasKey, idx);
+    return idx;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Frame-Auswahl (Action/Dir + Animation)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * legacy "Idle_DIR_fi_0" / "Walk_DIR_fi_0" Muster
+   * (wird nur genutzt, wenn solche Keys existieren)
+   */
+  function _pickLegacyFrame(atlas, action, dirTok, fi) {
+    const act = action === "walk" ? "Walk" : action === "work" ? "Work" : action === "carry" ? "Carry" : "Idle";
+    const key = `${act}_${dirTok}_${fi}_0`;
+    if (_hasFrame(atlas, key)) return key;
+
+    // Fallback: fi=0
+    const key0 = `${act}_${dirTok}_0_0`;
+    if (_hasFrame(atlas, key0)) return key0;
+
+    // Manche Atlanten haben nur "frame_r_c"
+    if (_hasFrame(atlas, "frame_0_0")) return "frame_0_0";
+
     return null;
   }
 
-  function _getDirTokenFromVector(dx, dy, atlasKey) {
-    if (!isFinite(dx) || !isFinite(dy)) return "S";
+  /**
+   * Prefixed Frames:
+   *  woodcutter_N_walk_0 ... woodcutter_N_walk_3
+   */
+  function _pickPrefixedFrame(prefIndex, action, dirTok, fi) {
+    if (!prefIndex) return null;
 
-    // Optional invert (falls du später mal ein anderes Koordinatensystem hast)
-    if (TUNING.invertDx) dx = -dx;
-    if (TUNING.invertDy) dy = -dy;
+    const act = action;
+    const actions = prefIndex.actions || {};
 
-    // Winkel in Screen-Koordinaten (Y down).
-    // atan2(dy, dx): 0=O, 90=S, 180=W, -90=N
-    const ang = Math.atan2(dy, dx);
+    // 1) exakte action vorhanden?
+    let list = actions?.[act]?.[dirTok];
 
-    // Quantisierung auf 8 Sektoren:
-    // index 0..7 entspricht DIR_TOKENS
-    const step = (Math.PI * 2) / 8;
-    let idx = Math.round(ang / step); // kann negativ sein
-    idx = ((idx % 8) + 8) % 8;
+    // 2) Wenn idle/work/carry fehlen, nimm walk (sehr praktisch für frühe Sprite-Iterationen)
+    if (!list && act !== "walk") list = actions?.walk?.[dirTok];
 
-    // Offset: global oder per-atlas default (wenn global==0 und per-atlas existiert)
-    let off = _clampInt(TUNING.offsetSteps, 0, 7);
-    if (off === 0 && atlasKey && ATLAS_DEFAULTS[atlasKey]?.offsetSteps) {
-      off = _clampInt(ATLAS_DEFAULTS[atlasKey].offsetSteps, 0, 7);
+    // 3) Wenn dirTok in "anderem Scheme" ist, versuch alias
+    if (!list) {
+      const altDir = DIR_ALIASES[dirTok];
+      if (altDir) {
+        list = actions?.[act]?.[altDir] || actions?.walk?.[altDir];
+      }
     }
-    idx = (idx + off) % 8;
 
-    return DIR_TOKENS[idx] || "S";
+    if (!list || !list.length) return null;
+
+    const i = _clampInt(fi, 0, list.length - 1);
+    return list[i];
   }
 
-  function _getDirTokenForUnit(u, atlasKey) {
-    // 1) wenn Unit explizit dir gesetzt hat
-    const d0 = u && (u.__dir || u.dir || u.facing);
-    if (d0 && typeof d0 === "string") {
-      const d = d0.toUpperCase();
-      if (DIR_TOKENS.includes(d)) return d;
-      // Legacy
-      if (d === "NE") return "NO";
-      if (d === "SE") return "SO";
-      if (d === "E") return "O";
-      return "S";
-    }
-
-    // 2) aus Task-Ziel
-    const vTask = _getMoveVectorFromTask(u);
-    if (vTask) return _getDirTokenFromVector(vTask.dx, vTask.dy, atlasKey);
-
-    // 3) aus letzter Bewegung (falls vorhanden)
-    const lm = u && (u.__lastMove || u.lastMove);
-    if (lm && typeof lm.dx === "number" && typeof lm.dy === "number") {
-      return _getDirTokenFromVector(lm.dx, lm.dy, atlasKey);
-    }
-
-    // 4) aus velocity
-    const vx = u && (u.vx ?? u.dx);
-    const vy = u && (u.vy ?? u.dy);
-    if (typeof vx === "number" && typeof vy === "number" && (Math.abs(vx) + Math.abs(vy)) > 0.0001) {
-      return _getDirTokenFromVector(vx, vy, atlasKey);
-    }
-
-    return "S";
+  /**
+   * FPS -> Frameindex (fi) berechnen.
+   * - Wenn Atlas nur 1 Frame hat: fi=0
+   */
+  function _frameIndexForNow(nowMs, fps, frameCount) {
+    if (!frameCount || frameCount <= 1) return 0;
+    const msPerFrame = 1000 / Math.max(1, fps || 1);
+    return Math.floor(nowMs / msPerFrame) % frameCount;
   }
 
-  function _pickFrameName(atlas, action, dirTok, t) {
-    if (!atlas || !atlas.frames) return null;
+  /**
+   * Haupt-Picker:
+   *  - versucht prefixed
+   *  - sonst legacy
+   *  - sonst "erstes Frame" fallback
+   */
+  function _pickFrameName(atlasKey, atlas, action, dirTok, nowMs) {
+    // Prefixed-Index
+    const prefIndex = _getPrefIndex(atlasKey, atlas);
 
-    // Primär: neue, sprechende Keys wie Idle_NW_0_0 etc.
-    const capA = action.charAt(0).toUpperCase() + action.slice(1); // idle->Idle
-    const key = `${capA}_${dirTok}_0_0`;
-    if (atlas.frames[key]) return key;
+    // Erkannten Scheme-Hint zurückgeben (für Richtung)
+    const schemeHint = prefIndex?.scheme || null;
 
-    // Fallback: wenn du irgendwann Walk_... etc. hinzufügst, aber action anders heißt
-    if (action === "walk") {
-      const k2 = `Idle_${dirTok}_0_0`;
-      if (atlas.frames[k2]) return k2;
+    // Zuerst passenden DirTok im Scheme entscheiden
+    // Wenn Atlas DE-Scheme nutzt, aber unser dirTok EN ist (oder andersrum), aliasen:
+    let dirTokUse = dirTok;
+    if (schemeHint === "de" && (dirTok === "E" || dirTok === "NE" || dirTok === "SE")) {
+      dirTokUse = DIR_ALIASES[dirTok] || dirTok;
+    }
+    if (schemeHint === "en" && (dirTok === "O" || dirTok === "NO" || dirTok === "SO")) {
+      dirTokUse = DIR_ALIASES[dirTok] || dirTok;
     }
 
-    // Legacy: frame_<row>_<col> (wenn vorhanden)
-    // Wir mappen Richtung auf row, col=0
-    // Reihenfolge: O,SO,S,SW,W,NW,N,NO -> row 0..7
-    const row = DIR_TOKENS.indexOf(dirTok);
-    if (row >= 0) {
-      const k3 = `frame_${row}_0`;
-      if (atlas.frames[k3]) return k3;
+    // Prefixed: frame count ermitteln (für fi)
+    let prefCount = 0;
+    if (prefIndex) {
+      const list = (prefIndex.actions?.[action]?.[dirTokUse]) ||
+                   (action !== "walk" ? prefIndex.actions?.walk?.[dirTokUse] : null) ||
+                   (DIR_ALIASES[dirTokUse] ? (prefIndex.actions?.[action]?.[DIR_ALIASES[dirTokUse]] || prefIndex.actions?.walk?.[DIR_ALIASES[dirTokUse]]) : null);
+      prefCount = list?.length || 0;
     }
 
-    // Last resort: irgendein erster Frame
-    const keys = Object.keys(atlas.frames);
-    return keys.length ? keys[0] : null;
+    const fps = ACTION_FPS[action] ?? 2;
+    const fiPref = _frameIndexForNow(nowMs, fps, prefCount);
+
+    const prefFrame = _pickPrefixedFrame(prefIndex, action, dirTokUse, fiPref);
+    if (prefFrame && _hasFrame(atlas, prefFrame)) return { frame: prefFrame, schemeHint };
+
+    // Legacy: wir wissen nicht wie viele Frames es wirklich gibt -> probier fi 0..7
+    // (weil die meisten Atlanten klein sind)
+    for (let tryFi = 0; tryFi < 8; tryFi++) {
+      const legacy = _pickLegacyFrame(atlas, action, dirTokUse, tryFi);
+      if (legacy) return { frame: legacy, schemeHint };
+    }
+
+    // Fallback: nimm erstes Frame, wenn vorhanden
+    const keys = atlas?.frames ? Object.keys(atlas.frames) : [];
+    return { frame: keys[0] || null, schemeHint };
   }
 
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Public API
-  // ------------------------------------------------------------
+  // ---------------------------------------------------------------------------
 
   const UnitAnim = {
-    /**
-     * Globale Tuning-Parameter setzen (optional).
-     * Beispiel:
-     *   UnitAnim.setTuning({ offsetSteps: 4 })
-     */
-    setTuning(patch = {}) {
-      if (patch && typeof patch === "object") {
-        if (patch.offsetSteps != null) TUNING.offsetSteps = _clampInt(patch.offsetSteps, 0, 7);
-        if (patch.invertDx != null) TUNING.invertDx = !!patch.invertDx;
-        if (patch.invertDy != null) TUNING.invertDy = !!patch.invertDy;
-        if (patch.debug != null) TUNING.debug = !!patch.debug;
-      }
-      return { ...TUNING };
+    /** Debug & Tuning setzen. */
+    setTuning(partial) {
+      if (!partial || typeof partial !== "object") return;
+      Object.assign(TUNING, partial);
+      // Cache leeren, falls man z.B. perAtlas umstellt
+      _prefCache.clear();
+      if (TUNING.debug) console.info("[UnitAnim] setTuning", TUNING);
     },
 
-    getTuning() { return { ...TUNING }; },
-
     /**
-     * Ermittelt den Frame-Key für eine Unit.
-     * Erwartet, dass Assets.getAtlas(atlasKey) funktioniert.
+     * Frame-Key für eine Unit bestimmen.
+     * Returns: string | null
      */
     getFrameForUnit(u, nowMs = performance.now()) {
       const atlasKey = _getAtlasKeyForUnit(u);
       const atlas = window.Assets?.getAtlas?.(atlasKey) || null;
 
       const action = _getActionForUnit(u);
-      const dirTok = _getDirTokenForUnit(u, atlasKey);
-      const frame = _pickFrameName(atlas, action, dirTok, nowMs);
+
+      // Erstmal grob Richtung (schemeHint kommt später aus picker)
+      const dirTokRaw = _getDirTokenForUnit(u, atlasKey, "en");
+
+      const picked = _pickFrameName(atlasKey, atlas, action, dirTokRaw, nowMs);
+
+      // Wenn Atlas z.B. DE scheme hat, wollen wir Dir nochmal sauber in diesem Scheme merken,
+      // damit Idle richtig bleibt.
+      if (picked?.schemeHint) {
+        const dirTokFinal = _getDirTokenForUnit(u, atlasKey, picked.schemeHint);
+        // (dirTokFinal wird in u.__lastDir gespeichert)
+        if (TUNING.debug && Math.random() < 0.01) {
+          console.debug("[UnitAnim] dir scheme", { atlasKey, scheme: picked.schemeHint, dirTokRaw, dirTokFinal });
+        }
+      }
 
       if (TUNING.debug && Math.random() < 0.01) {
-        console.debug("[UnitAnim]", { kind: _getUnitKind(u), atlasKey, action, dirTok, frame });
+        console.debug("[UnitAnim]", { kind: _getUnitKind(u), atlasKey, action, dir: u.__lastDir, frame: picked?.frame });
       }
-      return frame || null;
+      return picked?.frame || null;
     },
 
-    /**
-     * Nur Direction debug: liefert {dirTok, atlasKey}
-     */
+    /** Nur Direction debug: {dirTok, atlasKey} */
     getDir(u) {
       const atlasKey = _getAtlasKeyForUnit(u);
-      return { dirTok: _getDirTokenForUnit(u, atlasKey), atlasKey };
+      return { dirTok: _getDirTokenForUnit(u, atlasKey, "en"), atlasKey };
+    },
+
+    /** Debug-Hilfe: zeigt, ob prefixed index erkannt wurde */
+    debugPrefIndex(atlasKey) {
+      const atlas = window.Assets?.getAtlas?.(atlasKey) || null;
+      const idx = _getPrefIndex(atlasKey, atlas);
+      return idx;
     },
   };
 
-  // Global export
   window.UnitAnim = UnitAnim;
 })();
