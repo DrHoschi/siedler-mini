@@ -58,7 +58,14 @@
   // Area-Erzeugung
   // -------------------------------------------------------------------------
   function pickRadius(detail){
-    // ggf. später abhängig vom Gebäude-Typ machen
+    // Aus Registry übernehmen, wenn vorhanden:
+    // buildings.json → workArea.radiusTiles
+    try{
+      const id = detail?.id || detail?.buildingId || detail?.kind || null;
+      const def = id ? window.Registry?.getBuilding?.(id) : null;
+      const r = Number(def?.workArea?.radiusTiles);
+      if (Number.isFinite(r) && r > 0) return r;
+    }catch(_){}
     return DEFAULT_RADIUS_TILES;
   }
 

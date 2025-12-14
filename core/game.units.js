@@ -1,23 +1,28 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-units-spawn-bridge1
+ * Version : v25.12.14-units-worker-spawn-workarea-v1
  *
- * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
- *           – verwaltet HQ-Position & Carrier-Liste
+ * Zweck   : Zentrale Einheiten-Logik
+ *           – verwaltet HQ-Position & Unit-Liste
  *           – bewegt Carrier (Idle + Job-Phasen)
- *           – versteht Jobs mit {tx,ty} ODER {x,y}
- *           – sendet:
- *               • cb:build:deliver für Job-Typ "deliver" (Baustellen)
- *               • cb:job:done     für andere Job-Typen (z.B. "carry" später)
+ *           – spawnt Worker passend zu Gebäuden (Lumberjack/Quarry/Fisher)
+ *           – Worker "arbeiten" sichtbar: laufen im WorkArea-Kreis hin & her
+ *
+ * Wichtig :
+ *   - Carrier-Job-System bleibt 1:1 kompatibel.
+ *   - Worker-Loop ist bewusst "lightweight" (noch kein echtes Job-System),
+ *     aber liefert die sichtbare Basis, damit wir später D) sauber ausbauen:
+ *       Job anfordern → hinlaufen → arbeiten → output → carrier-job
  *
  * API     :
  *   GameUnits.setHQPos({tx,ty})
  *   GameUnits.getHQPos()
  *   GameUnits.spawnInitialCarriers(n)
  *   GameUnits.getUnits()
- *   GameUnits.needsJob()
- *   GameUnits.assignJob(job)
+ *   GameUnits.spawn(unitId, count, opts)
+ *   GameUnits.clear()
+ *   GameUnits.snapshot()
  *   GameUnits.tick(dt?)
  * ============================================================================ */
 (function () {
@@ -30,7 +35,7 @@
   // -------------------------------------------------------------------------
   // STATE
   // -------------------------------------------------------------------------
-  /** @type {Array<{id:number,type:string,x:number,y:number,task?:any,carrying?:string,_idleTarget?:{x:number,y:number}}>} */
+  /** @type {Array<any>} */
   const _units = [];
 
   /** @type {{tx:number,ty:number}|null} */
@@ -39,6 +44,13 @@
   /** optional Referenz aufs Game-Objekt (für spätere Erweiterungen) */
   let _game = null;
 
+  /** Für Auto-Spawn: buildingUid -> unit.id */
+  const _workersByBuildingUid = new Map();
+
+  /** letzte bekannte Building-Details (uid) -> detail */
+  const _buildingsByUid = new Map();
+
+  // Bewegungsgeschwindigkeit (Tiles/s). Carrier nutzt denselben Wert.
   const SPEED_TILES_PER_SEC = 0.8;
 
   // -------------------------------------------------------------------------
@@ -72,6 +84,18 @@
     }catch{}
   }
 
+  /** WorkArea-UID-Logik wie in core/game.workarea.js (für robuste Zuordnung) */
+  function _makeBuildingUid(detail){
+    if (!detail) return null;
+    if (typeof detail === 'string') return detail;
+    if (detail.uid) return String(detail.uid);
+
+    const id = detail.id || detail.buildingId || detail.kind || 'building';
+    const x  = detail.x | 0;
+    const y  = detail.y | 0;
+    return `${id}@${x},${y}`;
+  }
+
   // -------------------------------------------------------------------------
   // HQ & UNITS
   // -------------------------------------------------------------------------
@@ -90,6 +114,7 @@
     const unit = {
       id   : _units.length + 1,
       type : 'carrier',
+      kind : 'u.carrier',      // Registry-ID
       x    : tx,
       y    : ty,
       task : null,
@@ -100,7 +125,6 @@
     return unit;
   }
 
-  
   // -------------------------------------------------------------------------
   // GENERIC SPAWN (Worker/Villager etc.)
   // -------------------------------------------------------------------------
@@ -128,15 +152,15 @@
     return id === 'u.carrier' || id === 'u.porter' || id === 'u.träger' || id === 'u.traeger';
   }
 
-  function _spawnUnitAt(unitId, tx, ty) {
+  function _spawnUnitAt(unitId, tx, ty, meta){
     // Carrier bleibt kompatibel zum bestehenden Job-System
     if (_isCarrierId(unitId)) {
       const u = _spawnCarrierAt(tx, ty);
-      u.kind = 'u.carrier'; // zusätzlich: Registry-ID
+      if (meta && typeof meta === 'object') Object.assign(u, meta);
       return u;
     }
 
-    // Worker/Villager/Jobs später – aktuell nur als "Punkt" sichtbar
+    // Worker/Villager/Jobs später – aktuell als Sprite über Unit-Overlay sichtbar
     const kind = _normUnitId(unitId) || 'u.unknown';
     const unit = {
       id   : _units.length + 1,
@@ -146,13 +170,21 @@
       y    : ty,
       task : null,
       carrying   : null,
-      _idleTarget: null
+
+      // Worker-Movement-State
+      _idleTarget : null,
+      _wstate     : null,
+
+      // Zuordnung
+      assignedBuildingUid : meta?.assignedBuildingUid || null,
+      assignedBuildingId  : meta?.assignedBuildingId  || null,
+      home                : meta?.home || null
     };
     _units.push(unit);
     return unit;
   }
 
-function spawnInitialCarriers(count){
+  function spawnInitialCarriers(count){
     if (!_hqPos){
       WARN('spawnInitialCarriers ohne HQPos aufgerufen');
       return;
@@ -227,7 +259,7 @@ function spawnInitialCarriers(count){
     for (let i=0; i<count; i++){
       const jitterX = _rand(-0.25, 0.25);
       const jitterY = _rand(-0.25, 0.25);
-      arr.push(_spawnUnitAt(unitId, base.tx + jitterX, base.ty + jitterY));
+      arr.push(_spawnUnitAt(unitId, base.tx + jitterX, base.ty + jitterY, opts?.meta));
     }
     _emitChanged('spawn:'+String(unitId||''));
     return arr;
@@ -236,6 +268,8 @@ function spawnInitialCarriers(count){
   function clear(){
     if (!_units.length) return;
     _units.length = 0;
+    _workersByBuildingUid.clear();
+    _buildingsByUid.clear();
     _emitChanged('clear');
   }
 
@@ -246,9 +280,104 @@ function spawnInitialCarriers(count){
     return detail;
   }
 
+  // -------------------------------------------------------------------------
+  // AUTO-SPAWN: Worker passend zum Gebäude
+  // -------------------------------------------------------------------------
+
+  /**
+   * Building → Worker Mapping (Epoche 1)
+   * (Alias/Unit-IDs sind in data/units.json abgedeckt)
+   */
+  const BUILDING_TO_WORKER = Object.freeze({
+    'b.lumberjack': 'u.lumberjack',
+    'b.quarry'    : 'u.stonecutter',
+    'b.fisher'    : 'u.fisher'
+  });
+
+  function _getEntranceTile(buildingDetail){
+    const id = buildingDetail?.id || buildingDetail?.buildingId || '';
+    const x  = buildingDetail?.x ?? buildingDetail?.tx ?? 0;
+    const y  = buildingDetail?.y ?? buildingDetail?.ty ?? 0;
+    const w  = (buildingDetail?.w|0) || 3;
+    const h  = (buildingDetail?.h|0) || 3;
+
+    // Registry-Entrances bevorzugen (dx/dy sind relativ zur Gebäude-TopLeft-Tile)
+    try{
+      const def = window.Registry?.getBuilding?.(id);
+      const e0  = def?.entrances?.[0];
+      const dx  = Number(e0?.dx);
+      const dy  = Number(e0?.dy);
+      if (Number.isFinite(dx) && Number.isFinite(dy)){
+        return { tx: (x|0) + dx, ty: (y|0) + dy };
+      }
+    }catch(_){}
+
+    // Fallback: mittig unten
+    return { tx: (x|0) + w/2, ty: (y|0) + h };
+  }
+
+  function _spawnWorkerForBuilding(buildingDetail){
+    const id  = buildingDetail?.id || buildingDetail?.buildingId || '';
+    const uid = _makeBuildingUid(buildingDetail);
+    if (!uid || !id) return null;
+
+    // Nur, wenn wir das Gebäude kennen & es ein Worker-Gebäude ist
+    const workerKind = BUILDING_TO_WORKER[id];
+    if (!workerKind) return null;
+
+    // Schon vorhanden?
+    if (_workersByBuildingUid.has(uid)){
+      return null;
+    }
+
+    // WorkArea (default) sicherstellen – damit Worker direkt "arbeiten" kann
+    const area = window.GameWorkArea?.ensureDefaultForBuilding?.({
+      id, buildingId:id, uid,
+      x: buildingDetail.x|0, y: buildingDetail.y|0,
+      w: (buildingDetail.w|0) || 3, h: (buildingDetail.h|0) || 3
+    });
+
+    const door = _getEntranceTile(buildingDetail);
+    const meta = {
+      assignedBuildingUid : uid,
+      assignedBuildingId  : id,
+      home                : { tx: door.tx, ty: door.ty },
+      workAreaUid         : area?.uid || uid
+    };
+
+    const u = _spawnUnitAt(workerKind, door.tx + _rand(-0.15,0.15), door.ty + _rand(-0.15,0.15), meta);
+    _workersByBuildingUid.set(uid, u.id);
+
+    LOG('Worker gespawnt', { building:id, uid, worker: workerKind, at: door });
+    _emitChanged('worker:spawn:'+id);
+    return u;
+  }
+
+  /** Wohnhäuser: spawns[] aus buildings.json (z.B. 2 Villager) */
+  function _spawnBuildingSpawns(buildingDetail){
+    const id = buildingDetail?.id || buildingDetail?.buildingId || '';
+    if (!id) return;
+
+    const def = window.Registry?.getBuilding?.(id);
+    const sp = Array.isArray(def?.spawns) ? def.spawns : null;
+    if (!sp || !sp.length) return;
+
+    const uid = _makeBuildingUid(buildingDetail);
+    const door = _getEntranceTile(buildingDetail);
+
+    for (const s of sp){
+      const unit = s?.unit;
+      const qty  = (s?.qty|0) || 1;
+      if (!unit || qty <= 0) continue;
+
+      spawn(unit, qty, { at: door, meta: { assignedBuildingUid: uid, assignedBuildingId: id, home: {tx:door.tx, ty:door.ty} } });
+    }
+
+    LOG('Building-spawns erzeugt', { building:id, spawns: sp });
+  }
 
   // -------------------------------------------------------------------------
-  // JOB HANDLING
+  // JOB HANDLING (Carrier)
   // -------------------------------------------------------------------------
   function needsJob(){
     // Mindestens ein Carrier ohne laufenden Task?
@@ -258,14 +387,6 @@ function spawnInitialCarriers(count){
   /**
    * Job einem freien Carrier zuweisen.
    * Job darf from/to als {tx,ty} ODER {x,y} enthalten.
-   *
-   * job = {
-   *   id   : 'job-deliver-1',
-   *   type : 'deliver' | 'carry' | ...,
-   *   res  : 'wood' | 'stone' | ...,
-   *   from : {x,y} | {tx,ty} (optional, sonst HQ),
-   *   to   : {x,y} | {tx,ty}
-   * }
    */
   function assignJob(job){
     const u = _units.find(u => u.type === 'carrier' && !u.task);
@@ -278,7 +399,7 @@ function spawnInitialCarriers(count){
     // HQ-Fallback, falls from nicht gesetzt ist
     const hq = _hqPos || { tx: u.x, ty: u.y };
 
-    // Quelle (HQ oder Gebäude) – tolerant gegenüber {x,y} / {tx,ty}
+    // Quelle – tolerant gegenüber {x,y} / {tx,ty}
     const sx = _coord(job.from || hq, 'x',  hq.tx);
     const sy = _coord(job.from || hq, 'y',  hq.ty);
 
@@ -308,7 +429,7 @@ function spawnInitialCarriers(count){
   }
 
   // -------------------------------------------------------------------------
-  // BEWEGUNG
+  // BEWEGUNG (Carrier + Worker)
   // -------------------------------------------------------------------------
   function _randomTargetNearHQ(){
     if (!_hqPos) return null;
@@ -346,11 +467,13 @@ function spawnInitialCarriers(count){
     return dist <= step;
   }
 
+  // --------------------------- Carrier Task Loop ----------------------------
+
   function _tickTask(u, dt){
     const t = u.task;
     if (!t) return;
 
-    // Phase 1: Zum HQ / Quelle laufen
+    // Phase 1: Zur Quelle laufen
     if (t.phase === 'go_source'){
       if (_moveTowards(u, t.source, dt)){
         t.phase       = 'pickup';
@@ -359,7 +482,7 @@ function spawnInitialCarriers(count){
       return;
     }
 
-    // Phase 2: Aufnahme der Ressource
+    // Phase 2: Aufnahme
     if (t.phase === 'pickup'){
       t.pickupTimer -= dt;
       if (t.pickupTimer <= 0){
@@ -369,7 +492,7 @@ function spawnInitialCarriers(count){
       return;
     }
 
-    // Phase 3: Zum Ziel-Gebäude / Ziel laufen
+    // Phase 3: Zum Ziel laufen
     if (t.phase === 'go_target'){
       if (_moveTowards(u, t.dest, dt)){
         t.phase = 'deliver';
@@ -384,35 +507,17 @@ function spawnInitialCarriers(count){
       const tileY   = t.dest.y;
 
       if (jobType === 'deliver'){
-        // Klassischer Bau-Job → Bau-Subsystem informieren
         try{
           window.dispatchEvent(new CustomEvent('cb:build:deliver', {
-            detail: {
-              // Welt-/Tile-Koordinate (Mitte des Zieltiles)
-              x  : tileX,
-              y  : tileY,
-              // zusätzlich Tile-Koordinaten, weil ältere Module tx/ty erwarten
-              tx : tileX,
-              ty : tileY,
-              res: u.carrying,
-              jobId: t.job?.id
-            }
+            detail: { x: tileX, y: tileY, tx: tileX, ty: tileY, res: u.carrying, jobId: t.job?.id }
           }));
         } catch(e){
           WARN('cb:build:deliver dispatch fehlgeschlagen', e);
         }
       } else {
-        // Allgemeiner Job (z.B. zukünftige Tragejobs "carry")
         try{
           window.dispatchEvent(new CustomEvent('cb:job:done', {
-            detail: {
-              type     : jobType,
-              carrierId: u.id,
-              res      : u.carrying,
-              jobId    : t.job?.id,
-              x        : tileX,
-              y        : tileY
-            }
+            detail: { type: jobType, carrierId: u.id, res: u.carrying, jobId: t.job?.id, x: tileX, y: tileY }
           }));
         } catch(e){
           WARN('cb:job:done dispatch fehlgeschlagen', e);
@@ -420,13 +525,13 @@ function spawnInitialCarriers(count){
       }
 
       u.carrying = null;
-      u.task     = null; // Job erledigt → Carrier wieder idle
+      u.task     = null;
       return;
     }
   }
 
-  function _tickIdle(u, dt){
-    if (!_hqPos) return; // kein HQ → gar nicht bewegen
+  function _tickIdleCarrier(u, dt){
+    if (!_hqPos) return;
 
     if (!u._idleTarget || Math.random() < 0.01){
       u._idleTarget = _randomTargetNearHQ();
@@ -436,19 +541,88 @@ function spawnInitialCarriers(count){
     _moveTowards(u, u._idleTarget, dt);
   }
 
+  // --------------------------- Worker "WorkArea" Loop -----------------------
+
+  function _pickRandomInWorkArea(uid){
+    const area = window.GameWorkArea?.getAreaFor?.(uid) || window.GameWorkArea?.areasByUid?.get?.(uid) || null;
+    if (!area) return null;
+
+    const cx = Number(area.cx);
+    const cy = Number(area.cy);
+    const r  = Number(area.radiusTiles);
+    if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r) || r <= 0) return null;
+
+    // gleichmäßige Verteilung: sqrt(rand) * r
+    const a = Math.random() * Math.PI * 2;
+    const m = Math.sqrt(Math.random()) * r;
+    return { x: cx + Math.cos(a)*m, y: cy + Math.sin(a)*m };
+  }
+
+  function _tickWorker(u, dt){
+    // Worker ohne assignment: einfach minimal "atmen" (klein wandern um current pos)
+    const uid = u.assignedBuildingUid || u.workAreaUid || null;
+    const home = u.home || { tx: u.x, ty: u.y };
+
+    if (!u._wstate){
+      u._wstate = { phase:'go_work', timer:0, target:null };
+    }
+
+    const st = u._wstate;
+
+    if (st.phase === 'go_work'){
+      if (!st.target){
+        st.target = _pickRandomInWorkArea(uid) || { x: home.tx + _rand(-0.8,0.8), y: home.ty + _rand(-0.8,0.8) };
+      }
+      if (_moveTowards(u, st.target, dt)){
+        st.phase = 'work';
+        st.timer = 0.6 + Math.random() * 0.9; // kurze Arbeitszeit
+        st.target = null;
+      }
+      return;
+    }
+
+    if (st.phase === 'work'){
+      st.timer -= dt;
+      if (st.timer <= 0){
+        st.phase = 'go_home';
+      }
+      return;
+    }
+
+    if (st.phase === 'go_home'){
+      const target = { x: home.tx, y: home.ty };
+      if (_moveTowards(u, target, dt)){
+        st.phase = 'rest';
+        st.timer = 0.5 + Math.random() * 0.8;
+      }
+      return;
+    }
+
+    if (st.phase === 'rest'){
+      st.timer -= dt;
+      if (st.timer <= 0){
+        st.phase = 'go_work';
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // TICK
+  // -------------------------------------------------------------------------
   function tick(dt){
     if (!dt || !Number.isFinite(dt)){
-      // Fallback für Aufrufe ohne dt (z.B. game.tick.js)
       dt = 1/60;
     }
 
     for (const u of _units){
-      if (u.type !== 'carrier') continue;
-
-      if (u.task){
-        _tickTask(u, dt);
-      } else {
-        _tickIdle(u, dt);
+      if (u.type === 'carrier'){
+        if (u.task) _tickTask(u, dt);
+        else _tickIdleCarrier(u, dt);
+        continue;
+      }
+      if (u.type === 'worker'){
+        _tickWorker(u, dt);
+        continue;
       }
     }
   }
@@ -479,6 +653,42 @@ function spawnInitialCarriers(count){
     _emitChanged('hq:placed');
   });
 
+  /**
+   * Gebäude-Fertig/Placed Event:
+   * - wir merken uns Detail → späterer WorkArea-Set kann Worker nachziehen
+   * - wir spawnen default sofort, damit du Worker direkt am Gebäude siehst
+   */
+  window.addEventListener('cb:build:complete', (ev)=>{
+    const d = ev?.detail || {};
+    const id = d.id || d.buildingId || d.kind || '';
+    if (!id) return;
+
+    const uid = _makeBuildingUid(d);
+    if (uid) _buildingsByUid.set(uid, d);
+
+    // Haus-Spawns (Villager etc.)
+    _spawnBuildingSpawns(d);
+
+    // Worker buildings
+    _spawnWorkerForBuilding(d);
+  });
+
+  /**
+   * Sobald WorkArea gesetzt wird, stellen wir sicher, dass der Worker existiert
+   * und die UID korrekt verknüpft bleibt.
+   */
+  window.addEventListener('cb:workarea:set', (ev)=>{
+    const d = ev?.detail || {};
+    const uid = _makeBuildingUid(d);
+    if (!uid) return;
+
+    // Detail aktualisieren/merken (z.B. wenn x/y nicht komplett war)
+    _buildingsByUid.set(uid, { ...(_buildingsByUid.get(uid) || {}), ...d });
+
+    // Worker sicherstellen
+    _spawnWorkerForBuilding(_buildingsByUid.get(uid) || d);
+  });
+
   // -------------------------------------------------------------------------
   // Inspector / Debug Events (optional, aber super praktisch)
   // -------------------------------------------------------------------------
@@ -498,7 +708,6 @@ function spawnInitialCarriers(count){
     snapshot();
   });
 
-
   // -------------------------------------------------------------------------
   // EXPORT
   // -------------------------------------------------------------------------
@@ -513,16 +722,23 @@ function spawnInitialCarriers(count){
 
     // Legacy-Alias (game.map.js / ältere Module nutzen GameUnits.list)
     list: _units,
+
+    // Carrier API
     needsJob,
     assignJob,
+
+    // Tick
     tick,
-    // für spätere Worker-Typen:
+
+    // Debug
     _state: {
       units : _units,
       hqPos : () => _hqPos,
-      game  : () => _game
+      game  : () => _game,
+      workersByBuildingUid : _workersByBuildingUid,
+      buildingsByUid : _buildingsByUid
     }
   };
 
-  LOG('Units geladen → Jobfähig (fix4, deliver + job:done)');
+  LOG('Units geladen → Carrier + Worker-Spawns/WorkArea-Loop aktiv');
 })();
