@@ -285,7 +285,7 @@
       }catch(_e){}
 
       return entry;
-    }},
+    },
 
     /**
      * Zeichnet einen Atlas-Frame im WORLD-Space.
