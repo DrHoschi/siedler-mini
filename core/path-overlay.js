@@ -1,553 +1,540 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Pfad/Heatmap Overlay
- * Version : v25.12.15-paths-overlay-visible
- * Autor   : ChatGPT (Assistenz)
+ * Version : v4.1.5-hotfix (2025-12-15)
  *
- * Zweck   : Zeichnet ein transparentes Overlay über dem Spiel-Canvas (#game),
- *           um Trampelpfade/Nutzungsintensität pro Tile sichtbar zu machen.
- *
- * Design-Entscheidungen (konform Bootflow):
- *   • KEIN Autostart mehr auf DOMContentLoaded / assets-ready.
- *   • Init erfolgt ausschließlich nach cb:game:start (vom Boot).
- *   • Doppel-Init wird über File- und Instance-Guards verhindert.
+ * Ziel dieses Hotfix:
+ *   1) Overlay/Heatmap IMMER schaltbar (auch wenn cb:game:start verpasst wurde)
+ *   2) Kein "klebt am Bildschirm" mehr: wir benutzen die exakt gleiche Kamera-
+ *      Transform wie core/game.map.js:
+ *        ctx.setTransform(zoom,0,0,zoom,-camX*zoom,-camY*zoom)
+ *   3) Trampelpfade robust zeichnen (niemals crashen, auch wenn Texturen fehlen)
+ *   4) Optional: vorhandene Pfad-Texturen laden:
+ *        assets/tex/path/topdown_path0..9.png
  *
  * Struktur : Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
- * Abhäng.  : #game-Canvas existiert wenn cb:game:start kommt.
- * Events   : hört  auf:  cb:game:start, cb:path:overlay:on/off, cb:path:heatmap:on/off
- *            sendet:     (keine)
- * API      : window.PathOverlay.{init,toggle,setHeatmap,mark,reset,isEnabled,isHeatmap,_state}
  * ========================================================================== */
+(() => {
+  'use strict';
 
+  // --- Guards ---------------------------------------------------------------
+  // Wichtig: Das Modul MUSS window.PathOverlay immer bereitstellen.
+  if (window.__PATH_OVERLAY_V415__) return;
+  window.__PATH_OVERLAY_V415__ = true;
 
-/* ============================================================================
- * [Imports] (keine externen Imports – Plain JS Modul)
- * ========================================================================== */
+  // --- Logging (CBLog falls vorhanden) --------------------------------------
+  const TAG  = '[path-overlay]';
+  const LOG  = (...a) => (window.CBLog?.info ?? console.log )(TAG, ...a);
+  const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+  const ERR  = (...a) => (window.CBLog?.error?? console.error)(TAG, ...a);
 
+  // --- Konstanten -----------------------------------------------------------
+  const PO = {
+    VERSION: 'v4.1.5-hotfix',
+    CANVAS_ID: 'paths-overlay',
+    Z_INDEX: 40,
+    DEFAULT_TILE: 64,
 
-/* ============================================================================
- * [Run-Once: File-Guard] – verhindert, dass diese Datei mehrfach läuft
- * ========================================================================== */
-if (window.__PATH_OVERLAY_FILE_LOADED__) {
-  console.info('[PathOverlay] file already loaded – skip duplicate include');
-  // Sofort beenden, um doppelte Registrierung zu vermeiden
-  // (bewusst KEIN teardown hier, da ein zweites Include immer ein Fehler ist)
-  // eslint-disable-next-line no-useless-return
-  ;(function(){ return; })();
-}
-window.__PATH_OVERLAY_FILE_LOADED__ = true;
+    // Darstellung
+    MIN_VISIBLE: 0.02,
+    MAX_INTENSITY: 1.0,
 
+    // Heatmap
+    HEAT_ALPHA_MIN: 0.08,
+    HEAT_ALPHA_MAX: 0.55,
 
-/* ============================================================================
- * [Konstanten]
- * ========================================================================== */
-const PO = {
-  VERSION: 'v25.11.13-final',
-  CANVAS_ID: 'paths-overlay',
-  DEFAULT_TILE: 64,          // px pro Tile
-  DECAY_INTERVAL_MS: 500,    // Intervall fürs Ausklingen der Heat
-  DECAY_STEP: 0.01,          // Abbau pro Tick (0..1)
-  MAX_INTENSITY: 1.0,
-  MIN_VISIBLE: 0.02,
-  Z_INDEX: 40,               // über Game, unter HUD
-};
+    // Overlay (Textur/Stamp)
+    OVL_ALPHA_MIN: 0.10,
+    OVL_ALPHA_MAX: 0.65,
 
+    // Decay
+    DECAY_INTERVAL_MS: 500,
+    DECAY_STEP: 0.01,
 
-// Pfad-Texturen (optional) – liegt bei dir unter: assets/tex/path/topdown_path0..9.png
-// Wichtig: Wir laden LAZY (erst wenn Overlay aktiv ist), und fallen auf Pattern zurück,
-// falls die Images nicht gefunden werden.
-const TEX = {
-  BASE_PATH: 'assets/tex/path/',
-  FILE_PREFIX: 'topdown_path',
-  COUNT: 10,
-  EXT: '.png',
-  SCALE: 1.0,          // 1.0 = volle Tilegröße
-  ALPHA_MIN: 0.18,     // Overlay-Deckkraft bei geringer Intensität
-  ALPHA_MAX: 0.55      // Overlay-Deckkraft bei hoher Intensität
-};
-
-function _hash2i(x,y){
-  // deterministischer Hash für Tile-Varianten
-  x = (x|0); y=(y|0);
-  let h = (x * 73856093) ^ (y * 19349663);
-  h ^= (h >>> 13);
-  return (h >>> 0);
-}
-function _texUrl(i){
-  return `${TEX.BASE_PATH}${TEX.FILE_PREFIX}${i}${TEX.EXT}`;
-}
-function _dirAngleFromDelta(dtx, dty){
-  // 8-dir in Radiant. (0 = rechts, pi/2 = unten)
-  const dx = Number(dtx)||0;
-  const dy = Number(dty)||0;
-  if (!dx && !dy) return 0;
-  return Math.atan2(dy, dx);
-}
-
-
-
-/* ============================================================================
- * [Hilfsfunktionen]
- * ========================================================================== */
-function clamp01(v){ return Math.max(0, Math.min(1, v)); }
-function i(v){ return (v|0); }
-
-function findGameCanvas(){
-  return document.getElementById('game') ||
-         document.querySelector('canvas#game') ||
-         null;
-}
-
-function ensureRelativeParent(el) {
-  const parent = el.parentElement || document.body;
-  const style = window.getComputedStyle(parent);
-  if (style.position === 'static') parent.style.position = 'relative';
-  return parent;
-}
-
-function createOverlayCanvas(gameCanvas){
-  const c = document.createElement('canvas');
-  c.id = PO.CANVAS_ID;
-  Object.assign(c.style, {
-    position: 'absolute',
-    inset: '0',             // deckungsgleich im Parent
-    pointerEvents: 'none',
-    zIndex: String(PO.Z_INDEX),
-    display: 'none',        // erst sichtbar nach toggle(true)
-  });
-  ensureRelativeParent(gameCanvas).appendChild(c);
-  resizeCanvasToClient(c);  // Backbuffer an CSS-Größe anpassen
-  return c;
-}
-
-function resizeCanvasToClient(canvas){
-  const rect = canvas.getBoundingClientRect();
-  const dpr  = Math.max(1, window.devicePixelRatio || 1);
-  const w    = Math.max(1, Math.round(rect.width  * dpr));
-  const h    = Math.max(1, Math.round(rect.height * dpr));
-  if (canvas.width !== w)  canvas.width  = w;
-  if (canvas.height !== h) canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // 1 CSS-Pixel == 1 Einheit
-  return { ctx, rect, dpr };
-}
-
-
-/* ============================================================================
- * [Klasse] PathHeatmap – kapselt Zustand & Rendering
- * ========================================================================== */
-class PathHeatmap {
-  constructor(){
-    this.enabled   = false;
-    this.showHeat  = false;
-    this.showOvl   = false; // sichtbares Pfad-Overlay (Textur/Pattern)
-
-    this.tile = PO.DEFAULT_TILE;
-    this.cols = 0;
-    this.rows = 0;
-    this.map  = [];       // 1D-Array der Intensitäten
-
-
-    this.dir  = [];       // 1D-Array der Richtungen (Radiant)
-
-    // Texturen (lazy geladen)
-    this._texImgs     = [];
-    this._texReady    = false;
-    this._texLoading  = false;
-    this._texFail     = 0;
-    this.canvas = null;
-    this.ctx    = null;
-
-    this._raf         = 0;
-    this._decayTimer  = 0;
-    this._resizeObs   = null;
-
-    // Kamera-Status (World-Pixel): wird über cb:camera-change aktualisiert
-    this.camera = { x:0, y:0, zoom:1 };
-  }
-
-  /* ---------------- Lifecycle ---------------- */
-  init(opts = {}){
-    if (window.__PATH_OVERLAY_INIT__) {
-      console.info('[PathOverlay] already initialized – skip');
-      return;
-    }
-    window.__PATH_OVERLAY_INIT__ = true;
-
-    this.tile = i(opts.tileSize || this.tile);
-
-    const game = opts.gameCanvas || findGameCanvas();
-    if (!game) {
-      console.warn('[PathOverlay] no #game canvas yet – init postponed');
-      // Ein einziger Retry-Frame (kein Polling-Spam)
-      requestAnimationFrame(() => this.init(opts));
-      return;
-    }
-
-    // Canvas erstellen/finden
-    this.canvas = document.getElementById(PO.CANVAS_ID) || createOverlayCanvas(game);
-    this.ctx    = this.canvas.getContext('2d');
-
-    // Grid bestimmen
-    // Wichtig: Wir speichern die Heatmap in WELT-Tiles (nicht Screen-Tiles),
-    // damit sie beim Panning/Zooming "mit der Karte" wandert.
-    const gm = window.GameMap?._state || null;
-    if (gm && Number.isFinite(gm.cols) && Number.isFinite(gm.rows)) {
-      this.cols = Math.max(1, gm.cols|0);
-      this.rows = Math.max(1, gm.rows|0);
-      this.map  = new Array(this.cols * this.rows).fill(0);
-      this.dir  = new Array(this.cols * this.rows).fill(0);
-      this.dir  = new Array(this.cols * this.rows).fill(0);
-    } else {
-      // Fallback: Wenn Map-State noch nicht verfügbar ist, nutze Screen-Grid.
-      const { rect } = resizeCanvasToClient(this.canvas);
-      this.cols = Math.max(1, Math.ceil(rect.width  / this.tile));
-      this.rows = Math.max(1, Math.ceil(rect.height / this.tile));
-      this.map  = new Array(this.cols * this.rows).fill(0);
-    }
-
-    // Resize beobachten
-    try {
-      this._resizeObs = new ResizeObserver(() => this._alignToGame(game));
-      this._resizeObs.observe(game);
-    } catch {
-      window.addEventListener('resize', () => this._alignToGame(game));
-      window.addEventListener('orientationchange', () => this._alignToGame(game));
-    }
-    this._alignToGame(game);
-
-    // Renderloop
-    this._startLoop();
-
-    console.info('[PathOverlay] init ✓', { tile:this.tile, cols:this.cols, rows:this.rows });
-    try{ window.dispatchEvent(new CustomEvent('cb:paths:ready',{detail:{version:PO.VERSION, tile:this.tile, cols:this.cols, rows:this.rows}})); }catch(e){}
-  }
-
-  teardown(){
-    this.toggle(false);
-    this._stopLoop();
-    if (this._resizeObs){ try{ this._resizeObs.disconnect(); }catch{} this._resizeObs = null; }
-    if (this.canvas && this.canvas.parentElement){
-      this.canvas.parentElement.removeChild(this.canvas);
-    }
-    this.canvas = null;
-    this.ctx    = null;
-    this.map    = [];
-    window.__PATH_OVERLAY_INIT__ = false;
-  }
-
-
-/* ---------------- Texturen (lazy) ---------------- */
-_ensureTextures(){
-  if (this._texReady || this._texLoading) return;
-  this._texLoading = true;
-
-  const imgs = [];
-  let done = 0;
-
-  const onDone = ()=>{
-    done++;
-    if (done < TEX.COUNT) return;
-    this._texLoading = false;
-    // Wenn wenigstens 1 Bild ok: ready
-    this._texReady = imgs.some(im => im && im.complete && im.naturalWidth > 0);
-    this._texImgs  = imgs;
-    // Einmal neu zeichnen
-    this._markDirty();
-    console.info('[PathOverlay] textures ready?', this._texReady, 'fails:', this._texFail);
+    // Texturen
+    TEX_BASE: 'assets/tex/path/',
+    TEX_FILES: [
+      'topdown_path0.png','topdown_path1.png','topdown_path2.png','topdown_path3.png','topdown_path4.png',
+      'topdown_path5.png','topdown_path6.png','topdown_path7.png','topdown_path8.png','topdown_path9.png'
+    ],
   };
 
-  for (let i=0;i<TEX.COUNT;i++){
-    const im = new Image();
-    im.loading = 'eager';
-    im.decoding = 'async';
-    im.onload = ()=> onDone();
-    im.onerror = ()=>{ this._texFail++; onDone(); };
-    im.src = _texUrl(i);
-    imgs[i] = im;
-  }
-}
+  // --- Hilfsfunktionen ------------------------------------------------------
+  function clamp01(v){ return v < 0 ? 0 : (v > 1 ? 1 : v); }
 
-  /* ---------------- Sichtbarkeit/Modi ---------------- */
-  /* ---------------- Sichtbarkeit/Modi ---------------- */
-  _syncVisibility(){
-    // Canvas soll sichtbar sein, sobald EIN Modus aktiv ist.
-    this.enabled = !!(this.showOvl || this.showHeat);
-    if (this.canvas) this.canvas.style.display = this.enabled ? 'block' : 'none';
+  function ensureRelativeParent(gameCanvas){
+    const parent = gameCanvas?.parentElement || document.body;
+    const style  = window.getComputedStyle(parent);
+    if (style.position === 'static') parent.style.position = 'relative';
+    return parent;
   }
 
-  // Inspector "Overlay ON/OFF" → sichtbares Pfad-Overlay (Pattern/Textur)
-  toggle(on){
-    this.showOvl = !!on;
-    if (this.showOvl) this._ensureTextures();
-    this._syncVisibility();
-    this._markDirty();
+  function createOverlayCanvas(gameCanvas){
+    const c = document.createElement('canvas');
+    c.id = PO.CANVAS_ID;
+    Object.assign(c.style, {
+      position: 'absolute',
+      inset: '0',
+      pointerEvents: 'none',
+      zIndex: String(PO.Z_INDEX),
+      display: 'none',
+    });
+    ensureRelativeParent(gameCanvas).appendChild(c);
+    resizeCanvasToClient(c);
+    return c;
   }
 
-  // Inspector "Heatmap ON/OFF" → farbige Intensitäts-Heatmap
-  setHeatmap(on){
-    this.showHeat = !!on;
-    this._syncVisibility();
-    this._markDirty();
-  }
-
-  isEnabled(){ return !!this.enabled; }
-  isHeatmap(){ return !!this.showHeat; }
-  isOverlay(){ return !!this.showOvl; }
-
-  /* ---------------- Daten ---------------- */
-  mark(tx, ty, amt = 1, angle = null){
-    if (!this.map.length) return;
-    if (tx<0 || ty<0 || tx>=this.cols || ty>=this.rows) return;
-    const idx  = ty * this.cols + tx;
-    const next = clamp01((this.map[idx] || 0) + Math.max(0, amt) * 0.1);
-    this.map[idx] = Math.min(PO.MAX_INTENSITY, next);
-    if (angle !== null && Number.isFinite(angle)){
-      // leicht glätten (verhindert hartes Flackern)
-      const prev = Number(this.dir[idx]) || 0;
-      const a = Number(angle);
-      this.dir[idx] = prev * 0.7 + a * 0.3;
+  function resizeCanvasToClient(canvas){
+    const rect = canvas.getBoundingClientRect();
+    const dpr  = window.devicePixelRatio || 1;
+    const w    = Math.max(1, Math.floor(rect.width  * dpr));
+    const h    = Math.max(1, Math.floor(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h){
+      canvas.width  = w;
+      canvas.height = h;
     }
-    this._markDirty();
-  }
-  reset(){
-    if (!this.map.length) return;
-    this.map.fill(0);
-    this._markDirty();
   }
 
-  /* ---------------- Intern: Render/Resize ---------------- */
-  _markDirty(){ this._dirty = true; }
+  function getCameraState(){
+    // Kamera kann aus window.GameCamera kommen (dein Standard)
+    const cam  = window.GameCamera || {};
+    const zoom = (typeof cam.zoom === 'number') ? cam.zoom : 1;
+    const x    = (typeof cam.x    === 'number') ? cam.x    : 0;
+    const y    = (typeof cam.y    === 'number') ? cam.y    : 0;
+    return { x, y, zoom };
+  }
 
-  _startLoop(){
-    const loop = (t)=>{
-      // Decay
-      if (!this._decayTimer) this._decayTimer = t;
-      if ((t - this._decayTimer) >= PO.DECAY_INTERVAL_MS) {
-        this._decayTimer = t;
-        if (this.showHeat && this.map.length){
-          let changed = false;
-          for (let k=0; k<this.map.length; k++){
-            const v0 = this.map[k];
-            if (v0>0){
-              const v1 = Math.max(0, v0 - PO.DECAY_STEP);
-              if (v1!==v0){ this.map[k]=v1; changed = true; }
+  // Richtung (8-way) aus delta (tx/ty Schritte)
+  function dir8FromDelta(dx, dy){
+    // dy positiv = nach unten (screen)
+    // Mapping: 0=E,1=SE,2=S,3=SW,4=W,5=NW,6=N,7=NE
+    if (dx === 0 && dy === 0) return 2;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if (ax > ay){
+      return dx > 0 ? 0 : 4;
+    }else if (ay > ax){
+      return dy > 0 ? 2 : 6;
+    }else{
+      // diagonal
+      if (dx > 0 && dy > 0) return 1;
+      if (dx < 0 && dy > 0) return 3;
+      if (dx < 0 && dy < 0) return 5;
+      return 7; // dx>0 && dy<0
+    }
+  }
+
+  // --- Klasse ---------------------------------------------------------------
+  class PathOverlayImpl {
+    constructor(){
+      this.enabled  = false;
+      this.showHeat = false;
+      this.showOvl  = true;   // Overlay = echte Stamps (default ON wenn enabled)
+      this.inited   = false;
+
+      this.tile = PO.DEFAULT_TILE;
+      this.cols = 0;
+      this.rows = 0;
+
+      // map: Float intensity
+      this.map = [];
+      // last dir per tile (0..7)
+      this.dir = [];
+
+      // unit tracking for direction, falls Units kein prevTx/prevTy senden
+      this._unitLast = new Map();
+
+      // Debug/Stats
+      this.stepCount = 0;
+      this.lastStep = null;
+
+      // DOM/Canvas
+      this.gameCanvas = null;
+      this.canvas = null;
+      this.ctx = null;
+
+      // Decay timer
+      this._decayTimer = null;
+      this._dirty = false;
+
+      // Optional textures
+      this._tex = [];
+      this._texReady = false;
+      this._texTried = false;
+
+      // bind
+      this._onResize = () => { if (this.canvas) resizeCanvasToClient(this.canvas); this._dirty = true; };
+      this._onCamera = () => { this._dirty = true; this.requestRepaint(); };
+
+      this._onUnitStep = (ev) => {
+        const d = ev?.detail || {};
+        const tx = Number.isFinite(d.tx) ? d.tx : null;
+        const ty = Number.isFinite(d.ty) ? d.ty : null;
+        if (tx === null || ty === null) return;
+
+        const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
+        const last = this._unitLast.get(id);
+        let dx = 0, dy = 0;
+        if (last){
+          dx = tx - last.tx;
+          dy = ty - last.ty;
+        }
+        this._unitLast.set(id, { tx, ty });
+        this.stepCount++;
+        this.lastStep = { id, tx, ty, dx, dy, t: Date.now() };
+
+        // Gewichtung (Worker stärker)
+        const kind = String(d.kind || d.type || '');
+        const isWorker = /woodcutter|stonecutter|fisher|worker/i.test(kind);
+        const amt = (typeof d.weight === 'number') ? d.weight : (isWorker ? 0.14 : 0.08);
+
+        const cell = this._idx(tx, ty);
+        if (cell < 0) return;
+        this.map[cell] = clamp01((this.map[cell] || 0) + amt);
+        this.dir[cell] = dir8FromDelta(dx, dy);
+
+        this._dirty = true;
+        this.requestRepaint();
+      };
+    }
+
+    _idx(tx, ty){
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) return -1;
+      if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return -1;
+      return ty * this.cols + tx;
+    }
+
+    init(opts = {}){
+      try{
+        if (this.inited) return true;
+
+        this.gameCanvas = document.getElementById('game');
+        if (!this.gameCanvas){
+          WARN('Kein #game Canvas gefunden – init wird später erneut versucht.');
+          return false;
+        }
+
+        this.canvas = document.getElementById(PO.CANVAS_ID) || createOverlayCanvas(this.gameCanvas);
+        this.ctx = this.canvas.getContext('2d');
+
+        // tileSize aus GameMap/Runtime falls verfügbar
+        const ts = (window.Game?.tileSize ?? window.GameMap?.tileSize ?? window.Map?.tileSize);
+        if (typeof ts === 'number' && ts > 0) this.tile = ts;
+
+        // grid dims aus Map-Modul wenn vorhanden (Fallback: 128x128)
+        const cols = window.Game?.cols ?? window.Map?.cols ?? window.GameMap?.cols ?? window.Mod?.cols;
+        const rows = window.Game?.rows ?? window.Map?.rows ?? window.GameMap?.rows ?? window.Mod?.rows;
+        this.cols = (typeof cols === 'number' && cols > 0) ? cols : 128;
+        this.rows = (typeof rows === 'number' && rows > 0) ? rows : 128;
+
+        const n = this.cols * this.rows;
+        this.map = new Array(n).fill(0);
+        this.dir = new Array(n).fill(2);
+
+        // Events
+        window.addEventListener('resize', this._onResize);
+        window.addEventListener('cb:camera-change', this._onCamera);
+        window.addEventListener('cb:unit:step', this._onUnitStep);
+
+        // Decay loop
+        this._decayTimer = window.setInterval(() => this._tickDecay(), PO.DECAY_INTERVAL_MS);
+
+        // Optional: Texturen laden (fail-safe)
+        this._tryLoadTextures();
+
+        this.inited = true;
+        LOG('init OK', { tile:this.tile, cols:this.cols, rows:this.rows });
+        return true;
+      }catch(err){
+        ERR('init FAIL', err);
+        return false;
+      }
+    }
+
+    teardown(){
+      try{
+        window.removeEventListener('resize', this._onResize);
+        window.removeEventListener('cb:camera-change', this._onCamera);
+        window.removeEventListener('cb:unit:step', this._onUnitStep);
+        if (this._decayTimer) window.clearInterval(this._decayTimer);
+        this._decayTimer = null;
+        this.inited = false;
+      }catch(err){
+        ERR('teardown FAIL', err);
+      }
+    }
+
+    _tryLoadTextures(){
+      if (this._texTried) return;
+      this._texTried = true;
+
+      // NICHT blockieren – wir laden asynchron, Overlay funktioniert auch ohne.
+      const imgs = [];
+      let done = 0;
+      const total = PO.TEX_FILES.length;
+
+      const finish = () => {
+        this._tex = imgs;
+        this._texReady = imgs.some(Boolean);
+        LOG('Textures loaded:', this._texReady ? 'OK' : 'NONE', imgs.filter(Boolean).length, '/', total);
+        this._dirty = true;
+        this.requestRepaint();
+      };
+
+      PO.TEX_FILES.forEach((name, i) => {
+        const img = new Image();
+        img.onload = () => { imgs[i] = img; done++; if (done === total) finish(); };
+        img.onerror = () => { imgs[i] = null; done++; if (done === total) finish(); };
+        img.src = PO.TEX_BASE + name;
+      });
+    }
+
+    // --- API ----------------------------------------------------------------
+    toggle(on){
+      // Lazy init: falls cb:game:start verpasst wurde.
+      if (!this.inited) this.init({});
+      this.enabled = !!on;
+      if (this.canvas){
+        this.canvas.style.display = this.enabled ? 'block' : 'none';
+      }
+      this._dirty = true;
+      this.requestRepaint();
+      LOG('toggle', this.enabled);
+    }
+
+    // Heatmap-only switch
+    setHeatmap(on){
+      if (!this.inited) this.init({});
+      this.showHeat = !!on;
+
+      // UX: Heatmap ON soll IMMER sichtbar werden, auch wenn der User nicht
+      // zuerst "Overlay ON" geklickt hat.
+      if (this.showHeat && !this.enabled) this.toggle(true);
+
+      this._dirty = true;
+      this.requestRepaint();
+      LOG('heatmap', this.showHeat);
+    }
+
+    // Overlay stamps switch (separat, falls du beides getrennt willst)
+    setOverlay(on){
+      if (!this.inited) this.init({});
+      this.showOvl = !!on;
+
+      // UX: Wenn Stamps an sind, aber das Canvas aus ist → automatisch aktivieren.
+      if (this.showOvl && !this.enabled) this.toggle(true);
+
+      this._dirty = true;
+      this.requestRepaint();
+      LOG('overlay', this.showOvl);
+    }
+
+    mark(tx, ty, amt = 0.1){
+      if (!this.inited) this.init({});
+      const cell = this._idx(tx, ty);
+      if (cell < 0) return;
+      this.map[cell] = clamp01((this.map[cell] || 0) + amt);
+      this._dirty = true;
+      this.requestRepaint();
+    }
+
+    reset(){
+      if (!this.inited) this.init({});
+      this.map.fill(0);
+      this._dirty = true;
+      this.requestRepaint();
+    }
+
+    isEnabled(){ return !!this.enabled; }
+    isHeatmap(){ return !!this.showHeat; }
+
+    _tickDecay(){
+      if (!this.inited) return;
+      let any = false;
+      for (let i=0;i<this.map.length;i++){
+        const v = this.map[i];
+        if (v > 0){
+          const nv = v - PO.DECAY_STEP;
+          this.map[i] = nv > 0 ? nv : 0;
+          if (this.map[i] > 0) any = true;
+        }
+      }
+      if (any){
+        this._dirty = true;
+        this.requestRepaint();
+      }
+    }
+
+    requestRepaint(){
+      // Dein Projekt nutzt cb:request-repaint an mehreren Stellen
+      try{ window.dispatchEvent(new CustomEvent('cb:request-repaint')); }catch(_){}
+      // Fallback: selbst rendern, wenn kein zentraler Repaint kommt
+      this.render();
+    }
+
+    render(){
+      try{
+        if (!this.enabled || !this.canvas || !this.ctx) return;
+        if (!this._dirty) return;
+
+        resizeCanvasToClient(this.canvas);
+
+        const ctx = this.ctx;
+        const { x:camX, y:camY, zoom } = getCameraState();
+
+        // Clear in Screen-Space
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+
+        // World-Space transform wie GameMap
+        ctx.setTransform(zoom,0,0,zoom,-camX*zoom,-camY*zoom);
+
+        // Draw visible cells
+        const ts = this.tile;
+        const min = PO.MIN_VISIBLE;
+
+        // 1) Overlay stamps (Texturen oder Fallback-Punkt)
+        if (this.showOvl){
+          for (let ty=0; ty<this.rows; ty++){
+            for (let tx=0; tx<this.cols; tx++){
+              const i = ty*this.cols + tx;
+              const v = this.map[i] || 0;
+              if (v < min) continue;
+
+              const a = PO.OVL_ALPHA_MIN + (PO.OVL_ALPHA_MAX-PO.OVL_ALPHA_MIN) * v;
+              ctx.globalAlpha = a;
+
+              const px = tx*ts;
+              const py = ty*ts;
+
+              // Textur-Stamp falls vorhanden, sonst Fallback
+              if (this._texReady){
+                const img = this._tex[(tx + ty) % this._tex.length] || null;
+                if (img){
+                  // Rotation: aus last-dir
+                  const dir = this.dir[i] ?? 2;
+                  // 0..7 -> Winkel in 45° Schritten; baseline 0 = E
+                  const ang = (Math.PI/4) * dir;
+
+                  const cx = px + ts/2;
+                  const cy = py + ts/2;
+
+                  ctx.save();
+                  ctx.translate(cx, cy);
+                  ctx.rotate(ang);
+                  ctx.translate(-ts/2, -ts/2);
+                  ctx.drawImage(img, 0, 0, ts, ts);
+                  ctx.restore();
+                }else{
+                  // Fallback (wenn einzelne fehlen)
+                  ctx.fillStyle = 'rgba(40,30,20,1)';
+                  ctx.beginPath();
+                  ctx.arc(px+ts*0.5, py+ts*0.5, ts*0.18, 0, Math.PI*2);
+                  ctx.fill();
+                }
+              }else{
+                // Fallback (ohne Texturen): kleiner "Trampel"-Blob
+                ctx.fillStyle = 'rgba(40,30,20,1)';
+                ctx.beginPath();
+                ctx.ellipse(px+ts*0.5, py+ts*0.55, ts*0.22, ts*0.14, 0, 0, Math.PI*2);
+                ctx.fill();
+              }
             }
           }
-          if (changed) this._markDirty();
         }
-      }
 
-      // Redraw
-      if (this.enabled && this._dirty) {
-        this._draw();
-        this._dirty = false;
-      }
-
-      this._raf = requestAnimationFrame(loop);
-    };
-    this._raf = requestAnimationFrame(loop);
-  }
-
-  _stopLoop(){ if (this._raf){ cancelAnimationFrame(this._raf); this._raf = 0; } }
-
-  _draw(){
-    if (!this.canvas || !this.ctx) return;
-    const { ctx, canvas } = this;
-
-    // 1) Canvas auf Clientgröße bringen (DPR-scharf)
-    const { dpr } = resizeCanvasToClient(canvas);
-
-    // 2) Immer in Screen-Space löschen (sonst bleiben Reste beim Panning)
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Wenn kein Modus aktiv ist → nichts zeichnen (Canvas bleibt aber sauber)
-    if (!this.showHeat && !this.showOvl) return;
-
-    // 3) Kamera-Transform (wie Map-Render): World-Pixel → Screen
-    const cam = this.camera || {x:0,y:0,zoom:1};
-    const zoom = Number(cam.zoom) || 1;
-    const camX = Number(cam.x) || 0;
-    const camY = Number(cam.y) || 0;
-
-    const s = dpr * zoom;
-    ctx.setTransform(s, 0, 0, s, -camX * s, -camY * s);
-
-    // 4) Nur sichtbaren Bereich zeichnen (Performance)
-    const viewW = (canvas.width  / s); // sichtbare Welt-Pixel
-    const viewH = (canvas.height / s);
-
-    const pad = 2; // +Tiles am Rand
-    let minTx = Math.floor(camX / this.tile) - pad;
-    let minTy = Math.floor(camY / this.tile) - pad;
-    let maxTx = Math.floor((camX + viewW) / this.tile) + pad;
-    let maxTy = Math.floor((camY + viewH) / this.tile) + pad;
-
-    minTx = Math.max(0, minTx); minTy = Math.max(0, minTy);
-    maxTx = Math.min(this.cols - 1, maxTx); maxTy = Math.min(this.rows - 1, maxTy);
-
-    for (let ty=minTy; ty<=maxTy; ty++){
-      const rowOff = ty * this.cols;
-      for (let tx=minTx; tx<=maxTx; tx++){
-        const v = this.map[rowOff + tx] || 0;
-        if (v < PO.MIN_VISIBLE) continue;
-        // (A) Heatmap: farbige Fläche
+        // 2) Heatmap (darüber/ darunter – hier darüber)
         if (this.showHeat){
-          ctx.globalAlpha = clamp01(v);
-          ctx.fillStyle   = '#d1a81b';
-          ctx.fillRect(tx*this.tile, ty*this.tile, this.tile, this.tile);
+          for (let ty=0; ty<this.rows; ty++){
+            for (let tx=0; tx<this.cols; tx++){
+              const i = ty*this.cols + tx;
+              const v = this.map[i] || 0;
+              if (v < min) continue;
+
+              const a = PO.HEAT_ALPHA_MIN + (PO.HEAT_ALPHA_MAX-PO.HEAT_ALPHA_MIN) * v;
+              ctx.globalAlpha = a;
+
+              // Rot-ish (ohne feste Farbpalette – nur alpha variierend)
+              // Wir nehmen ein neutrales Dunkel und lassen Alpha sprechen,
+              // damit es nicht zu bunt wird.
+              ctx.fillStyle = 'rgba(255, 140, 80, 1)';
+              ctx.fillRect(tx*ts, ty*ts, ts, ts);
+            }
+          }
         }
 
-        // (B) Overlay: "Trampelpfad"-Pattern (subtil, grau/schwarz)
-        // Hinweis: Das ist absichtlich ein einfacher Pattern-Stil, bis du deine
-        // finalen Pfad-Texturen/Brushes lieferst. Dann tauschen wir das Rendering
-        // gegen echte Stamp-Sprites aus.
-        if (this.showOvl){
-  // Variante wählen (deterministisch), damit das Muster natürlich wirkt
-  const hv   = _hash2i(tx,ty);
-  const idxT = (TEX.COUNT>0) ? (hv % TEX.COUNT) : 0;
-  const im   = this._texReady ? this._texImgs[idxT] : null;
-
-  // Deckkraft abhängig von Intensität (v)
-  const a = TEX.ALPHA_MIN + (TEX.ALPHA_MAX - TEX.ALPHA_MIN) * clamp01(v);
-  ctx.globalAlpha = a;
-
-  // Richtung (Radiant) pro Tile – wird beim Step/mark aktualisiert
-  const ang = Number(this.dir[ty*this.cols + tx]) || 0;
-
-  if (im && im.complete && im.naturalWidth>0){
-    const cx = tx*this.tile + this.tile*0.5;
-    const cy = ty*this.tile + this.tile*0.5;
-    const sz = this.tile * TEX.SCALE;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(ang);
-    ctx.drawImage(im, -sz*0.5, -sz*0.5, sz, sz);
-    ctx.restore();
-  }else{
-    // Fallback: simples Pattern (wenn Texturen fehlen/noch laden)
-    const g = (hv & 7); // 0..7
-    ctx.fillStyle = (g<3) ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.22)';
-    ctx.fillRect(tx*this.tile, ty*this.tile, this.tile, this.tile);
-  }
-}
-      }
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  _alignToGame(gameCanvas){
-
-    if (!this.canvas) return;
-
-    // Canvas an Game-Canvas ausrichten (innerhalb desselben Parents)
-    ensureRelativeParent(gameCanvas);
-    Object.assign(this.canvas.style, {
-      width:  gameCanvas.clientWidth  + 'px',
-      height: gameCanvas.clientHeight + 'px',
-      left:   '0',
-      top:    '0',
-    });
-
-    // Grid ggf. neu aufbauen (Welt-Grid bevorzugt)
-    const prevCols = this.cols, prevRows = this.rows, prev = this.map.slice();
-
-    // Canvas DPR-scharf halten (Größe kommt vom Game-Canvas)
-    resizeCanvasToClient(this.canvas);
-
-    // Wenn Map-State verfügbar: Heatmap in Welt-Tiles (ganze Karte)
-    const gm = window.GameMap?._state || null;
-    const targetCols = (gm && Number.isFinite(gm.cols)) ? (gm.cols|0) : prevCols;
-    const targetRows = (gm && Number.isFinite(gm.rows)) ? (gm.rows|0) : prevRows;
-
-    // Nur neu allokieren, wenn sich die Größe wirklich geändert hat
-    if (targetCols !== prevCols || targetRows !== prevRows){
-      this.cols = Math.max(1, targetCols);
-      this.rows = Math.max(1, targetRows);
-      this.map  = new Array(this.cols * this.rows).fill(0);
-
-      const minC = Math.min(prevCols, this.cols), minR = Math.min(prevRows, this.rows);
-      for (let y=0; y<minR; y++){
-        for (let x=0; x<minC; x++){
-          this.map[y*this.cols + x] = prev[y*prevCols + x] || 0;
-        }
+        ctx.globalAlpha = 1;
+        this._dirty = false;
+      }catch(err){
+        // Niemals Game-Loop killen
+        ERR('render FAIL', err);
       }
     }
 
-    this._markDirty();
+    selfTest(){
+      const s = {
+        version: PO.VERSION,
+        inited: this.inited,
+        enabled: this.enabled,
+        heatmap: this.showHeat,
+        overlay: this.showOvl,
+        tile: this.tile,
+        cols: this.cols,
+        rows: this.rows,
+        texTried: this._texTried,
+        texReady: this._texReady,
+        hasCanvas: !!this.canvas,
+        stepCount: this.stepCount,
+        lastStep: this.lastStep,
+        cam: getCameraState(),
+      };
+      LOG('selfTest', s);
+      try{ window.dispatchEvent(new CustomEvent('cb:log', { detail: { type:'info', msg: TAG+' selfTest '+JSON.stringify(s) }})); }catch(_){}
+      return s;
+    }
   }
-}
 
+  // --- Instance -------------------------------------------------------------
+  const inst = new PathOverlayImpl();
 
-/* ============================================================================
- * [Hauptlogik] – Singleton + Events sauber, einmalig binden
- * ========================================================================== */
-(function setupSingletonBindings(){
-  // Einmalige Bindings-Guard (wichtig gegen doppelte Logs)
-  if (window.__PATH_OVERLAY_BINDINGS__) return;
-  window.__PATH_OVERLAY_BINDINGS__ = true;
-
-  const inst = new PathHeatmap();
-
-  // Öffentliche API
+  // Public API – kompatibel mit inspector.bridges.js (toggle/setHeatmap)
   window.PathOverlay = Object.freeze({
-    init:       (opts)=>inst.init(opts),
-    teardown:   ()=>inst.teardown(),
-    toggle:     (on)=>inst.toggle(on),
+    init: (opts)=>inst.init(opts),
+    teardown: ()=>inst.teardown(),
+    toggle: (on)=>inst.toggle(on),
     setHeatmap: (on)=>inst.setHeatmap(on),
-    mark:       (tx,ty,amt)=>inst.mark(tx,ty,amt),
-    reset:      ()=>inst.reset(),
-    isEnabled:  ()=>inst.isEnabled(),
-    isHeatmap:  ()=>inst.isHeatmap(),
-    isOverlay:  ()=>inst.isOverlay(),
-    _state:     ()=>({ version:PO.VERSION, enabled:inst.enabled, overlay:inst.showOvl, heat:inst.showHeat,
-                       tile:inst.tile, cols:inst.cols, rows:inst.rows, cells:inst.map.length }),
+    setOverlay: (on)=>inst.setOverlay(on),
+    mark: (tx,ty,amt)=>inst.mark(tx,ty,amt),
+    reset: ()=>inst.reset(),
+    isEnabled: ()=>inst.isEnabled(),
+    isHeatmap: ()=>inst.isHeatmap(),
+    selfTest: ()=>inst.selfTest(),
+    _state: ()=>({
+      version: PO.VERSION,
+      inited: inst.inited,
+      enabled: inst.enabled,
+      heatmap: inst.showHeat,
+      overlay: inst.showOvl,
+      tile: inst.tile,
+      cols: inst.cols,
+      rows: inst.rows,
+      texReady: inst._texReady,
+      stepCount: inst.stepCount,
+      lastStep: inst.lastStep
+    }),
   });
 
-  // ✨ Konformer Start: NUR nach cb:game:start initialisieren
-  window.addEventListener('cb:game:start', () => inst.init({}));
+  // --- Inspector/Event wiring (robust) -------------------------------------
+  window.addEventListener('cb:game:start', () => { inst.init({}); });
 
-  // Inspector-Brücke
-  window.addEventListener('cb:path:overlay:on',  ()=>inst.toggle(true));
-  window.addEventListener('cb:path:overlay:off', ()=>inst.toggle(false));
-  window.addEventListener('cb:path:heatmap:on',  ()=>inst.setHeatmap(true));
-  window.addEventListener('cb:path:heatmap:off', ()=>inst.setHeatmap(false));
+  window.addEventListener('cb:path:overlay:on',  () => inst.toggle(true));
+  window.addEventListener('cb:path:overlay:off', () => inst.toggle(false));
+  window.addEventListener('cb:path:heatmap:on',  () => inst.setHeatmap(true));
+  window.addEventListener('cb:path:heatmap:off', () => inst.setHeatmap(false));
 
-  // Kamera: wenn gepannt/gezoomt wird, muss das Overlay neu gerendert werden,
-  // sonst wirkt es, als würde es "am Bildschirm kleben".
-  window.addEventListener('cb:camera-change', (ev)=>{
-    const d = ev?.detail || {};
-    const x = Number(d.x) || 0;
-    const y = Number(d.y) || 0;
-    const z = Number(d.zoom) || 1;
-    inst.camera = { x, y, zoom: z };
-    if (inst.isEnabled() && inst.isHeatmap()) inst._markDirty();
-  });
+  // Optional: Overlay separat (falls du später Buttons dafür willst)
+  window.addEventListener('cb:path:stamps:on',   () => inst.setOverlay(true));
+  window.addEventListener('cb:path:stamps:off',  () => inst.setOverlay(false));
 
-  // Trampelpfade: bei jedem Tile-Step einer Unit "Intensity" erhöhen.
-  // Hinweis: Das funktioniert sofort für Carrier/Worker, sobald irgendwo cb:unit:step emittiert wird.
-  window.addEventListener('cb:unit:step', (ev)=>{
-    const d = ev?.detail || {};
-    const tx = Number.isFinite(d.tx) ? d.tx : Math.floor(d.x || 0);
-    const ty = Number.isFinite(d.ty) ? d.ty : Math.floor(d.y || 0);
-
-    // Gewichtung: Carrier etwas stärker (weil oft laufen), Worker normal.
-    const type = String(d.type || '').toLowerCase();
-    const kind = String(d.kind || '').toLowerCase();
-    const amt  = (type === 'carrier' || kind.includes('carrier')) ? 2 : 1;
-
-    const ang = _dirAngleFromDelta(d.dtx, d.dty);
-    inst.mark(tx, ty, amt, ang);
-});
-
-
-
-  console.info('[PathOverlay] bindings ready', PO.VERSION);
+  // --- Final log ------------------------------------------------------------
+  LOG('loaded', PO.VERSION);
 })();
-
-
-/* ============================================================================
- * [Exports] – (global via window.PathOverlay)
- * ========================================================================== */
