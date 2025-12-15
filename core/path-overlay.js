@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Pfad/Heatmap Overlay
- * Version : v4.1.5-hotfix (2025-12-15)
+ * Version : v4.1.6-align+autotrack (2025-12-15)
  *
  * Ziel dieses Hotfix:
  *   1) Overlay/Heatmap IMMER schaltbar (auch wenn cb:game:start verpasst wurde)
@@ -55,7 +55,10 @@
     TEX_BASE: 'assets/tex/path/',
     TEX_FILES: [
       'topdown_path0.png','topdown_path1.png','topdown_path2.png','topdown_path3.png','topdown_path4.png',
-      'topdown_path5.png','topdown_path6.png','topdown_path7.png','topdown_path8.png','topdown_path9.png'
+      'topdown_path5.png','topdown_path6.png','topdown_path7.png','topdown_path8.png','topdown_path9.png',
+      // Fallback falls im Repo noch .PNG groß geschrieben ist
+      'topdown_path0.PNG','topdown_path1.PNG','topdown_path2.PNG','topdown_path3.PNG','topdown_path4.PNG',
+      'topdown_path5.PNG','topdown_path6.PNG','topdown_path7.PNG','topdown_path8.PNG','topdown_path9.PNG'
     ],
   };
 
@@ -85,14 +88,16 @@
   }
 
   function resizeCanvasToClient(canvas){
-    const rect = canvas.getBoundingClientRect();
-    const dpr  = window.devicePixelRatio || 1;
-    const w    = Math.max(1, Math.floor(rect.width  * dpr));
-    const h    = Math.max(1, Math.floor(rect.height * dpr));
+    // WICHTIG: Unser Haupt-Canvas (core/game.map.js) nutzt KEIN DPR-Scaling,
+    // sondern setzt canvas.width/height direkt auf window.innerWidth/innerHeight.
+    // Wenn wir hier rect*dpr nehmen, driftet das Overlay (halbes Panning / falsches Zoom).
+    const w = (window.innerWidth  || document.documentElement.clientWidth  || canvas.width  || 1) | 0;
+    const h = (window.innerHeight || document.documentElement.clientHeight || canvas.height || 1) | 0;
     if (canvas.width !== w || canvas.height !== h){
-      canvas.width  = w;
-      canvas.height = h;
+      canvas.width  = Math.max(1, w);
+      canvas.height = Math.max(1, h);
     }
+  }
   }
 
   function getCameraState(){
@@ -143,6 +148,12 @@
       // unit tracking for direction, falls Units kein prevTx/prevTy senden
       this._unitLast = new Map();
 
+      // Wenn init (Canvas/Map) noch nicht bereit ist, puffern wir Steps.
+      // So gehen keine Trampelpfade verloren, nur weil der User das Overlay
+      // erst später einschaltet.
+      this._preInitSteps = [];
+      this._preInitMax   = 2000;
+
       // Debug/Stats
       this.stepCount = 0;
       this.lastStep = null;
@@ -170,6 +181,14 @@
         const tx = Number.isFinite(d.tx) ? d.tx : null;
         const ty = Number.isFinite(d.ty) ? d.ty : null;
         if (tx === null || ty === null) return;
+
+        // Falls wir noch nicht initialisiert sind (Map-Dims/Canvas noch nicht da),
+        // puffern wir den Step und verarbeiten ihn später.
+        if (!this.inited || !this.map || !this.map.length){
+          this._preInitSteps.push({ ...d, tx, ty, t: Date.now() });
+          if (this._preInitSteps.length > this._preInitMax) this._preInitSteps.shift();
+          return;
+        }
 
         const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
         const last = this._unitLast.get(id);
@@ -229,6 +248,18 @@
         const n = this.cols * this.rows;
         this.map = new Array(n).fill(0);
         this.dir = new Array(n).fill(2);
+
+        // Vor-Init Steps nachziehen (damit Pfade von Anfang an "da" sind)
+        if (Array.isArray(this._preInitSteps) && this._preInitSteps.length){
+          const tmp = this._preInitSteps.slice();
+          this._preInitSteps.length = 0;
+          for (const d of tmp){
+            try{
+              // Reuse handler logic: wir dispatchen ein Fake-Event
+              this._onUnitStep({ detail: d });
+            }catch(_){}
+          }
+        }
 
         // Events
         window.addEventListener('resize', this._onResize);
@@ -526,14 +557,36 @@
   // --- Inspector/Event wiring (robust) -------------------------------------
   window.addEventListener('cb:game:start', () => { inst.init({}); });
 
-  window.addEventListener('cb:path:overlay:on',  () => inst.toggle(true));
-  window.addEventListener('cb:path:overlay:off', () => inst.toggle(false));
+  // Init-Versuche zusätzlich, falls cb:game:start verpasst wurde oder Scripts später laden
+  const tryInitSoon = () => { try{ inst.init({}); }catch(_){} };
+  window.addEventListener('DOMContentLoaded', tryInitSoon);
+  window.addEventListener('load', tryInitSoon);
+
+  // Wenn Units schon laufen, bevor init fertig ist, wollen wir trotzdem Steps puffern:
+  window.addEventListener('cb:unit:step', (e)=>{ try{ if(!inst.inited) inst._onUnitStep(e); }catch(_){} });
+
+  // Inspector / UI Events (mehrere Aliase, weil du die Buttons/Labels teils als
+  // "Overlay", teils als "Layer" bezeichnet hast).
+  //
+  // Regel:
+  // - overlay/layer = Canvas sichtbar / unsichtbar
+  // - heatmap       = Heatmap-Anteil (Alpha-Feld) an/aus
+  // - stamps        = Textur-Stamps (Richtung) an/aus
+  window.addEventListener('cb:path:overlay:on',  () => { inst.toggle(true);  });
+  window.addEventListener('cb:path:overlay:off', () => { inst.toggle(false); });
+
+  window.addEventListener('cb:path:layer:on',    () => { inst.toggle(true);  }); // Alias
+  window.addEventListener('cb:path:layer:off',   () => { inst.toggle(false); });
+
   window.addEventListener('cb:path:heatmap:on',  () => inst.setHeatmap(true));
   window.addEventListener('cb:path:heatmap:off', () => inst.setHeatmap(false));
 
-  // Optional: Overlay separat (falls du später Buttons dafür willst)
   window.addEventListener('cb:path:stamps:on',   () => inst.setOverlay(true));
   window.addEventListener('cb:path:stamps:off',  () => inst.setOverlay(false));
+
+  // Weitere Aliase (falls UI anders heißt)
+  window.addEventListener('cb:path:overlaylayer:on',  () => inst.setOverlay(true));
+  window.addEventListener('cb:path:overlaylayer:off', () => inst.setOverlay(false));
 
   // --- Final log ------------------------------------------------------------
   LOG('loaded', PO.VERSION);
