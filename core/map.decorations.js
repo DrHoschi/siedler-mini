@@ -51,6 +51,23 @@
     },
 
     // ---------------------------------------------------------------
+    // Mini-Patch: Mindestabstand pro Typ
+    // ---------------------------------------------------------------
+
+    minDist: {
+      mushrooms: 1,
+      flowers: 1,
+      grassClumps: 0,
+      shrubs: 1,
+      waterlily: 1,
+      cattails: 1,
+      rocksSmall: 1,
+      rocksLarge: 1,
+      boulders: 2,
+      logs: 2
+    },
+    
+    // ---------------------------------------------------------------
     // Patch/Cluster: kleine Gruppen, dazwischen Platz
     // ---------------------------------------------------------------
     clusterChance: {
@@ -254,6 +271,14 @@
   function canPlace(kind, x,y){
     if (!isInside(x,y)) return false;
     if (isOccupiedByDeco(x,y)) return false;
+    const d = CFG.minDist?.[kind] ?? 0;
+if (d > 0) {
+  for (const n of State.nodes) {
+    if (n.kind !== kind) continue;
+    const dx = n.x - x, dy = n.y - y;
+    if ((dx*dx + dy*dy) <= (d*d)) return false;
+  }
+}
     if (isOccupiedByResource(x,y)) return false;
 
     if (kind === 'waterlily') return isShoreWaterTile(x,y);
