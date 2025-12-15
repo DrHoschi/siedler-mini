@@ -1,3 +1,6 @@
+FILE: core/unit.anim.js
+--------------------------------------------------------------------------------
+
 /* ============================================================================
  * core/unit.anim.js
  * v4.1-patch: prefixed-atlas + 8dir + iso-friendly direction mapping
@@ -24,25 +27,23 @@
   const DIR8_EN = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
 
   /** 8er-Richtungen (Deutsche Tokens) im Uhrzeigersinn, Start bei O */
-  
-  /**
-   * EMPFEHLUNG: Nutze intern EN-Tokens (N,NE,E,SE,S,SW,W,NW).
-   * DE-Tokens (NO,SO,O) werden über DIR_ALIASES automatisch unterstützt,
-   * können aber bei externen Tools leichter zu Verwechslungen führen.
-   */
-const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
+  const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
 
   /**
    * Richtungs-Aliase (DE <-> EN), damit alte und neue Atlanten funktionieren.
    * NO = NE, SO = SE, O = E
    */
+    /**
+   * Alias-Mapping für Dir-Tokens (DE -> EN), damit alte Atlanten weiterhin funktionieren.
+   * NO = NE, SO = SE, O = E
+   *
+   * WICHTIG: Wir mappen NUR DE -> EN (nicht umgekehrt),
+   * damit Atlanten mit EN-Keys (N/NE/E/SE/S/SW/W/NW) sauber funktionieren.
+   */
   const DIR_ALIASES = {
     NO: "NE",
     SO: "SE",
     O: "E",
-    NE: "NO",
-    SE: "SO",
-    E: "O",
   };
 
   /** Standard-FPS pro Action (nur genutzt, wenn mehrere Frames vorhanden sind). */
@@ -59,8 +60,7 @@ const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
 
     /**
      * Wenn true: Richtung aus TILE-Delta in SCREEN-Delta umrechnen (Isometric).
-     * ACHTUNG: Nur aktivieren, wenn deine Bewegungs-Deltas (dx/dy) im TILE-Raum sind.
-     * In unserem aktuellen 2D-Grid-Setup mit isometrischen Bildern wollen wir SCREEN-Richtungen direkt nutzen -> false.
+     * Das behebt sehr oft "läuft seitlich/rückwärts", wenn Sprites nach Bildschirmrichtung benannt sind.
      */
     isoProject: false,
 
@@ -122,7 +122,26 @@ const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
     const vy = Number(u?.vy || 0);
     if (Math.abs(vx) > 1e-6 || Math.abs(vy) > 1e-6) return { dx: vx, dy: vy };
 
-    const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? u?.x ?? 0);
+    
+    // Fallback: Positionsdelta benutzen, wenn vx/vy nicht gesetzt ist.
+    // Das verhindert, dass die Richtung "stehen bleibt", obwohl die Unit sich bewegt.
+    const cx = Number(u?.x);
+    const cy = Number(u?.y);
+    const px = Number(u?.__animPrevX);
+    const py = Number(u?.__animPrevY);
+
+    // Prev immer aktualisieren (auch wenn wir gleich target-logic nutzen)
+    if (Number.isFinite(cx) && Number.isFinite(cy)) {
+      u.__animPrevX = cx;
+      u.__animPrevY = cy;
+    }
+
+    if (Number.isFinite(cx) && Number.isFinite(cy) && Number.isFinite(px) && Number.isFinite(py)) {
+      const dxp = cx - px;
+      const dyp = cy - py;
+      if (Math.abs(dxp) + Math.abs(dyp) > 0.0005) return { dx: dxp, dy: dyp };
+    }
+const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? u?.x ?? 0);
     const ty = Number(u?.task?.to?.y ?? u?.task?.target?.y ?? u?.targetY ?? u?.toY ?? u?.y ?? 0);
     const ux = Number(u?.x ?? 0);
     const uy = Number(u?.y ?? 0);
@@ -439,3 +458,4 @@ const DIR8_DE = ["O", "SO", "S", "SW", "W", "NW", "N", "NO"];
 
   window.UnitAnim = UnitAnim;
 })();
+
