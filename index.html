@@ -171,6 +171,16 @@
   <!-- NEU: Zentrales Units-System (muss VOR JobEngine + CarrierRuntime geladen werden) -->
   <script src="core/game.units.js"></script>
 
+  <!-- Unit-Animation Helper (8 Richtungen + idle/walk/work/carry)
+       Wird von core/game.map.js benutzt (wenn vorhanden). -->
+  <script src="core/unit.anim.js"></script>
+  <!-- Komfort für die Konsole: erlaubt auch `UnitAnim...` statt `window.UnitAnim...` -->
+  <script>
+    // NOTE: Nur für Debug/Dev (Safari Konsole auf iOS etc.)
+    // Dadurch kannst du `UnitAnim.pick(...)` tippen, ohne `window.` davor.
+    var UnitAnim = window.UnitAnim;
+  </script>
+
   <!-- JobEngine verwaltet Jobs, nutzt GameUnits.needsJob/assignJob -->
   <script src="core/job.engine.js"></script>
   <script src="core/building.stock.js"></script>
