@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Pfad/Heatmap Overlay
- * Version : v25.12.15-paths-camera-follow-hotfix
+ * Version : v25.12.15-paths-overlay-visible
  * Autor   : ChatGPT (Assistenz)
  *
  * Zweck   : Zeichnet ein transparentes Overlay über dem Spiel-Canvas (#game),
@@ -107,6 +107,7 @@ class PathHeatmap {
   constructor(){
     this.enabled   = false;
     this.showHeat  = false;
+    this.showOvl   = false; // sichtbares Pfad-Overlay (Textur/Pattern)
 
     this.tile = PO.DEFAULT_TILE;
     this.cols = 0;
@@ -193,15 +194,30 @@ class PathHeatmap {
   }
 
   /* ---------------- Sichtbarkeit/Modi ---------------- */
-  toggle(on){
-    this.enabled = !!on;
+  /* ---------------- Sichtbarkeit/Modi ---------------- */
+  _syncVisibility(){
+    // Canvas soll sichtbar sein, sobald EIN Modus aktiv ist.
+    this.enabled = !!(this.showOvl || this.showHeat);
     if (this.canvas) this.canvas.style.display = this.enabled ? 'block' : 'none';
+  }
+
+  // Inspector "Overlay ON/OFF" → sichtbares Pfad-Overlay (Pattern/Textur)
+  toggle(on){
+    this.showOvl = !!on;
+    this._syncVisibility();
     this._markDirty();
   }
-  setHeatmap(on){ this.showHeat = !!on; this._markDirty(); }
+
+  // Inspector "Heatmap ON/OFF" → farbige Intensitäts-Heatmap
+  setHeatmap(on){
+    this.showHeat = !!on;
+    this._syncVisibility();
+    this._markDirty();
+  }
 
   isEnabled(){ return !!this.enabled; }
   isHeatmap(){ return !!this.showHeat; }
+  isOverlay(){ return !!this.showOvl; }
 
   /* ---------------- Daten ---------------- */
   mark(tx, ty, amt = 1){
@@ -264,8 +280,8 @@ class PathHeatmap {
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Overlay an, aber Heatmap aus → nichts zeichnen (Canvas bleibt aber sauber)
-    if (!this.showHeat) return;
+    // Wenn kein Modus aktiv ist → nichts zeichnen (Canvas bleibt aber sauber)
+    if (!this.showHeat && !this.showOvl) return;
 
     // 3) Kamera-Transform (wie Map-Render): World-Pixel → Screen
     const cam = this.camera || {x:0,y:0,zoom:1};
@@ -294,9 +310,38 @@ class PathHeatmap {
       for (let tx=minTx; tx<=maxTx; tx++){
         const v = this.map[rowOff + tx] || 0;
         if (v < PO.MIN_VISIBLE) continue;
-        ctx.globalAlpha = clamp01(v);
-        ctx.fillStyle   = '#d1a81b';
-        ctx.fillRect(tx*this.tile, ty*this.tile, this.tile, this.tile);
+        // (A) Heatmap: farbige Fläche
+        if (this.showHeat){
+          ctx.globalAlpha = clamp01(v);
+          ctx.fillStyle   = '#d1a81b';
+          ctx.fillRect(tx*this.tile, ty*this.tile, this.tile, this.tile);
+        }
+
+        // (B) Overlay: "Trampelpfad"-Pattern (subtil, grau/schwarz)
+        // Hinweis: Das ist absichtlich ein einfacher Pattern-Stil, bis du deine
+        // finalen Pfad-Texturen/Brushes lieferst. Dann tauschen wir das Rendering
+        // gegen echte Stamp-Sprites aus.
+        if (this.showOvl){
+          // deterministisches Tile-Jitter für natürlicheren Look
+          const h = (((tx*73856093) ^ (ty*19349663)) >>> 0);
+          const jx = ((h & 255) / 255 - 0.5) * 0.18; // -0.09..+0.09 tiles
+          const jy = (((h>>8) & 255) / 255 - 0.5) * 0.18;
+
+          const x0 = (tx + 0.1 + jx) * this.tile;
+          const y0 = (ty + 0.1 + jy) * this.tile;
+          const w0 = this.tile * 0.8;
+          const h0 = this.tile * 0.8;
+
+          // Alpha deutlich niedriger als Heatmap (realistischer)
+          ctx.globalAlpha = clamp01(v) * 0.22;
+
+          // 2 "Furchen" + kleine Mitte
+          ctx.fillStyle = '#000';
+          ctx.fillRect(x0, y0 + h0*0.38, w0, h0*0.22);
+          ctx.fillRect(x0 + w0*0.38, y0, w0*0.22, h0);
+          ctx.globalAlpha = clamp01(v) * 0.28;
+          ctx.fillRect(x0 + w0*0.42, y0 + h0*0.42, w0*0.16, h0*0.16);
+        }
       }
     }
     ctx.globalAlpha = 1;
@@ -365,7 +410,8 @@ class PathHeatmap {
     reset:      ()=>inst.reset(),
     isEnabled:  ()=>inst.isEnabled(),
     isHeatmap:  ()=>inst.isHeatmap(),
-    _state:     ()=>({ version:PO.VERSION, enabled:inst.enabled, heat:inst.showHeat,
+    isOverlay:  ()=>inst.isOverlay(),
+    _state:     ()=>({ version:PO.VERSION, enabled:inst.enabled, overlay:inst.showOvl, heat:inst.showHeat,
                        tile:inst.tile, cols:inst.cols, rows:inst.rows, cells:inst.map.length }),
   });
 
