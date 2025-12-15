@@ -106,6 +106,47 @@
         w = (f.w|0) || defW;
         h = (f.h|0) || defH;
 
+
+        // -------------------------------------------------------------
+        // CELL-PIVOT FIX (Trimmed Frames auf Grid-Zellen verankern)
+        //
+        // Problem: Viele deiner Unit-Atlanten sind "trimmed": die Frame-BBox
+        // ist je Frame unterschiedlich breit/hoch. Wenn man dann standardmäßig
+        // pivotX = w/2, pivotY = h benutzt, "wandert" die Figur pro Frame und
+        // wirkt wie Teleportieren/Jittern.
+        //
+        // Lösung: Wenn die Atlas-JSON ein meta.cell beschreibt (z.B. 256x128),
+        // verankern wir die Pivot-Position *global* in der jeweiligen Zelle:
+        //   pivotX = (cellLeft + cellW/2) - frameX
+        //   pivotY = (cellTop + (cellH - baseline_margin)) - frameY
+        //
+        // Dadurch bleibt die Fußposition stabil, unabhängig vom Trim.
+        // -------------------------------------------------------------
+        const cellMeta = atlasJson?.meta?.cell;
+        const hasExplicitPivot =
+          (info.pivot != null) || (info.pivotX != null) || (info.pivotY != null) ||
+          (info.anchorX != null) || (info.anchorY != null);
+
+        if (!hasExplicitPivot && cellMeta && Number.isFinite(x) && Number.isFinite(y)) {
+          const cellW = (cellMeta.w|0) || 0;
+          const cellH = (cellMeta.h|0) || 0;
+          if (cellW > 0 && cellH > 0) {
+            const baseMargin = (cellMeta.baseline_margin|0) || 0;
+
+            // Zelle bestimmen (funktioniert bei klassischen Grid-Sheets)
+            const cellLeft = Math.floor(x / cellW) * cellW;
+            const cellTop  = Math.floor(y / cellH) * cellH;
+
+            // Fußpunkt (Bottom-Center) der Zelle als "Anker" verwenden
+            const footX = cellLeft + (cellW / 2);
+            const footY = cellTop + (cellH - baseMargin);
+
+            // Pivot relativ zum Frame-Rect
+            pivotX = footX - x;
+            pivotY = footY - y;
+          }
+        }
+
         if (info.pivot && typeof info.pivot.x === 'number') pivotX = info.pivot.x;
         if (info.pivot && typeof info.pivot.y === 'number') pivotY = info.pivot.y;
 
