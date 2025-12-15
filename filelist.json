@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-14T22:06:45.686Z",
+  "createdAt": "2025-12-15T09:12:38.395Z",
   "root": ".",
   "count": 528,
   "entries": [
@@ -1367,7 +1367,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 15279
+      "size": 18412
     },
     {
       "type": "file",
@@ -1507,7 +1507,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 20524
+      "size": 21480
     },
     {
       "type": "file",
@@ -1572,7 +1572,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 11741
+      "size": 12587
     },
     {
       "type": "file",
@@ -2541,12 +2541,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52511
+      "size": 52718
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20464
+      "size": 20547
     },
     {
       "type": "file",
@@ -2556,7 +2556,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16892
+      "size": 17355
     },
     {
       "type": "file",
