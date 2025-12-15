@@ -422,6 +422,22 @@
       return { dirTok: _getDirTokenForUnit(u, atlasKey, "en"), atlasKey };
     },
 
+    /**
+     * Backwards-Compat: 8er-Richtung aus Delta (Tile oder World).
+     * Wird von manchen Game-Teilen noch direkt aufgerufen.
+     * Returns: "E","SE","S","SW","W","NW","N","NE" (EN-Tokens).
+     */
+    dir8FromDelta(dx, dy) {
+      const x = Number(dx) || 0;
+      const y = Number(dy) || 0;
+      if (Math.abs(x) < 1e-6 && Math.abs(y) < 1e-6) return "S"; // Default
+      const ang = Math.atan2(y, x);
+      let deg = (ang * 180) / Math.PI;
+      if (deg < 0) deg += 360;
+      const idx = Math.round(deg / 45) % 8;
+      return DIR8_EN[idx] || "S";
+    },
+
     /** Debug-Hilfe: zeigt, ob prefixed index erkannt wurde */
     debugPrefIndex(atlasKey) {
       const atlas = window.Assets?.getAtlas?.(atlasKey) || null;

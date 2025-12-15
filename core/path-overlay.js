@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Pfad/Heatmap Overlay
- * Version : v25.12.15-paths-camera-follow
+ * Version : v25.12.15-paths-camera-follow-hotfix
  * Autor   : ChatGPT (Assistenz)
  *
  * Zweck   : Zeichnet ein transparentes Overlay über dem Spiel-Canvas (#game),
@@ -119,6 +119,9 @@ class PathHeatmap {
     this._raf         = 0;
     this._decayTimer  = 0;
     this._resizeObs   = null;
+
+    // Kamera-Status (World-Pixel): wird über cb:camera-change aktualisiert
+    this.camera = { x:0, y:0, zoom:1 };
   }
 
   /* ---------------- Lifecycle ---------------- */
@@ -144,10 +147,20 @@ class PathHeatmap {
     this.ctx    = this.canvas.getContext('2d');
 
     // Grid bestimmen
-    const { rect } = resizeCanvasToClient(this.canvas);
-    this.cols = Math.max(1, Math.ceil(rect.width  / this.tile));
-    this.rows = Math.max(1, Math.ceil(rect.height / this.tile));
-    this.map  = new Array(this.cols * this.rows).fill(0);
+    // Wichtig: Wir speichern die Heatmap in WELT-Tiles (nicht Screen-Tiles),
+    // damit sie beim Panning/Zooming "mit der Karte" wandert.
+    const gm = window.GameMap?._state || null;
+    if (gm && Number.isFinite(gm.cols) && Number.isFinite(gm.rows)) {
+      this.cols = Math.max(1, gm.cols|0);
+      this.rows = Math.max(1, gm.rows|0);
+      this.map  = new Array(this.cols * this.rows).fill(0);
+    } else {
+      // Fallback: Wenn Map-State noch nicht verfügbar ist, nutze Screen-Grid.
+      const { rect } = resizeCanvasToClient(this.canvas);
+      this.cols = Math.max(1, Math.ceil(rect.width  / this.tile));
+      this.rows = Math.max(1, Math.ceil(rect.height / this.tile));
+      this.map  = new Array(this.cols * this.rows).fill(0);
+    }
 
     // Resize beobachten
     try {
@@ -254,21 +267,32 @@ class PathHeatmap {
     // Overlay an, aber Heatmap aus → nichts zeichnen (Canvas bleibt aber sauber)
     if (!this.showHeat) return;
 
-    // 3) Kamera-Transform wie in core/game.map.js anwenden,
-    //    aber zusätzlich mit DPR multiplizieren, weil dieses Overlay dpr-scharf gerendert wird.
-    const cam  = window.GameCamera || {};
-    const zoom = (cam.zoom ?? 1) || 1;
-    const camX = (cam.x    ?? 0) || 0;
-    const camY = (cam.y    ?? 0) || 0;
+    // 3) Kamera-Transform (wie Map-Render): World-Pixel → Screen
+    const cam = this.camera || {x:0,y:0,zoom:1};
+    const zoom = Number(cam.zoom) || 1;
+    const camX = Number(cam.x) || 0;
+    const camY = Number(cam.y) || 0;
 
     const s = dpr * zoom;
     ctx.setTransform(s, 0, 0, s, -camX * s, -camY * s);
 
-    // 4) Heatmap zeichnen (World-Space)
-    //    Hinweis: Hier wird absichtlich "tile grid" (Rect) genutzt – so wie das Map-Rendering.
-    for (let ty=0; ty<this.rows; ty++){
-      for (let tx=0; tx<this.cols; tx++){
-        const v = this.map[ty*this.cols + tx] || 0;
+    // 4) Nur sichtbaren Bereich zeichnen (Performance)
+    const viewW = (canvas.width  / s); // sichtbare Welt-Pixel
+    const viewH = (canvas.height / s);
+
+    const pad = 2; // +Tiles am Rand
+    let minTx = Math.floor(camX / this.tile) - pad;
+    let minTy = Math.floor(camY / this.tile) - pad;
+    let maxTx = Math.floor((camX + viewW) / this.tile) + pad;
+    let maxTy = Math.floor((camY + viewH) / this.tile) + pad;
+
+    minTx = Math.max(0, minTx); minTy = Math.max(0, minTy);
+    maxTx = Math.min(this.cols - 1, maxTx); maxTy = Math.min(this.rows - 1, maxTy);
+
+    for (let ty=minTy; ty<=maxTy; ty++){
+      const rowOff = ty * this.cols;
+      for (let tx=minTx; tx<=maxTx; tx++){
+        const v = this.map[rowOff + tx] || 0;
         if (v < PO.MIN_VISIBLE) continue;
         ctx.globalAlpha = clamp01(v);
         ctx.fillStyle   = '#d1a81b';
@@ -276,9 +300,10 @@ class PathHeatmap {
       }
     }
     ctx.globalAlpha = 1;
-  }  }
+  }
 
   _alignToGame(gameCanvas){
+
     if (!this.canvas) return;
 
     // Canvas an Game-Canvas ausrichten (innerhalb desselben Parents)
@@ -290,18 +315,31 @@ class PathHeatmap {
       top:    '0',
     });
 
-    // Grid ggf. neu aufbauen (links oben verankert)
+    // Grid ggf. neu aufbauen (Welt-Grid bevorzugt)
     const prevCols = this.cols, prevRows = this.rows, prev = this.map.slice();
-    const { rect } = resizeCanvasToClient(this.canvas);
-    this.cols = Math.max(1, Math.ceil(rect.width  / this.tile));
-    this.rows = Math.max(1, Math.ceil(rect.height / this.tile));
-    this.map  = new Array(this.cols * this.rows).fill(0);
-    const minC = Math.min(prevCols, this.cols), minR = Math.min(prevRows, this.rows);
-    for (let y=0; y<minR; y++){
-      for (let x=0; x<minC; x++){
-        this.map[y*this.cols + x] = prev[y*prevCols + x] || 0;
+
+    // Canvas DPR-scharf halten (Größe kommt vom Game-Canvas)
+    resizeCanvasToClient(this.canvas);
+
+    // Wenn Map-State verfügbar: Heatmap in Welt-Tiles (ganze Karte)
+    const gm = window.GameMap?._state || null;
+    const targetCols = (gm && Number.isFinite(gm.cols)) ? (gm.cols|0) : prevCols;
+    const targetRows = (gm && Number.isFinite(gm.rows)) ? (gm.rows|0) : prevRows;
+
+    // Nur neu allokieren, wenn sich die Größe wirklich geändert hat
+    if (targetCols !== prevCols || targetRows !== prevRows){
+      this.cols = Math.max(1, targetCols);
+      this.rows = Math.max(1, targetRows);
+      this.map  = new Array(this.cols * this.rows).fill(0);
+
+      const minC = Math.min(prevCols, this.cols), minR = Math.min(prevRows, this.rows);
+      for (let y=0; y<minR; y++){
+        for (let x=0; x<minC; x++){
+          this.map[y*this.cols + x] = prev[y*prevCols + x] || 0;
+        }
       }
     }
+
     this._markDirty();
   }
 }
@@ -340,44 +378,28 @@ class PathHeatmap {
   window.addEventListener('cb:path:heatmap:on',  ()=>inst.setHeatmap(true));
   window.addEventListener('cb:path:heatmap:off', ()=>inst.setHeatmap(false));
 
-  
-  // Kamera: wenn gepannt/gezoomt wird, muss das Overlay neu gerendert werden.
-  // Ohne dieses "dirty" klebt die Heatmap am Bildschirm (Map bewegt sich, Overlay bleibt).
-  let _lastCamKey = '';
+  // Kamera: wenn gepannt/gezoomt wird, muss das Overlay neu gerendert werden,
+  // sonst wirkt es, als würde es "am Bildschirm kleben".
   window.addEventListener('cb:camera-change', (ev)=>{
     const d = ev?.detail || {};
     const x = Number(d.x) || 0;
     const y = Number(d.y) || 0;
     const z = Number(d.zoom) || 1;
-    const key = `${x}|${y}|${z}`;
-    if (key !== _lastCamKey){
-      _lastCamKey = key;
-      // Nur zeichnen, wenn sichtbar – trotzdem billig: mark dirty triggert den RAF-Draw
-      if (inst.isEnabled() && inst.isHeatmap()) inst._markDirty?.();
-    }
+    inst.camera = { x, y, zoom: z };
+    if (inst.isEnabled() && inst.isHeatmap()) inst._markDirty();
   });
 
-// Trampelpfade: bei jedem Tile-Step einer Unit "Intensity" erhöhen.
+  // Trampelpfade: bei jedem Tile-Step einer Unit "Intensity" erhöhen.
   // Hinweis: Das funktioniert sofort für Carrier/Worker, sobald irgendwo cb:unit:step emittiert wird.
   window.addEventListener('cb:unit:step', (ev)=>{
     const d = ev?.detail || {};
     const tx = Number.isFinite(d.tx) ? d.tx : Math.floor(d.x || 0);
     const ty = Number.isFinite(d.ty) ? d.ty : Math.floor(d.y || 0);
 
-    // Gewichtung: Worker etwas stärker (weil "Arbeitsrouten" sichtbar werden sollen),
-    // Carrier normal (laufen viel, sonst wird alles zu schnell "dicht").
-    // Optional kann ein Sender bereits d.weight setzen.
+    // Gewichtung: Carrier etwas stärker (weil oft laufen), Worker normal.
     const type = String(d.type || '').toLowerCase();
     const kind = String(d.kind || '').toLowerCase();
-    const wIn  = Number.isFinite(d.weight) ? Number(d.weight) : null;
-
-    const amt  = (wIn !== null)
-      ? wIn
-      : (type === 'worker' || kind.includes('woodcutter') || kind.includes('stonecutter') || kind.includes('fisher'))
-        ? 3
-        : (type === 'carrier' || kind.includes('carrier'))
-          ? 2
-          : 1;
+    const amt  = (type === 'carrier' || kind.includes('carrier')) ? 2 : 1;
 
     inst.mark(tx, ty, amt);
   });
