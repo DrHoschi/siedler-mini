@@ -15,7 +15,7 @@
  *   • cb:path:show           { path:[{x,y},...] }   // Pfad-Vorschau setzen
  *
  * Public (global):
- *   window.PathOverlay = {
+ *   window.PFOverlay = {
  *     setPath(pathArray),   // manuell Pfad setzen
  *     clear(),              // Pfad löschen
  *     enable(bool),         // Overlay an/aus
@@ -237,10 +237,25 @@
   }
 
   // ---------- Exports ---------------------------------------------------------
-  window.PathOverlay = {
+  window.PFOverlay = {
     setPath(path){ previewPath = (Array.isArray(path)&&path.length)? path : null; redraw(); },
     clear(){ previewPath = null; redraw(); },
     enable: enableOverlay,
     redraw
-  };
+  
+  // ---------- Backwards-Compat / Konfliktvermeidung ---------------------------
+  // WICHTIG: Trampelpfade benutzen window.PathOverlay.
+  // pfglue darf dieses Objekt NICHT überschreiben, sonst schaltet der Inspector
+  // plötzlich das falsche Overlay.
+  //
+  // Daher:
+  // - PFOverlay ist die neue, eindeutige API für Pathfinding-Vorschau
+  // - PathOverlay wird NUR gesetzt, wenn es noch frei ist
+  // - sonst legen wir zusätzlich PathOverlayPF an
+  if (!window.PathOverlay) window.PathOverlay = window.PFOverlay;
+  else window.PathOverlayPF = window.PFOverlay;
+
+};
 })();
+
+

@@ -1,51 +1,58 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
- * Projekt : Neue Siedler – Pfad/Heatmap Overlay
- * Version : v4.1.6-align+autotrack (2025-12-15)
+ * Projekt : Neue Siedler – Trampelpfade (Stamps) + Heatmap
+ * Version : v4.2.0-stable-overlayhooks (2025-12-15)
  *
- * Ziel dieses Hotfix:
- *   1) Overlay/Heatmap IMMER schaltbar (auch wenn cb:game:start verpasst wurde)
- *   2) Kein "klebt am Bildschirm" mehr: wir benutzen die exakt gleiche Kamera-
- *      Transform wie core/game.map.js:
- *        ctx.setTransform(zoom,0,0,zoom,-camX*zoom,-camY*zoom)
- *   3) Trampelpfade robust zeichnen (niemals crashen, auch wenn Texturen fehlen)
- *   4) Optional: vorhandene Pfad-Texturen laden:
- *        assets/tex/path/topdown_path0..9.png
+ * Ziel (Endlich stabil, ohne "wir drehen uns im Kreis"):
+ *   1) EIN Koordinatensystem: Wir zeichnen über OverlayHooks auf dem
+ *      bestehenden #overlay Canvas (Renderer synchronisiert Size/Scale).
+ *      → kein Versatz, kein "halber Weg", kein "zu wenig Zoom".
  *
- * Struktur : Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+ *   2) Trampelpfade tracken IMMER (auch wenn Inspector noch aus ist).
+ *      Sichtbarkeit ist trotzdem schaltbar, aber Default = sichtbar.
+ *
+ *   3) Kein Global-Name-Konflikt mit pfglue:
+ *      - Trampelpfade nutzen window.PathOverlay (wie Inspector erwartet)
+ *      - pfglue darf window.PathOverlay NICHT überschreiben (siehe Patch pfglue)
+ *
+ *   4) Richtungsgebundene Stamps:
+ *      - wir merken pro Tile die letzte Bewegungsrichtung (dx/dy)
+ *      - Stamps werden per ctx.rotate(angle) gedreht
+ *
+ *   5) Texturen:
+ *      assets/tex/path/topdown_path0..9.png  (wir versuchen .png und .PNG)
+ *
+ * Struktur : IIFE → Konstanten → Helpers → Klasse → Wiring → Export
  * ========================================================================== */
 (() => {
   'use strict';
 
-  // --- Guards ---------------------------------------------------------------
-  // Wichtig: Das Modul MUSS window.PathOverlay immer bereitstellen.
-  if (window.__PATH_OVERLAY_V415__) return;
-  window.__PATH_OVERLAY_V415__ = true;
-
-  // --- Logging (CBLog falls vorhanden) --------------------------------------
   const TAG  = '[path-overlay]';
-  const LOG  = (...a) => (window.CBLog?.info ?? console.log )(TAG, ...a);
-  const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
-  const ERR  = (...a) => (window.CBLog?.error?? console.error)(TAG, ...a);
+  const LOG  = (window.CBLog?.info  || console.info ).bind(console, TAG);
+  const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
 
-  // --- Konstanten -----------------------------------------------------------
-  const PO = {
-    VERSION: 'v4.1.5-hotfix',
-    CANVAS_ID: 'paths-overlay',
-    Z_INDEX: 40,
-    DEFAULT_TILE: 64,
+  // -------------------------------------------------------------------------
+  // KONSTANTEN
+  // -------------------------------------------------------------------------
+
+  const CFG = {
+    VERSION: 'v4.2.0-stable-overlayhooks',
+
+    // Default: sichtbar ab Spielstart (wie von dir gewünscht)
+    DEFAULT_VISIBLE: true,
+    DEFAULT_STAMPS : true,
+    DEFAULT_HEATMAP: false,
 
     // Darstellung
     MIN_VISIBLE: 0.02,
-    MAX_INTENSITY: 1.0,
 
-    // Heatmap
-    HEAT_ALPHA_MIN: 0.08,
-    HEAT_ALPHA_MAX: 0.55,
+    // Heatmap Alpha (wir verwenden nur Alpha, Farbe bleibt neutral/schwarz)
+    HEAT_ALPHA_MIN: 0.06,
+    HEAT_ALPHA_MAX: 0.45,
 
-    // Overlay (Textur/Stamp)
-    OVL_ALPHA_MIN: 0.10,
-    OVL_ALPHA_MAX: 0.65,
+    // Stamp Alpha
+    STAMP_ALPHA_MIN: 0.10,
+    STAMP_ALPHA_MAX: 0.70,
 
     // Decay
     DECAY_INTERVAL_MS: 500,
@@ -53,541 +60,479 @@
 
     // Texturen
     TEX_BASE: 'assets/tex/path/',
-    TEX_FILES: [
-      'topdown_path0.png','topdown_path1.png','topdown_path2.png','topdown_path3.png','topdown_path4.png',
-      'topdown_path5.png','topdown_path6.png','topdown_path7.png','topdown_path8.png','topdown_path9.png',
-      // Fallback falls im Repo noch .PNG groß geschrieben ist
-      'topdown_path0.PNG','topdown_path1.PNG','topdown_path2.PNG','topdown_path3.PNG','topdown_path4.PNG',
-      'topdown_path5.PNG','topdown_path6.PNG','topdown_path7.PNG','topdown_path8.PNG','topdown_path9.PNG'
-    ],
+    TEX_NAMES: Array.from({length:10}, (_,i)=>`topdown_path${i}`),
+
+    // Weighting
+    WEIGHT_WORKER: 0.14,
+    WEIGHT_CARRIER: 0.08,
   };
 
-  // --- Hilfsfunktionen ------------------------------------------------------
-  function clamp01(v){ return v < 0 ? 0 : (v > 1 ? 1 : v); }
+  // -------------------------------------------------------------------------
+  // HELPERS
+  // -------------------------------------------------------------------------
 
-  function ensureRelativeParent(gameCanvas){
-    const parent = gameCanvas?.parentElement || document.body;
-    const style  = window.getComputedStyle(parent);
-    if (style.position === 'static') parent.style.position = 'relative';
-    return parent;
+  const clamp01 = (v)=> Math.max(0, Math.min(1, v));
+
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function isWorkerKind(kind){
+    return /woodcutter|stonecutter|fisher|worker/i.test(String(kind||''));
   }
 
-  function createOverlayCanvas(gameCanvas){
-    const c = document.createElement('canvas');
-    c.id = PO.CANVAS_ID;
-    Object.assign(c.style, {
-      position: 'absolute',
-      inset: '0',
-      pointerEvents: 'none',
-      zIndex: String(PO.Z_INDEX),
-      display: 'none',
-    });
-    ensureRelativeParent(gameCanvas).appendChild(c);
-    resizeCanvasToClient(c);
-    return c;
+  function safeInt(v, fallback){
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
   }
 
-  function resizeCanvasToClient(canvas){
-    // WICHTIG: Unser Haupt-Canvas (core/game.map.js) nutzt KEIN DPR-Scaling,
-    // sondern setzt canvas.width/height direkt auf window.innerWidth/innerHeight.
-    // Wenn wir hier rect*dpr nehmen, driftet das Overlay (halbes Panning / falsches Zoom).
-    const w = (window.innerWidth  || document.documentElement.clientWidth  || canvas.width  || 1) | 0;
-    const h = (window.innerHeight || document.documentElement.clientHeight || canvas.height || 1) | 0;
-    if (canvas.width !== w || canvas.height !== h){
-      canvas.width  = Math.max(1, w);
-      canvas.height = Math.max(1, h);
-    }
-  }
+  function angleFromDelta(dx, dy){
+    // Canvas: x rechts, y nach unten. atan2(dy,dx) passt.
+    return Math.atan2(dy, dx);
   }
 
-  function getCameraState(){
-    // Kamera kann aus window.GameCamera kommen (dein Standard)
-    const cam  = window.GameCamera || {};
-    const zoom = (typeof cam.zoom === 'number') ? cam.zoom : 1;
-    const x    = (typeof cam.x    === 'number') ? cam.x    : 0;
-    const y    = (typeof cam.y    === 'number') ? cam.y    : 0;
-    return { x, y, zoom };
-  }
-
-  // Richtung (8-way) aus delta (tx/ty Schritte)
-  function dir8FromDelta(dx, dy){
-    // dy positiv = nach unten (screen)
-    // Mapping: 0=E,1=SE,2=S,3=SW,4=W,5=NW,6=N,7=NE
-    if (dx === 0 && dy === 0) return 2;
+  function dir8FromDelta(dx,dy){
+    // 0..7 Richtung. (E,SE,S,SW,W,NW,N,NE)
+    if (!dx && !dy) return 0;
     const ax = Math.abs(dx), ay = Math.abs(dy);
-    if (ax > ay){
-      return dx > 0 ? 0 : 4;
-    }else if (ay > ax){
-      return dy > 0 ? 2 : 6;
-    }else{
+    if (ay > ax){
+      return dy > 0 ? 2 : 6; // S oder N
+    } else if (ax > ay){
+      return dx > 0 ? 0 : 4; // E oder W
+    } else {
       // diagonal
-      if (dx > 0 && dy > 0) return 1;
-      if (dx < 0 && dy > 0) return 3;
-      if (dx < 0 && dy < 0) return 5;
-      return 7; // dx>0 && dy<0
+      if (dx > 0 && dy > 0) return 1; // SE
+      if (dx < 0 && dy > 0) return 3; // SW
+      if (dx < 0 && dy < 0) return 5; // NW
+      return 7; // NE
     }
   }
 
-  // --- Klasse ---------------------------------------------------------------
-  class PathOverlayImpl {
-    constructor(){
-      this.enabled  = false;
-      this.showHeat = false;
-      this.showOvl  = true;   // Overlay = echte Stamps (default ON wenn enabled)
-      this.inited   = false;
+  function ensureOverlayHooksReady(cb){
+    // OverlayHooks kann später geladen werden (in index.html steht path-overlay vor overlay-hooks).
+    // Wir versuchen sofort und dann kurz zu "pollen", bis es da ist.
+    let tries = 0;
+    const tick = ()=>{
+      if (window.OverlayHooks && typeof window.OverlayHooks.register === 'function'){
+        cb();
+        return;
+      }
+      tries++;
+      if (tries > 120) { // ~2s bei 16ms
+        WARN('OverlayHooks nicht gefunden – Pfad-Overlay kann nicht zeichnen.');
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
 
-      this.tile = PO.DEFAULT_TILE;
+  function getMapState(){
+    // bevorzugt GameMap._state (stabil in deinem Projekt)
+    const s = window.GameMap?._state;
+    if (s && Number.isFinite(s.cols) && Number.isFinite(s.rows) && Number.isFinite(s.tileSize)){
+      return { cols:s.cols, rows:s.rows, tile:s.tileSize };
+    }
+    // Fallbacks
+    const cols = window.Game?.cols ?? window.Map?.cols;
+    const rows = window.Game?.rows ?? window.Map?.rows;
+    const tile = window.Game?.tileSize ?? window.Map?.tileSize;
+    if (Number.isFinite(cols) && Number.isFinite(rows) && Number.isFinite(tile)){
+      return { cols, rows, tile };
+    }
+    return null;
+  }
+
+  function getViewportTileBounds(cam, ctx, tile){
+    // sichtbarer Weltbereich in Pixeln
+    const w = ctx.canvas.width  / (cam.zoom || 1);
+    const h = ctx.canvas.height / (cam.zoom || 1);
+    const x0 = cam.x;
+    const y0 = cam.y;
+    const x1 = cam.x + w;
+    const y1 = cam.y + h;
+
+    // in Tiles
+    const tx0 = Math.max(0, Math.floor(x0 / tile) - 1);
+    const ty0 = Math.max(0, Math.floor(y0 / tile) - 1);
+    const tx1 = Math.floor(x1 / tile) + 1;
+    const ty1 = Math.floor(y1 / tile) + 1;
+    return { tx0, ty0, tx1, ty1 };
+  }
+
+  // -------------------------------------------------------------------------
+  // KLASSE
+  // -------------------------------------------------------------------------
+
+  class TrampleOverlay {
+    constructor(){
+      // Sichtbarkeit/Modi
+      this.visible = CFG.DEFAULT_VISIBLE;
+      this.showStamps = CFG.DEFAULT_STAMPS;
+      this.showHeatmap = CFG.DEFAULT_HEATMAP;
+
+      // Grid
       this.cols = 0;
       this.rows = 0;
+      this.tile = 64;
 
-      // map: Float intensity
-      this.map = [];
-      // last dir per tile (0..7)
-      this.dir = [];
+      // Data
+      this.map = null; // Float32Array intensity
+      this.dir = null; // Int8Array direction 0..7
 
-      // unit tracking for direction, falls Units kein prevTx/prevTy senden
+      // Unit last positions
       this._unitLast = new Map();
 
-      // Wenn init (Canvas/Map) noch nicht bereit ist, puffern wir Steps.
-      // So gehen keine Trampelpfade verloren, nur weil der User das Overlay
-      // erst später einschaltet.
+      // Steps buffer falls Map-Dims noch fehlen
       this._preInitSteps = [];
-      this._preInitMax   = 2000;
+      this._preInitMax = 2000;
+
+      // Texturen
+      this._tex = new Array(10).fill(null);
+      this._texReady = false;
+      this._texTried = false;
 
       // Debug/Stats
       this.stepCount = 0;
       this.lastStep = null;
 
-      // DOM/Canvas
-      this.gameCanvas = null;
-      this.canvas = null;
-      this.ctx = null;
+      // Decay
+      this._decayTimer = 0;
 
-      // Decay timer
-      this._decayTimer = null;
-      this._dirty = false;
-
-      // Optional textures
-      this._tex = [];
-      this._texReady = false;
-      this._texTried = false;
-
-      // bind
-      this._onResize = () => { if (this.canvas) resizeCanvasToClient(this.canvas); this._dirty = true; };
-      this._onCamera = () => { this._dirty = true; this.requestRepaint(); };
-
-      this._onUnitStep = (ev) => {
-        const d = ev?.detail || {};
-        const tx = Number.isFinite(d.tx) ? d.tx : null;
-        const ty = Number.isFinite(d.ty) ? d.ty : null;
-        if (tx === null || ty === null) return;
-
-        // Falls wir noch nicht initialisiert sind (Map-Dims/Canvas noch nicht da),
-        // puffern wir den Step und verarbeiten ihn später.
-        if (!this.inited || !this.map || !this.map.length){
-          this._preInitSteps.push({ ...d, tx, ty, t: Date.now() });
-          if (this._preInitSteps.length > this._preInitMax) this._preInitSteps.shift();
-          return;
-        }
-
-        const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
-        const last = this._unitLast.get(id);
-        let dx = 0, dy = 0;
-        if (last){
-          dx = tx - last.tx;
-          dy = ty - last.ty;
-        }
-        this._unitLast.set(id, { tx, ty });
-        this.stepCount++;
-        this.lastStep = { id, tx, ty, dx, dy, t: Date.now() };
-
-        // Gewichtung (Worker stärker)
-        const kind = String(d.kind || d.type || '');
-        const isWorker = /woodcutter|stonecutter|fisher|worker/i.test(kind);
-        const amt = (typeof d.weight === 'number') ? d.weight : (isWorker ? 0.14 : 0.08);
-
-        const cell = this._idx(tx, ty);
-        if (cell < 0) return;
-        this.map[cell] = clamp01((this.map[cell] || 0) + amt);
-        this.dir[cell] = dir8FromDelta(dx, dy);
-
-        this._dirty = true;
-        this.requestRepaint();
-      };
+      // OverlayHooks layer name
+      this._layerName = 'trample-paths';
+      this._layerRegistered = false;
     }
 
-    _idx(tx, ty){
+    // ----------------------------
+    // INIT / GRID
+    // ----------------------------
+
+    ensureGrid(){
+      const ms = getMapState();
+      if (!ms) return false;
+
+      const changed = (ms.cols !== this.cols) || (ms.rows !== this.rows) || (ms.tile !== this.tile);
+
+      this.cols = ms.cols;
+      this.rows = ms.rows;
+      this.tile = ms.tile;
+
+      if (!this.map || changed){
+        this.map = new Float32Array(this.cols * this.rows);
+        this.dir = new Int8Array(this.cols * this.rows);
+
+        // buffered Steps nachziehen
+        if (this._preInitSteps.length){
+          const steps = this._preInitSteps.slice();
+          this._preInitSteps.length = 0;
+          for (const d of steps){
+            this._applyStepDetail(d);
+          }
+        }
+      }
+      return true;
+    }
+
+    _idx(tx,ty){
       if (!Number.isFinite(tx) || !Number.isFinite(ty)) return -1;
       if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return -1;
       return ty * this.cols + tx;
     }
 
-    init(opts = {}){
-      try{
-        if (this.inited) return true;
+    // ----------------------------
+    // TRACKING
+    // ----------------------------
 
-        this.gameCanvas = document.getElementById('game');
-        if (!this.gameCanvas){
-          WARN('Kein #game Canvas gefunden – init wird später erneut versucht.');
-          return false;
-        }
+    onUnitStep(ev){
+      const d = ev?.detail || {};
+      // tx/ty Pflicht
+      const tx = Number.isFinite(d.tx) ? d.tx : null;
+      const ty = Number.isFinite(d.ty) ? d.ty : null;
+      if (tx === null || ty === null) return;
 
-        this.canvas = document.getElementById(PO.CANVAS_ID) || createOverlayCanvas(this.gameCanvas);
-        this.ctx = this.canvas.getContext('2d');
-
-        // tileSize aus GameMap/Runtime falls verfügbar
-        const ts = (window.Game?.tileSize ?? window.GameMap?.tileSize ?? window.Map?.tileSize);
-        if (typeof ts === 'number' && ts > 0) this.tile = ts;
-
-        // grid dims aus Map-Modul wenn vorhanden (Fallback: 128x128)
-        const cols = window.Game?.cols ?? window.Map?.cols ?? window.GameMap?.cols ?? window.Mod?.cols;
-        const rows = window.Game?.rows ?? window.Map?.rows ?? window.GameMap?.rows ?? window.Mod?.rows;
-        this.cols = (typeof cols === 'number' && cols > 0) ? cols : 128;
-        this.rows = (typeof rows === 'number' && rows > 0) ? rows : 128;
-
-        const n = this.cols * this.rows;
-        this.map = new Array(n).fill(0);
-        this.dir = new Array(n).fill(2);
-
-        // Vor-Init Steps nachziehen (damit Pfade von Anfang an "da" sind)
-        if (Array.isArray(this._preInitSteps) && this._preInitSteps.length){
-          const tmp = this._preInitSteps.slice();
-          this._preInitSteps.length = 0;
-          for (const d of tmp){
-            try{
-              // Reuse handler logic: wir dispatchen ein Fake-Event
-              this._onUnitStep({ detail: d });
-            }catch(_){}
-          }
-        }
-
-        // Events
-        window.addEventListener('resize', this._onResize);
-        window.addEventListener('cb:camera-change', this._onCamera);
-        window.addEventListener('cb:unit:step', this._onUnitStep);
-
-        // Decay loop
-        this._decayTimer = window.setInterval(() => this._tickDecay(), PO.DECAY_INTERVAL_MS);
-
-        // Optional: Texturen laden (fail-safe)
-        this._tryLoadTextures();
-
-        this.inited = true;
-        LOG('init OK', { tile:this.tile, cols:this.cols, rows:this.rows });
-        return true;
-      }catch(err){
-        ERR('init FAIL', err);
-        return false;
+      // Wenn Grid noch nicht da ist: puffern
+      if (!this.ensureGrid()){
+        this._preInitSteps.push({ ...d, tx, ty, t: Date.now() });
+        if (this._preInitSteps.length > this._preInitMax) this._preInitSteps.shift();
+        return;
       }
+
+      this._applyStepDetail({ ...d, tx, ty });
     }
 
-    teardown(){
-      try{
-        window.removeEventListener('resize', this._onResize);
-        window.removeEventListener('cb:camera-change', this._onCamera);
-        window.removeEventListener('cb:unit:step', this._onUnitStep);
-        if (this._decayTimer) window.clearInterval(this._decayTimer);
-        this._decayTimer = null;
-        this.inited = false;
-      }catch(err){
-        ERR('teardown FAIL', err);
+    _applyStepDetail(d){
+      const tx = d.tx, ty = d.ty;
+
+      const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
+      const last = this._unitLast.get(id);
+
+      let dx = 0, dy = 0;
+      if (last){
+        dx = tx - last.tx;
+        dy = ty - last.ty;
       }
+      this._unitLast.set(id, { tx, ty });
+
+      this.stepCount++;
+      this.lastStep = { id, tx, ty, dx, dy, t: Date.now() };
+
+      const kind = String(d.kind || d.type || '');
+      const isW = isWorkerKind(kind);
+
+      const amt = (typeof d.weight === 'number')
+        ? d.weight
+        : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
+
+      const cell = this._idx(tx, ty);
+      if (cell < 0) return;
+
+      this.map[cell] = clamp01((this.map[cell] || 0) + amt);
+      this.dir[cell] = dir8FromDelta(dx, dy);
     }
+
+    // ----------------------------
+    // TEXTURE LOADING
+    // ----------------------------
 
     _tryLoadTextures(){
       if (this._texTried) return;
       this._texTried = true;
 
-      // NICHT blockieren – wir laden asynchron, Overlay funktioniert auch ohne.
-      const imgs = [];
+      let loaded = 0;
       let done = 0;
-      const total = PO.TEX_FILES.length;
 
-      const finish = () => {
-        this._tex = imgs;
-        this._texReady = imgs.some(Boolean);
-        LOG('Textures loaded:', this._texReady ? 'OK' : 'NONE', imgs.filter(Boolean).length, '/', total);
-        this._dirty = true;
-        this.requestRepaint();
+      const finalize = ()=>{
+        done++;
+        if (done >= 10){
+          this._texReady = (loaded > 0);
+          LOG('Textures ready:', this._texReady, `(loaded ${loaded}/10)`);
+        }
       };
 
-      PO.TEX_FILES.forEach((name, i) => {
+      for (let i=0;i<10;i++){
+        const base = CFG.TEX_BASE + CFG.TEX_NAMES[i];
         const img = new Image();
-        img.onload = () => { imgs[i] = img; done++; if (done === total) finish(); };
-        img.onerror = () => { imgs[i] = null; done++; if (done === total) finish(); };
-        img.src = PO.TEX_BASE + name;
-      });
-    }
 
-    // --- API ----------------------------------------------------------------
-    toggle(on){
-      // Lazy init: falls cb:game:start verpasst wurde.
-      if (!this.inited) this.init({});
-      this.enabled = !!on;
-      if (this.canvas){
-        this.canvas.style.display = this.enabled ? 'block' : 'none';
+        // Wir versuchen zuerst .png, dann .PNG (falls du noch am Umbenennen bist)
+        const tryUrls = [base + '.png', base + '.PNG'];
+        let urlIdx = 0;
+
+        const tryNext = ()=>{
+          if (urlIdx >= tryUrls.length){
+            this._tex[i] = null;
+            finalize();
+            return;
+          }
+          img.src = tryUrls[urlIdx++];
+        };
+
+        img.onload = ()=>{
+          this._tex[i] = img;
+          loaded++;
+          finalize();
+        };
+        img.onerror = ()=>{
+          // nächster Versuch (PNG groß) oder endgültig fail
+          tryNext();
+        };
+
+        tryNext();
       }
-      this._dirty = true;
-      this.requestRepaint();
-      LOG('toggle', this.enabled);
     }
 
-    // Heatmap-only switch
-    setHeatmap(on){
-      if (!this.inited) this.init({});
-      this.showHeat = !!on;
+    // ----------------------------
+    // TOGGLES (Inspector)
+    // ----------------------------
 
-      // UX: Heatmap ON soll IMMER sichtbar werden, auch wenn der User nicht
-      // zuerst "Overlay ON" geklickt hat.
-      if (this.showHeat && !this.enabled) this.toggle(true);
-
-      this._dirty = true;
-      this.requestRepaint();
-      LOG('heatmap', this.showHeat);
+    setVisible(flag){
+      this.visible = !!flag;
+      // overlay canvas wird pro frame cleared, daher muss der layer aktiv bleiben;
+      // wir steuern die Sichtbarkeit im draw().
     }
 
-    // Overlay stamps switch (separat, falls du beides getrennt willst)
-    setOverlay(on){
-      if (!this.inited) this.init({});
-      this.showOvl = !!on;
+    setHeatmap(flag){ this.showHeatmap = !!flag; }
+    setStamps(flag){ this.showStamps = !!flag; }
 
-      // UX: Wenn Stamps an sind, aber das Canvas aus ist → automatisch aktivieren.
-      if (this.showOvl && !this.enabled) this.toggle(true);
+    // ----------------------------
+    // DRAW (OverlayHooks Layer)
+    // ----------------------------
 
-      this._dirty = true;
-      this.requestRepaint();
-      LOG('overlay', this.showOvl);
+    draw(ctx, cam){
+      // Wenn nicht sichtbar -> nichts zeichnen
+      if (!this.visible) return;
+      if (!this.showHeatmap && !this.showStamps) return;
+
+      // Grid sicherstellen (wenn Map spät initialisiert)
+      if (!this.ensureGrid()) return;
+
+      // Texturen bei Bedarf laden (lazy)
+      if (!this._texTried) this._tryLoadTextures();
+
+      const tile = this.tile;
+
+      // Viewport -> Tile Bounds
+      const b = getViewportTileBounds(cam, ctx, tile);
+
+      ctx.save();
+
+      // Welt → Screen (exakt wie deine Map)
+      const z = cam.zoom || 1;
+      ctx.setTransform(z, 0, 0, z, -cam.x * z, -cam.y * z);
+
+      // HEATMAP (neutral: schwarz mit Alpha)
+      if (this.showHeatmap){
+        // Wir verwenden globalAlpha + schwarze FillRects, damit es "unaufdringlich" ist.
+        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
+          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
+            const cell = this._idx(tx, ty);
+            if (cell < 0) continue;
+            const v = this.map[cell];
+            if (v < CFG.MIN_VISIBLE) continue;
+
+            const a = lerp(CFG.HEAT_ALPHA_MIN, CFG.HEAT_ALPHA_MAX, v);
+            ctx.globalAlpha = a;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(tx*tile, ty*tile, tile, tile);
+          }
+        }
+      }
+
+      // STAMPS (Texturen / Fallback)
+      if (this.showStamps){
+        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
+          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
+            const cell = this._idx(tx, ty);
+            if (cell < 0) continue;
+            const v = this.map[cell];
+            if (v < CFG.MIN_VISIBLE) continue;
+
+            const idx = Math.min(9, Math.max(0, Math.floor(v * 9.999)));
+            const img = this._texReady ? this._tex[idx] : null;
+
+            const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, v);
+            ctx.globalAlpha = a;
+
+            const px = tx*tile;
+            const py = ty*tile;
+
+            const dir = this.dir[cell] || 0;
+            const ang = (dir===0?0:
+                         dir===1?Math.PI/4:
+                         dir===2?Math.PI/2:
+                         dir===3?3*Math.PI/4:
+                         dir===4?Math.PI:
+                         dir===5?-3*Math.PI/4:
+                         dir===6?-Math.PI/2:
+                         -Math.PI/4);
+
+            if (img){
+              ctx.save();
+              ctx.translate(px + tile/2, py + tile/2);
+              ctx.rotate(ang);
+              ctx.drawImage(img, -tile/2, -tile/2, tile, tile);
+              ctx.restore();
+            } else {
+              // Fallback: kleines "Tritt"-Rect (damit man IMMER was sieht)
+              ctx.fillStyle = '#000';
+              ctx.fillRect(px + tile*0.25, py + tile*0.35, tile*0.5, tile*0.3);
+            }
+          }
+        }
+      }
+
+      ctx.restore();
+
+      // Decay (zeitbasiert)
+      this._tickDecay();
     }
-
-    mark(tx, ty, amt = 0.1){
-      if (!this.inited) this.init({});
-      const cell = this._idx(tx, ty);
-      if (cell < 0) return;
-      this.map[cell] = clamp01((this.map[cell] || 0) + amt);
-      this._dirty = true;
-      this.requestRepaint();
-    }
-
-    reset(){
-      if (!this.inited) this.init({});
-      this.map.fill(0);
-      this._dirty = true;
-      this.requestRepaint();
-    }
-
-    isEnabled(){ return !!this.enabled; }
-    isHeatmap(){ return !!this.showHeat; }
 
     _tickDecay(){
-      if (!this.inited) return;
-      let any = false;
+      const now = performance.now ? performance.now() : Date.now();
+      if (!this._decayTimer) this._decayTimer = now;
+
+      const dt = now - this._decayTimer;
+      if (dt < CFG.DECAY_INTERVAL_MS) return;
+
+      this._decayTimer = now;
+
+      // nur decayn, wenn wir überhaupt Daten haben
+      if (!this.map) return;
+
+      const step = CFG.DECAY_STEP;
       for (let i=0;i<this.map.length;i++){
         const v = this.map[i];
-        if (v > 0){
-          const nv = v - PO.DECAY_STEP;
-          this.map[i] = nv > 0 ? nv : 0;
-          if (this.map[i] > 0) any = true;
-        }
-      }
-      if (any){
-        this._dirty = true;
-        this.requestRepaint();
+        if (v <= 0) continue;
+        const nv = v - step;
+        this.map[i] = nv > 0 ? nv : 0;
       }
     }
 
-    requestRepaint(){
-      // Dein Projekt nutzt cb:request-repaint an mehreren Stellen
-      try{ window.dispatchEvent(new CustomEvent('cb:request-repaint')); }catch(_){}
-      // Fallback: selbst rendern, wenn kein zentraler Repaint kommt
-      this.render();
-    }
+    // ----------------------------
+    // REGISTER LAYER
+    // ----------------------------
 
-    render(){
-      try{
-        if (!this.enabled || !this.canvas || !this.ctx) return;
-        if (!this._dirty) return;
-
-        resizeCanvasToClient(this.canvas);
-
-        const ctx = this.ctx;
-        const { x:camX, y:camY, zoom } = getCameraState();
-
-        // Clear in Screen-Space
-        ctx.setTransform(1,0,0,1,0,0);
-        ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
-
-        // World-Space transform wie GameMap
-        ctx.setTransform(zoom,0,0,zoom,-camX*zoom,-camY*zoom);
-
-        // Draw visible cells
-        const ts = this.tile;
-        const min = PO.MIN_VISIBLE;
-
-        // 1) Overlay stamps (Texturen oder Fallback-Punkt)
-        if (this.showOvl){
-          for (let ty=0; ty<this.rows; ty++){
-            for (let tx=0; tx<this.cols; tx++){
-              const i = ty*this.cols + tx;
-              const v = this.map[i] || 0;
-              if (v < min) continue;
-
-              const a = PO.OVL_ALPHA_MIN + (PO.OVL_ALPHA_MAX-PO.OVL_ALPHA_MIN) * v;
-              ctx.globalAlpha = a;
-
-              const px = tx*ts;
-              const py = ty*ts;
-
-              // Textur-Stamp falls vorhanden, sonst Fallback
-              if (this._texReady){
-                const img = this._tex[(tx + ty) % this._tex.length] || null;
-                if (img){
-                  // Rotation: aus last-dir
-                  const dir = this.dir[i] ?? 2;
-                  // 0..7 -> Winkel in 45° Schritten; baseline 0 = E
-                  const ang = (Math.PI/4) * dir;
-
-                  const cx = px + ts/2;
-                  const cy = py + ts/2;
-
-                  ctx.save();
-                  ctx.translate(cx, cy);
-                  ctx.rotate(ang);
-                  ctx.translate(-ts/2, -ts/2);
-                  ctx.drawImage(img, 0, 0, ts, ts);
-                  ctx.restore();
-                }else{
-                  // Fallback (wenn einzelne fehlen)
-                  ctx.fillStyle = 'rgba(40,30,20,1)';
-                  ctx.beginPath();
-                  ctx.arc(px+ts*0.5, py+ts*0.5, ts*0.18, 0, Math.PI*2);
-                  ctx.fill();
-                }
-              }else{
-                // Fallback (ohne Texturen): kleiner "Trampel"-Blob
-                ctx.fillStyle = 'rgba(40,30,20,1)';
-                ctx.beginPath();
-                ctx.ellipse(px+ts*0.5, py+ts*0.55, ts*0.22, ts*0.14, 0, 0, Math.PI*2);
-                ctx.fill();
-              }
-            }
-          }
+    registerLayer(){
+      if (this._layerRegistered) return;
+      ensureOverlayHooksReady(()=>{
+        try{
+          window.OverlayHooks.register(this._layerName, (ctx, cam)=> this.draw(ctx, cam));
+          window.OverlayHooks.enable(this._layerName, true); // aktiv
+          this._layerRegistered = true;
+          LOG('registered layer:', this._layerName, 'visible=', this.visible);
+        }catch(e){
+          WARN('konnte OverlayHooks layer nicht registrieren:', e);
         }
-
-        // 2) Heatmap (darüber/ darunter – hier darüber)
-        if (this.showHeat){
-          for (let ty=0; ty<this.rows; ty++){
-            for (let tx=0; tx<this.cols; tx++){
-              const i = ty*this.cols + tx;
-              const v = this.map[i] || 0;
-              if (v < min) continue;
-
-              const a = PO.HEAT_ALPHA_MIN + (PO.HEAT_ALPHA_MAX-PO.HEAT_ALPHA_MIN) * v;
-              ctx.globalAlpha = a;
-
-              // Rot-ish (ohne feste Farbpalette – nur alpha variierend)
-              // Wir nehmen ein neutrales Dunkel und lassen Alpha sprechen,
-              // damit es nicht zu bunt wird.
-              ctx.fillStyle = 'rgba(255, 140, 80, 1)';
-              ctx.fillRect(tx*ts, ty*ts, ts, ts);
-            }
-          }
-        }
-
-        ctx.globalAlpha = 1;
-        this._dirty = false;
-      }catch(err){
-        // Niemals Game-Loop killen
-        ERR('render FAIL', err);
-      }
-    }
-
-    selfTest(){
-      const s = {
-        version: PO.VERSION,
-        inited: this.inited,
-        enabled: this.enabled,
-        heatmap: this.showHeat,
-        overlay: this.showOvl,
-        tile: this.tile,
-        cols: this.cols,
-        rows: this.rows,
-        texTried: this._texTried,
-        texReady: this._texReady,
-        hasCanvas: !!this.canvas,
-        stepCount: this.stepCount,
-        lastStep: this.lastStep,
-        cam: getCameraState(),
-      };
-      LOG('selfTest', s);
-      try{ window.dispatchEvent(new CustomEvent('cb:log', { detail: { type:'info', msg: TAG+' selfTest '+JSON.stringify(s) }})); }catch(_){}
-      return s;
+      });
     }
   }
 
-  // --- Instance -------------------------------------------------------------
-  const inst = new PathOverlayImpl();
+  // -------------------------------------------------------------------------
+  // SINGLETON + WIRING
+  // -------------------------------------------------------------------------
 
-  // Public API – kompatibel mit inspector.bridges.js (toggle/setHeatmap)
-  window.PathOverlay = Object.freeze({
-    init: (opts)=>inst.init(opts),
-    teardown: ()=>inst.teardown(),
-    toggle: (on)=>inst.toggle(on),
-    setHeatmap: (on)=>inst.setHeatmap(on),
-    setOverlay: (on)=>inst.setOverlay(on),
-    mark: (tx,ty,amt)=>inst.mark(tx,ty,amt),
-    reset: ()=>inst.reset(),
-    isEnabled: ()=>inst.isEnabled(),
-    isHeatmap: ()=>inst.isHeatmap(),
-    selfTest: ()=>inst.selfTest(),
-    _state: ()=>({
-      version: PO.VERSION,
-      inited: inst.inited,
-      enabled: inst.enabled,
-      heatmap: inst.showHeat,
-      overlay: inst.showOvl,
-      tile: inst.tile,
-      cols: inst.cols,
-      rows: inst.rows,
-      texReady: inst._texReady,
-      stepCount: inst.stepCount,
-      lastStep: inst.lastStep
-    }),
-  });
+  const inst = new TrampleOverlay();
 
-  // --- Inspector/Event wiring (robust) -------------------------------------
-  window.addEventListener('cb:game:start', () => { inst.init({}); });
+  // 1) Immer registrieren (damit ab Start sichtbar)
+  inst.registerLayer();
 
-  // Init-Versuche zusätzlich, falls cb:game:start verpasst wurde oder Scripts später laden
-  const tryInitSoon = () => { try{ inst.init({}); }catch(_){} };
-  window.addEventListener('DOMContentLoaded', tryInitSoon);
-  window.addEventListener('load', tryInitSoon);
+  // 2) Unit Steps immer tracken
+  window.addEventListener('cb:unit:step', (e)=>{ try{ inst.onUnitStep(e); }catch(err){ WARN('onUnitStep err', err); } });
 
-  // Wenn Units schon laufen, bevor init fertig ist, wollen wir trotzdem Steps puffern:
-  window.addEventListener('cb:unit:step', (e)=>{ try{ if(!inst.inited) inst._onUnitStep(e); }catch(_){} });
+  // 3) Toggle-Events (Inspector)
+  //    Overlay = Sichtbarkeit (und Stamps automatisch an, damit man wirklich etwas sieht)
+  window.addEventListener('cb:path:overlay:on',  ()=>{ inst.setVisible(true);  inst.setStamps(true); });
+  window.addEventListener('cb:path:overlay:off', ()=>{ inst.setVisible(false); });
 
-  // Inspector / UI Events (mehrere Aliase, weil du die Buttons/Labels teils als
-  // "Overlay", teils als "Layer" bezeichnet hast).
-  //
-  // Regel:
-  // - overlay/layer = Canvas sichtbar / unsichtbar
-  // - heatmap       = Heatmap-Anteil (Alpha-Feld) an/aus
-  // - stamps        = Textur-Stamps (Richtung) an/aus
-  window.addEventListener('cb:path:overlay:on',  () => { inst.toggle(true);  });
-  window.addEventListener('cb:path:overlay:off', () => { inst.toggle(false); });
+  // Alias: "Layer" in deinem Sprachgebrauch = Stamps
+  window.addEventListener('cb:path:layer:on',    ()=>{ inst.setVisible(true); inst.setStamps(true); });
+  window.addEventListener('cb:path:layer:off',   ()=>{ inst.setStamps(false); });
 
-  window.addEventListener('cb:path:layer:on',    () => { inst.toggle(true);  }); // Alias
-  window.addEventListener('cb:path:layer:off',   () => { inst.toggle(false); });
+  // Heatmap toggles
+  window.addEventListener('cb:path:heatmap:on',  ()=> inst.setHeatmap(true));
+  window.addEventListener('cb:path:heatmap:off', ()=> inst.setHeatmap(false));
 
-  window.addEventListener('cb:path:heatmap:on',  () => inst.setHeatmap(true));
-  window.addEventListener('cb:path:heatmap:off', () => inst.setHeatmap(false));
+  // Optional separate Stamps toggle (wenn du Buttons dafür willst)
+  window.addEventListener('cb:path:stamps:on',   ()=>{ inst.setVisible(true); inst.setStamps(true); });
+  window.addEventListener('cb:path:stamps:off',  ()=> inst.setStamps(false));
 
-  window.addEventListener('cb:path:stamps:on',   () => inst.setOverlay(true));
-  window.addEventListener('cb:path:stamps:off',  () => inst.setOverlay(false));
+  // 4) Extra: sobald game start/registry ready: grid sicherstellen
+  const kick = ()=>{ try{ inst.ensureGrid(); }catch(_){} };
+  window.addEventListener('cb:game:start', kick);
+  window.addEventListener('cb:registry:ready', kick);
+  window.addEventListener('cb:game:initialized', kick);
 
-  // Weitere Aliase (falls UI anders heißt)
-  window.addEventListener('cb:path:overlaylayer:on',  () => inst.setOverlay(true));
-  window.addEventListener('cb:path:overlaylayer:off', () => inst.setOverlay(false));
+  // -------------------------------------------------------------------------
+  // GLOBAL EXPORT (für Debug/Inspector)
+  // -------------------------------------------------------------------------
 
-  // --- Final log ------------------------------------------------------------
-  LOG('loaded', PO.VERSION);
+  window.PathOverlay = {
+    version: CFG.VERSION,
+    // API
+    setVisible: (v)=> inst.setVisible(v),
+    setHeatmap: (v)=> inst.setHeatmap(v),
+    setStamps : (v)=> inst.setStamps(v),
+    // debug
+    _inst: inst,
+  };
+
+  LOG('loaded', CFG.VERSION, 'defaultVisible=', CFG.DEFAULT_VISIBLE);
 })();
