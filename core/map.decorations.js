@@ -1,37 +1,49 @@
 /* ============================================================================
  * Datei   : core/map.decorations.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.15-mapdecorations-deco-atlas-v2 (SMALLER + PATCHY)
+ * Version : v25.12.15-mapdecorations-deco-atlas-v3 (VARI-SIZE + TILT + WOBBLE)
  *
- * Änderungen ggü. v1:
- *   - Deko insgesamt deutlich kleiner (v.a. Pilze/Blumen/Gras)
- *   - Mehr "kleine Anhäufungen" (Cluster-Radius pro Typ), dazwischen mehr Platz
- *   - Counts reduziert, Cluster-Chance für kleine Pflanzen leicht erhöht
+ * Wunsch-Umsetzung (dein Feedback):
+ *   - Unterschiedliche Größen pro Deko-Typ (und leicht pro Objekt zufällig)
+ *   - Kleine Neigung links/rechts (Tilt) + lebendiges "Wachstums"-Loop (sehr langsam)
+ *   - Pro Typ EINSTELLBAR (baseScale / randScale / rotDeg / wobble)
+ *
+ * Hinweis:
+ *   - Wir rotieren Frames selbst (ctx.rotate) anhand der Atlas-Frame-Daten.
+ *   - Kein Gameplay-Effekt: rein dekorativ, non-blocking.
  * ========================================================================== */
 
 (function(){
   'use strict';
 
+  // =========================================================================
+  // LOGGING
+  // =========================================================================
   const TAG  = '[map.decorations]';
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
 
-  // Tile-Legende aus map-epoch1.json fileciteturn2file16
+  // =========================================================================
+  // TILE-LEGEND (map-epoch1.json) fileciteturn2file16
+  // =========================================================================
   const TILE = { GRASS:1, FOREST:5, ROCK:6, WATER:8, SAND:9 };
 
+  // =========================================================================
+  // CFG – HIER stellst du deine Größen/Varianz pro Typ ein
+  // =========================================================================
   const CFG = {
     atlasName: 'deco_plants_mega_atlas',
 
     // ---------------------------------------------------------------
-    // DICHTE: weniger insgesamt -> mehr Platz
+    // Dichte (Counts) – mehr/ weniger Deko insgesamt
     // ---------------------------------------------------------------
     counts: {
-      grassClumps: 70,
-      shrubs:      38,
-      flowers:     26,
-      mushrooms:   16,
+      grassClumps: 78,
+      shrubs:      42,
+      flowers:     30,
+      mushrooms:   18,
       cattails:    14,
-      waterlily:    8,
+      waterlily:    9,
       logs:         5,
       rocksSmall:  12,
       rocksLarge:   7,
@@ -39,11 +51,11 @@
     },
 
     // ---------------------------------------------------------------
-    // CLUSTER: kleine Pflanzen dürfen eher "patchy" wachsen
+    // Patch/Cluster: kleine Gruppen, dazwischen Platz
     // ---------------------------------------------------------------
     clusterChance: {
       grassClumps: 0.62,
-      shrubs:      0.42,
+      shrubs:      0.44,
       flowers:     0.58,
       mushrooms:   0.70,
       cattails:    0.65,
@@ -53,11 +65,6 @@
       rocksLarge:  0.25,
       boulders:    0.20
     },
-
-    // ---------------------------------------------------------------
-    // CLUSTER-RADIUS: kleinere Patches (statt große "Wolken")
-    // Werte sind in Tiles (Radius 1..4)
-    // ---------------------------------------------------------------
     clusterRadius: {
       grassClumps: 2,
       flowers:     2,
@@ -72,33 +79,87 @@
     },
 
     // ---------------------------------------------------------------
-    // GRÖSSE: deutlich kleiner (Pilze waren zu groß)
+    // Position-Jitter (innerhalb der Tile)
     // ---------------------------------------------------------------
-    drawScale: {
-      grassClumps: 0.62,
-      shrubs:      0.78,
-      flowers:     0.58,
-      mushrooms:   0.45,
-      cattails:    0.70,
-      waterlily:   0.70,
-      logs:        0.82,
-      rocksSmall:  0.65,
-      rocksLarge:  0.72,
-      boulders:    0.78
+    jitter: { px: 0.18, py: 0.10 },
+
+    // ---------------------------------------------------------------
+    // GRÖSSEN/VARIANZ pro Typ
+    //
+    // baseScale: Basis (relativ zu tileSize; wird später mit ts/256 multipliziert)
+    // randScale: Zufallsabweichung (0.20 = ±20% um baseScale)
+    //
+    // Beispiel: Pilze kleiner + stark variieren:
+    //   mushrooms.baseScale runter / randScale hoch
+    // ---------------------------------------------------------------
+    size: {
+      grassClumps: { baseScale: 0.62, randScale: 0.25 },
+      shrubs:      { baseScale: 0.78, randScale: 0.30 }, // Büsche dürfen deutlich variieren
+      flowers:     { baseScale: 0.58, randScale: 0.28 },
+      mushrooms:   { baseScale: 0.44, randScale: 0.35 }, // kleiner, aber mit "Wachstum"
+      cattails:    { baseScale: 0.70, randScale: 0.22 },
+      waterlily:   { baseScale: 0.62, randScale: 0.20 }, // Seerosen kleiner machen hier!
+      logs:        { baseScale: 0.82, randScale: 0.18 },
+      rocksSmall:  { baseScale: 0.65, randScale: 0.20 },
+      rocksLarge:  { baseScale: 0.72, randScale: 0.18 },
+      boulders:    { baseScale: 0.78, randScale: 0.15 }
     },
 
-    // weniger Jitter: wirkt ruhiger/gezielter
-    jitter: { px: 0.16, py: 0.08 },
+    // ---------------------------------------------------------------
+    // TILT (Neigung) pro Typ – in Grad
+    // randRotDeg: Zufalls-Neigung pro Objekt
+    // wobbleRotDeg: sehr langsame Mini-Schwingung (lebendig)
+    // ---------------------------------------------------------------
+    tilt: {
+      grassClumps: { randRotDeg: 2.0, wobbleRotDeg: 1.2 },
+      shrubs:      { randRotDeg: 3.0, wobbleRotDeg: 1.4 },
+      flowers:     { randRotDeg: 3.2, wobbleRotDeg: 1.6 },
+      mushrooms:   { randRotDeg: 2.8, wobbleRotDeg: 1.8 },
+      cattails:    { randRotDeg: 3.0, wobbleRotDeg: 1.2 },
+      waterlily:   { randRotDeg: 2.0, wobbleRotDeg: 0.8 },
+      logs:        { randRotDeg: 4.0, wobbleRotDeg: 0.6 },
+      rocksSmall:  { randRotDeg: 3.0, wobbleRotDeg: 0.4 },
+      rocksLarge:  { randRotDeg: 2.0, wobbleRotDeg: 0.3 },
+      boulders:    { randRotDeg: 1.5, wobbleRotDeg: 0.2 }
+    },
+
+    // ---------------------------------------------------------------
+    // "Wachstums"-Loop: extrem subtiler Scale-Loop
+    // wobbleScale: Amplitude (0.03 = ±3%)
+    // speedMin/Max: langsam! (Sekunden-Frequenz)
+    // ---------------------------------------------------------------
+    wobble: {
+      enabled: true,
+      perKind: {
+        grassClumps: { wobbleScale: 0.018, speedMin: 0.10, speedMax: 0.20 },
+        shrubs:      { wobbleScale: 0.020, speedMin: 0.08, speedMax: 0.18 },
+        flowers:     { wobbleScale: 0.028, speedMin: 0.10, speedMax: 0.22 },
+        mushrooms:   { wobbleScale: 0.035, speedMin: 0.06, speedMax: 0.14 }, // langsam & "wachsend"
+        cattails:    { wobbleScale: 0.020, speedMin: 0.10, speedMax: 0.18 },
+        waterlily:   { wobbleScale: 0.022, speedMin: 0.07, speedMax: 0.14 },
+        logs:        { wobbleScale: 0.006, speedMin: 0.05, speedMax: 0.10 },
+        rocksSmall:  { wobbleScale: 0.004, speedMin: 0.05, speedMax: 0.10 },
+        rocksLarge:  { wobbleScale: 0.003, speedMin: 0.05, speedMax: 0.10 },
+        boulders:    { wobbleScale: 0.002, speedMin: 0.05, speedMax: 0.10 }
+      }
+    },
 
     sortByY: true
   };
 
+  // =========================================================================
+  // STATE
+  // =========================================================================
   const State = {
     initialized: false,
     seed: (Math.random()*1e9)|0,
+    // nodes: { id, kind, x,y, frame, ox,oy, sMul, rotBase, phase, speed, phase2, speed2 }
     nodes: []
   };
 
+  // =========================================================================
+  // RNG
+  // =========================================================================
   function mulberry32(a){
     return function(){
       let t = a += 0x6D2B79F5;
@@ -108,6 +169,9 @@
     };
   }
 
+  // =========================================================================
+  // MAP HELPERS
+  // =========================================================================
   function getMap(){ return (window.GameMap && window.GameMap._state) ? window.GameMap._state : (window.Map||null); }
   function getGrid(map){ return map ? (map.grid || map.tiles || null) : null; }
   function getColsRows(map){
@@ -124,6 +188,7 @@
     const map = getMap(); const {cols, rows} = getColsRows(map);
     return (x>=0 && y>=0 && x<cols && y<rows);
   }
+
   const isWater  = (x,y)=> getTileId(x,y)===TILE.WATER;
   const isSand   = (x,y)=> getTileId(x,y)===TILE.SAND;
   const isGrass  = (x,y)=> getTileId(x,y)===TILE.GRASS;
@@ -149,6 +214,7 @@
     return countNeighbors4(x,y, w) > 0;
   }
 
+  // optional: keine Überdeckung mit Ressourcen
   function isOccupiedByResource(x,y){
     const res = window.MapResources?.state?.nodes;
     if (!Array.isArray(res)) return false;
@@ -158,12 +224,14 @@
     return State.nodes.some(n => n.x===x && n.y===y);
   }
 
+  // =========================================================================
+  // FRAME PICKER (Prefixe aus deinem Deco-Atlas) fileciteturn3file4
+  // =========================================================================
   function pickByPrefix(prefix){
     const A = window.Assets;
     if (!A || !A.state?.ready) return null;
     return A.pickRandomFrame(CFG.atlasName, prefix);
   }
-
   function pickFrameForKind(kind){
     switch (kind){
       case 'grassClumps': return pickByPrefix('deco_grass_clump_');
@@ -180,6 +248,9 @@
     }
   }
 
+  // =========================================================================
+  // PLACEMENT RULES (tunen nach Geschmack)
+  // =========================================================================
   function canPlace(kind, x,y){
     if (!isInside(x,y)) return false;
     if (isOccupiedByDeco(x,y)) return false;
@@ -229,6 +300,47 @@
     return false;
   }
 
+  // =========================================================================
+  // ROTATED DRAW (wir kopieren das Prinzip aus Assets.drawAtlasFrame)
+  // =========================================================================
+  function isDrawableImage(img){
+    return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+  }
+
+  function drawAtlasFrameRot(ctx, atlasName, frameName, worldX, worldY, scale, rotRad){
+    const A = window.Assets;
+    if (!A) return false;
+
+    // getAtlas ist public in core/asset.js fileciteturn5file0
+    const a = A.getAtlas?.(atlasName);
+    if (!a || !a.ok || !isDrawableImage(a.img)) return false;
+
+    const fr = a.frames?.[frameName];
+    if (!fr) return false;
+
+    const dw = fr.w * scale;
+    const dh = fr.h * scale;
+
+    // Pivot-Align: worldX/worldY ist Pivot-Punkt in WORLD
+    const dx = - (fr.pivotX * scale);
+    const dy = - (fr.pivotY * scale);
+
+    try{
+      ctx.save();
+      ctx.translate(worldX, worldY);
+      if (rotRad) ctx.rotate(rotRad);
+      ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
+      ctx.restore();
+      return true;
+    }catch(e){
+      try{ ctx.restore(); }catch(_){}
+      return false;
+    }
+  }
+
+  // =========================================================================
+  // SPAWN
+  // =========================================================================
   function spawn(kind, count, rng){
     const map = getMap();
     const g = getGrid(map);
@@ -250,7 +362,7 @@
     let tries = 0;
     let made  = 0;
 
-    while (made < count && tries < count*160){
+    while (made < count && tries < count*170){
       tries++;
 
       const base = pickBase();
@@ -266,15 +378,39 @@
 
       if (!canPlace(kind, x,y)) continue;
 
+      // ---- per-object Variation ------------------------------------------------
+      const sCfg = CFG.size[kind] || { baseScale: 0.7, randScale: 0.2 };
+      const tCfg = CFG.tilt[kind] || { randRotDeg: 2, wobbleRotDeg: 1 };
+
+      const sMul = 1 + ((rng()*2)-1) * (sCfg.randScale ?? 0.0);
+      const rotBase = (((rng()*2)-1) * (tCfg.randRotDeg ?? 0.0)) * (Math.PI/180);
+
+      const wCfg = CFG.wobble.perKind[kind] || { wobbleScale: 0.0, speedMin: 0.05, speedMax: 0.10 };
+      const phase  = rng() * Math.PI * 2;
+      const phase2 = rng() * Math.PI * 2;
+      const speed  = (wCfg.speedMin ?? 0.05) + rng() * ((wCfg.speedMax ?? 0.10) - (wCfg.speedMin ?? 0.05));
+      const speed2 = (wCfg.speedMin ?? 0.05) + rng() * ((wCfg.speedMax ?? 0.10) - (wCfg.speedMin ?? 0.05));
+
       const frame = pickFrameForKind(kind);
+
       State.nodes.push({
         id: `${kind}:${State.nodes.length}`,
-        kind,
-        x, y,
+        kind, x, y,
         frame,
-        ox: ((rng()*2)-1) * CFG.jitter.px,
-        oy: ((rng()*2)-1) * CFG.jitter.py
+
+        // Tile jitter
+        ox: ((rng()*2)-1) * (CFG.jitter.px ?? 0),
+        oy: ((rng()*2)-1) * (CFG.jitter.py ?? 0),
+
+        // Variation
+        sBase: (sCfg.baseScale ?? 0.7),
+        sMul,
+        rotBase,
+
+        // Wobble
+        phase, phase2, speed, speed2
       });
+
       made++;
     }
 
@@ -293,12 +429,15 @@
     if (typeof seed === 'number') State.seed = seed|0;
     const rng = mulberry32(State.seed);
 
+    // Reihenfolge: fein -> groß
     spawn('grassClumps', CFG.counts.grassClumps, rng);
     spawn('flowers',     CFG.counts.flowers,     rng);
     spawn('shrubs',      CFG.counts.shrubs,      rng);
     spawn('mushrooms',   CFG.counts.mushrooms,   rng);
+
     spawn('cattails',    CFG.counts.cattails,    rng);
     spawn('waterlily',   CFG.counts.waterlily,   rng);
+
     spawn('logs',        CFG.counts.logs,        rng);
     spawn('rocksSmall',  CFG.counts.rocksSmall,  rng);
     spawn('rocksLarge',  CFG.counts.rocksLarge,  rng);
@@ -310,6 +449,9 @@
     LOG('init ok', { seed: State.seed, nodes: State.nodes.length });
   }
 
+  // =========================================================================
+  // DRAW
+  // =========================================================================
   function drawOnMainCanvas(ctx, cam, tileSize){
     if (!ctx) return;
 
@@ -319,23 +461,39 @@
     }
 
     const ts = tileSize || (window.GameMap?.tileSize) || 64;
-    const A  = window.Assets;
+    const baseAtlasScale = ts / 256; // Atlas sourceSize ~256 fileciteturn3file0
+
+    // Zeit (Sekunden) für Loop
+    const t = (typeof performance !== 'undefined' && performance.now) ? (performance.now() * 0.001) : (Date.now() * 0.001);
 
     for (const n of State.nodes){
+      // world pos (wie Ressourcen)
       const wx = (n.x * ts) + ts * (0.5 + (n.ox || 0));
       const wy = (n.y * ts) + ts * (0.82 + (n.oy || 0));
 
-      if (A && A.state?.ready && n.frame){
-        const scale = (CFG.drawScale[n.kind] ?? 1.0);
-        const ok = A.drawAtlasFrame(ctx, CFG.atlasName, n.frame, wx, wy, {
-          scale: (ts/256) * scale,
-          align: 'pivot'
-        });
+      // Scale & Tilt Variation + langsamer Loop
+      const wCfg = CFG.wobble.perKind[n.kind] || { wobbleScale: 0.0, speedMin: 0.05, speedMax: 0.10 };
+      const wobbleScale = (CFG.wobble.enabled ? (wCfg.wobbleScale ?? 0.0) : 0.0);
+
+      const tiltCfg = CFG.tilt[n.kind] || { wobbleRotDeg: 0.0 };
+      const wobbleRotDeg = (CFG.wobble.enabled ? (tiltCfg.wobbleRotDeg ?? 0.0) : 0.0);
+      const wobbleRot = wobbleRotDeg * (Math.PI/180);
+
+      const sLoop = wobbleScale ? (1 + wobbleScale * Math.sin(t * (n.speed || 0.1) + (n.phase || 0))) : 1;
+      const rLoop = wobbleRot ? (wobbleRot * Math.sin(t * (n.speed2 || 0.08) + (n.phase2 || 0))) : 0;
+
+      const scale = baseAtlasScale * (n.sBase || 0.7) * (n.sMul || 1) * sLoop;
+      const rot   = (n.rotBase || 0) + rLoop;
+
+      // Draw rotated
+      if (n.frame){
+        const ok = drawAtlasFrameRot(ctx, CFG.atlasName, n.frame, wx, wy, scale, rot);
         if (ok) continue;
       }
 
+      // Fallback Kreis (wenn Atlas fehlt)
       ctx.save();
-      ctx.fillStyle = 'rgba(0,200,0,0.75)';
+      ctx.fillStyle = 'rgba(0,200,0,0.70)';
       if (n.kind === 'waterlily') ctx.fillStyle = 'rgba(20,170,120,0.85)';
       if (n.kind === 'rocksSmall' || n.kind === 'rocksLarge' || n.kind === 'boulders') ctx.fillStyle = 'rgba(160,160,160,0.85)';
       ctx.beginPath();
@@ -345,6 +503,9 @@
     }
   }
 
+  // =========================================================================
+  // TOOLS API (regen/clear/snapshot/export)
+  // =========================================================================
   function _resetState(keepSeed=true){
     const s = State.seed;
     State.initialized = false;
@@ -354,15 +515,17 @@
 
   function snapshot(options = {}){
     const limit = Number.isFinite(options.limit) ? options.limit : 300;
-    const nodes = State.nodes.slice(0, Math.max(0, limit)).map(n => ({
-      id:n.id, kind:n.kind, x:n.x, y:n.y, frame:n.frame||null, ox:n.ox??0, oy:n.oy??0
+    const sample = State.nodes.slice(0, Math.max(0, limit)).map(n => ({
+      id:n.id, kind:n.kind, x:n.x, y:n.y, frame:n.frame||null,
+      sBase:n.sBase, sMul:n.sMul, rotBase:n.rotBase,
+      ox:n.ox??0, oy:n.oy??0
     }));
     return {
       version: window.MapDecorations?.version || 'unknown',
       initialized: State.initialized,
       seed: State.seed,
       counts: { nodes: State.nodes.length },
-      sample: nodes,
+      sample,
       note: (State.nodes.length > limit) ? `sample limited to ${limit}` : 'full list (<= limit)'
     };
   }
@@ -371,7 +534,11 @@
     const payload = {
       id: (getMap()?.id) || 'unknown-map',
       seed: State.seed,
-      nodes: State.nodes.map(n => ({ kind:n.kind, x:n.x, y:n.y, frame:n.frame||null, ox:n.ox??0, oy:n.oy??0 }))
+      nodes: State.nodes.map(n => ({
+        kind:n.kind, x:n.x, y:n.y, frame:n.frame||null,
+        sBase:n.sBase, sMul:n.sMul, rotBase:n.rotBase,
+        ox:n.ox??0, oy:n.oy??0
+      }))
     };
     return JSON.stringify(payload, null, pretty ? 2 : 0);
   }
@@ -390,7 +557,7 @@
 
   function clear(){
     _resetState(true);
-    State.initialized = true;
+    State.initialized = true; // kein auto-init
     window.dispatchEvent(new CustomEvent('cb:mapdeco:changed', { detail: snapshot() }));
   }
 
@@ -407,8 +574,11 @@
     window.dispatchEvent(new CustomEvent('cb:mapdeco:clear', { detail: snapshot() }));
   });
 
+  // =========================================================================
+  // PUBLIC
+  // =========================================================================
   window.MapDecorations = {
-    version: 'v25.12.15-mapdecorations-deco-atlas-v2',
+    version: 'v25.12.15-mapdecorations-deco-atlas-v3',
     state: State,
     cfg: CFG,
     init,
