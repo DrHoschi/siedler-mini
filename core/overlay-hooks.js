@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/overlay-hooks.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.03-overlayhooks-v2
+ * Version : v25.12.15-overlayhooks-v3 (adds OverlayHooks.render + auto overlay canvas)
  *
  * Zweck   :
  *   - Zentrales Overlay-Hooks-System
@@ -123,6 +123,75 @@
     }
   }
 
+  
+  // -------------------------------------------------------------------------
+  // DEFAULT OVERLAY CANVAS RENDERER
+  // -------------------------------------------------------------------------
+  // In deinem Projekt ruft core/game.js pro Frame OverlayHooks.render() auf.
+  // Früher gab es mehrere Varianten (drawOverlays im Renderer, eigenes Canvas,
+  // etc.). Damit wir ENDLICH konsistent sind, liefern wir hier render():
+  //   - nutzt das vorhandene <canvas id="overlay">
+  //   - synchronisiert Größe zum Game-Canvas
+  //   - cleared Screen-Space (Identity Transform)
+  //   - ruft danach draw(ctx) auf (Layer entscheiden selbst, ob sie Transform setzen)
+  //
+  // WICHTIG:
+  // - Overlays wie path-traces.overlay.js rechnen Kamera selbst in Screen-Space um.
+  // - PathOverlay setzt aktuell im draw() selbst ctx.setTransform(...) wie GameMap.
+  // → Deshalb lassen wir hier absichtlich Identity (kein Welt-Transform).
+
+  let _overlayCanvas = null;
+  let _overlayCtx    = null;
+
+  function _resolveOverlay(){
+    if (_overlayCanvas && _overlayCtx) return true;
+    _overlayCanvas = document.getElementById('overlay');
+    if (!_overlayCanvas) return false;
+    _overlayCtx = _overlayCanvas.getContext('2d');
+    return !!_overlayCtx;
+  }
+
+  function _syncOverlaySize(){
+    if (!_overlayCanvas) return;
+
+    // Referenz: Game-Canvas (falls vorhanden), sonst ClientSize des Overlay-Canvas
+    const gameCanvas =
+      window.Game?.canvas
+      || document.getElementById('game')
+      || document.querySelector('canvas#game');
+
+    const ref = gameCanvas || _overlayCanvas;
+    const cssW = Math.max(0, ref.clientWidth  | 0);
+    const cssH = Math.max(0, ref.clientHeight | 0);
+    if (!cssW || !cssH) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.floor(cssW * dpr));
+    const h = Math.max(1, Math.floor(cssH * dpr));
+
+    if (_overlayCanvas.width !== w || _overlayCanvas.height !== h){
+      _overlayCanvas.width  = w;
+      _overlayCanvas.height = h;
+      _overlayCanvas.style.width  = cssW + 'px';
+      _overlayCanvas.style.height = cssH + 'px';
+    }
+  }
+
+  function render(){
+    if (!_globalEnabled) return;
+    if (!_resolveOverlay()) return;
+
+    _syncOverlaySize();
+
+    // Clear in Screen-Space
+    _overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+    _overlayCtx.clearRect(0, 0, _overlayCanvas.width, _overlayCanvas.height);
+
+    // Zeichnen (Layer setzen Transform selbst, falls sie Welt-Koordinaten brauchen)
+    draw(_overlayCtx);
+  }
+
+
   // -------------------------------------------------------------------------
   // GLOBAL EXPORT
   // -------------------------------------------------------------------------
@@ -136,6 +205,7 @@
     disable,
     setGlobal,
     draw,
+    render,
     _layers,
     _getState: function(){
       return {
@@ -145,6 +215,6 @@
     }
   });
 
-  LOG('Modul geladen – OverlayHooks bereit.');
+  LOG('Modul geladen – OverlayHooks bereit (API: register/enable/disable/draw/render).');
 
 })();
