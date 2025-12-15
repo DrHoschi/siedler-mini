@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.build-v1.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.15-build-tab-v3-registry+runtime+stats
+ * Version : v25.12.15-build-tab-v4-sparkline+runtime+stats
  *
  * Zweck   : Build-Tab – zeigt
  *           (A) Registry/Definitions-Snapshot (cb:build:snapshot)
@@ -40,14 +40,23 @@
     onlyProblems : false,
 
     // D6-Stats: wird durch cb:worker:produce gefüttert
-    // Map<buildingUid, { last:{ts,resId,qty,workerId,workerKind}, totals:{[resId]:n}, sinceTs:number }>
+    // Map<buildingUid, { last:{ts,resId,qty,workerId,workerKind}, totals:{[resId]:n}, sinceTs:number, series:Array<{ts,resId,qty}> }>
     prodByBuilding : new Map(),
 
     // kleine Render-Drosselung (damit Worker nicht 60x/s den Tab neu rendert)
     _renderScheduled : false
   };
 
+  
   // -------------------------------------------------------------------------
+  // Sparkline (Produktion über Zeit)
+  // -------------------------------------------------------------------------
+  const SPARK_WINDOW_MS = 60_000; // 60s Historie
+  const SPARK_BINS      = 30;     // 30 Punkte → 2s pro Bin
+  const SPARK_BIN_MS    = Math.max(250, Math.floor(SPARK_WINDOW_MS / SPARK_BINS));
+
+
+// -------------------------------------------------------------------------
   // Helpers – tolerant gegenüber „halb fertigen“ Daten
   // -------------------------------------------------------------------------
   const ms = v => (v==null ? '–' : `${Math.round(+v)} ms`);
@@ -227,7 +236,81 @@
   }
 
 
-  function escapeHtml(s){
+  
+  // -------------------------------------------------------------------------
+  // Sparkline – Daten → Bins → Canvas
+  // -------------------------------------------------------------------------
+  function sparkBinsFromSeries(series, nowTs){
+    const bins = new Array(SPARK_BINS).fill(0);
+    if (!Array.isArray(series) || !series.length) return bins;
+
+    const start = nowTs - SPARK_WINDOW_MS;
+
+    for (const e of series){
+      const t = Number(e?.ts) || 0;
+      if (t < start) continue;
+      const idx = Math.floor((t - start) / SPARK_BIN_MS);
+      if (idx < 0 || idx >= SPARK_BINS) continue;
+      bins[idx] += (Number(e?.qty) || 1);
+    }
+    return bins;
+  }
+
+  function drawSparkline(canvas, bins){
+    if (!canvas || !bins) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width  || 1;
+    const h = canvas.height || 1;
+
+    ctx.clearRect(0,0,w,h);
+
+    // Style (passt zur goldenen Heatmap-Farbe)
+    ctx.strokeStyle = 'rgba(209,168,27,0.9)';
+    ctx.fillStyle   = 'rgba(209,168,27,0.9)';
+
+    // Baseline (dezent)
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath();
+    ctx.moveTo(0, h-1);
+    ctx.lineTo(w, h-1);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    const maxV = Math.max(1, ...bins);
+
+    // Linie (Spark)
+    ctx.beginPath();
+    for (let i=0; i<bins.length; i++){
+      const x = (i/(bins.length-1 || 1)) * (w-1);
+      const v = bins[i] / maxV;
+      const y = (h-2) - v * (h-3);
+      if (i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // Letzten Punkt als Mini-Dot
+    const last = bins[bins.length-1] / maxV;
+    const lx = w-2;
+    const ly = (h-2) - last * (h-3);
+    ctx.fillRect(lx, ly, 2, 2);
+  }
+
+  function drawAllSparklines(rootEl){
+    if (!rootEl) return;
+    const now = Date.now();
+    const cvs = rootEl.querySelectorAll('canvas.insp-spark[data-uid]');
+    cvs.forEach(cv=>{
+      const uid = String(cv.getAttribute('data-uid') || '');
+      const ps = getProdStatsFor(uid);
+      const bins = sparkBinsFromSeries(ps?.series || [], now);
+      drawSparkline(cv, bins);
+    });
+  }
+
+function escapeHtml(s){
     return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   }
 
@@ -255,7 +338,9 @@
 #inspector .warn{color:#ffcf66}
 #inspector .bad{color:#ff6b6b}
 #inspector .ok{color:#8cff9b}
-    `;
+    
+#inspector canvas.insp-spark{display:block;width:120px;height:26px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px}
+`;
     document.head.appendChild(st);
   }
 
@@ -434,12 +519,17 @@
         <tr><th>Worker</th><td>${escapeHtml(workerInfo)}</td></tr>
         <tr><th>Letzte Produktion</th><td>${escapeHtml(lastInfo)}</td></tr>
         <tr><th>Produziert seit Start</th><td>${escapeHtml(totalsInfo)}</td></tr>
+        <tr><th>Prod (60s)</th><td><canvas class="insp-spark" width="120" height="26" data-uid="${escapeHtml(uid)}"></canvas></td></tr>
         <tr><th>Prod-Meta</th><td>${escapeHtml(prodInfo)}</td></tr>
       `;
 
       card.append(h4, tbl);
       grid.append(card);
     }
+
+
+    // Sparklines nach DOM-Aufbau zeichnen
+    drawAllSparklines(grid);
 
     if (!list.length){
       const p = document.createElement('p');
@@ -484,6 +574,20 @@
     const st = S.prodByBuilding.get(uid) || { last:null, totals:{}, sinceTs: ts };
     st.last = { ts, resId: res || 'wood', qty, workerId: d.workerId || null, workerKind: d.workerKind || '' };
     st.totals[st.last.resId] = (Number(st.totals[st.last.resId]) || 0) + qty;
+
+    // Sparkline: Roh-Events speichern (klein halten + alten Verlauf abschneiden)
+    st.series = Array.isArray(st.series) ? st.series : [];
+    st.series.push({ ts, resId: st.last.resId, qty });
+
+    // Pruning: nur die letzte Window + kleiner Puffer behalten
+    const cutoff = ts - (SPARK_WINDOW_MS + 5_000);
+    if (st.series.length > 500){
+      // harte Bremse: falls irgendwas aus dem Ruder läuft
+      st.series = st.series.slice(-500);
+    }
+    while (st.series.length && (Number(st.series[0]?.ts)||0) < cutoff){
+      st.series.shift();
+    }
 
     S.prodByBuilding.set(uid, st);
 
