@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Pfad/Heatmap Overlay
- * Version : v25.12.15-paths-step-wiring
+ * Version : v25.12.15-paths-camera-follow
  * Autor   : ChatGPT (Assistenz)
  *
  * Zweck   : Zeichnet ein transparentes Overlay über dem Spiel-Canvas (#game),
@@ -243,11 +243,29 @@ class PathHeatmap {
   _draw(){
     if (!this.canvas || !this.ctx) return;
     const { ctx, canvas } = this;
-    const { rect } = resizeCanvasToClient(canvas); // DPR-scharf bleiben
-    ctx.clearRect(0,0,rect.width,rect.height);
 
-    if (!this.showHeat) return; // Overlay an, aber Heatmap aus → nichts zeichnen
+    // 1) Canvas auf Clientgröße bringen (DPR-scharf)
+    const { dpr } = resizeCanvasToClient(canvas);
 
+    // 2) Immer in Screen-Space löschen (sonst bleiben Reste beim Panning)
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Overlay an, aber Heatmap aus → nichts zeichnen (Canvas bleibt aber sauber)
+    if (!this.showHeat) return;
+
+    // 3) Kamera-Transform wie in core/game.map.js anwenden,
+    //    aber zusätzlich mit DPR multiplizieren, weil dieses Overlay dpr-scharf gerendert wird.
+    const cam  = window.GameCamera || {};
+    const zoom = (cam.zoom ?? 1) || 1;
+    const camX = (cam.x    ?? 0) || 0;
+    const camY = (cam.y    ?? 0) || 0;
+
+    const s = dpr * zoom;
+    ctx.setTransform(s, 0, 0, s, -camX * s, -camY * s);
+
+    // 4) Heatmap zeichnen (World-Space)
+    //    Hinweis: Hier wird absichtlich "tile grid" (Rect) genutzt – so wie das Map-Rendering.
     for (let ty=0; ty<this.rows; ty++){
       for (let tx=0; tx<this.cols; tx++){
         const v = this.map[ty*this.cols + tx] || 0;
@@ -258,7 +276,7 @@ class PathHeatmap {
       }
     }
     ctx.globalAlpha = 1;
-  }
+  }  }
 
   _alignToGame(gameCanvas){
     if (!this.canvas) return;
@@ -322,7 +340,24 @@ class PathHeatmap {
   window.addEventListener('cb:path:heatmap:on',  ()=>inst.setHeatmap(true));
   window.addEventListener('cb:path:heatmap:off', ()=>inst.setHeatmap(false));
 
-  // Trampelpfade: bei jedem Tile-Step einer Unit "Intensity" erhöhen.
+  
+  // Kamera: wenn gepannt/gezoomt wird, muss das Overlay neu gerendert werden.
+  // Ohne dieses "dirty" klebt die Heatmap am Bildschirm (Map bewegt sich, Overlay bleibt).
+  let _lastCamKey = '';
+  window.addEventListener('cb:camera-change', (ev)=>{
+    const d = ev?.detail || {};
+    const x = Number(d.x) || 0;
+    const y = Number(d.y) || 0;
+    const z = Number(d.zoom) || 1;
+    const key = `${x}|${y}|${z}`;
+    if (key !== _lastCamKey){
+      _lastCamKey = key;
+      // Nur zeichnen, wenn sichtbar – trotzdem billig: mark dirty triggert den RAF-Draw
+      if (inst.isEnabled() && inst.isHeatmap()) inst._markDirty?.();
+    }
+  });
+
+// Trampelpfade: bei jedem Tile-Step einer Unit "Intensity" erhöhen.
   // Hinweis: Das funktioniert sofort für Carrier/Worker, sobald irgendwo cb:unit:step emittiert wird.
   window.addEventListener('cb:unit:step', (ev)=>{
     const d = ev?.detail || {};
