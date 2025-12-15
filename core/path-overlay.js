@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Pfad/Heatmap Overlay
- * Version : v25.11.13-final
+ * Version : v25.12.15-paths-step-wiring
  * Autor   : ChatGPT (Assistenz)
  *
  * Zweck   : Zeichnet ein transparentes Overlay über dem Spiel-Canvas (#game),
@@ -329,10 +329,20 @@ class PathHeatmap {
     const tx = Number.isFinite(d.tx) ? d.tx : Math.floor(d.x || 0);
     const ty = Number.isFinite(d.ty) ? d.ty : Math.floor(d.y || 0);
 
-    // Gewichtung: Carrier etwas stärker (weil oft laufen), Worker normal.
+    // Gewichtung: Worker etwas stärker (weil "Arbeitsrouten" sichtbar werden sollen),
+    // Carrier normal (laufen viel, sonst wird alles zu schnell "dicht").
+    // Optional kann ein Sender bereits d.weight setzen.
     const type = String(d.type || '').toLowerCase();
     const kind = String(d.kind || '').toLowerCase();
-    const amt  = (type === 'carrier' || kind.includes('carrier')) ? 2 : 1;
+    const wIn  = Number.isFinite(d.weight) ? Number(d.weight) : null;
+
+    const amt  = (wIn !== null)
+      ? wIn
+      : (type === 'worker' || kind.includes('woodcutter') || kind.includes('stonecutter') || kind.includes('fisher'))
+        ? 3
+        : (type === 'carrier' || kind.includes('carrier'))
+          ? 2
+          : 1;
 
     inst.mark(tx, ty, amt);
   });

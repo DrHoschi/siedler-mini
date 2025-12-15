@@ -1,5 +1,5 @@
 /* ==========================================================================
- * Siedler‑Mini – Building Stock (Output‑Puffer)  v25.12.14-stock-v1
+ * Siedler‑Mini – Building Stock (Output‑Puffer)  v25.12.15-stock-prod-enqueue-v2
  * --------------------------------------------------------------------------
  * Ziel:
  *  - Produktionen (Holz/Stein/Fisch) landen ZUERST als "Stock" am Gebäude.
@@ -186,39 +186,35 @@
   function createCarryJob(bUid, building, resId){
     const res = normResId(resId);
 
+    // Ohne HQ-Ziel keine sinnvollen Carry-Jobs.
+    // (Production würde sonst 'to:null' setzen; das lassen wir bewusst nicht zu,
+    //  damit die Carrier nicht in einen "Job ohne Ziel" laufen.)
     const hq = getHQTile();
     if (!hq){
       WARN('HQ unbekannt – kann keine Carry‑Jobs erzeugen', { bUid, res });
       return null;
     }
 
-    const src = computeDropTile(building);
-    const now = Date.now();
-
-    const job = {
-      id   : `job-stock-${res}-${bUid}-${now}`,
-      type : 'carry',
-      res  : res,
-      qty  : DEFAULT_JOB_QTY,
-      from : { x: src.x, y: src.y },
-      to   : { x: hq.x,  y: hq.y }
-    };
-
-    // In JobEngine legen (kompatibel mit add/push)
-    const eng = window.JobEngine;
-    try{
-      if (eng && typeof eng.add === 'function') eng.add(job);
-      else if (eng && typeof eng.push === 'function') eng.push(job);
-      else {
-        WARN('JobEngine fehlt – Job nicht enqueuebar', job);
-        return null;
-      }
-    }catch(e){
-      WARN('JobEngine enqueue Fehler', e);
+    // NEU (Fix D4/D5): Carry-Jobs IMMER über Production anlegen,
+    // damit Delivery‑Accounting beim Deliver zuverlässig greift.
+    const P = window.Production;
+    if (!P || typeof P.enqueueCarryJobFromBuilding !== 'function'){
+      WARN('Production.enqueueCarryJobFromBuilding fehlt – Job nicht enqueuebar', { bUid, res });
       return null;
     }
 
-    // Mapping jobId -> Stock‑Meta (für cb:job:done)
+    const job = P.enqueueCarryJobFromBuilding(building, res, DEFAULT_JOB_QTY, {
+      accountOnDeliver: true,        // <<< zählt Ressource erst beim Deliver (cb:job:done)
+      reason: 'stock:deliver',
+      src   : 'BuildingStock'
+    });
+
+    if (!job || !job.id){
+      WARN('Production enqueue lieferte keinen Job', job);
+      return null;
+    }
+
+    // Mapping jobId -> Stock‑Meta (für cb:job:done) (für cb:job:done)
     JOBMETA.set(job.id, { bUid, resId: res, qty: DEFAULT_JOB_QTY });
 
     // Outstanding hochzählen
@@ -311,9 +307,21 @@
 
     // Debug/Inspector
     get(bUid, resId){ return getStock(bUid, resId); },
+    getOutstanding(bUid, resId=null){
+      if (!bUid) return 0;
+      const uid = String(bUid);
+      if (resId){
+        return outstandingCount(uid, normResId(resId)) | 0;
+      }
+      const m = OUTSTANDING.get(uid);
+      if (!m) return 0;
+      let sum = 0;
+      for (const v of m.values()) sum += (Number(v)||0);
+      return sum | 0;
+    },
     snapshot,
     _state: { STOCK, OUTSTANDING, JOBMETA } // nur Debug
   };
 
-  LOG('geladen (v25.12.14-stock-v1)');
+  LOG('geladen (v25.12.15-stock-prod-enqueue-v2)');
 })();

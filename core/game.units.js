@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-units-workers-spawnloop1
+ * Version : v25.12.15-D6-paths-stock-inspector-v4.1
  *
  * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
@@ -482,6 +482,85 @@ function spawnInitialCarriers(count){
     // später: weitere Gebäude/Jobs
   };
 
+  // -------------------------------------------------------------------------
+  // D6 – WORKERPRODUKTION „ECHTER“
+  //   - Am Ende der Work-Phase wird Output erzeugt
+  //   - Output landet im BuildingStock (Puffer am Gebäude)
+  //   - Carriers holen via BuildingStock Pull-Jobs ab
+  //   - Zusätzlich: cb:worker:produce für Inspector/Debug
+  // -------------------------------------------------------------------------
+  const WORKER_OUTPUT_BY_KIND = {
+    'u.woodcutter' : 'wood',
+    'u.stonecutter': 'stone',
+    'u.fisherman'  : 'fish'
+  };
+
+  function _getProdBuildingByUid(uid){
+    try{
+      const P = window.Production;
+      const m = P && P._buildings;
+      if (m && typeof m.get === 'function' && m.has(uid)) return m.get(uid);
+    }catch(e){ /* ignore */ }
+    return null;
+  }
+
+  function _maybeProduceWorkerOutput(u){
+    if (!u || u.type !== 'worker') return;
+
+    const uid = u.homeUid || null;
+    if (!uid) return;
+
+    const building = _getProdBuildingByUid(String(uid)) || null;
+
+    // Ressource ermitteln: 1) Worker-Kind 2) Building-ID Fallback
+    const kind = String(u.kind || '').trim();
+    let res = WORKER_OUTPUT_BY_KIND[kind] || null;
+
+    if (!res){
+      const bid = String(u.homeDetail?.id || building?.kind || building?.id || '').trim();
+      if (bid === 'b.lumberjack' || bid === 'b.woodcutter') res = 'wood';
+      else if (bid === 'b.quarry' || bid === 'b.stonecutter') res = 'stone';
+      else if (bid === 'b.fisher' || bid === 'b.fisherman') res = 'fish';
+    }
+
+    if (!res) return;
+
+    // Output ins BuildingStock schreiben (falls vorhanden)
+    const BS = window.BuildingStock;
+    if (BS && typeof BS.add === 'function'){
+      const b = building || {
+        uid : String(uid),
+        kind: (u.homeDetail?.id || null),
+        x   : u.homeDetail?.x,
+        y   : u.homeDetail?.y,
+        w   : u.homeDetail?.w,
+        h   : u.homeDetail?.h
+      };
+      try{
+        BS.add(b, res, 1);
+      }catch(e){
+        WARN('BuildingStock.add fehlgeschlagen', e);
+      }
+    }
+
+    // Event für Inspector/Stats
+    try{
+      window.dispatchEvent(new CustomEvent('cb:worker:produce', {
+        detail:{
+          workerId    : u.id,
+          workerType  : u.type,
+          workerKind  : kind,
+          buildingUid : String(uid),
+          buildingId  : String(u.homeDetail?.id || building?.kind || building?.id || ''),
+          resId       : res,
+          qty         : 1,
+          ts          : Date.now()
+        }
+      }));
+    }catch(e){ /* silent */ }
+  }
+
+
   function _getBuildingIdFromDetail(d){
     return String(d?.id || d?.buildingId || d?.kind || '').trim();
   }
@@ -568,6 +647,9 @@ function spawnInitialCarriers(count){
       u.task = null;
       ai.timer -= dt;
       if (ai.timer <= 0){
+        // D6: Arbeit ist fertig → Output erzeugen (1 Stück) und im BuildingStock ablegen
+        _maybeProduceWorkerOutput(u);
+
         ai.mode = 'toHome';
       }
       return;
