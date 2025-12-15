@@ -29,8 +29,12 @@
       '  <button type="button" data-action="heat-on">Heatmap ON</button>',
       '  <button type="button" data-action="heat-off">Heatmap OFF</button>',
       '</div>',
+      '<div class="row" style="margin-top:8px;">',
+      '  <button type="button" data-action="layer-on">Layer (Stamps) ON</button>',
+      '  <button type="button" data-action="layer-off">Layer (Stamps) OFF</button>',
+      '</div>',
       '<p style="opacity:.7;margin-top:8px">',
-      'Hinweis: Wenn kein PathOverlay vorhanden ist, passiert einfach nichts.',
+      'Hinweis: Overlay = sichtbar/unsichtbar. Layer = Pfad-Stamps an/aus. Heatmap = Intensitätsfläche.',
       '</p>',
       '</div>'
     ].join('');
@@ -49,6 +53,12 @@
 
     sectionEl.querySelector('[data-action="heat-off"]')
       .addEventListener('click', () => send('cb:path:heatmap:off'));
+
+    sectionEl.querySelector('[data-action="layer-on"]')
+      .addEventListener('click', () => send('cb:path:layer:on'));
+
+    sectionEl.querySelector('[data-action="layer-off"]')
+      .addEventListener('click', () => send('cb:path:layer:off'));
   }
 
   // Legacy-API des Inspectors (Adapter kümmert sich um Einbindung)
@@ -163,3 +173,5 @@
     ensureMountedOnShow();
   }
 })();
+
+
