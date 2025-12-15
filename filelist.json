@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-15T18:55:27.942Z",
+  "createdAt": "2025-12-15T21:18:05.761Z",
   "root": ".",
-  "count": 524,
+  "count": 527,
   "entries": [
     {
       "type": "dir",
@@ -848,6 +848,16 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/deco/map-epoch1.decorations.json",
+      "size": 19891
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/map-epoch1.decorations.png",
+      "size": 2119651
+    },
+    {
+      "type": "file",
       "path": "assets/tex/deco/readme.md",
       "size": 2198
     },
@@ -1417,7 +1427,7 @@
     {
       "type": "file",
       "path": "core/core.pfglue.js",
-      "size": 8119
+      "size": 8690
     },
     {
       "type": "file",
@@ -1462,7 +1472,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 25227
+      "size": 25772
     },
     {
       "type": "file",
@@ -1551,6 +1561,11 @@
     },
     {
       "type": "file",
+      "path": "core/map.decorations.js",
+      "size": 19147
+    },
+    {
+      "type": "file",
       "path": "core/map.resources.js",
       "size": 13693
     },
@@ -1572,7 +1587,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 20757
+      "size": 16790
     },
     {
       "type": "file",
@@ -1896,7 +1911,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.paths-v1.js",
-      "size": 6591
+      "size": 7104
     },
     {
       "type": "file",
@@ -2516,7 +2531,7 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1783
+      "size": 1413
     },
     {
       "type": "file",
@@ -2536,7 +2551,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16991
+      "size": 17040
     },
     {
       "type": "file",
