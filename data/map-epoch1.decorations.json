@@ -1,0 +1,1075 @@
+{
+  "id": "map-epoch1-decorations",
+  "source_map_id": "map-epoch1",
+  "source_file": "map-epoch1.json",
+  "grid": {
+    "width": 32,
+    "height": 35
+  },
+  "seed": 251215,
+  "note": "Decorations are NON-resources and should be rendered as non-blocking / purely visual.",
+  "integration": {
+    "merge_strategy": "Either load this file separately and render its 'decorations' list, or merge into your map's 'objects' with a type prefix 'deco_' and blocking=false.",
+    "coordinate_system": "Tile coordinates (x,y) in the same grid as map.tiles."
+  },
+  "rules": {
+    "legend_used": {
+      "1": "grass",
+      "5": "forest",
+      "6": "rock",
+      "7": "path",
+      "8": "water",
+      "9": "sand"
+    },
+    "shore_reeds": {
+      "on": "sand|grass adjacent to water",
+      "coverage": "~35% of sand shoreline",
+      "types": [
+        "deco_reeds"
+      ]
+    },
+    "lilypads": {
+      "on": "water adjacent to sand/grass",
+      "coverage": "~25% of shallow water",
+      "types": [
+        "deco_lilypad"
+      ]
+    },
+    "mushrooms": {
+      "on": "forest",
+      "coverage": "~12% of forest",
+      "types": [
+        "deco_mushroom_cluster"
+      ]
+    },
+    "bushes": {
+      "on": "grass, especially near forest edge",
+      "types": [
+        "deco_bush"
+      ]
+    },
+    "flowers": {
+      "on": "grass (edge-biased)",
+      "types": [
+        "deco_flower_patch"
+      ]
+    },
+    "pebbles": {
+      "on": "sand",
+      "types": [
+        "deco_pebbles"
+      ]
+    },
+    "stumps": {
+      "on": "forest edge",
+      "types": [
+        "deco_stump"
+      ]
+    }
+  },
+  "decorations": [
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 20,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "b"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 1,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "b"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 11,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "c"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 15,
+      "y": 25,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "b"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 6,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "c"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 18,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "b"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 18,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "c"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 17,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "b"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 3,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "a"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 17,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "c"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 21,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "a"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 8,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "c"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 10,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "a"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 5,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "c"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 0,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "a"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 21,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "a"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 7,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "c"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 18,
+      "y": 23,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "b"
+    },
+    {
+      "type": "deco_reeds",
+      "x": 13,
+      "y": 6,
+      "blocking": false,
+      "layer": "shore",
+      "variant": "b"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 17,
+      "y": 2,
+      "blocking": false,
+      "layer": "water",
+      "variant": "1"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 14,
+      "y": 23,
+      "blocking": false,
+      "layer": "water",
+      "variant": "2"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 14,
+      "y": 10,
+      "blocking": false,
+      "layer": "water",
+      "variant": "1"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 14,
+      "y": 15,
+      "blocking": false,
+      "layer": "water",
+      "variant": "3"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 17,
+      "y": 15,
+      "blocking": false,
+      "layer": "water",
+      "variant": "1"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 14,
+      "y": 9,
+      "blocking": false,
+      "layer": "water",
+      "variant": "3"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 17,
+      "y": 23,
+      "blocking": false,
+      "layer": "water",
+      "variant": "2"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 16,
+      "y": 24,
+      "blocking": false,
+      "layer": "water",
+      "variant": "1"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 17,
+      "y": 0,
+      "blocking": false,
+      "layer": "water",
+      "variant": "3"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 17,
+      "y": 19,
+      "blocking": false,
+      "layer": "water",
+      "variant": "3"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 17,
+      "y": 21,
+      "blocking": false,
+      "layer": "water",
+      "variant": "1"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 14,
+      "y": 7,
+      "blocking": false,
+      "layer": "water",
+      "variant": "3"
+    },
+    {
+      "type": "deco_lilypad",
+      "x": 14,
+      "y": 12,
+      "blocking": false,
+      "layer": "water",
+      "variant": "2"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 10,
+      "y": 8,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "brown"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 10,
+      "y": 3,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "white"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 7,
+      "y": 3,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "red"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 4,
+      "y": 4,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "white"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 3,
+      "y": 9,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "brown"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 2,
+      "y": 5,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "white"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 7,
+      "y": 9,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "white"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 11,
+      "y": 6,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "red"
+    },
+    {
+      "type": "deco_mushroom_cluster",
+      "x": 7,
+      "y": 6,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "brown"
+    },
+    {
+      "type": "deco_bush",
+      "x": 12,
+      "y": 7,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 6,
+      "y": 10,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 5,
+      "y": 10,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 12,
+      "y": 4,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 11,
+      "y": 1,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 12,
+      "y": 9,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 1,
+      "y": 3,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 7,
+      "y": 1,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 12,
+      "y": 5,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 3,
+      "y": 1,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 1,
+      "y": 6,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 3,
+      "y": 10,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 15,
+      "y": 29,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 20,
+      "y": 28,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 19,
+      "y": 8,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 24,
+      "y": 2,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 0,
+      "y": 29,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 14,
+      "y": 32,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 1,
+      "y": 34,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 4,
+      "y": 19,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 7,
+      "y": 23,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 27,
+      "y": 16,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 27,
+      "y": 20,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 8,
+      "y": 25,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "large"
+    },
+    {
+      "type": "deco_bush",
+      "x": 6,
+      "y": 18,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 29,
+      "y": 17,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "med"
+    },
+    {
+      "type": "deco_bush",
+      "x": 12,
+      "y": 32,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 29,
+      "y": 15,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 31,
+      "y": 21,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_bush",
+      "x": 30,
+      "y": 19,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "small"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 0,
+      "y": 17,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 9,
+      "y": 0,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 0,
+      "y": 13,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 10,
+      "y": 28,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 24,
+      "y": 24,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 12,
+      "y": 15,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 0,
+      "y": 21,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 16,
+      "y": 27,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 5,
+      "y": 33,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 22,
+      "y": 10,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 21,
+      "y": 17,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 30,
+      "y": 28,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 10,
+      "y": 26,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 23,
+      "y": 23,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 29,
+      "y": 26,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 20,
+      "y": 6,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 26,
+      "y": 31,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 31,
+      "y": 19,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 8,
+      "y": 22,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 3,
+      "y": 34,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 0,
+      "y": 10,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 18,
+      "y": 25,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 26,
+      "y": 20,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 30,
+      "y": 16,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 22,
+      "y": 28,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 30,
+      "y": 3,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 22,
+      "y": 1,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 23,
+      "y": 15,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 25,
+      "y": 32,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 21,
+      "y": 14,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "blue"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 29,
+      "y": 1,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 25,
+      "y": 27,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 20,
+      "y": 19,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "pink"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 8,
+      "y": 30,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "yellow"
+    },
+    {
+      "type": "deco_flower_patch",
+      "x": 5,
+      "y": 0,
+      "blocking": false,
+      "layer": "grass",
+      "variant": "white"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 1,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "dark"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 18,
+      "y": 12,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 18,
+      "y": 20,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 18,
+      "y": 19,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 19,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "dark"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 4,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "dark"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 23,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 3,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 18,
+      "y": 9,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "dark"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 2,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 14,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_pebbles",
+      "x": 13,
+      "y": 12,
+      "blocking": false,
+      "layer": "sand",
+      "variant": "light"
+    },
+    {
+      "type": "deco_stump",
+      "x": 11,
+      "y": 3,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "stump2"
+    },
+    {
+      "type": "deco_stump",
+      "x": 5,
+      "y": 9,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "stump2"
+    },
+    {
+      "type": "deco_stump",
+      "x": 4,
+      "y": 9,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "stump1"
+    },
+    {
+      "type": "deco_stump",
+      "x": 2,
+      "y": 3,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "stump1"
+    },
+    {
+      "type": "deco_stump",
+      "x": 6,
+      "y": 2,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "stump1"
+    },
+    {
+      "type": "deco_stump",
+      "x": 10,
+      "y": 2,
+      "blocking": false,
+      "layer": "forest",
+      "variant": "stump1"
+    }
+  ],
+  "stats": {
+    "tile_grid_in_file": {
+      "width": 32,
+      "height": 35
+    },
+    "map_size_field": [
+      64,
+      64
+    ],
+    "decorations_count": 124
+  }
+}
