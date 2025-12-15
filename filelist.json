@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-15T09:12:38.395Z",
+  "createdAt": "2025-12-15T13:21:03.612Z",
   "root": ".",
-  "count": 528,
+  "count": 524,
   "entries": [
     {
       "type": "dir",
@@ -1367,7 +1367,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 18412
+      "size": 18089
     },
     {
       "type": "file",
@@ -2450,18 +2450,13 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-build-v6.js",
-      "size": 14379
-    },
-    {
-      "type": "file",
       "path": "ui/ui-build.categories.js",
       "size": 1398
     },
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 9592
+      "size": 14379
     },
     {
       "type": "file",
@@ -2490,23 +2485,8 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-hud-v0.js",
-      "size": 6878
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-hud-v1.js",
-      "size": 5155
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-hud-v2.js",
-      "size": 6376
-    },
-    {
-      "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 4873
+      "size": 6376
     },
     {
       "type": "file",
@@ -2556,7 +2536,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 17355
+      "size": 16983
     },
     {
       "type": "file",
