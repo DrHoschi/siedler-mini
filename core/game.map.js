@@ -116,14 +116,38 @@
       const c = ctx.canvas;
       if (!c) return;
 
-      const w = window.innerWidth  || document.documentElement.clientWidth  || c.width;
-      const h = window.innerHeight || document.documentElement.clientHeight || c.height;
+      // iPad/Safari (Split-View, Toolbars, Rotation):
+      // window.innerWidth/innerHeight können vom "Layout-Viewport" stammen und
+      // NICHT der tatsächlich sichtbaren Canvas-Box entsprechen → Strecken/Versatz.
+      // Darum: erst BoundingClientRect (echte CSS-Box), dann visualViewport als Fallback.
+      let w = 0, h = 0;
+
+      try{
+        const r = c.getBoundingClientRect();
+        w = Math.round(r.width);
+        h = Math.round(r.height);
+      }catch(_){ /* ignore */ }
+
+      if (!w || !h){
+        const vv = window.visualViewport;
+        w = Math.round(vv?.width  || window.innerWidth  || document.documentElement.clientWidth  || c.width);
+        h = Math.round(vv?.height || window.innerHeight || document.documentElement.clientHeight || c.height);
+      }
+
+      w = Math.max(1, w|0);
+      h = Math.max(1, h|0);
 
       if (!Mod.sized || c.width !== w || c.height !== h){
         c.width  = w;
         c.height = h;
         Mod.sized = true;
-        LOG('Canvasgröße gesetzt:', w, 'x', h);
+
+        LOG('Canvasgröße gesetzt:', w, 'x', h, '(bbox/vv)');
+
+        // Optionales Event: andere Module (Overlay/Inspector) können darauf reagieren.
+        try{
+          window.dispatchEvent(new CustomEvent('cb:canvas:resize', { detail: { w, h } }));
+        }catch(_){}
       }
     }catch(e){
       WARN('ensureCanvasSize Fehler:', e?.message || e);
@@ -720,3 +744,4 @@ if (window.GameWorkArea) {
   window.GameMap = { init, render, _state: Mod };
 
 })();
+
