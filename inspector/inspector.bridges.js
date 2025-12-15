@@ -20,10 +20,16 @@
   const off     = () => window.PathOverlay?.toggle?.(false);
   const heatOn  = () => window.PathOverlay?.setHeatmap?.(true);
   const heatOff = () => window.PathOverlay?.setHeatmap?.(false);
-  window.addEventListener('cb:path:overlay:on',  on);
-  window.addEventListener('cb:path:overlay:off', off);
-  window.addEventListener('cb:path:heatmap:on',  heatOn);
-  window.addEventListener('cb:path:heatmap:off', heatOff);
+  const layerOn = () => { window.PathOverlay?.setVisible?.(true); window.PathOverlay?.setStamps?.(true); };
+  const layerOff = () => window.PathOverlay?.setStamps?.(false);
+  window.addEventListener('cb:path:overlay:on',   on);
+  window.addEventListener('cb:path:overlay:off',  off);
+  window.addEventListener('cb:path:heatmap:on',   heatOn);
+  window.addEventListener('cb:path:heatmap:off',  heatOff);
+  window.addEventListener('cb:path:layer:on',     layerOn);
+  window.addEventListener('cb:path:layer:off',    layerOff);
+  window.addEventListener('cb:path:stamps:on',    layerOn);
+  window.addEventListener('cb:path:stamps:off',   layerOff);
 
   /* ------------------------------------------------------------------ */
   /* [B] Ressourcen-Snapshot                                            */
