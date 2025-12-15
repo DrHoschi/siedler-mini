@@ -53,6 +53,39 @@ const PO = {
 };
 
 
+// Pfad-Texturen (optional) – liegt bei dir unter: assets/tex/path/topdown_path0..9.png
+// Wichtig: Wir laden LAZY (erst wenn Overlay aktiv ist), und fallen auf Pattern zurück,
+// falls die Images nicht gefunden werden.
+const TEX = {
+  BASE_PATH: 'assets/tex/path/',
+  FILE_PREFIX: 'topdown_path',
+  COUNT: 10,
+  EXT: '.png',
+  SCALE: 1.0,          // 1.0 = volle Tilegröße
+  ALPHA_MIN: 0.18,     // Overlay-Deckkraft bei geringer Intensität
+  ALPHA_MAX: 0.55      // Overlay-Deckkraft bei hoher Intensität
+};
+
+function _hash2i(x,y){
+  // deterministischer Hash für Tile-Varianten
+  x = (x|0); y=(y|0);
+  let h = (x * 73856093) ^ (y * 19349663);
+  h ^= (h >>> 13);
+  return (h >>> 0);
+}
+function _texUrl(i){
+  return `${TEX.BASE_PATH}${TEX.FILE_PREFIX}${i}${TEX.EXT}`;
+}
+function _dirAngleFromDelta(dtx, dty){
+  // 8-dir in Radiant. (0 = rechts, pi/2 = unten)
+  const dx = Number(dtx)||0;
+  const dy = Number(dty)||0;
+  if (!dx && !dy) return 0;
+  return Math.atan2(dy, dx);
+}
+
+
+
 /* ============================================================================
  * [Hilfsfunktionen]
  * ========================================================================== */
@@ -114,6 +147,14 @@ class PathHeatmap {
     this.rows = 0;
     this.map  = [];       // 1D-Array der Intensitäten
 
+
+    this.dir  = [];       // 1D-Array der Richtungen (Radiant)
+
+    // Texturen (lazy geladen)
+    this._texImgs     = [];
+    this._texReady    = false;
+    this._texLoading  = false;
+    this._texFail     = 0;
     this.canvas = null;
     this.ctx    = null;
 
@@ -155,6 +196,8 @@ class PathHeatmap {
       this.cols = Math.max(1, gm.cols|0);
       this.rows = Math.max(1, gm.rows|0);
       this.map  = new Array(this.cols * this.rows).fill(0);
+      this.dir  = new Array(this.cols * this.rows).fill(0);
+      this.dir  = new Array(this.cols * this.rows).fill(0);
     } else {
       // Fallback: Wenn Map-State noch nicht verfügbar ist, nutze Screen-Grid.
       const { rect } = resizeCanvasToClient(this.canvas);
@@ -193,6 +236,38 @@ class PathHeatmap {
     window.__PATH_OVERLAY_INIT__ = false;
   }
 
+
+/* ---------------- Texturen (lazy) ---------------- */
+_ensureTextures(){
+  if (this._texReady || this._texLoading) return;
+  this._texLoading = true;
+
+  const imgs = [];
+  let done = 0;
+
+  const onDone = ()=>{
+    done++;
+    if (done < TEX.COUNT) return;
+    this._texLoading = false;
+    // Wenn wenigstens 1 Bild ok: ready
+    this._texReady = imgs.some(im => im && im.complete && im.naturalWidth > 0);
+    this._texImgs  = imgs;
+    // Einmal neu zeichnen
+    this._markDirty();
+    console.info('[PathOverlay] textures ready?', this._texReady, 'fails:', this._texFail);
+  };
+
+  for (let i=0;i<TEX.COUNT;i++){
+    const im = new Image();
+    im.loading = 'eager';
+    im.decoding = 'async';
+    im.onload = ()=> onDone();
+    im.onerror = ()=>{ this._texFail++; onDone(); };
+    im.src = _texUrl(i);
+    imgs[i] = im;
+  }
+}
+
   /* ---------------- Sichtbarkeit/Modi ---------------- */
   /* ---------------- Sichtbarkeit/Modi ---------------- */
   _syncVisibility(){
@@ -204,6 +279,7 @@ class PathHeatmap {
   // Inspector "Overlay ON/OFF" → sichtbares Pfad-Overlay (Pattern/Textur)
   toggle(on){
     this.showOvl = !!on;
+    if (this.showOvl) this._ensureTextures();
     this._syncVisibility();
     this._markDirty();
   }
@@ -220,12 +296,18 @@ class PathHeatmap {
   isOverlay(){ return !!this.showOvl; }
 
   /* ---------------- Daten ---------------- */
-  mark(tx, ty, amt = 1){
+  mark(tx, ty, amt = 1, angle = null){
     if (!this.map.length) return;
     if (tx<0 || ty<0 || tx>=this.cols || ty>=this.rows) return;
     const idx  = ty * this.cols + tx;
     const next = clamp01((this.map[idx] || 0) + Math.max(0, amt) * 0.1);
     this.map[idx] = Math.min(PO.MAX_INTENSITY, next);
+    if (angle !== null && Number.isFinite(angle)){
+      // leicht glätten (verhindert hartes Flackern)
+      const prev = Number(this.dir[idx]) || 0;
+      const a = Number(angle);
+      this.dir[idx] = prev * 0.7 + a * 0.3;
+    }
     this._markDirty();
   }
   reset(){
@@ -322,26 +404,35 @@ class PathHeatmap {
         // finalen Pfad-Texturen/Brushes lieferst. Dann tauschen wir das Rendering
         // gegen echte Stamp-Sprites aus.
         if (this.showOvl){
-          // deterministisches Tile-Jitter für natürlicheren Look
-          const h = (((tx*73856093) ^ (ty*19349663)) >>> 0);
-          const jx = ((h & 255) / 255 - 0.5) * 0.18; // -0.09..+0.09 tiles
-          const jy = (((h>>8) & 255) / 255 - 0.5) * 0.18;
+  // Variante wählen (deterministisch), damit das Muster natürlich wirkt
+  const hv   = _hash2i(tx,ty);
+  const idxT = (TEX.COUNT>0) ? (hv % TEX.COUNT) : 0;
+  const im   = this._texReady ? this._texImgs[idxT] : null;
 
-          const x0 = (tx + 0.1 + jx) * this.tile;
-          const y0 = (ty + 0.1 + jy) * this.tile;
-          const w0 = this.tile * 0.8;
-          const h0 = this.tile * 0.8;
+  // Deckkraft abhängig von Intensität (v)
+  const a = TEX.ALPHA_MIN + (TEX.ALPHA_MAX - TEX.ALPHA_MIN) * clamp01(v);
+  ctx.globalAlpha = a;
 
-          // Alpha deutlich niedriger als Heatmap (realistischer)
-          ctx.globalAlpha = clamp01(v) * 0.22;
+  // Richtung (Radiant) pro Tile – wird beim Step/mark aktualisiert
+  const ang = Number(this.dir[ty*this.cols + tx]) || 0;
 
-          // 2 "Furchen" + kleine Mitte
-          ctx.fillStyle = '#000';
-          ctx.fillRect(x0, y0 + h0*0.38, w0, h0*0.22);
-          ctx.fillRect(x0 + w0*0.38, y0, w0*0.22, h0);
-          ctx.globalAlpha = clamp01(v) * 0.28;
-          ctx.fillRect(x0 + w0*0.42, y0 + h0*0.42, w0*0.16, h0*0.16);
-        }
+  if (im && im.complete && im.naturalWidth>0){
+    const cx = tx*this.tile + this.tile*0.5;
+    const cy = ty*this.tile + this.tile*0.5;
+    const sz = this.tile * TEX.SCALE;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(ang);
+    ctx.drawImage(im, -sz*0.5, -sz*0.5, sz, sz);
+    ctx.restore();
+  }else{
+    // Fallback: simples Pattern (wenn Texturen fehlen/noch laden)
+    const g = (hv & 7); // 0..7
+    ctx.fillStyle = (g<3) ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.22)';
+    ctx.fillRect(tx*this.tile, ty*this.tile, this.tile, this.tile);
+  }
+}
       }
     }
     ctx.globalAlpha = 1;
@@ -447,8 +538,9 @@ class PathHeatmap {
     const kind = String(d.kind || '').toLowerCase();
     const amt  = (type === 'carrier' || kind.includes('carrier')) ? 2 : 1;
 
-    inst.mark(tx, ty, amt);
-  });
+    const ang = _dirAngleFromDelta(d.dtx, d.dty);
+    inst.mark(tx, ty, amt, ang);
+});
 
 
 
