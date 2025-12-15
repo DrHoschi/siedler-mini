@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.build-v1.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-build-tab-v2-runtime+stock
+ * Version : v25.12.15-build-tab-v3-registry+runtime+stats
  *
  * Zweck   : Build-Tab – zeigt
  *           (A) Registry/Definitions-Snapshot (cb:build:snapshot)
@@ -38,6 +38,13 @@
     mode    : 'runtime', // 'runtime' | 'registry'
     onlyPlaced : false,
     onlyProblems : false,
+
+    // D6-Stats: wird durch cb:worker:produce gefüttert
+    // Map<buildingUid, { last:{ts,resId,qty,workerId,workerKind}, totals:{[resId]:n}, sinceTs:number }>
+    prodByBuilding : new Map(),
+
+    // kleine Render-Drosselung (damit Worker nicht 60x/s den Tab neu rendert)
+    _renderScheduled : false
   };
 
   // -------------------------------------------------------------------------
@@ -69,11 +76,22 @@
     return def?.imageUrl || def?.iconUrl || def?.image || def?.icon || '';
   }
 
-  function fmtKV(obj){
-    if (!obj || typeof obj !== 'object') return '–';
-    const entries = Object.entries(obj).filter(([,v]) => (v|0) > 0);
-    if (!entries.length) return '–';
-    return entries.map(([k,v])=>`${k}:${v|0}`).join('  ');
+  function fmtKV(obj, order=null){
+    if (!obj) return '–';
+    const keys = Object.keys(obj);
+
+    // Optional: bestimme Reihenfolge (z.B. ['wood','stone','fish'])
+    let list = keys;
+    if (Array.isArray(order) && order.length){
+      const o = order.map(String);
+      const inOrder = o.filter(k=>keys.includes(k));
+      const rest = keys.filter(k=>!o.includes(k)).sort();
+      list = inOrder.concat(rest);
+    } else {
+      list = keys.sort();
+    }
+
+    return list.map(k=>`${k}:${obj[k]}`).join(', ');
   }
 
   function computeUidForBuilding(b){
@@ -106,15 +124,26 @@
     return [];
   }
 
-  function countWorkersFor(uid){
+  function getWorkerModeCounts(uid){
     const units = getUnits();
-    let c = 0;
+    const out = { total:0, toWork:0, work:0, toHome:0, other:0 };
+
     for (const u of units){
-      if (!u) continue;
-      const home = u.homeUid || u.homeBuildingUid || u.home || u.homeId || '';
-      if (home === uid) c++;
+      if (!u || u.type !== 'worker') continue;
+      if (String(u.homeUid||'') !== String(uid)) continue;
+
+      out.total++;
+      const mode = String(u._ai?.mode || '').toLowerCase();
+      if (mode === 'towork') out.toWork++;
+      else if (mode === 'work') out.work++;
+      else if (mode === 'tohome') out.toHome++;
+      else out.other++;
     }
-    return c;
+    return out;
+  }
+
+  function countWorkersFor(uid){
+    return getWorkerModeCounts(uid).total;
   }
 
   function getStockFor(uid){
@@ -128,10 +157,33 @@
     }
   }
 
-  function getOutstandingFor(uid){
+  function getOutstandingFor(uid, resId=null){
     const BS = window.BuildingStock;
-    if (!BS || typeof BS.getOutstanding !== 'function') return null;
-    try { return BS.getOutstanding(uid) | 0; } catch(_) { return null; }
+    if (!BS) return null;
+
+    // bevorzugt: offizieller API-Helfer
+    if (typeof BS.getOutstanding === 'function'){
+      try { return BS.getOutstanding(uid, resId) | 0; } catch(_) { return null; }
+    }
+
+    // Fallback: Debug-State lesen (Map<uid, Map<res,count>>)
+    const M = BS._state?.OUTSTANDING;
+    if (!M || typeof M.get !== 'function') return null;
+
+    try{
+      const mm = M.get(String(uid));
+      if (!mm) return 0;
+
+      if (resId){
+        return (Number(mm.get(String(resId))) || 0) | 0;
+      }
+
+      let sum = 0;
+      for (const v of mm.values()) sum += (Number(v)||0);
+      return sum | 0;
+    }catch(_){
+      return null;
+    }
   }
 
   function getProdMeta(uid){
@@ -140,6 +192,40 @@
     if (!map || typeof map.get !== 'function') return null;
     try { return map.get(uid) || null; } catch(_) { return null; }
   }
+
+  function getJobMetaCountFor(uid){
+    const BS = window.BuildingStock;
+    const JM = BS?._state?.JOBMETA;
+    if (!JM || typeof JM.forEach !== 'function') return null;
+
+    let c = 0;
+    try{
+      JM.forEach((meta)=>{
+        if (String(meta?.bUid||'') === String(uid)) c++;
+      });
+    }catch(_){
+      return null;
+    }
+    return c;
+  }
+
+  function getProdStatsFor(uid){
+    try { return S.prodByBuilding.get(String(uid)) || null; } catch(_) { return null; }
+  }
+
+  function fmtTime(ts){
+    if (!ts) return '–';
+    try{
+      const d = new Date(Number(ts));
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mm = String(d.getMinutes()).padStart(2,'0');
+      const ss = String(d.getSeconds()).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    }catch(_){
+      return '–';
+    }
+  }
+
 
   function escapeHtml(s){
     return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -299,8 +385,37 @@
         ? `drop: (${prod.dropTx ?? '–'},${prod.dropTy ?? '–'})`
         : '–';
 
-      const stockInfo = stock ? fmtKV(stock) : '–';
-      const outInfo = (outstanding == null) ? '–' : String(outstanding);
+      // Stock: bevorzugt geordnet (wood/stone/fish zuerst), danach Rest
+      const stockInfo = stock ? fmtKV(stock, ['wood','stone','fish']) : '–';
+
+      // Outstanding: pro Ressource + total (wenn möglich)
+      const outWood = getOutstandingFor(uid, 'wood');
+      const outStone= getOutstandingFor(uid, 'stone');
+      const outFish = getOutstandingFor(uid, 'fish');
+      const outTotal= (outstanding == null) ? getOutstandingFor(uid, null) : outstanding;
+
+      const outInfo = (outTotal == null)
+        ? '–'
+        : `total=${outTotal}` + (
+            (outWood==null && outStone==null && outFish==null)
+              ? ''
+              : ` (wood=${outWood||0}, stone=${outStone||0}, fish=${outFish||0})`
+          );
+
+      // Worker-Counts pro Mode (toWork/work/toHome)
+      const wm = getWorkerModeCounts(uid);
+      const workerInfo = `${wm.total} (toWork=${wm.toWork}, work=${wm.work}, toHome=${wm.toHome}${wm.other?`, other=${wm.other}`:''})`;
+
+      // D6 Produktion (cb:worker:produce)
+      const ps = getProdStatsFor(uid);
+      const lastInfo = ps?.last
+        ? `${fmtTime(ps.last.ts)}  ${ps.last.resId}+${ps.last.qty}`
+        : '–';
+      const totalsInfo = ps?.totals ? fmtKV(ps.totals, ['wood','stone','fish']) : '–';
+
+      // Stock-Jobs im Queue (Debug)
+      const jobMetaCount = getJobMetaCountFor(uid);
+      const jobMetaInfo = (jobMetaCount==null) ? '–' : String(jobMetaCount);
 
       const needsInfo = needs ? fmtKV(needs) : '–';
       const delInfo = delivered ? fmtKV(delivered) : '–';
@@ -315,7 +430,10 @@
         <tr><th>DropSlots</th><td>${escapeHtml(String(dropSlots))}</td></tr>
         <tr><th>Lager (Stock)</th><td>${escapeHtml(stockInfo)}</td></tr>
         <tr><th>Pull-Jobs offen</th><td>${escapeHtml(outInfo)}</td></tr>
-        <tr><th>Worker</th><td>${escapeHtml(String(workerCount))}</td></tr>
+        <tr><th>Stock-Jobs Queue</th><td>${escapeHtml(jobMetaInfo)}</td></tr>
+        <tr><th>Worker</th><td>${escapeHtml(workerInfo)}</td></tr>
+        <tr><th>Letzte Produktion</th><td>${escapeHtml(lastInfo)}</td></tr>
+        <tr><th>Produziert seit Start</th><td>${escapeHtml(totalsInfo)}</td></tr>
         <tr><th>Prod-Meta</th><td>${escapeHtml(prodInfo)}</td></tr>
       `;
 
@@ -342,7 +460,38 @@
     try { window.dispatchEvent(new CustomEvent('req:build:snapshot')); } catch(_) {}
   }
 
+    // -------------------------------------------------------------------------
+  // D6 Event: cb:worker:produce → Stats sammeln + ggf. Runtime-Render anstoßen
   // -------------------------------------------------------------------------
+  function scheduleRuntimeRender(){
+    if (S._renderScheduled) return;
+    S._renderScheduled = true;
+    setTimeout(()=>{
+      S._renderScheduled = false;
+      if (S.mode === 'runtime') renderRuntime();
+    }, 120);
+  }
+
+  function onWorkerProduce(ev){
+    const d = ev?.detail || {};
+    const uid = String(d.buildingUid || '').trim();
+    if (!uid) return;
+
+    const res = String(d.resId || '').trim();
+    const qty = Math.max(1, Number(d.qty) || 1);
+    const ts  = Number(d.ts || Date.now());
+
+    const st = S.prodByBuilding.get(uid) || { last:null, totals:{}, sinceTs: ts };
+    st.last = { ts, resId: res || 'wood', qty, workerId: d.workerId || null, workerKind: d.workerKind || '' };
+    st.totals[st.last.resId] = (Number(st.totals[st.last.resId]) || 0) + qty;
+
+    S.prodByBuilding.set(uid, st);
+
+    // Live-Update im Inspector (nur wenn Tab bereits geöffnet ist)
+    if (S.section && S.mode === 'runtime') scheduleRuntimeRender();
+  }
+
+// -------------------------------------------------------------------------
   // Exports / Debug (optional)
   // -------------------------------------------------------------------------
   window.InspectorBuildTab = {
@@ -393,6 +542,7 @@
 
     // Event: Snapshot
     window.addEventListener('cb:build:snapshot', onSnapshot);
+  window.addEventListener('cb:worker:produce', onWorkerProduce);
 
     // Handlers
     btnRuntime.onclick = () => {
