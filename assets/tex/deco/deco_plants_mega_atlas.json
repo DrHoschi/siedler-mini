@@ -324,7 +324,7 @@
   "meta": {
     "app": "siedler-mini deco packer",
     "version": "v3",
-    "image": "deco_plants_iso_settlersstyle_v3_sheet.png",
+    "image": "deco_plants_mega_atlas.png",
     "format": "RGBA8888",
     "size": {
       "w": 1024,
