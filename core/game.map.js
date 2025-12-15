@@ -439,6 +439,21 @@ if (window.MapResources) {
     WARN('MapResources draw Fehler:', e);
   }
 }
+
+    // ---------------------------------------------------------------------
+// Deko-Layer (Pflanzen/Props, KEINE Ressourcen)
+//  - benötigt core/map.decorations.js
+//  - nutzt MapDecorations.drawOnMainCanvas(ctx, cam, tileSize)
+// ---------------------------------------------------------------------
+if (window.MapDecorations) {
+  try {
+    if (typeof window.MapDecorations.drawOnMainCanvas === 'function') {
+      window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
+    }
+  } catch (e) {
+    WARN('MapDecorations draw Fehler:', e);
+  }
+}
     
     // ---------------------------------------------------------------------
 // Arbeitsbereiche (WorkAreas) zeichnen
