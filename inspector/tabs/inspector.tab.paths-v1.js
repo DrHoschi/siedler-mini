@@ -7,6 +7,7 @@
  * Events  : Inspector sendet:
  *            'cb:path:overlay:on'  | 'cb:path:overlay:off'
  *            'cb:path:heatmap:on'  | 'cb:path:heatmap:off'
+ *            'cb:path:layer:on'    | 'cb:path:layer:off'   (Stamps)
  * Hinweis : Es wird NICHT mehr UIInspector.pathOverlay/heatmap aufgerufen,
  *           weil diese Funktionen in deinem Projekt nicht existieren.
  * ========================================================================== */
@@ -87,6 +88,10 @@
     if (type === 'cb:path:overlay:off') PO.toggle?.(false);
     if (type === 'cb:path:heatmap:on')  PO.setHeatmap?.(true);
     if (type === 'cb:path:heatmap:off') PO.setHeatmap?.(false);
+    if (type === 'cb:path:layer:on')    { PO.setVisible?.(true); PO.setStamps?.(true); }
+    if (type === 'cb:path:layer:off')   PO.setStamps?.(false);
+    if (type === 'cb:path:stamps:on')   { PO.setVisible?.(true); PO.setStamps?.(true); }
+    if (type === 'cb:path:stamps:off')  PO.setStamps?.(false);
   }catch(err){
     // NICHT spammen – nur einmal pro Fehlerart
     window.__PATHS_TAB_DIRECT_CALL_ERR__ = window.__PATHS_TAB_DIRECT_CALL_ERR__ || {};
@@ -113,6 +118,8 @@
         <button class="insp-btn" id="p-ov-off">Overlay aus</button>
         <button class="insp-btn" id="p-hm-on">Heatmap an</button>
         <button class="insp-btn" id="p-hm-off">Heatmap aus</button>
+        <button class="insp-btn" id="p-layer-on">Layer an</button>
+        <button class="insp-btn" id="p-layer-off">Layer aus</button>
       </div>
       <div id="paths-info" class="pad muted">(keine Daten)</div>
     `;
@@ -121,6 +128,8 @@
     const btnOverlayOff = panel.querySelector("#p-ov-off");
     const btnHeatOn     = panel.querySelector("#p-hm-on");
     const btnHeatOff    = panel.querySelector("#p-hm-off");
+    const btnLayerOn    = panel.querySelector("#p-layer-on");
+    const btnLayerOff   = panel.querySelector("#p-layer-off");
 
     // Overlay EIN
     btnOverlayOn?.addEventListener("click", () => {
