@@ -88,10 +88,6 @@
       let pivotX = w/2, pivotY = h; // default: "Fußpunkt unten"
       let anchorX = 0.5, anchorY = 1.0;
       let scale = 1;
-      // Merker: Wurde ein Pivot explizit geliefert (pivot/pivotX/anchor-global)?
-      // Wenn nein, dürfen wir (optional) einen stabilen Pivot aus meta.cell ableiten,
-      // damit "getrimmte" Frames (unterschiedliche w/h) nicht beim Laufen "teleportieren".
-      let pivotExplicit = false;
 
       // Format A: trees_mega_atlas-style: info = [cx,cy]
       if (Array.isArray(info)){
@@ -110,8 +106,8 @@
         w = (f.w|0) || defW;
         h = (f.h|0) || defH;
 
-        if (info.pivot && typeof info.pivot.x === 'number') { pivotX = info.pivot.x; pivotExplicit = true; }
-        if (info.pivot && typeof info.pivot.y === 'number') { pivotY = info.pivot.y; pivotExplicit = true; }
+        if (info.pivot && typeof info.pivot.x === 'number') pivotX = info.pivot.x;
+        if (info.pivot && typeof info.pivot.y === 'number') pivotY = info.pivot.y;
 
         if (info.anchor && typeof info.anchor.x === 'number') anchorX = info.anchor.x;
         if (info.anchor && typeof info.anchor.y === 'number') anchorY = info.anchor.y;
@@ -120,8 +116,8 @@
         // ------------------------------------------------------------
         // Zusätzliche Atlas-Formate (Exporter / Preview-Tool):
         // 1) pivotX/pivotY direkt am Frame-Objekt (Pixel, lokal im Frame)
-        if (typeof info.pivotX === 'number') { pivotX = info.pivotX; pivotExplicit = true; }
-        if (typeof info.pivotY === 'number') { pivotY = info.pivotY; pivotExplicit = true; }
+        if (typeof info.pivotX === 'number') pivotX = info.pivotX;
+        if (typeof info.pivotY === 'number') pivotY = info.pivotY;
 
         // 2) anchorX/anchorY als "globaler Pivot" in Sheet-Koordinaten.
         //    Viele Preview-Exporter speichern den Fußpunkt absolut im Sheet
@@ -135,7 +131,6 @@
             // Global → lokal: pivot = anchor - (frame top-left)
             pivotX = ax - x;
             pivotY = ay - y;
-            pivotExplicit = true;
           } else {
             // Normalisiert (0..1) → Anchor-Align möglich
             anchorX = ax;
@@ -143,62 +138,64 @@
           }
         }
 
-        // ------------------------------------------------------------
-        // 3) AUTO-PIVOT für getrimmte Unit-Frames aus einem Grid-Sheet
-        //
-        // Problem:
-        // - Deine Atlas-Dateien (z.B. woodcutter_N_walk_0 ...) sind "trimmed": w/h sind je Frame anders.
-        // - Wenn wir Pivot = (w/2,h) nehmen, springt der Fußpunkt pro Frame → sichtbares "Teleportieren".
-        //
-        // Lösung:
-        // - Wenn der Atlas meta.cell {w,h,baseline_margin} UND meta.rows (Richtungs-Reihenfolge) hat,
-        //   dann rekonstruieren wir die ursprüngliche Zelle (256x128) pro Frame anhand des Namens
-        //   "<unit>_<DIR>_<action>_<i>".
-        // - Pivot wird dann stabil als "Fußpunkt" in Zell-Koordinaten berechnet und in den
-        //   getrimmten Frame umgerechnet.
-        //
-        // Voraussetzung:
-        // - Sheet ist wirklich ein Raster: Spalte i → i*cell.w, Zeile DIR → rowIndex*cell.h
-        // - Dateinamen enthalten DIR und Frame-Index am Ende.
-        if (!pivotExplicit && info && info.trimmed && atlasJson?.meta?.cell?.w && atlasJson?.meta?.cell?.h) {
-          const cellW = atlasJson.meta.cell.w|0;
-          const cellH = atlasJson.meta.cell.h|0;
-          const baseline = (atlasJson.meta.cell.baseline_margin|0) || 0;
+      }
 
-          // Dir-Order: aus meta.rows (falls vorhanden), sonst Standard.
-          const dirOrder = Array.isArray(atlasJson?.meta?.rows)
-            ? atlasJson.meta.rows
-            : ['N','NE','E','SE','S','SW','W','NW'];
+      
+      // ------------------------------------------------------------
+      // Grid-Trim-Fix (ohne Atlas-Offsets):
+      // Viele unserer "Grid"-Atlanten (z.B. woodcutter) sind visuell in Zellen
+      // (meta.cell.w/h) organisiert, aber werden als "trimmed" exportiert, wobei
+      // spriteSourceSize.x/y oft 0 bleiben. Das führt zu "Teleport/Jitter", weil
+      // sich der Fußpunkt (Pivot) pro Frame verschiebt.
+      //
+      // Wenn meta.cell vorhanden ist und der Frame-Name eine Richtung + Spaltenindex
+      // enthält (…_<DIR>_…_<COLIDX>), können wir den Zell-Offset aus fr.x/fr.y
+      // rückrechnen und einen stabilen Pivot (Bottom-Center/Baseline) setzen.
+      const cell = atlasJson?.meta?.cell;
+      const rows = atlasJson?.meta?.rows;
+      if (cell && typeof cell.w === 'number' && typeof cell.h === 'number') {
+        // COLIDX = letzte Zahl im Namen (…_0, …_1, …_2 …)
+        const parts = String(name).split('_');
+        const last = parts[parts.length - 1];
+        if (/^\d+$/.test(last)) {
+          const colIdx = parseInt(last, 10);
+          // DIR Token: erstes Token, das in meta.rows enthalten ist (z.B. N, NE, E, …)
+          let dirTok = null;
+          if (Array.isArray(rows) && rows.length) {
+            for (const p of parts) { if (rows.includes(p)) { dirTok = p; break; } }
+          }
+          // Fallback-Reihenfolge, falls meta.rows fehlt
+          const fallbackRows = ['N','NE','E','SE','S','SW','W','NW'];
+          const rowList = (Array.isArray(rows) && rows.length) ? rows : fallbackRows;
+          if (!dirTok) {
+            for (const p of parts) { if (rowList.includes(p)) { dirTok = p; break; } }
+          }
+          if (dirTok) {
+            const rowIdx = rowList.indexOf(dirTok);
+            if (rowIdx >= 0) {
+              const cellX = colIdx * cell.w;
+              const cellY = rowIdx * cell.h;
+              const offX = x - cellX;
+              const offY = y - cellY;
 
-          // Pattern: <prefix>_<DIR>_<action>_<i>
-          // Beispiele:
-          // - woodcutter_N_walk_0
-          // - carrier_SW_idle_2
-          const m = String(name).match(/_(N|NE|E|SE|S|SW|W|NW)_[^_]+_(\d+)$/i);
-          if (m) {
-            const dirToken = m[1].toUpperCase();
-            const idx = parseInt(m[2], 10);
-            const rowIndex = dirOrder.map(d=>String(d).toUpperCase()).indexOf(dirToken);
-            if (rowIndex >= 0 && Number.isFinite(idx) && idx >= 0) {
-              const cellOriginX = idx * cellW;
-              const cellOriginY = rowIndex * cellH;
-              const offX = x - cellOriginX;
-              const offY = y - cellOriginY;
+              // Nur anwenden, wenn der Frame plausibel in dieser Zelle liegt.
+              if (offX > -2 && offX < cell.w + 2 && offY > -2 && offY < cell.h + 2) {
+                const baseline = (typeof cell.baseline_margin === 'number') ? cell.baseline_margin : 0;
+                const anchorCellX = cell.w / 2;
+                const anchorCellY = cell.h - baseline;
 
-              // Pivot in "ursprünglicher Zelle": bottom-center (mit baseline_margin)
-              const pivotAbsX = cellW / 2;
-              const pivotAbsY = cellH - baseline;
+                // Pivot in lokalen Frame-Koordinaten (getrimmt)
+                pivotX = anchorCellX - offX;
+                pivotY = anchorCellY - offY;
 
-              // Umrechnung in lokalen, getrimmten Frame
-              // (offX/offY entspricht spriteSourceSize in TP-JSON)
-              if (Number.isFinite(offX) && Number.isFinite(offY)) {
-                pivotX = pivotAbsX - offX;
-                pivotY = pivotAbsY - offY;
+                // Anchor (0..1) auf Zellfußpunkt, falls jemand align:'anchor' nutzt
+                // (wichtig: bezieht sich dann auf *Frame*, nicht Zell – wir lassen es als Hinweis drin)
+                anchorX = 0.5;
+                anchorY = 1.0;
               }
             }
           }
         }
-
       }
 
       resolved[name] = { x,y,w,h,pivotX,pivotY,anchorX,anchorY,scale };
@@ -212,7 +209,7 @@
   // ASSETS SINGLETON
   // =========================================================================
   const Assets = {
-    version: 'v25.12.15-trimmed-cellpivot',
+    version: 'v25.12.13-atlas+char-support',
 
     // Einfache Image-Caches (z. B. building-icons)
     images: new Map(),
