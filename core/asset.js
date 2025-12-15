@@ -440,6 +440,30 @@
       ));
 
 
+
+      // --------------------------------------------------------------------
+      // Deco / Pflanzen (rein dekorativ, KEINE Ressourcen)
+      //  - Für core/map.decorations.js (MapDecorations)
+      //  - Atlas-Key MUSS 'deco_plants_mega_atlas' heißen (Default in map.decorations.js)
+      //
+      // Lege die Dateien z.B. hier ab:
+      //   assets/tex/deco/deco_plants_mega_atlas.json
+      //   assets/tex/deco/deco_plants_mega_atlas.png
+      //
+      // Oder (falls du die Original-Dateinamen beibehalten willst), nutze die Kandidatenliste:
+      //   assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.json
+      //   assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.png
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'deco_plants_mega_atlas',
+        [
+          'assets/tex/deco/deco_plants_mega_atlas.json',
+          'assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.json',
+          'assets/tex/deco/deco_plants_iso_settlersstyle_v4_atlas_compact.json'
+        ],
+        // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer)
+        'assets/tex/deco/deco_plants_mega_atlas.png'
+      ));
       // Characters / Units: Carrier (Träger)
       // Hinweis: JSON kann meta.image="carrier.png" enthalten, deshalb geben wir
       // imageUrl explizit mit an, damit es immer stimmt.
