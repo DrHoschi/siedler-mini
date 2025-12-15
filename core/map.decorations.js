@@ -1,16 +1,25 @@
 /* ============================================================================
  * Datei   : core/map.decorations.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.15-mapdecorations-deco-atlas-v3 (VARI-SIZE + TILT + WOBBLE)
+ * Version : v25.12.15-mapdecorations-deco-atlas-v4 (DYNAMIC ECO + VARI-SIZE)
  *
- * Wunsch-Umsetzung (dein Feedback):
- *   - Unterschiedliche Größen pro Deko-Typ (und leicht pro Objekt zufällig)
- *   - Kleine Neigung links/rechts (Tilt) + lebendiges "Wachstums"-Loop (sehr langsam)
- *   - Pro Typ EINSTELLBAR (baseScale / randScale / rotDeg / wobble)
+ * Was ist neu (v4 "aufgebohrt"):
+ *   1) PRO Typ einstellbare Größen + Varianz (wie v3)
+ *   2) PRO Objekt leichte Neigung (Tilt) + sehr langsame Mini-Wobble (wie v3)
+ *   3) OPTIONAL: "Wachstum/Öko"-Dynamik (sehr langsam, low-cost):
+ *        - Pflanzen bekommen ein langsames Growth-Cycle (Scale drift)
+ *        - Dekos können sehr selten "nachwachsen" (Spawn) und "vergehen" (Despawn)
+ *        - Alles pro Typ konfigurierbar
+ *      -> Das läuft direkt IN DIESER DATEI (kein extra System nötig),
+ *         kann aber später sauber in ein eigenes Eco-Modul ausgelagert werden.
  *
- * Hinweis:
- *   - Wir rotieren Frames selbst (ctx.rotate) anhand der Atlas-Frame-Daten.
- *   - Kein Gameplay-Effekt: rein dekorativ, non-blocking.
+ * Pattern/Stil:
+ *   - bewusst ähnlich wie core/map.resources.js (init/draw + regen/clear/snapshot + Events) fileciteturn6file0
+ *
+ * Integration:
+ *   - Atlas-Key: CFG.atlasName = 'deco_plants_mega_atlas'
+ *   - Render: game.map.js nach Ressourcen, vor WorkAreas/Units:
+ *       window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
  * ========================================================================== */
 
 (function(){
@@ -24,19 +33,19 @@
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
 
   // =========================================================================
-  // TILE-LEGEND (map-epoch1.json) fileciteturn2file16
+  // TILE-LEGEND (map-epoch1.json)
   // =========================================================================
   const TILE = { GRASS:1, FOREST:5, ROCK:6, WATER:8, SAND:9 };
 
   // =========================================================================
-  // CFG – HIER stellst du deine Größen/Varianz pro Typ ein
+  // CFG – hier stellst du ALLES ein (Größe/Varianz/Abstände/Dynamik)
   // =========================================================================
   const CFG = {
     atlasName: 'deco_plants_mega_atlas',
 
-    // ---------------------------------------------------------------
-    // Dichte (Counts) – mehr/ weniger Deko insgesamt
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // Dichte (Counts) – Zielbestand. Dynamik versucht über Zeit wieder dorthin.
+    // ---------------------------------------------------------------------
     counts: {
       grassClumps: 78,
       shrubs:      42,
@@ -50,26 +59,9 @@
       boulders:     4
     },
 
-    // ---------------------------------------------------------------
-    // Mini-Patch: Mindestabstand pro Typ
-    // ---------------------------------------------------------------
-
-    minDist: {
-      mushrooms: 1,
-      flowers: 1,
-      grassClumps: 0,
-      shrubs: 1,
-      waterlily: 1,
-      cattails: 1,
-      rocksSmall: 1,
-      rocksLarge: 1,
-      boulders: 2,
-      logs: 2
-    },
-    
-    // ---------------------------------------------------------------
-    // Patch/Cluster: kleine Gruppen, dazwischen Platz
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // Patch/Cluster (Wachstumsinseln)
+    // ---------------------------------------------------------------------
     clusterChance: {
       grassClumps: 0.62,
       shrubs:      0.44,
@@ -95,38 +87,50 @@
       boulders:    2
     },
 
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // Mindestabstand pro Typ (in Tiles)
+    //  - 0 = darf direkt nebeneinander (dichter)
+    //  - 1 = leicht getrennt (natürlicher)
+    //  - 2+ = deutlich getrennt
+    // ---------------------------------------------------------------------
+    minDist: {
+      mushrooms: 0,     // du wolltest: nicht zwingend weit auseinander
+      flowers:   0,
+      grassClumps: 0,
+      shrubs:    1,
+      cattails:  1,
+      waterlily: 1,
+      logs:      2,
+      rocksSmall: 1,
+      rocksLarge: 1,
+      boulders:  2
+    },
+
+    // ---------------------------------------------------------------------
     // Position-Jitter (innerhalb der Tile)
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
     jitter: { px: 0.18, py: 0.10 },
 
-    // ---------------------------------------------------------------
-    // GRÖSSEN/VARIANZ pro Typ
-    //
-    // baseScale: Basis (relativ zu tileSize; wird später mit ts/256 multipliziert)
-    // randScale: Zufallsabweichung (0.20 = ±20% um baseScale)
-    //
-    // Beispiel: Pilze kleiner + stark variieren:
-    //   mushrooms.baseScale runter / randScale hoch
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // GRÖSSE/VARIANZ pro Typ (deine Haupt-Schrauben)
+    // baseScale: Basisgröße (relativ)   randScale: ±Varianz (0.30=±30%)
+    // ---------------------------------------------------------------------
     size: {
       grassClumps: { baseScale: 0.62, randScale: 0.25 },
-      shrubs:      { baseScale: 0.78, randScale: 0.30 }, // Büsche dürfen deutlich variieren
+      shrubs:      { baseScale: 0.78, randScale: 0.30 },
       flowers:     { baseScale: 0.58, randScale: 0.28 },
-      mushrooms:   { baseScale: 0.44, randScale: 0.35 }, // kleiner, aber mit "Wachstum"
+      mushrooms:   { baseScale: 0.44, randScale: 0.35 },
       cattails:    { baseScale: 0.70, randScale: 0.22 },
-      waterlily:   { baseScale: 0.62, randScale: 0.20 }, // Seerosen kleiner machen hier!
+      waterlily:   { baseScale: 0.58, randScale: 0.18 }, // Seerose: kleiner
       logs:        { baseScale: 0.82, randScale: 0.18 },
       rocksSmall:  { baseScale: 0.65, randScale: 0.20 },
       rocksLarge:  { baseScale: 0.72, randScale: 0.18 },
       boulders:    { baseScale: 0.78, randScale: 0.15 }
     },
 
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
     // TILT (Neigung) pro Typ – in Grad
-    // randRotDeg: Zufalls-Neigung pro Objekt
-    // wobbleRotDeg: sehr langsame Mini-Schwingung (lebendig)
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
     tilt: {
       grassClumps: { randRotDeg: 2.0, wobbleRotDeg: 1.2 },
       shrubs:      { randRotDeg: 3.0, wobbleRotDeg: 1.4 },
@@ -140,24 +144,87 @@
       boulders:    { randRotDeg: 1.5, wobbleRotDeg: 0.2 }
     },
 
-    // ---------------------------------------------------------------
-    // "Wachstums"-Loop: extrem subtiler Scale-Loop
-    // wobbleScale: Amplitude (0.03 = ±3%)
-    // speedMin/Max: langsam! (Sekunden-Frequenz)
-    // ---------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // WOBBLE (lebendig, sehr langsam)
+    // wobbleScale: ±% Scale
+    // speedMin/Max: klein = langsam
+    // ---------------------------------------------------------------------
     wobble: {
       enabled: true,
       perKind: {
         grassClumps: { wobbleScale: 0.018, speedMin: 0.10, speedMax: 0.20 },
         shrubs:      { wobbleScale: 0.020, speedMin: 0.08, speedMax: 0.18 },
         flowers:     { wobbleScale: 0.028, speedMin: 0.10, speedMax: 0.22 },
-        mushrooms:   { wobbleScale: 0.035, speedMin: 0.06, speedMax: 0.14 }, // langsam & "wachsend"
+        mushrooms:   { wobbleScale: 0.035, speedMin: 0.06, speedMax: 0.14 },
         cattails:    { wobbleScale: 0.020, speedMin: 0.10, speedMax: 0.18 },
         waterlily:   { wobbleScale: 0.022, speedMin: 0.07, speedMax: 0.14 },
         logs:        { wobbleScale: 0.006, speedMin: 0.05, speedMax: 0.10 },
         rocksSmall:  { wobbleScale: 0.004, speedMin: 0.05, speedMax: 0.10 },
         rocksLarge:  { wobbleScale: 0.003, speedMin: 0.05, speedMax: 0.10 },
         boulders:    { wobbleScale: 0.002, speedMin: 0.05, speedMax: 0.10 }
+      }
+    },
+
+    // ---------------------------------------------------------------------
+    // DYNAMIK / ÖKO-SIM (optional, LOW-COST)
+    //
+    // Idee:
+    //  - draw() läuft ohnehin pro Frame. Wir machen die Öko-Änderungen nur
+    //    alle X Sekunden (eco.tickEverySec).
+    //  - Pro Tick nur wenige Operationen (remove/spawn) -> sehr billig.
+    //
+    // WICHTIG:
+    //  - Wenn du "nur optischen Wobble" willst: eco.enabled=false
+    // ---------------------------------------------------------------------
+    eco: {
+      enabled: true,
+
+      // wie oft überhaupt was passieren darf (in Sekunden)
+      tickEverySec: 4.0,
+
+      // wie viele Änderungen maximal pro Tick (Performance-Grenze)
+      maxOpsPerTick: 3,
+
+      // Wie stark "lebt" es? (kleine Werte = sehr langsam)
+      // chanceGrow: Wahrscheinlichkeit pro Tick, dass ein Spawn versucht wird
+      // chanceDecay: Wahrscheinlichkeit pro Tick, dass ein Remove versucht wird
+      chanceGrow: 0.35,
+      chanceDecay: 0.18,
+
+      // "Wachstumszyklus" pro Objekt (Scale drift) – sehr langsam
+      // cycleSec: Basis-Länge, randCycleSec: Varianz
+      // amp: zusätzliche Scale-Amplitude (z.B. 0.08 = ±8% über langen Zyklus)
+      growthCycle: {
+        enabled: true,
+        cycleSec: 180,        // 3 Minuten
+        randCycleSec: 180,    // +0..3 Minuten
+        amp: 0.10             // Wachstum/Schrumpfen über Zeit (extra zum Wobble)
+      },
+
+      // pro Typ erlauben/unterbinden (z.B. Steine nicht "wachsen")
+      allowGrow: {
+        grassClumps: true,
+        shrubs:      true,
+        flowers:     true,
+        mushrooms:   true,
+        cattails:    true,
+        waterlily:   true,
+        logs:        false,
+        rocksSmall:  false,
+        rocksLarge:  false,
+        boulders:    false
+      },
+      allowDecay: {
+        grassClumps: true,
+        shrubs:      true,
+        flowers:     true,
+        mushrooms:   true,
+        cattails:    true,
+        waterlily:   true,
+        logs:        false,
+        rocksSmall:  false,
+        rocksLarge:  false,
+        boulders:    false
       }
     },
 
@@ -170,8 +237,13 @@
   const State = {
     initialized: false,
     seed: (Math.random()*1e9)|0,
-    // nodes: { id, kind, x,y, frame, ox,oy, sMul, rotBase, phase, speed, phase2, speed2 }
-    nodes: []
+
+    // nodes: { id, kind, x,y, frame, ox,oy, sBase,sMul, rotBase, phase,speed, phase2,speed2, ecoPhase, ecoSpeed }
+    nodes: [],
+
+    // eco timing
+    _ecoAcc: 0,
+    _lastT: null
   };
 
   // =========================================================================
@@ -231,9 +303,9 @@
     return countNeighbors4(x,y, w) > 0;
   }
 
-  // optional: keine Überdeckung mit Ressourcen
+  // optional: keine Überdeckung mit Ressourcen (Trees/Stones/Fish)
   function isOccupiedByResource(x,y){
-    const res = window.MapResources?.state?.nodes;
+    const res = window.MapResources?.state?.nodes; // Pattern wie map.resources.js fileciteturn6file0
     if (!Array.isArray(res)) return false;
     return res.some(n => n && n.x===x && n.y===y);
   }
@@ -241,8 +313,21 @@
     return State.nodes.some(n => n.x===x && n.y===y);
   }
 
+  function distOk(kind, x,y){
+    const d = (CFG.minDist?.[kind] ?? 0) | 0;
+    if (d <= 0) return true;
+    const dd = d*d;
+    for (const n of State.nodes){
+      if (n.kind !== kind) continue;
+      const dx = n.x - x;
+      const dy = n.y - y;
+      if ((dx*dx + dy*dy) <= dd) return false;
+    }
+    return true;
+  }
+
   // =========================================================================
-  // FRAME PICKER (Prefixe aus deinem Deco-Atlas) fileciteturn3file4
+  // FRAME PICKER (Prefixe aus deinem Deco-Atlas)
   // =========================================================================
   function pickByPrefix(prefix){
     const A = window.Assets;
@@ -266,28 +351,19 @@
   }
 
   // =========================================================================
-  // PLACEMENT RULES (tunen nach Geschmack)
+  // PLACEMENT RULES
   // =========================================================================
   function canPlace(kind, x,y){
     if (!isInside(x,y)) return false;
     if (isOccupiedByDeco(x,y)) return false;
-    const d = CFG.minDist?.[kind] ?? 0;
-if (d > 0) {
-  for (const n of State.nodes) {
-    if (n.kind !== kind) continue;
-    const dx = n.x - x, dy = n.y - y;
-    if ((dx*dx + dy*dy) <= (d*d)) return false;
-  }
-}
+    if (!distOk(kind, x,y)) return false;
     if (isOccupiedByResource(x,y)) return false;
 
     if (kind === 'waterlily') return isShoreWaterTile(x,y);
-
     if (kind === 'cattails'){
       if (!isLandNextToWater(x,y)) return false;
       return isSand(x,y) || isGrass(x,y);
     }
-
     if (kind === 'mushrooms'){
       if (isForest(x,y)) return true;
       if (isGrass(x,y)){
@@ -296,7 +372,6 @@ if (d > 0) {
       }
       return false;
     }
-
     if (kind === 'logs'){
       if (isForest(x,y)) return true;
       if (isGrass(x,y)){
@@ -305,28 +380,23 @@ if (d > 0) {
       }
       return false;
     }
-
     if (kind === 'rocksLarge' || kind === 'boulders') return isRock(x,y);
-
     if (kind === 'rocksSmall'){
       if (isWater(x,y)) return false;
       return isSand(x,y) || isRock(x,y) || isGrass(x,y);
     }
-
     if (kind === 'shrubs')      return isGrass(x,y) || isForest(x,y);
     if (kind === 'grassClumps') return isGrass(x,y) || isSand(x,y);
-
     if (kind === 'flowers'){
       if (isGrass(x,y)) return true;
       if (isForest(x,y)) return Math.random() < 0.10;
       return false;
     }
-
     return false;
   }
 
   // =========================================================================
-  // ROTATED DRAW (wir kopieren das Prinzip aus Assets.drawAtlasFrame)
+  // ROTATED DRAW (ctx.rotate basierend auf Atlas-Frame-Daten)
   // =========================================================================
   function isDrawableImage(img){
     return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
@@ -336,7 +406,7 @@ if (d > 0) {
     const A = window.Assets;
     if (!A) return false;
 
-    // getAtlas ist public in core/asset.js fileciteturn5file0
+    // getAtlas ist public in asset.js (dein Loader) – wird hier verwendet fileciteturn5file0
     const a = A.getAtlas?.(atlasName);
     if (!a || !a.ok || !isDrawableImage(a.img)) return false;
 
@@ -364,7 +434,54 @@ if (d > 0) {
   }
 
   // =========================================================================
-  // SPAWN
+  // SPAWN / DESPAWN HELPERS
+  // =========================================================================
+  function makeNode(kind, x,y, rng){
+    const sCfg = CFG.size[kind] || { baseScale: 0.7, randScale: 0.2 };
+    const tCfg = CFG.tilt[kind] || { randRotDeg: 2, wobbleRotDeg: 1 };
+
+    const sMul = 1 + ((rng()*2)-1) * (sCfg.randScale ?? 0.0);
+    const rotBase = (((rng()*2)-1) * (tCfg.randRotDeg ?? 0.0)) * (Math.PI/180);
+
+    const wCfg = CFG.wobble.perKind[kind] || { wobbleScale: 0.0, speedMin: 0.05, speedMax: 0.10 };
+    const phase  = rng() * Math.PI * 2;
+    const phase2 = rng() * Math.PI * 2;
+    const speed  = (wCfg.speedMin ?? 0.05) + rng() * ((wCfg.speedMax ?? 0.10) - (wCfg.speedMin ?? 0.05));
+    const speed2 = (wCfg.speedMin ?? 0.05) + rng() * ((wCfg.speedMax ?? 0.10) - (wCfg.speedMin ?? 0.05));
+
+    // Eco growth cycle (sehr langsam)
+    const gCfg = CFG.eco.growthCycle;
+    const ecoPhase = rng() * Math.PI * 2;
+    const ecoSpeed = (gCfg.enabled ? (1 / Math.max(30, (gCfg.cycleSec + rng()*gCfg.randCycleSec))) : 0.0);
+
+    return {
+      id: `${kind}:${State.nodes.length}`,
+      kind, x, y,
+      frame: pickFrameForKind(kind),
+      ox: ((rng()*2)-1) * (CFG.jitter.px ?? 0),
+      oy: ((rng()*2)-1) * (CFG.jitter.py ?? 0),
+      sBase: (sCfg.baseScale ?? 0.7),
+      sMul,
+      rotBase,
+      phase, phase2, speed, speed2,
+      ecoPhase, ecoSpeed
+    };
+  }
+
+  function removeRandomKind(kind, rng){
+    const idxs = [];
+    for (let i=0;i<State.nodes.length;i++){
+      if (State.nodes[i].kind === kind) idxs.push(i);
+    }
+    if (!idxs.length) return false;
+
+    const rmIndex = idxs[(rng()*idxs.length)|0];
+    State.nodes.splice(rmIndex, 1);
+    return true;
+  }
+
+  // =========================================================================
+  // SPAWN LOGIK (Initial + Eco)
   // =========================================================================
   function spawn(kind, count, rng){
     const map = getMap();
@@ -403,39 +520,7 @@ if (d > 0) {
 
       if (!canPlace(kind, x,y)) continue;
 
-      // ---- per-object Variation ------------------------------------------------
-      const sCfg = CFG.size[kind] || { baseScale: 0.7, randScale: 0.2 };
-      const tCfg = CFG.tilt[kind] || { randRotDeg: 2, wobbleRotDeg: 1 };
-
-      const sMul = 1 + ((rng()*2)-1) * (sCfg.randScale ?? 0.0);
-      const rotBase = (((rng()*2)-1) * (tCfg.randRotDeg ?? 0.0)) * (Math.PI/180);
-
-      const wCfg = CFG.wobble.perKind[kind] || { wobbleScale: 0.0, speedMin: 0.05, speedMax: 0.10 };
-      const phase  = rng() * Math.PI * 2;
-      const phase2 = rng() * Math.PI * 2;
-      const speed  = (wCfg.speedMin ?? 0.05) + rng() * ((wCfg.speedMax ?? 0.10) - (wCfg.speedMin ?? 0.05));
-      const speed2 = (wCfg.speedMin ?? 0.05) + rng() * ((wCfg.speedMax ?? 0.10) - (wCfg.speedMin ?? 0.05));
-
-      const frame = pickFrameForKind(kind);
-
-      State.nodes.push({
-        id: `${kind}:${State.nodes.length}`,
-        kind, x, y,
-        frame,
-
-        // Tile jitter
-        ox: ((rng()*2)-1) * (CFG.jitter.px ?? 0),
-        oy: ((rng()*2)-1) * (CFG.jitter.py ?? 0),
-
-        // Variation
-        sBase: (sCfg.baseScale ?? 0.7),
-        sMul,
-        rotBase,
-
-        // Wobble
-        phase, phase2, speed, speed2
-      });
-
+      State.nodes.push(makeNode(kind, x,y, rng));
       made++;
     }
 
@@ -452,6 +537,7 @@ if (d > 0) {
   function init(seed){
     if (State.initialized) return;
     if (typeof seed === 'number') State.seed = seed|0;
+
     const rng = mulberry32(State.seed);
 
     // Reihenfolge: fein -> groß
@@ -475,6 +561,69 @@ if (d > 0) {
   }
 
   // =========================================================================
+  // ECO UPDATE (low cost)
+  // =========================================================================
+  const KINDS = ['grassClumps','shrubs','flowers','mushrooms','cattails','waterlily','logs','rocksSmall','rocksLarge','boulders'];
+
+  function countKind(kind){
+    let c=0;
+    for (const n of State.nodes) if (n.kind === kind) c++;
+    return c;
+  }
+
+  function ecoTick(dtSec){
+    const eco = CFG.eco;
+    if (!eco.enabled) return;
+
+    // wir nutzen Seed als deterministischen RNG-Basis (aber pro Tick leicht drift)
+    // -> für "SaveGame determinism" später besser: eigener ecoSeed speichern.
+    const rng = mulberry32((State.seed + ((performance.now()*0.001)|0))|0);
+
+    let ops = 0;
+
+    // 1) Decay: selten etwas entfernen
+    if (rng() < eco.chanceDecay){
+      // pick kind, aber nur wo decay erlaubt & wo mehr als Ziel/Minimum existiert
+      for (let i=0;i<4 && ops<eco.maxOpsPerTick;i++){
+        const k = KINDS[(rng()*KINDS.length)|0];
+        if (!eco.allowDecay[k]) continue;
+
+        const target = CFG.counts[k] || 0;
+        const have = countKind(k);
+
+        // entferne nur, wenn wir über ~80% des Ziels liegen (damit es nicht leer wird)
+        if (have > Math.max(1, Math.floor(target*0.8))){
+          if (removeRandomKind(k, rng)){
+            ops++;
+          }
+        }
+      }
+    }
+
+    // 2) Grow: selten etwas hinzufügen, wenn unter Zielbestand
+    if (rng() < eco.chanceGrow){
+      for (let i=0;i<6 && ops<eco.maxOpsPerTick;i++){
+        const k = KINDS[(rng()*KINDS.length)|0];
+        if (!eco.allowGrow[k]) continue;
+
+        const target = CFG.counts[k] || 0;
+        const have = countKind(k);
+        if (have >= target) continue;
+
+        // spawn nur EIN node (sehr sanft)
+        spawn(k, 1, rng);
+        ops++;
+      }
+    }
+
+    if (ops){
+      // Nach Sort optional neu sortieren (y-order)
+      if (CFG.sortByY) State.nodes.sort((a,b)=> (a.y-b.y) || (a.x-b.x));
+      window.dispatchEvent(new CustomEvent('cb:mapdeco:changed', { detail: snapshot({limit:120}) }));
+    }
+  }
+
+  // =========================================================================
   // DRAW
   // =========================================================================
   function drawOnMainCanvas(ctx, cam, tileSize){
@@ -486,17 +635,32 @@ if (d > 0) {
     }
 
     const ts = tileSize || (window.GameMap?.tileSize) || 64;
-    const baseAtlasScale = ts / 256; // Atlas sourceSize ~256 fileciteturn3file0
+    const baseAtlasScale = ts / 256;
 
     // Zeit (Sekunden) für Loop
-    const t = (typeof performance !== 'undefined' && performance.now) ? (performance.now() * 0.001) : (Date.now() * 0.001);
+    const now = (typeof performance !== 'undefined' && performance.now) ? (performance.now() * 0.001) : (Date.now() * 0.001);
+
+    // Eco timing: nur alle X Sekunden
+    if (State._lastT == null) State._lastT = now;
+    const dt = Math.min(0.2, Math.max(0, now - State._lastT));
+    State._lastT = now;
+
+    State._ecoAcc += dt;
+    if (CFG.eco.enabled && State._ecoAcc >= (CFG.eco.tickEverySec || 4.0)){
+      const acc = State._ecoAcc;
+      State._ecoAcc = 0;
+      ecoTick(acc);
+    }
+
+    const ecoGrowth = CFG.eco.growthCycle;
+    const ecoAmp = (CFG.eco.enabled && ecoGrowth.enabled) ? (ecoGrowth.amp ?? 0.0) : 0.0;
 
     for (const n of State.nodes){
       // world pos (wie Ressourcen)
       const wx = (n.x * ts) + ts * (0.5 + (n.ox || 0));
       const wy = (n.y * ts) + ts * (0.82 + (n.oy || 0));
 
-      // Scale & Tilt Variation + langsamer Loop
+      // Wobble
       const wCfg = CFG.wobble.perKind[n.kind] || { wobbleScale: 0.0, speedMin: 0.05, speedMax: 0.10 };
       const wobbleScale = (CFG.wobble.enabled ? (wCfg.wobbleScale ?? 0.0) : 0.0);
 
@@ -504,19 +668,25 @@ if (d > 0) {
       const wobbleRotDeg = (CFG.wobble.enabled ? (tiltCfg.wobbleRotDeg ?? 0.0) : 0.0);
       const wobbleRot = wobbleRotDeg * (Math.PI/180);
 
-      const sLoop = wobbleScale ? (1 + wobbleScale * Math.sin(t * (n.speed || 0.1) + (n.phase || 0))) : 1;
-      const rLoop = wobbleRot ? (wobbleRot * Math.sin(t * (n.speed2 || 0.08) + (n.phase2 || 0))) : 0;
+      const sLoop = wobbleScale ? (1 + wobbleScale * Math.sin(now * (n.speed || 0.1) + (n.phase || 0))) : 1;
+      const rLoop = wobbleRot ? (wobbleRot * Math.sin(now * (n.speed2 || 0.08) + (n.phase2 || 0))) : 0;
 
-      const scale = baseAtlasScale * (n.sBase || 0.7) * (n.sMul || 1) * sLoop;
+      // Eco Growth Cycle (langsam): zusätzliche Scale Drift (nicht "wackelig")
+      // -> wir nutzen sin, aber sehr langsam; du kannst amp runterdrehen.
+      let ecoLoop = 1;
+      if (ecoAmp && (n.ecoSpeed || 0) > 0){
+        ecoLoop = 1 + ecoAmp * Math.sin((now * (n.ecoSpeed || 0)) + (n.ecoPhase || 0));
+      }
+
+      const scale = baseAtlasScale * (n.sBase || 0.7) * (n.sMul || 1) * sLoop * ecoLoop;
       const rot   = (n.rotBase || 0) + rLoop;
 
-      // Draw rotated
       if (n.frame){
         const ok = drawAtlasFrameRot(ctx, CFG.atlasName, n.frame, wx, wy, scale, rot);
         if (ok) continue;
       }
 
-      // Fallback Kreis (wenn Atlas fehlt)
+      // Fallback
       ctx.save();
       ctx.fillStyle = 'rgba(0,200,0,0.70)';
       if (n.kind === 'waterlily') ctx.fillStyle = 'rgba(20,170,120,0.85)';
@@ -529,17 +699,19 @@ if (d > 0) {
   }
 
   // =========================================================================
-  // TOOLS API (regen/clear/snapshot/export)
+  // TOOLS API (regen/clear/snapshot/export/import + eco toggles)
   // =========================================================================
   function _resetState(keepSeed=true){
     const s = State.seed;
     State.initialized = false;
     State.nodes.length = 0;
+    State._ecoAcc = 0;
+    State._lastT = null;
     if (keepSeed) State.seed = s;
   }
 
   function snapshot(options = {}){
-    const limit = Number.isFinite(options.limit) ? options.limit : 300;
+    const limit = Number.isFinite(options.limit) ? options.limit : 200;
     const sample = State.nodes.slice(0, Math.max(0, limit)).map(n => ({
       id:n.id, kind:n.kind, x:n.x, y:n.y, frame:n.frame||null,
       sBase:n.sBase, sMul:n.sMul, rotBase:n.rotBase,
@@ -549,6 +721,13 @@ if (d > 0) {
       version: window.MapDecorations?.version || 'unknown',
       initialized: State.initialized,
       seed: State.seed,
+      eco: {
+        enabled: CFG.eco.enabled,
+        tickEverySec: CFG.eco.tickEverySec,
+        chanceGrow: CFG.eco.chanceGrow,
+        chanceDecay: CFG.eco.chanceDecay,
+        growthCycle: CFG.eco.growthCycle
+      },
       counts: { nodes: State.nodes.length },
       sample,
       note: (State.nodes.length > limit) ? `sample limited to ${limit}` : 'full list (<= limit)'
@@ -559,13 +738,57 @@ if (d > 0) {
     const payload = {
       id: (getMap()?.id) || 'unknown-map',
       seed: State.seed,
+      cfg: {
+        atlasName: CFG.atlasName,
+        counts: CFG.counts,
+        minDist: CFG.minDist,
+        size: CFG.size
+      },
       nodes: State.nodes.map(n => ({
         kind:n.kind, x:n.x, y:n.y, frame:n.frame||null,
         sBase:n.sBase, sMul:n.sMul, rotBase:n.rotBase,
-        ox:n.ox??0, oy:n.oy??0
+        ox:n.ox??0, oy:n.oy??0,
+        ecoPhase:n.ecoPhase??0, ecoSpeed:n.ecoSpeed??0
       }))
     };
     return JSON.stringify(payload, null, pretty ? 2 : 0);
+  }
+
+  function importJSON(payload){
+    // payload kann string oder object sein
+    try{
+      const data = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+      if (!data || !Array.isArray(data.nodes)) return false;
+
+      _resetState(true);
+      State.initialized = true; // damit draw nicht auto-init drüberlegt
+
+      State.nodes = data.nodes.map((n, i) => ({
+        id: `${n.kind}:${i}`,
+        kind: n.kind,
+        x: n.x|0, y: n.y|0,
+        frame: n.frame || null,
+        ox: +n.ox || 0,
+        oy: +n.oy || 0,
+        sBase: +n.sBase || (CFG.size[n.kind]?.baseScale ?? 0.7),
+        sMul: +n.sMul || 1,
+        rotBase: +n.rotBase || 0,
+        phase: Math.random()*Math.PI*2,
+        phase2: Math.random()*Math.PI*2,
+        speed: 0.12,
+        speed2: 0.10,
+        ecoPhase: +n.ecoPhase || 0,
+        ecoSpeed: +n.ecoSpeed || 0
+      }));
+
+      if (CFG.sortByY) State.nodes.sort((a,b)=> (a.y-b.y) || (a.x-b.x));
+
+      window.dispatchEvent(new CustomEvent('cb:mapdeco:changed', { detail: snapshot({limit:120}) }));
+      return true;
+    }catch(e){
+      WARN('importJSON failed', e);
+      return false;
+    }
   }
 
   function regen(seed){
@@ -586,6 +809,12 @@ if (d > 0) {
     window.dispatchEvent(new CustomEvent('cb:mapdeco:changed', { detail: snapshot() }));
   }
 
+  function setEcoEnabled(v){
+    CFG.eco.enabled = !!v;
+    window.dispatchEvent(new CustomEvent('cb:mapdeco:eco', { detail: snapshot({limit:80}) }));
+  }
+
+  // Events (Inspector kompatibel)
   window.addEventListener('req:mapdeco:snapshot', ()=>{
     window.dispatchEvent(new CustomEvent('cb:mapdeco:snapshot', { detail: snapshot() }));
   });
@@ -598,20 +827,31 @@ if (d > 0) {
     clear();
     window.dispatchEvent(new CustomEvent('cb:mapdeco:clear', { detail: snapshot() }));
   });
+  window.addEventListener('req:mapdeco:eco', (e)=>{
+    setEcoEnabled(e?.detail?.enabled);
+  });
+  window.addEventListener('req:mapdeco:import', (e)=>{
+    const ok = importJSON(e?.detail?.payload);
+    window.dispatchEvent(new CustomEvent('cb:mapdeco:import', { detail: { ok, snap: snapshot({limit:80}) } }));
+  });
 
   // =========================================================================
   // PUBLIC
   // =========================================================================
   window.MapDecorations = {
-    version: 'v25.12.15-mapdecorations-deco-atlas-v3',
+    version: 'v25.12.15-mapdecorations-deco-atlas-v4',
     state: State,
     cfg: CFG,
     init,
     drawOnMainCanvas,
+
+    // Tools
     regen,
     clear,
     snapshot,
-    exportJSON
+    exportJSON,
+    importJSON,
+    setEcoEnabled
   };
 
   LOG('bereit', window.MapDecorations.version);
