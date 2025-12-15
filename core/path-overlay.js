@@ -193,6 +193,7 @@
       // Debug/Stats
       this.stepCount = 0;
       this.lastStep = null;
+      this._dbgLoggedDraw = false;
 
       // Decay
       this._decayTimer = 0;
@@ -364,6 +365,18 @@
       // Grid sicherstellen (wenn Map spät initialisiert)
       if (!this.ensureGrid()) return;
 
+      // DBG (einmalig): Canvas + Cam + Grid + Flags (hilft gegen Cache/Koordinaten-Rätsel)
+      if (!this._dbgLoggedDraw){
+        this._dbgLoggedDraw = true;
+        try{
+          LOG('DBG draw:',
+              'canvas=', (ctx?.canvas?.width||0) + 'x' + (ctx?.canvas?.height||0),
+              'cam=', { x: cam?.x, y: cam?.y, zoom: cam?.zoom },
+              'grid=', this.cols + 'x' + this.rows, 'tile=', this.tile,
+              'visible=', this.visible, 'stamps=', this.showStamps, 'heatmap=', this.showHeatmap);
+        }catch(_){/* noop */}
+      }
+
       // Texturen bei Bedarf laden (lazy)
       if (!this._texTried) this._tryLoadTextures();
 
@@ -474,6 +487,7 @@
       if (this._layerRegistered) return;
       ensureOverlayHooksReady(()=>{
         try{
+          LOG('mode=overlay-hooks');
           window.OverlayHooks.register(this._layerName, (ctx, cam)=> this.draw(ctx, cam));
           window.OverlayHooks.enable(this._layerName, true); // aktiv
           this._layerRegistered = true;
