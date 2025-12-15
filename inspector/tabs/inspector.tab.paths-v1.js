@@ -65,8 +65,28 @@
 
   // Hilfsfunktion: zentrales Event-Dispatching für Overlay/Heatmap
   function send(type) {
-    window.dispatchEvent(new CustomEvent(type));
+  // 1) Standard: Event dispatch (wie bisher)
+  window.dispatchEvent(new CustomEvent(type));
+
+  // 2) HARDENING: Falls Bridge/Listener mal nicht greift, direkt das Modul ansprechen,
+  //    sofern es im selben Window verfügbar ist. (Schadet nicht, hilft sofort beim Debug.)
+  const PO = window.PathOverlay;
+  if (!PO) return;
+  try{
+    if (type === 'cb:path:overlay:on')  PO.toggle?.(true);
+    if (type === 'cb:path:overlay:off') PO.toggle?.(false);
+    if (type === 'cb:path:heatmap:on')  PO.setHeatmap?.(true);
+    if (type === 'cb:path:heatmap:off') PO.setHeatmap?.(false);
+  }catch(err){
+    // NICHT spammen – nur einmal pro Fehlerart
+    window.__PATHS_TAB_DIRECT_CALL_ERR__ = window.__PATHS_TAB_DIRECT_CALL_ERR__ || {};
+    const key = String(err && err.message || err);
+    if (!window.__PATHS_TAB_DIRECT_CALL_ERR__[key]){
+      window.__PATHS_TAB_DIRECT_CALL_ERR__[key] = 1;
+      console.warn('[inspector.paths] direct PathOverlay call failed:', err);
+    }
   }
+}
 
   // Status-Text unten im Panel aktualisieren
   function setInfo(msg) {
