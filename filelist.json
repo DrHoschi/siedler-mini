@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-15T13:21:03.612Z",
+  "createdAt": "2025-12-15T18:55:27.942Z",
   "root": ".",
   "count": 524,
   "entries": [
@@ -907,52 +907,52 @@
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path0.PNG",
+      "path": "assets/tex/path/topdown_path0.png",
       "size": 2774350
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path1.PNG",
+      "path": "assets/tex/path/topdown_path1.png",
       "size": 2908011
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path2.PNG",
-      "size": 3061973
+      "path": "assets/tex/path/topdown_path2.png",
+      "size": 6458326
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path3.PNG",
+      "path": "assets/tex/path/topdown_path3.png",
       "size": 2910714
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path4.PNG",
-      "size": 1774127
+      "path": "assets/tex/path/topdown_path4.png",
+      "size": 4300812
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path5.PNG",
+      "path": "assets/tex/path/topdown_path5.png",
       "size": 1999783
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path6.PNG",
+      "path": "assets/tex/path/topdown_path6.png",
       "size": 2402168
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path7.PNG",
+      "path": "assets/tex/path/topdown_path7.png",
       "size": 2281267
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path8.PNG",
+      "path": "assets/tex/path/topdown_path8.png",
       "size": 3197098
     },
     {
       "type": "file",
-      "path": "assets/tex/path/topdown_path9.PNG",
+      "path": "assets/tex/path/topdown_path9.png",
       "size": 2304754
     },
     {
@@ -1377,7 +1377,7 @@
     {
       "type": "file",
       "path": "core/building.stock.js",
-      "size": 10433
+      "size": 11040
     },
     {
       "type": "file",
@@ -1507,7 +1507,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 21480
+      "size": 21706
     },
     {
       "type": "file",
@@ -1572,7 +1572,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 12587
+      "size": 20757
     },
     {
       "type": "file",
@@ -1632,7 +1632,7 @@
     {
       "type": "file",
       "path": "core/unit.anim.js",
-      "size": 14254
+      "size": 14823
     },
     {
       "type": "file",
@@ -1866,7 +1866,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.build-v1.js",
-      "size": 17102
+      "size": 25642
     },
     {
       "type": "file",
@@ -1896,7 +1896,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.paths-v1.js",
-      "size": 5665
+      "size": 6591
     },
     {
       "type": "file",
@@ -2521,12 +2521,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52718
+      "size": 52368
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20547
+      "size": 20445
     },
     {
       "type": "file",
@@ -2536,7 +2536,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16983
+      "size": 16991
     },
     {
       "type": "file",
