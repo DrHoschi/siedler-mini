@@ -94,7 +94,11 @@
       y    : ty,
       task : null,
       carrying   : null,
-      _idleTarget: null
+      _idleTarget: null,
+
+      // Path-Navigation Cache (A*/Smoothing)
+      // Wird von _moveTo() befüllt, wenn AdFinder aktiv ist.
+      _nav: null
     };
     _units.push(unit);
     return unit;
@@ -146,7 +150,11 @@
       y    : ty,
       task : null,
       carrying   : null,
-      _idleTarget: null
+      _idleTarget: null,
+
+      // Path-Navigation Cache (A*/Smoothing)
+      // Wird von _moveTo() befüllt, wenn AdFinder aktiv ist.
+      _nav: null
     };
     _units.push(unit);
     return unit;
@@ -385,13 +393,151 @@ function spawnInitialCarriers(count){
     return dist <= step;
   }
 
+  // ==========================================================================
+  // PATHFINDING / NAVIGATION
+  // --------------------------------------------------------------------------
+  // Ziel:
+  //  - Kein "gerader Strich" mehr durch Bäume/Gebäude.
+  //  - Keine "Zick-Zack"-Stempel: wir bewegen tile-by-tile entlang eines Pfads.
+  //
+  // Technisch:
+  //  - Nutzt window.AdFinder.findPath() (A* + optional smoothing)
+  //  - Nutzt Default-Obstacles (GameMap/MapResources/Game.buildings)
+  //  - Start/Ziel-Footprints werden als "allowRects" übergeben,
+  //    damit Units aus Gebäuden herauskommen und in Ziel-Baustellen hineinlaufen.
+  //
+  // Debug:
+  //  - AdFinder feuert cb:path:test:done (metrics), bleibt im Inspector nutzbar.
+  // ==========================================================================
+
+  const NAV_RECALC_COOLDOWN = 0.35; // Sekunden: nicht jede Tick neu suchen
+
+  function _tileOfXY(x,y){
+    return { x: Math.floor(x), y: Math.floor(y) };
+  }
+
+  function _buildAllowRects(startTile, goalTile){
+    const rects = [];
+    const buildings = (window.Game?.getBuildings?.() || window.Game?.buildings || []);
+    for (const b of buildings){
+      if (!b) continue;
+      const bx = b.x|0, by = b.y|0, bw = Math.max(1, b.w|0), bh = Math.max(1, b.h|0);
+      const inStart = startTile && startTile.x >= bx && startTile.x < bx + bw && startTile.y >= by && startTile.y < by + bh;
+      const inGoal  = goalTile  && goalTile.x  >= bx && goalTile.x  < bx + bw && goalTile.y  >= by && goalTile.y  < by + bh;
+      if (inStart || inGoal) rects.push({ x:bx, y:by, w:bw, h:bh });
+    }
+    return rects.length ? rects : null;
+  }
+
+  function _navKey(startTile, goalTile){
+    return `${startTile.x},${startTile.y}->${goalTile.x},${goalTile.y}`;
+  }
+
+  function _moveTo(u, target, dt){
+    // target: {x,y} in Tile-Koords (float ok)
+    if (!u || !target) return false;
+
+    // Wenn AdFinder nicht geladen ist, bleibt das alte Verhalten (gerade Linie).
+    const PF = window.AdFinder;
+    if (!PF || typeof PF.findPath !== 'function'){
+      return _moveTowards(u, target, dt);
+    }
+
+    const startTile = _tileOfXY(u.x, u.y);
+    const goalTile  = _tileOfXY(target.x, target.y);
+    const key = _navKey(startTile, goalTile);
+
+    // Init Cache
+    if (!u._nav){
+      u._nav = {
+        key: '',
+        path: null,
+        idx: 0,
+        tSinceCalc: 999,
+        lastGoalX: NaN,
+        lastGoalY: NaN
+      };
+    }
+
+    // Timer hochzählen (dt in Sekunden)
+    u._nav.tSinceCalc += dt;
+
+    // Recalc?
+    const goalChanged = (u._nav.lastGoalX !== goalTile.x || u._nav.lastGoalY !== goalTile.y);
+    const needCalc = (u._nav.key !== key) || !u._nav.path || goalChanged;
+
+    if (needCalc && u._nav.tSinceCalc >= NAV_RECALC_COOLDOWN){
+      const allowRects = _buildAllowRects(startTile, goalTile);
+
+      const path = PF.findPath(
+        { x: startTile.x, y: startTile.y },
+        { x: goalTile.x,  y: goalTile.y  },
+        {
+          allowDiagonal: true,
+          smooth       : true,
+          allowRects   : allowRects || undefined
+        }
+      );
+
+      u._nav.key = key;
+      u._nav.path = Array.isArray(path) ? path : null;
+      u._nav.idx  = 0;
+      u._nav.tSinceCalc = 0;
+      u._nav.lastGoalX = goalTile.x;
+      u._nav.lastGoalY = goalTile.y;
+    }
+
+    // Wenn kein Pfad gefunden: fallback (damit Unit nicht "tot" wirkt)
+    if (!u._nav.path || !u._nav.path.length){
+      return _moveTowards(u, target, dt);
+    }
+
+    // idx so anpassen, dass wir nicht "auf dem Starttile hängen"
+    const curTile = startTile;
+    while (u._nav.idx < u._nav.path.length){
+      const n = u._nav.path[u._nav.idx];
+      if (!n) { u._nav.idx++; continue; }
+      if ((n.x|0) === curTile.x && (n.y|0) === curTile.y){
+        u._nav.idx++;
+        continue;
+      }
+      break;
+    }
+
+    // Waypoint:
+    // - solange Pfad noch Nodes hat: center des nächsten Tiles
+    // - sonst: exaktes Ziel (float), damit Deliver-Punkt stimmt
+    let waypoint = null;
+
+    if (u._nav.idx < u._nav.path.length){
+      const n = u._nav.path[u._nav.idx];
+      waypoint = { x: (n.x|0) + 0.5, y: (n.y|0) + 0.5 };
+    } else {
+      waypoint = { x: target.x, y: target.y };
+    }
+
+    const reached = _moveTowards(u, waypoint, dt);
+    if (reached){
+      if (u._nav.idx < u._nav.path.length){
+        u._nav.idx++;
+        return false; // noch nicht final am echten Ziel
+      } else {
+        // fertig
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+
   function _tickTask(u, dt){
     const t = u.task;
     if (!t) return;
 
     // Phase 1: Zum HQ / Quelle laufen
     if (t.phase === 'go_source'){
-      if (_moveTowards(u, t.source, dt)){
+      if (_moveTo(u, t.source, dt)){
         t.phase       = 'pickup';
         t.pickupTimer = 0.3; // kleine Pause zum „Aufladen“
       }
@@ -410,7 +556,7 @@ function spawnInitialCarriers(count){
 
     // Phase 3: Zum Ziel-Gebäude / Ziel laufen
     if (t.phase === 'go_target'){
-      if (_moveTowards(u, t.dest, dt)){
+      if (_moveTo(u, t.dest, dt)){
         t.phase = 'deliver';
       }
       return;
