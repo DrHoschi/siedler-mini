@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : ui/ui-minimap.js
  * Projekt : Neue Siedler – Siedler-Mini
- * Version : v25.12.16-minimap-mvp1
+ * Version : v25.12.16-minimap-mvp2
  *
  * Zweck   :
  *   - Kleine Minimap als UI-Overlay (separates Canvas, NICHT im Game-Canvas).
@@ -36,7 +36,7 @@
   // =========================================================================
   // [Konstanten]
   // =========================================================================
-  const VERSION = 'v25.12.16-minimap-mvp1';
+  const VERSION   = 'v25.12.16-minimap-mvp2';
   const TAG     = '[ui.minimap]';
 
   const LOG  = (...a)=> (window.CBLog?.ok    ?? console.log)(TAG, ...a);
@@ -46,10 +46,16 @@
   // DOM-IDs (bewusst stabil, damit Inspector/Debug schnell drankommt)
   const ROOT_ID   = 'minimap-root';
   const CANVAS_ID = 'minimap-canvas';
+  const TOGGLE_ID = 'minimap-toggle';
 
   // Default-Optionen (können über window.UIMinimap.configure(...) überschrieben werden)
   const DEFAULTS = {
-    cssSizePx : 220,   // sichtbare Größe (CSS px). Intern wird HiDPI gerendert.
+    cssSizePx : 160,   // sichtbare Größe (CSS px). Intern wird HiDPI gerendert.
+    minimizedPx: 34,    // Größe im minimierten Modus (nur Button)
+    autoMinW   : 520,   // bei kleinen Displays standardmäßig minimieren (wenn kein gespeicherter Zustand)
+    autoMinH   : 700,   // dito (Höhe)
+    remember   : true,  // Zustand in localStorage merken
+    storageKey : 'siedler:minimap:minimized',
     fps       : 8,     // Overlay-Updates pro Sekunde (Terrain-Base wird nicht ständig neu gerendert)
     dotR      : 2.0,   // Basis-Radius (wird * DPR skaliert)
     showGrid  : false, // optional: sehr dezentes Grid (Debug)
@@ -206,9 +212,13 @@
       this.cfg = JSON.parse(JSON.stringify(DEFAULTS));
 
       // DOM
-      this.root   = null;
-      this.canvas = null;
-      this.ctx    = null;
+      this.root     = null;
+      this.canvas   = null;
+      this.ctx      = null;
+      this.toggleBtn= null;
+
+      // UI-State
+      this._minimized = false;
 
       // Offscreen: Terrain-Base
       this.baseCanvas = null;
@@ -268,11 +278,41 @@
         this.root.appendChild(this.canvas);
       }
 
+      // Toggle-Button (minimieren / öffnen)
+      this.toggleBtn = document.getElementById(TOGGLE_ID);
+      if (!this.toggleBtn){
+        this.toggleBtn = createEl('button', 'minimap__toggle');
+        this.toggleBtn.id = TOGGLE_ID;
+        this.toggleBtn.type = 'button';
+        this.toggleBtn.title = 'Minimap minimieren';
+        this.toggleBtn.setAttribute('aria-label', this.toggleBtn.title);
+        this.toggleBtn.textContent = '–';
+        this.root.appendChild(this.toggleBtn);
+      }
+
+      // Toggle-Handler (Button darf NICHT die Pointer-Events vom Canvas stören)
+      this.toggleBtn.onclick = (e)=>{
+        try{
+          e.preventDefault();
+          e.stopPropagation();
+        }catch{}
+        this.toggleMinimized();
+      };
+
       this.ctx = this.canvas.getContext('2d', { alpha:true });
 
       // Offscreen Base
       this.baseCanvas = document.createElement('canvas');
       this.baseCtx = this.baseCanvas.getContext('2d', { alpha:true });
+
+      // Initial-Status (kleine Displays: standardmäßig minimiert, wenn nichts gespeichert)
+      this._minimized = this._loadInitialMinState();
+      this.root.classList.toggle('is-minimized', this._minimized);
+      if (this.toggleBtn){
+        this.toggleBtn.textContent = this._minimized ? '▣' : '–';
+        this.toggleBtn.title = this._minimized ? 'Minimap öffnen' : 'Minimap minimieren';
+        this.toggleBtn.setAttribute('aria-label', this.toggleBtn.title);
+      }
 
       // Größe / HiDPI
       this._resizeCanvases();
@@ -293,6 +333,9 @@
 
     destroy(){
       this._stopTimer();
+      if (this.toggleBtn){
+        this.toggleBtn.onclick = null;
+      }
       if (this.canvas){
         this.canvas.onpointerdown = null;
         this.canvas.onpointermove = null;
@@ -305,6 +348,7 @@
       this.root = null;
       this.canvas = null;
       this.ctx = null;
+      this.toggleBtn = null;
       this.baseCanvas = null;
       this.baseCtx = null;
       this._drag = false;
@@ -316,22 +360,96 @@
     // Resize
     // -----------------------------------------------------------------------
     _resizeCanvases(){
-      const css = Math.max(120, this.cfg.cssSizePx|0); // minimale Nutzbarkeit
+      // Expanded vs. minimized Größe
+      const expanded = clamp((this.cfg.cssSizePx|0) || 160, 120, 320);
+      const mini     = clamp((this.cfg.minimizedPx|0) || 34, 26, 90);
+      const css = this._minimized ? mini : expanded;
+
       const r = dpr();
 
-      // sichtbare Größe
-      this.canvas.style.width  = css + 'px';
-      this.canvas.style.height = css + 'px';
+      // Root (damit minimiert wirklich wenig Platz braucht)
+      if (this.root){
+        this.root.style.width  = css + 'px';
+        this.root.style.height = css + 'px';
+      }
 
-      // interne Buffergröße
+      // sichtbare Größe über CSS (Canvas füllt den Root)
+      this.canvas.style.width  = '100%';
+      this.canvas.style.height = '100%';
+
+      // interne Buffergröße (HiDPI)
       const W = Math.floor(css * r);
       const H = Math.floor(css * r);
       this.canvas.width  = W;
       this.canvas.height = H;
 
-      // Base identisch groß
+      // Base identisch groß (Terrain-Base)
       this.baseCanvas.width  = W;
       this.baseCanvas.height = H;
+    }
+
+    // -----------------------------------------------------------------------
+    // Minimize / Restore
+    // -----------------------------------------------------------------------
+    _loadInitialMinState(){
+      // 1) gespeicherter Zustand?
+      let stored = null;
+      if (this.cfg.remember && this.cfg.storageKey){
+        try{
+          stored = window.localStorage.getItem(this.cfg.storageKey);
+        }catch{}
+      }
+      if (stored === '1') return true;
+      if (stored === '0') return false;
+
+      // 2) Auto-Minimize nach Screen-Größe (Default, falls nichts gespeichert)
+      const w = window.innerWidth  || 9999;
+      const h = window.innerHeight || 9999;
+      return (w <= (this.cfg.autoMinW|0)) || (h <= (this.cfg.autoMinH|0));
+    }
+
+    setMinimized(on, persist=true){
+      const next = !!on;
+      if (this._minimized === next) return;
+
+      this._minimized = next;
+
+      if (this.root){
+        this.root.classList.toggle('is-minimized', this._minimized);
+      }
+
+      // Button-Icon/Text
+      if (this.toggleBtn){
+        // Minimiert -> "Karte öffnen", Expandiert -> "Minimieren"
+        this.toggleBtn.textContent = this._minimized ? '▣' : '–';
+        this.toggleBtn.title = this._minimized ? 'Minimap öffnen' : 'Minimap minimieren';
+        this.toggleBtn.setAttribute('aria-label', this.toggleBtn.title);
+      }
+
+      // Größen + Render-Loop
+      try{
+        if (this.canvas) this._resizeCanvases();
+        if (this._minimized){
+          this._stopTimer();
+        }else{
+          this.rebuildBase(true);
+          this._renderOverlay();
+          this._startTimer();
+        }
+      }catch(e){
+        ERR('setMinimized Fehler:', e);
+      }
+
+      // persist
+      if (persist && this.cfg.remember && this.cfg.storageKey){
+        try{
+          window.localStorage.setItem(this.cfg.storageKey, this._minimized ? '1' : '0');
+        }catch{}
+      }
+    }
+
+    toggleMinimized(){
+      this.setMinimized(!this._minimized, true);
     }
 
     // -----------------------------------------------------------------------
@@ -614,6 +732,9 @@
     _startTimer(){
       this._stopTimer();
 
+      // wenn minimiert, kein Render-Loop (spart CPU auf kleinen Geräten)
+      if (this._minimized) return;
+
       // zusätzlich: beim Resize Canvas neu setzen
       window.addEventListener('resize', this._onResize, { passive:true });
 
@@ -639,6 +760,7 @@
       // Canvas neu skalieren und Base neu rendern
       try{
         if (!this.canvas) return;
+        if (this._minimized) return;
         this._resizeCanvases();
         this.rebuildBase(true);
         this._renderOverlay();
@@ -685,6 +807,12 @@
 
     // für dich: schnell tile-klassifizierung anpassen, ohne Code zu ändern
     configure: (partial)=> mm.configure(partial),
+
+    // Minimap minimieren/öffnen
+    minimize: ()=> mm.setMinimized(true, true),
+    restore : ()=> mm.setMinimized(false, true),
+    toggle  : ()=> mm.toggleMinimized(),
+    isMinimized: ()=> !!mm._minimized,
 
     // Debug: Base neu rendern
     rebuild: ()=> mm.rebuildBase(true),
