@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.16-units-nav-smoothing-segments
+ * Version : v25.12.16-units-trail-move-events
  *
  * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
@@ -42,10 +42,24 @@
   const SPEED_TILES_PER_SEC = 0.8;
 
   // -------------------------------------------------------------------------
+  // TRAMPELPFAD / TRAIL SEGMENT EVENTS
+  // -------------------------------------------------------------------------
+  // Ziel: Nicht mehr nur tile-step stempeln, sondern echte Segmente entlang
+  //       der Bewegung (cb:unit:move). Gleichzeitig dürfen Spawn/Idle-
+  //       Micro-Bewegungen NICHT stempeln (HQ wird sonst sofort "dreckig").
+  const TRAIL_EMIT_STEP_TILES = 0.25; // alle ~0.25 Tiles ein Segment
+  const TRAIL_SPAWN_GRACE_MS  = 2500; // 2.5s nach Spawn keine Pfad-Stempel
+
+  // -------------------------------------------------------------------------
   // HELFER
   // -------------------------------------------------------------------------
   function _rand(min, max){
     return min + Math.random() * (max - min);
+  }
+
+  function _nowMs(){
+    try{ return (performance && typeof performance.now === 'function') ? performance.now() : Date.now(); }
+    catch(_e){ return Date.now(); }
   }
 
   function _coord(src, key, fallback){
@@ -95,6 +109,11 @@
       task : null,
       carrying   : null,
       _idleTarget: null,
+
+      // Trampelpfad-Trail: Spawn-Timestamp + Event-Anker
+      _spawnMs    : _nowMs(),
+      _trailLastX : tx,
+      _trailLastY : ty,
 
       // Path-Navigation Cache (A*/Smoothing)
       // Wird von _moveTo() befüllt, wenn AdFinder aktiv ist.
@@ -151,6 +170,11 @@
       task : null,
       carrying   : null,
       _idleTarget: null,
+
+      // Trampelpfad-Trail: Spawn-Timestamp + Event-Anker
+      _spawnMs    : _nowMs(),
+      _trailLastX : tx,
+      _trailLastY : ty,
 
       // Path-Navigation Cache (A*/Smoothing)
       // Wird von _moveTo() befüllt, wenn AdFinder aktiv ist.
@@ -363,6 +387,81 @@ function spawnInitialCarriers(count){
     }catch(e){ /* silent */ }
   }
 
+  // -------------------------------------------------------------------------
+  // TRAMPELPFAD: SEGMENT-EMIT (cb:unit:move)
+  //  - wird aus der echten Bewegung generiert (float), nicht aus Tile-Schritten
+  //  - ignoriert Spawn-Phase + Idle-Wanderung (HQ soll nicht sofort "dreckig" werden)
+  // -------------------------------------------------------------------------
+
+  function _trailInit(u){
+    if (!u) return;
+    if (!Number.isFinite(u._spawnMs)) u._spawnMs = _nowMs();
+    if (!Number.isFinite(u._trailLastX)) u._trailLastX = u.x;
+    if (!Number.isFinite(u._trailLastY)) u._trailLastY = u.y;
+  }
+
+  function _trailIsIdle(u){
+    if (!u) return true;
+    // Idle-Target ist unser klares Signal: das ist "rumstehen / wandern"
+    if (u._idleTarget) return true;
+    // Ohne Task = kein echter Job-Move
+    if (!u.task) return true;
+
+    // Task-Typ/Phase optional auswerten (robust gegen zukünftige Erweiterungen)
+    const t = u.task || {};
+    const type = String(t.type || t.job?.type || '');
+    if (/idle|wait|spawn/i.test(type)) return true;
+
+    return false;
+  }
+
+  function _trailMaybeEmit(u){
+    if (!u) return;
+    _trailInit(u);
+
+    const now = _nowMs();
+
+    // Spawn-Grace: NICHT stempeln, nur Anker nachziehen
+    if ((now - (u._spawnMs || 0)) < TRAIL_SPAWN_GRACE_MS){
+      u._trailLastX = u.x;
+      u._trailLastY = u.y;
+      return;
+    }
+
+    // Idle-Wanderung: niemals stempeln
+    if (_trailIsIdle(u)){
+      u._trailLastX = u.x;
+      u._trailLastY = u.y;
+      return;
+    }
+
+    const dx = (u.x - u._trailLastX);
+    const dy = (u.y - u._trailLastY);
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < TRAIL_EMIT_STEP_TILES) return;
+
+    const from = { x: u._trailLastX, y: u._trailLastY };
+    const to   = { x: u.x,          y: u.y };
+
+    u._trailLastX = u.x;
+    u._trailLastY = u.y;
+
+    try{
+      window.dispatchEvent(new CustomEvent('cb:unit:move', {
+        detail: {
+          id   : u.id,
+          kind : u.kind,
+          type : u.type,
+          from,
+          to,
+          idle : false
+        }
+      }));
+    }catch(_e){ /* silent */ }
+  }
+
+
   function _moveTowards(u, target, dt){
     if (!target) return false;
 
@@ -379,6 +478,7 @@ function spawnInitialCarriers(count){
       u.x = target.x;
       u.y = target.y;
       _maybeEmitUnitStep(u);
+      _trailMaybeEmit(u);
       return true;
     }
 
@@ -389,270 +489,150 @@ function spawnInitialCarriers(count){
     if (Number.isFinite(ny)) u.y = ny;
 
     _maybeEmitUnitStep(u);
+    _trailMaybeEmit(u);
 
     return dist <= step;
   }
 
   // ==========================================================================
-// PATHFINDING / NAVIGATION (A* + Smoothing + Segment-Events)
-// --------------------------------------------------------------------------
-// Ziel (dein Wunsch):
-//  1) A* plant auf Grid (8 Nachbarn ok), ohne Corner-Cutting
-//  2) Smoothing/String-Pulling reduziert Nodes → Movement läuft als Gerade
-//  3) Unit bewegt sich kontinuierlich Waypoint→Waypoint (float)
-//  4) Für Pfad-Overlay NICHT mehr Tile-Step als Hauptquelle:
-//       → wir emittieren cb:unit:move (Segment von A nach B)
-//
-// Debug:
-//  - AdFinder feuert cb:path:test:done (metrics), bleibt im Inspector nutzbar.
-// ==========================================================================
+  // PATHFINDING / NAVIGATION
+  // --------------------------------------------------------------------------
+  // Ziel:
+  //  - Kein "gerader Strich" mehr durch Bäume/Gebäude.
+  //  - Keine "Zick-Zack"-Stempel: wir bewegen tile-by-tile entlang eines Pfads.
+  //
+  // Technisch:
+  //  - Nutzt window.AdFinder.findPath() (A* + optional smoothing)
+  //  - Nutzt Default-Obstacles (GameMap/MapResources/Game.buildings)
+  //  - Start/Ziel-Footprints werden als "allowRects" übergeben,
+  //    damit Units aus Gebäuden herauskommen und in Ziel-Baustellen hineinlaufen.
+  //
+  // Debug:
+  //  - AdFinder feuert cb:path:test:done (metrics), bleibt im Inspector nutzbar.
+  // ==========================================================================
 
-// Replan-Strategie (gegen Jitter):
-// - wir replannen NICHT bei jedem Tile-Wechsel,
-// - sondern nur wenn Ziel sich ändert / Pfad fehlt / Unit deutlich vom Pfad abweicht,
-// - und dann max. alle NAV_RECALC_COOLDOWN Sekunden.
-const NAV_RECALC_COOLDOWN = 0.45; // Sekunden
+  const NAV_RECALC_COOLDOWN = 0.35; // Sekunden: nicht jede Tick neu suchen
 
-// Wenn wir den aktuellen Tile nicht in der Nähe unseres Pfad-Index finden,
-// gilt das als "off-path" und triggert (nach Cooldown) einen Replan.
-const NAV_SYNC_WINDOW_BACK  = 3;
-const NAV_SYNC_WINDOW_FWD   = 8;
-
-// Segment-Events:
-// - nur EIN Event pro abgeschlossenem Segment (nicht pro Frame)
-// - Pfad-Overlay kann dann entlang der Linie stempeln (keine Treppe/Zickzack)
-function _emitUnitMoveSegment(u, from, to, meta){
-  if (!u || !from || !to) return;
-  try{
-    const dx = (to.x - from.x);
-    const dy = (to.y - from.y);
-    const dist = Math.hypot(dx, dy);
-    window.dispatchEvent(new CustomEvent('cb:unit:move', {
-      detail: {
-        id   : u.id,
-        kind : u.kind,
-        type : u.type,
-        from : { x: from.x, y: from.y },
-        to   : { x: to.x,   y: to.y   },
-        dx, dy, dist,
-        // optional meta (Phase/Reason/etc.)
-        ...(meta || {})
-      }
-    }));
-  }catch(e){ /* silent */ }
-}
-
-function _tileOfXY(x,y){
-  return { x: Math.floor(x), y: Math.floor(y) };
-}
-
-function _buildAllowRects(startTile, goalTile){
-  const rects = [];
-  const buildings = (window.Game?.getBuildings?.() || window.Game?.buildings || []);
-  for (const b of buildings){
-    if (!b) continue;
-    const bx = b.x|0, by = b.y|0, bw = Math.max(1, b.w|0), bh = Math.max(1, b.h|0);
-    const inStart = startTile && startTile.x >= bx && startTile.x < bx + bw && startTile.y >= by && startTile.y < by + bh;
-    const inGoal  = goalTile  && goalTile.x  >= bx && goalTile.x  < bx + bw && goalTile.y  >= by && goalTile.y  < by + bh;
-    if (inStart || inGoal) rects.push({ x:bx, y:by, w:bw, h:bh });
+  function _tileOfXY(x,y){
+    return { x: Math.floor(x), y: Math.floor(y) };
   }
-  return rects.length ? rects : null;
-}
 
-function _goalKey(goalTile){
-  return `${goalTile.x},${goalTile.y}`;
-}
-
-function _syncNavIdxToCurrent(u, curTile){
-  const nav = u._nav;
-  const path = nav?.path;
-  if (!nav || !Array.isArray(path) || !path.length) return;
-
-  // 1) Normal: Nodes überspringen, die exakt dem aktuellen Tile entsprechen
-  while (nav.idx < path.length){
-    const n = path[nav.idx];
-    if (!n) { nav.idx++; continue; }
-    if ((n.x|0) === curTile.x && (n.y|0) === curTile.y){
-      nav.idx++;
-      continue;
+  function _buildAllowRects(startTile, goalTile){
+    const rects = [];
+    const buildings = (window.Game?.getBuildings?.() || window.Game?.buildings || []);
+    for (const b of buildings){
+      if (!b) continue;
+      const bx = b.x|0, by = b.y|0, bw = Math.max(1, b.w|0), bh = Math.max(1, b.h|0);
+      const inStart = startTile && startTile.x >= bx && startTile.x < bx + bw && startTile.y >= by && startTile.y < by + bh;
+      const inGoal  = goalTile  && goalTile.x  >= bx && goalTile.x  < bx + bw && goalTile.y  >= by && goalTile.y  < by + bh;
+      if (inStart || inGoal) rects.push({ x:bx, y:by, w:bw, h:bh });
     }
-    break;
+    return rects.length ? rects : null;
   }
 
-  // 2) Falls wir "aus dem Pfad raus" geraten sind:
-  //    Suche in einem kleinen Fenster um nav.idx herum nach dem aktuellen Tile.
-  //    Wenn nicht gefunden → markiere Replan-Request.
-  let found = -1;
-  const from = Math.max(0, nav.idx - NAV_SYNC_WINDOW_BACK);
-  const to   = Math.min(path.length - 1, nav.idx + NAV_SYNC_WINDOW_FWD);
-  for (let k = from; k <= to; k++){
-    const n = path[k];
-    if (!n) continue;
-    if ((n.x|0) === curTile.x && (n.y|0) === curTile.y){
-      found = k;
+  function _navKey(startTile, goalTile){
+    return `${startTile.x},${startTile.y}->${goalTile.x},${goalTile.y}`;
+  }
+
+  function _moveTo(u, target, dt){
+    // target: {x,y} in Tile-Koords (float ok)
+    if (!u || !target) return false;
+
+    // Wenn AdFinder nicht geladen ist, bleibt das alte Verhalten (gerade Linie).
+    const PF = window.AdFinder;
+    if (!PF || typeof PF.findPath !== 'function'){
+      return _moveTowards(u, target, dt);
+    }
+
+    const startTile = _tileOfXY(u.x, u.y);
+    const goalTile  = _tileOfXY(target.x, target.y);
+    const key = _navKey(startTile, goalTile);
+
+    // Init Cache
+    if (!u._nav){
+      u._nav = {
+        key: '',
+        path: null,
+        idx: 0,
+        tSinceCalc: 999,
+        lastGoalX: NaN,
+        lastGoalY: NaN
+      };
+    }
+
+    // Timer hochzählen (dt in Sekunden)
+    u._nav.tSinceCalc += dt;
+
+    // Recalc?
+    const goalChanged = (u._nav.lastGoalX !== goalTile.x || u._nav.lastGoalY !== goalTile.y);
+    const needCalc = (u._nav.key !== key) || !u._nav.path || goalChanged;
+
+    if (needCalc && u._nav.tSinceCalc >= NAV_RECALC_COOLDOWN){
+      const allowRects = _buildAllowRects(startTile, goalTile);
+
+      const path = PF.findPath(
+        { x: startTile.x, y: startTile.y },
+        { x: goalTile.x,  y: goalTile.y  },
+        {
+          allowDiagonal: true,
+          smooth       : true,
+          allowRects   : allowRects || undefined
+        }
+      );
+
+      u._nav.key = key;
+      u._nav.path = Array.isArray(path) ? path : null;
+      u._nav.idx  = 0;
+      u._nav.tSinceCalc = 0;
+      u._nav.lastGoalX = goalTile.x;
+      u._nav.lastGoalY = goalTile.y;
+    }
+
+    // Wenn kein Pfad gefunden: fallback (damit Unit nicht "tot" wirkt)
+    if (!u._nav.path || !u._nav.path.length){
+      return _moveTowards(u, target, dt);
+    }
+
+    // idx so anpassen, dass wir nicht "auf dem Starttile hängen"
+    const curTile = startTile;
+    while (u._nav.idx < u._nav.path.length){
+      const n = u._nav.path[u._nav.idx];
+      if (!n) { u._nav.idx++; continue; }
+      if ((n.x|0) === curTile.x && (n.y|0) === curTile.y){
+        u._nav.idx++;
+        continue;
+      }
       break;
     }
-  }
-  if (found >= 0){
-    nav.idx = found + 1; // nächster Node nach aktuellem Tile
-    nav.offPath = false;
-  } else {
-    nav.offPath = true;
-  }
-}
 
-function _moveTo(u, target, dt){
-  // target: {x,y} in Tile-Koords (float ok)
-  if (!u || !target) return false;
-
-  const PF = window.AdFinder;
-
-  // -----------------------------------------------------------------------
-  // Fallback: kein Pathfinding geladen → gerade Linie, aber Segment-Event
-  // -----------------------------------------------------------------------
-  if (!PF || typeof PF.findPath !== 'function'){
-    if (!u._nav) u._nav = {};
-    if (!u._nav.segActive){
-      u._nav.segActive = true;
-      u._nav.segFrom = { x: u.x, y: u.y };
-      u._nav.segTo   = { x: target.x, y: target.y };
-    }
-    const reached = _moveTowards(u, target, dt);
-    if (reached){
-      _emitUnitMoveSegment(u, u._nav.segFrom, u._nav.segTo, { reason:'fallback' });
-      u._nav.segActive = false;
-      return true;
-    }
-    return false;
-  }
-
-  // -----------------------------------------------------------------------
-  // A* + Smoothing
-  // -----------------------------------------------------------------------
-  const curTile  = _tileOfXY(u.x, u.y);
-  const goalTile = _tileOfXY(target.x, target.y);
-  const gKey = _goalKey(goalTile);
-
-  // Init Cache
-  if (!u._nav){
-    u._nav = {
-      goalKey: '',
-      path: null,
-      idx: 0,
-      tSinceCalc: 999,
-      offPath: false,
-
-      // Segment tracking (für cb:unit:move)
-      segActive: false,
-      segFrom: null,
-      segTo: null
-    };
-  }
-
-  // Timer hochzählen (dt in Sekunden)
-  u._nav.tSinceCalc += dt;
-
-  // Pfad-Index grob an aktuelle Position anpassen (verhindert "zurücklaufen")
-  _syncNavIdxToCurrent(u, curTile);
-
-  // Recalc?
-  const goalChanged = (u._nav.goalKey !== gKey);
-  const noPath = (!u._nav.path || !u._nav.path.length);
-  const wantReplan = goalChanged || noPath || (u._nav.offPath === true);
-
-  if (wantReplan && u._nav.tSinceCalc >= NAV_RECALC_COOLDOWN){
-    const allowRects = _buildAllowRects(curTile, goalTile);
-
-    const path = PF.findPath(
-      { x: curTile.x,  y: curTile.y  },
-      { x: goalTile.x, y: goalTile.y },
-      {
-        allowDiagonal: true,
-        smooth       : true,
-        allowRects   : allowRects || undefined
-      }
-    );
-
-    u._nav.goalKey = gKey;
-    u._nav.path = Array.isArray(path) ? path : null;
-    u._nav.idx  = 0;
-    u._nav.tSinceCalc = 0;
-    u._nav.offPath = false;
-
-    // Segment wird neu gestartet (wenn wir gleich einen Waypoint wählen)
-    u._nav.segActive = false;
-    u._nav.segFrom = null;
-    u._nav.segTo   = null;
-  }
-
-  // Wenn kein Pfad gefunden: fallback (damit Unit nicht "tot" wirkt)
-  if (!u._nav.path || !u._nav.path.length){
-    if (!u._nav.segActive){
-      u._nav.segActive = true;
-      u._nav.segFrom = { x: u.x, y: u.y };
-      u._nav.segTo   = { x: target.x, y: target.y };
-    }
-    const reached = _moveTowards(u, target, dt);
-    if (reached){
-      _emitUnitMoveSegment(u, u._nav.segFrom, u._nav.segTo, { reason:'noPath' });
-      u._nav.segActive = false;
-      return true;
-    }
-    return false;
-  }
-
-  // idx erneut anpassen (falls der Pfad neu ist)
-  _syncNavIdxToCurrent(u, curTile);
-
-  // Waypoint:
-  // - solange Pfad noch Nodes hat: center des nächsten Tiles (kann durch smoothing weit springen)
-  // - sonst: exaktes Ziel (float), damit Deliver-Punkt stimmt
-  let waypoint = null;
-
-  if (u._nav.idx < u._nav.path.length){
-    const n = u._nav.path[u._nav.idx];
-    waypoint = { x: (n.x|0) + 0.5, y: (n.y|0) + 0.5 };
-  } else {
-    waypoint = { x: target.x, y: target.y };
-  }
-
-  // Segment-Start setzen, wenn wir ein neues Segment beginnen
-  if (!u._nav.segActive){
-    u._nav.segActive = true;
-    u._nav.segFrom = { x: u.x, y: u.y };
-    u._nav.segTo   = { x: waypoint.x, y: waypoint.y };
-  } else {
-    // Falls sich der Waypoint geändert hat (z.B. idx++), Segment neu starten
-    const st = u._nav.segTo;
-    if (st && (Math.abs(st.x - waypoint.x) > 1e-6 || Math.abs(st.y - waypoint.y) > 1e-6)){
-      // Voriges Segment NICHT emitten (wir haben es noch nicht gelaufen),
-      // sondern sauber neu starten.
-      u._nav.segFrom = { x: u.x, y: u.y };
-      u._nav.segTo   = { x: waypoint.x, y: waypoint.y };
-    }
-  }
-
-  const reached = _moveTowards(u, waypoint, dt);
-
-  if (reached){
-    // Segment abgeschlossen → Event feuern
-    _emitUnitMoveSegment(u, u._nav.segFrom, u._nav.segTo, { reason:'nav' });
-
-    u._nav.segActive = false;
-    u._nav.segFrom = null;
-    u._nav.segTo   = null;
+    // Waypoint:
+    // - solange Pfad noch Nodes hat: center des nächsten Tiles
+    // - sonst: exaktes Ziel (float), damit Deliver-Punkt stimmt
+    let waypoint = null;
 
     if (u._nav.idx < u._nav.path.length){
-      u._nav.idx++;
-      return false; // noch nicht final am echten Ziel
+      const n = u._nav.path[u._nav.idx];
+      waypoint = { x: (n.x|0) + 0.5, y: (n.y|0) + 0.5 };
+    } else {
+      waypoint = { x: target.x, y: target.y };
     }
-    return true;
+
+    const reached = _moveTowards(u, waypoint, dt);
+    if (reached){
+      if (u._nav.idx < u._nav.path.length){
+        u._nav.idx++;
+        return false; // noch nicht final am echten Ziel
+      } else {
+        // fertig
+        return true;
+      }
+    }
+
+    return false;
   }
 
-  return false;
-}
 
-function _tickTask(u, dt){
+  function _tickTask(u, dt){
     const t = u.task;
     if (!t) return;
 

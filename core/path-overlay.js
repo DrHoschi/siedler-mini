@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Trampelpfade (Stamps) + Heatmap
- * Version : v4.3.1-segment-stamping-supercover-decay-ui
+ * Version : v4.3.0-segment-move-trail-decayctl (2025-12-16)
  *
  * Ziel (Endlich stabil, ohne "wir drehen uns im Kreis"):
  *   1) EIN Koordinatensystem: Wir zeichnen über OverlayHooks auf dem
@@ -36,12 +36,18 @@
   // -------------------------------------------------------------------------
 
   const CFG = {
-    VERSION: 'v4.3.1-segment-stamping-supercover-decay-ui',
+    VERSION: 'v4.2.0-stable-overlayhooks',
 
     // Default: sichtbar ab Spielstart (wie von dir gewünscht)
     DEFAULT_VISIBLE: true,
     DEFAULT_STAMPS : true,
     DEFAULT_HEATMAP: false,
+
+    // Event-Quelle
+    // - Move-Segmente (cb:unit:move) sind die neue Hauptquelle (glatte Linie)
+    // - Step-Fallback (cb:unit:step) optional, standardmäßig AUS um Zickzack zu vermeiden
+    USE_MOVE_EVENTS_DEFAULT  : true,
+    USE_STEP_FALLBACK_DEFAULT: false,
 
     // Darstellung
     MIN_VISIBLE: 0.02,
@@ -54,21 +60,16 @@
     STAMP_ALPHA_MIN: 0.10,
     STAMP_ALPHA_MAX: 0.70,
 
-    // Movement / Events
-    USE_UNIT_MOVE: true,          // bevorzugt cb:unit:move (Segment-Events)
-    IGNORE_UNIT_STEP: true,       // ignoriert cb:unit:step (verhindert Doppel-Stamping)
-    SEGMENT_MAX_TILES: 4096,      // Safety-Limit für Supercover-Linien
+    // Decay (zeitbasiert + Inspector steuerbar)
+    // Hinweis: Wir decayen NICHT mehr in fixen "Steps", sondern per Sekunde.
+    DECAY_TICK_MS      : 250,
+    DECAY_PER_SEC_BASE : 0.0008, // 100% Speed: ~0.08 Intensität pro 100s
 
-    // Decay (VIEL langsamer + zeitbasiert)
-    // Früher (0.01 alle 500ms) war der Pfad nach wenigen Sekunden weg.
-    // Jetzt: DECAY_BASE_PER_SEC pro Sekunde, dt-geclamped für Tab-Hintergrund.
-    // Der Inspector kann später per Slider eine SPEED_MULT (0..3) setzen.
-    DECAY_ENABLED: true,
-    DECAY_BASE_PER_SEC: 0.0008,   // Intensität pro Sekunde bei 100% (0.08 ≈ 100s)
-    DECAY_SPEED_DEFAULT: 1.0,     // 100%
-    DECAY_MIN_DT_MS: 250,
-    DECAY_MAX_DT_MS: 2000,
-// Texturen
+    // Legacy-Fallback (wird nur genutzt, wenn DECAY_PER_SEC_BASE fehlt)
+    DECAY_INTERVAL_MS  : 500,
+    DECAY_STEP         : 0.01,
+
+    // Texturen
     TEX_BASE: 'assets/tex/path/',
     TEX_NAMES: Array.from({length:10}, (_,i)=>`topdown_path${i}`),
 
@@ -168,85 +169,6 @@
     return { tx0, ty0, tx1, ty1 };
   }
 
-
-// Supercover-DDA: Liste aller Tiles, die ein Segment im Tile-Space durchschneidet.
-// Input/Output in Tile-Koordinaten (float).
-// Wir benutzen das fürs "Segment-Stempeln" im Trampelpfad-Overlay.
-function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
-  // Start/Goal Zelle
-  let cx = Math.floor(x0);
-  let cy = Math.floor(y0);
-  const gx = Math.floor(x1);
-  const gy = Math.floor(y1);
-
-  const out = [];
-  const seen = new Set();
-
-  const push = (tx,ty)=>{
-    const k = tx + ',' + ty;
-    if (seen.has(k)) return;
-    seen.add(k);
-    out.push({ tx, ty });
-  };
-
-  push(cx, cy);
-  if (cx === gx && cy === gy) return out;
-
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-
-  const stepX = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
-  const stepY = dy > 0 ? 1 : (dy < 0 ? -1 : 0);
-
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-
-  const tDeltaX = absDx > 0 ? (1 / absDx) : Infinity;
-  const tDeltaY = absDy > 0 ? (1 / absDy) : Infinity;
-
-  let tMaxX = Infinity;
-  let tMaxY = Infinity;
-
-  if (stepX !== 0){
-    const nextGridX = stepX > 0 ? (cx + 1) : cx;
-    tMaxX = (nextGridX - x0) / dx;
-    tMaxX = Math.abs(tMaxX);
-  }
-  if (stepY !== 0){
-    const nextGridY = stepY > 0 ? (cy + 1) : cy;
-    tMaxY = (nextGridY - y0) / dy;
-    tMaxY = Math.abs(tMaxY);
-  }
-
-  let guard = 0;
-  const maxIters = Math.min(limit + 8, 100000);
-
-  while (!(cx === gx && cy === gy) && guard++ < maxIters && out.length < limit){
-    if (tMaxX < tMaxY){
-      cx += stepX;
-      tMaxX += tDeltaX;
-    } else if (tMaxY < tMaxX){
-      cy += stepY;
-      tMaxY += tDeltaY;
-    } else {
-      // Ecke -> Supercover (beide Nachbarn)
-      const nx = cx + stepX;
-      const ny = cy + stepY;
-      push(nx, cy);
-      push(cx, ny);
-      cx = nx;
-      cy = ny;
-      tMaxX += tDeltaX;
-      tMaxY += tDeltaY;
-    }
-    push(cx, cy);
-  }
-
-  return out;
-}
-
-
-
   // -------------------------------------------------------------------------
   // KLASSE
   // -------------------------------------------------------------------------
@@ -286,14 +208,18 @@ function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
 
       // Decay
       this._decayTimer = 0;
-      this._decayPaused = false;
+      this.decayPaused    = false;
+      this.decaySpeedMult = 1.0; // 1.0 = 100%
+      this.decayPerSec    = CFG.DECAY_PER_SEC_BASE;
 
-      // Decay-Speed (Inspector-Slider)
-      // - Base = CFG.DECAY_BASE_PER_SEC (100%)
-      // - Mult = 0..3 (0%..300%)
-      this._decayBasePerSec = CFG.DECAY_BASE_PER_SEC;
-      this._decaySpeedMult  = CFG.DECAY_SPEED_DEFAULT;
-      this._decayPerSec     = this._decayBasePerSec * this._decaySpeedMult;
+      // Segment-Events vs Step-Events
+      this.useMoveEvents  = !!CFG.USE_MOVE_EVENTS_DEFAULT;
+      this.useStepEvents  = !!CFG.USE_STEP_FALLBACK_DEFAULT;
+      this._seenMoveEvent = false;
+
+      // Buffer für Move-Segmente (falls Map spät initialisiert)
+      this._preInitMoves = [];
+      this._preInitMovesMax = 1000;
 
       // OverlayHooks layer name
       this._layerName = 'trample-paths';
@@ -326,6 +252,15 @@ function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
             this._applyStepDetail(d);
           }
         }
+
+        // buffered Move-Segmente nachziehen
+        if (this._preInitMoves.length){
+          const moves = this._preInitMoves.slice();
+          this._preInitMoves.length = 0;
+          for (const d of moves){
+            this._applyMoveDetail(d);
+          }
+        }
       }
       return true;
     }
@@ -341,16 +276,13 @@ function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
     // ----------------------------
 
     onUnitStep(ev){
+      // Wenn wir Move-Segmente nutzen, sind Tile-Steps nur noch Fallback.
+      if (this.useMoveEvents && !this.useStepEvents) return;
       const d = ev?.detail || {};
       // tx/ty Pflicht
       const tx = Number.isFinite(d.tx) ? d.tx : null;
       const ty = Number.isFinite(d.ty) ? d.ty : null;
       if (tx === null || ty === null) return;
-
-
-      // Wenn wir Segment-Events nutzen, ignorieren wir Tile-Step-Events,
-      // sonst wird pro Bewegung doppelt gestempelt (sieht nach Zickzack aus).
-      if (CFG.USE_UNIT_MOVE && CFG.IGNORE_UNIT_STEP) return;
 
       // Wenn Grid noch nicht da ist: puffern
       if (!this.ensureGrid()){
@@ -362,59 +294,109 @@ function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
       this._applyStepDetail({ ...d, tx, ty });
     }
 
+    // ----------------------------
+    // MOVE-SEGMENT EVENTS (cb:unit:move)
+    //  - Hauptquelle für glatte Trampelpfade (Linie statt Treppe)
+    //  - Detail: {from:{x,y}, to:{x,y}, id, kind, type, weight?, idle?}
+    // ----------------------------
 
-/**
- * Segment-Event von GameUnits:
- *  cb:unit:move { id, kind/type, from:{x,y}, to:{x,y}, ... }
- *
- * Wichtig:
- *  - Wir stempeln entlang des Segments (Supercover-DDA), NICHT pro Tile-Step.
- *  - Dadurch entstehen glatte Linien statt "Treppen".
- */
-onUnitMove(ev){
-  if (!this.ensureGrid()) return;
+    onUnitMove(ev){
+      if (!this.useMoveEvents) return;
 
-  const d = ev?.detail || {};
-  const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
-  const from = d.from;
-  const to   = d.to;
-  if (!from || !to) return;
+      const d = ev?.detail || {};
+      if (d.idle === true) return;
 
-  const kind = String(d.kind || d.type || '');
-  const isW = isWorkerKind(kind);
+      const from = d.from, to = d.to;
+      const x0 = Number(from?.x), y0 = Number(from?.y);
+      const x1 = Number(to?.x),   y1 = Number(to?.y);
+      if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)) return;
 
-  const amt = (typeof d.weight === 'number')
-    ? d.weight
-    : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
+      // Micro-Jitter killen
+      const dist = Math.hypot(x1 - x0, y1 - y0);
+      if (dist < 0.20) return;
 
-  // Tiles entlang der Linie (Tile-Space)
-  const tiles = tilesAlongSegmentSupercover(from.x, from.y, to.x, to.y, CFG.SEGMENT_MAX_TILES);
+      // Wenn Grid noch nicht da ist: puffern
+      if (!this.ensureGrid()){
+        this._preInitMoves.push({ ...d, t: Date.now() });
+        if (this._preInitMoves.length > this._preInitMovesMax) this._preInitMoves.shift();
+        return;
+      }
 
-  // Für Richtung/Delta wollen wir einen stabilen Startpunkt:
-  // setze "last" auf erstes Tile, damit _applyStepDetail die Deltas sauber berechnet.
-  if (tiles.length){
-    const t0 = tiles[0];
-    this._unitLast.set(String(id), { tx: t0.tx, ty: t0.ty });
-  }
+      this._seenMoveEvent = true;
+      this._applyMoveDetail(d);
+    }
 
-  for (const t of tiles){
-    this._applyStepDetail({
-      id,
-      kind,
-      weight: amt,
-      tx: t.tx,
-      ty: t.ty
-    });
-  }
+    _getBuildingsArray(){
+      // möglichst kompatibel mit deinem Projekt (verschiedene Versionen/Monoliths)
+      const g = window.Game;
+      if (!g) return [];
+      try{
+        const a = (typeof g.getBuildings === 'function') ? g.getBuildings() : (g.buildings || []);
+        if (Array.isArray(a)) return a;
+        if (a && typeof a.list === 'function') return a.list();
+      }catch(_e){}
+      return [];
+    }
 
-  // Debug
-  this.lastStep = { id, tx: tiles.at(-1)?.tx, ty: tiles.at(-1)?.ty, dx: 0, dy: 0, t: Date.now(), via:'move' };
-}
+    _isInBuildingFootprint(tx, ty){
+      // HQ/Buildings nicht "dreckig" stempeln – weder beim Spawn noch beim Deliver-Reinlaufen
+      const arr = this._getBuildingsArray();
+      for (const b of arr){
+        if (!b) continue;
+        const bx = (b.x ?? b.tx ?? 0) | 0;
+        const by = (b.y ?? b.ty ?? 0) | 0;
+        const bw = Math.max(1, (b.w ?? b.width ?? 1) | 0);
+        const bh = Math.max(1, (b.h ?? b.height ?? 1) | 0);
+        if (tx >= bx && tx < bx + bw && ty >= by && ty < by + bh) return true;
+      }
+      return false;
+    }
 
+    _applyMoveDetail(d){
+      const from = d.from, to = d.to;
+      const x0 = Number(from?.x), y0 = Number(from?.y);
+      const x1 = Number(to?.x),   y1 = Number(to?.y);
+
+      const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
+      const kind = String(d.kind || d.type || '');
+      const isW = isWorkerKind(kind);
+
+      const amt = (typeof d.weight === 'number')
+        ? d.weight
+        : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
+
+      // Segment in konstanten Abständen sampeln (runde Stempel, keine Rotation nötig)
+      const step = 0.20; // Tiles
+      const dx = x1 - x0, dy = y1 - y0;
+      const dist = Math.hypot(dx, dy);
+      const n = Math.max(1, Math.ceil(dist / step));
+
+      // Duplikate vermeiden (wenn mehrere Samples im gleichen Tile landen)
+      let lastTx = null, lastTy = null;
+
+      for (let i=0; i<=n; i++){
+        const t = i / n;
+        const x = x0 + dx * t;
+        const y = y0 + dy * t;
+        const tx = Math.floor(x);
+        const ty = Math.floor(y);
+
+        if (tx === lastTx && ty === lastTy) continue;
+        lastTx = tx; lastTy = ty;
+
+        // nicht auf/in Gebäuden stempeln (HQ-Spawn Problem)
+        if (this._isInBuildingFootprint(tx, ty)) continue;
+
+        this._applyStepDetail({ id, kind, tx, ty, weight: amt });
+      }
+    }
 
 
     _applyStepDetail(d){
       const tx = d.tx, ty = d.ty;
+
+      // NICHT auf/in Gebäuden stempeln (HQ bleibt sauber)
+      if (this._isInBuildingFootprint(tx, ty)) return;
 
       const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
       const last = this._unitLast.get(id);
@@ -501,11 +483,67 @@ onUnitMove(ev){
       this.visible = !!flag;
       // overlay canvas wird pro frame cleared, daher muss der layer aktiv bleiben;
       // wir steuern die Sichtbarkeit im draw().
-      this._emitState();
     }
 
-    setHeatmap(flag){ this.showHeatmap = !!flag; this._emitState(); }
-    setStamps(flag){ this.showStamps = !!flag; this._emitState(); }
+    setHeatmap(flag){ this.showHeatmap = !!flag; this._emitState('heatmap'); }
+    setStamps(flag){ this.showStamps = !!flag; this._emitState('stamps'); }
+
+    // ----------------------------
+    // INSPECTOR-API (Decay + State)
+    // ----------------------------
+    setDecaySpeed(mult){
+      // mult: 0.0 .. 3.0 (0..300%)
+      const v = Number(mult);
+      if (!Number.isFinite(v)) return;
+      this.decaySpeedMult = Math.max(0, Math.min(3, v));
+      this._emitState('decay:speed');
+    }
+
+    setDecayPerSec(perSec){
+      const v = Number(perSec);
+      if (!Number.isFinite(v)) return;
+      this.decayPerSec = Math.max(0, v);
+      this._emitState('decay:persec');
+    }
+
+    setDecayPaused(flag){
+      this.decayPaused = !!flag;
+      this._emitState('decay:paused');
+    }
+
+    toggleDecayPaused(){
+      this.setDecayPaused(!this.decayPaused);
+    }
+
+    setUseStepFallback(flag){
+      this.useStepEvents = !!flag;
+      this._emitState('events:stepFallback');
+    }
+
+    setUseMoveEvents(flag){
+      this.useMoveEvents = !!flag;
+      this._emitState('events:move');
+    }
+
+    getState(){
+      return {
+        visible     : !!this.visible,
+        stamps      : !!this.showStamps,
+        heatmap     : !!this.showHeatmap,
+        decayPaused : !!this.decayPaused,
+        decaySpeed  : Number(this.decaySpeedMult || 1),
+        decayPerSec : Number(this.decayPerSec || CFG.DECAY_PER_SEC_BASE || 0),
+        useMoveEvents: !!this.useMoveEvents,
+        useStepFallback: !!this.useStepEvents
+      };
+    }
+
+    _emitState(reason){
+      try{
+        window.dispatchEvent(new CustomEvent('cb:path:state', { detail: { reason, state: this.getState() } }));
+      }catch(_e){}
+    }
+
 
     // ----------------------------
     // DRAW (OverlayHooks Layer)
@@ -613,26 +651,29 @@ onUnitMove(ev){
     }
 
     _tickDecay(){
-      if (!CFG.DECAY_ENABLED) return;
-      if (this._decayPaused) return;
+      const now = (performance && typeof performance.now === 'function') ? performance.now() : Date.now();
+      if (!this._decayTimer) this._decayTimer = now;
 
-      const now = (performance && performance.now) ? performance.now() : Date.now();
-      if (!this._decayTimer){
-        this._decayTimer = now;
-        return;
-      }
+      const tickMs = CFG.DECAY_TICK_MS || CFG.DECAY_INTERVAL_MS || 250;
+      const dtMs = now - this._decayTimer;
+      if (dtMs < tickMs) return;
 
-      let dt = now - this._decayTimer;
-      if (dt < CFG.DECAY_MIN_DT_MS) return;
-
-      // Clamp: wenn der Tab im Hintergrund war, wollen wir nicht "alles auf einmal wegdecayn"
-      dt = Math.min(Math.max(dt, CFG.DECAY_MIN_DT_MS), CFG.DECAY_MAX_DT_MS);
       this._decayTimer = now;
 
+      // nur decayn, wenn wir überhaupt Daten haben
       if (!this.map) return;
 
-      const step = this._decayPerSec * (dt / 1000);
-      if (step <= 0) return;
+      if (this.decayPaused) return;
+
+      // Basis (per Sekunde) * Speed-Multiplier
+      const basePerSec = (typeof this.decayPerSec === 'number' && this.decayPerSec >= 0)
+        ? this.decayPerSec
+        : (CFG.DECAY_PER_SEC_BASE || (CFG.DECAY_STEP / ((CFG.DECAY_INTERVAL_MS||500)/1000)));
+
+      const perSec = basePerSec * (this.decaySpeedMult || 1.0);
+      const step = perSec * (dtMs / 1000);
+
+      if (!(step > 0)) return;
 
       for (let i=0;i<this.map.length;i++){
         const v = this.map[i];
@@ -640,55 +681,6 @@ onUnitMove(ev){
         const nv = v - step;
         this.map[i] = nv > 0 ? nv : 0;
       }
-    }
-
-    setDecayPaused(flag){
-      this._decayPaused = !!flag;
-      this._emitState();
-    }
-
-    // Inspector-Slider: "Decay Speed" (Faktor, 0..3)
-    // Beispiel: 0.5 = halb so schnell, 1.0 = normal, 2.0 = doppelt.
-    setDecaySpeed(mult){
-      const m = Number(mult);
-      if (!Number.isFinite(m)) return;
-      const clamped = Math.max(0, Math.min(3, m));
-      this._decaySpeedMult = clamped;
-      this._decayPerSec = this._decayBasePerSec * this._decaySpeedMult;
-      this._emitState();
-    }
-
-    // Absolute Einstellung (falls du lieber "pro Sekunde" steuern willst)
-    // Setzt BASE neu und setzt Mult auf 1.0
-    setDecayPerSec(perSec){
-      const p = Number(perSec);
-      if (!Number.isFinite(p)) return;
-      const clamped = Math.max(0, p);
-      this._decayBasePerSec = clamped;
-      this._decaySpeedMult  = 1.0;
-      this._decayPerSec     = this._decayBasePerSec;
-      this._emitState();
-    }
-
-    getState(){
-      return {
-        visible: this.visible,
-        stamps: this.showStamps,
-        heatmap: this.showHeatmap,
-        decayPaused: this._decayPaused,
-        decayPerSec: this._decayPerSec,
-        decayBasePerSec: this._decayBasePerSec,
-        decaySpeedMult: this._decaySpeedMult,
-        cols: this.cols, rows: this.rows, tile: this.tile,
-        stepCount: this.stepCount,
-        lastStep: this.lastStep
-      };
-    }
-
-    _emitState(){
-      try{
-        window.dispatchEvent(new CustomEvent('cb:path:state', { detail: this.getState() }));
-      }catch(_){/*noop*/}
     }
 
     // ----------------------------
@@ -720,14 +712,23 @@ onUnitMove(ev){
   // 1) Immer registrieren (damit ab Start sichtbar)
   inst.registerLayer();
 
-  // 2) Unit Move-Segmente bevorzugen (glatte Linien)
+  // 2) Unit Steps immer tracken
+  window.addEventListener('cb:unit:step', (e)=>{ try{ inst.onUnitStep(e); }catch(err){ WARN('onUnitStep err', err); } });
   window.addEventListener('cb:unit:move', (e)=>{ try{ inst.onUnitMove(e); }catch(err){ WARN('onUnitMove err', err); } });
 
-  // 3) Unit Steps als Fallback (oder für andere Tools)
-  //    (werden optional ignoriert, siehe CFG.USE_UNIT_MOVE/IGNORE_UNIT_STEP)
-  window.addEventListener('cb:unit:step', (e)=>{ try{ inst.onUnitStep(e); }catch(err){ WARN('onUnitStep err', err); } });
-
   // 3) Toggle-Events (Inspector)
+  //    Decay-Control: Speed (0..3) + Freeze
+  window.addEventListener('cb:path:decay:speed', (e)=>{
+    const d = e?.detail || {};
+    const v = (d.mult ?? d.speed ?? d.value);
+    inst.setDecaySpeed(Number(v));
+  });
+  window.addEventListener('cb:path:decay:freeze', (e)=>{
+    const d = e?.detail || {};
+    if (typeof d.paused === 'boolean') inst.setDecayPaused(d.paused);
+    else inst.toggleDecayPaused();
+  });
+
   //    Overlay = Sichtbarkeit (und Stamps automatisch an, damit man wirklich etwas sieht)
   window.addEventListener('cb:path:overlay:on',  ()=>{ inst.setVisible(true);  inst.setStamps(true); });
   window.addEventListener('cb:path:overlay:off', ()=>{ inst.setVisible(false); });
@@ -744,31 +745,6 @@ onUnitMove(ev){
   window.addEventListener('cb:path:stamps:on',   ()=>{ inst.setVisible(true); inst.setStamps(true); });
   window.addEventListener('cb:path:stamps:off',  ()=> inst.setStamps(false));
 
-  // Decay toggles (für Debug/Tests)
-  window.addEventListener('cb:path:decay:off', ()=> inst.setDecayPaused(true));
-  window.addEventListener('cb:path:decay:on',  ()=> inst.setDecayPaused(false));
-
-  // Inspector: Decay Speed (Slider)
-  // Erwartete Payloads (tolerant):
-  //   detail: { mult: 0..3 }  oder { percent: 0..300 } oder { perSec: number }
-  window.addEventListener('cb:path:decay:speed', (e)=>{
-    try{
-      const d = e?.detail || {};
-      if (d.perSec != null) return inst.setDecayPerSec(d.perSec);
-      if (d.mult != null)   return inst.setDecaySpeed(d.mult);
-      if (d.percent != null) return inst.setDecaySpeed(Number(d.percent)/100);
-    }catch(_){/*noop*/}
-  });
-
-  // Inspector: Freeze Toggle (optional)
-  window.addEventListener('cb:path:decay:freeze', (e)=>{
-    try{
-      const d = e?.detail || {};
-      if (typeof d.paused === 'boolean') return inst.setDecayPaused(d.paused);
-      inst.setDecayPaused(!inst._decayPaused);
-    }catch(_){/*noop*/}
-  });
-
   // 4) Extra: sobald game start/registry ready: grid sicherstellen
   const kick = ()=>{ try{ inst.ensureGrid(); }catch(_){} };
   window.addEventListener('cb:game:start', kick);
@@ -782,14 +758,9 @@ onUnitMove(ev){
   window.PathOverlay = {
     version: CFG.VERSION,
     // API
-    toggle: (v)=> inst.setVisible(v),
     setVisible: (v)=> inst.setVisible(v),
     setHeatmap: (v)=> inst.setHeatmap(v),
     setStamps : (v)=> inst.setStamps(v),
-    setDecayPaused: (v)=> inst.setDecayPaused(v),
-    setDecaySpeed: (mult)=> inst.setDecaySpeed(mult),
-    setDecayPerSec: (perSec)=> inst.setDecayPerSec(perSec),
-    getState: ()=> inst.getState(),
     // debug
     _inst: inst,
   };
