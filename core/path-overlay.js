@@ -54,11 +54,19 @@
     STAMP_ALPHA_MIN: 0.10,
     STAMP_ALPHA_MAX: 0.70,
 
-    // Decay
-    DECAY_INTERVAL_MS: 500,
-    DECAY_STEP: 0.01,
+    // Movement / Events
+    USE_UNIT_MOVE: true,          // bevorzugt cb:unit:move (Segment-Events)
+    IGNORE_UNIT_STEP: true,       // ignoriert cb:unit:step (verhindert Doppel-Stamping)
+    SEGMENT_MAX_TILES: 4096,      // Safety-Limit für Supercover-Linien
 
-    // Texturen
+    // Decay (VIEL langsamer + zeitbasiert)
+    // Früher (0.01 alle 500ms) war der Pfad nach wenigen Sekunden weg.
+    // Jetzt: DECAY_PER_SEC pro Sekunde, dt-geclamped für Tab-Hintergrund.
+    DECAY_ENABLED: true,
+    DECAY_PER_SEC: 0.0008,        // Intensität pro Sekunde (0.08 ≈ 100s)
+    DECAY_MIN_DT_MS: 250,
+    DECAY_MAX_DT_MS: 2000,
+// Texturen
     TEX_BASE: 'assets/tex/path/',
     TEX_NAMES: Array.from({length:10}, (_,i)=>`topdown_path${i}`),
 
@@ -276,6 +284,7 @@ function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
 
       // Decay
       this._decayTimer = 0;
+      this._decayPaused = false;
 
       // OverlayHooks layer name
       this._layerName = 'trample-paths';
@@ -328,6 +337,11 @@ function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
       const tx = Number.isFinite(d.tx) ? d.tx : null;
       const ty = Number.isFinite(d.ty) ? d.ty : null;
       if (tx === null || ty === null) return;
+
+
+      // Wenn wir Segment-Events nutzen, ignorieren wir Tile-Step-Events,
+      // sonst wird pro Bewegung doppelt gestempelt (sieht nach Zickzack aus).
+      if (CFG.USE_UNIT_MOVE && CFG.IGNORE_UNIT_STEP) return;
 
       // Wenn Grid noch nicht da ist: puffern
       if (!this.ensureGrid()){
@@ -478,10 +492,11 @@ onUnitMove(ev){
       this.visible = !!flag;
       // overlay canvas wird pro frame cleared, daher muss der layer aktiv bleiben;
       // wir steuern die Sichtbarkeit im draw().
+      this._emitState();
     }
 
-    setHeatmap(flag){ this.showHeatmap = !!flag; }
-    setStamps(flag){ this.showStamps = !!flag; }
+    setHeatmap(flag){ this.showHeatmap = !!flag; this._emitState(); }
+    setStamps(flag){ this.showStamps = !!flag; this._emitState(); }
 
     // ----------------------------
     // DRAW (OverlayHooks Layer)
@@ -494,8 +509,6 @@ onUnitMove(ev){
 
       // Grid sicherstellen (wenn Map spät initialisiert)
       if (!this.ensureGrid()) return;
-      // Wenn wir Segment-Events nutzen, ignorieren wir klassische Tile-Step Events.
-      if (CFG.USE_UNIT_MOVE && CFG.IGNORE_UNIT_STEP) return;
 
       // DBG (einmalig): Canvas + Cam + Grid + Flags (hilft gegen Cache/Koordinaten-Rätsel)
       if (!this._dbgLoggedDraw){
@@ -591,24 +604,56 @@ onUnitMove(ev){
     }
 
     _tickDecay(){
-      const now = performance.now ? performance.now() : Date.now();
-      if (!this._decayTimer) this._decayTimer = now;
+      if (!CFG.DECAY_ENABLED) return;
+      if (this._decayPaused) return;
 
-      const dt = now - this._decayTimer;
-      if (dt < CFG.DECAY_INTERVAL_MS) return;
+      const now = (performance && performance.now) ? performance.now() : Date.now();
+      if (!this._decayTimer){
+        this._decayTimer = now;
+        return;
+      }
 
+      let dt = now - this._decayTimer;
+      if (dt < CFG.DECAY_MIN_DT_MS) return;
+
+      // Clamp: wenn der Tab im Hintergrund war, wollen wir nicht "alles auf einmal wegdecayn"
+      dt = Math.min(Math.max(dt, CFG.DECAY_MIN_DT_MS), CFG.DECAY_MAX_DT_MS);
       this._decayTimer = now;
 
-      // nur decayn, wenn wir überhaupt Daten haben
       if (!this.map) return;
 
-      const step = CFG.DECAY_STEP;
+      const step = CFG.DECAY_PER_SEC * (dt / 1000);
+      if (step <= 0) return;
+
       for (let i=0;i<this.map.length;i++){
         const v = this.map[i];
         if (v <= 0) continue;
         const nv = v - step;
         this.map[i] = nv > 0 ? nv : 0;
       }
+    }
+
+    setDecayPaused(flag){
+      this._decayPaused = !!flag;
+      this._emitState();
+    }
+
+    getState(){
+      return {
+        visible: this.visible,
+        stamps: this.showStamps,
+        heatmap: this.showHeatmap,
+        decayPaused: this._decayPaused,
+        cols: this.cols, rows: this.rows, tile: this.tile,
+        stepCount: this.stepCount,
+        lastStep: this.lastStep
+      };
+    }
+
+    _emitState(){
+      try{
+        window.dispatchEvent(new CustomEvent('cb:path:state', { detail: this.getState() }));
+      }catch(_){/*noop*/}
     }
 
     // ----------------------------
@@ -664,6 +709,10 @@ onUnitMove(ev){
   window.addEventListener('cb:path:stamps:on',   ()=>{ inst.setVisible(true); inst.setStamps(true); });
   window.addEventListener('cb:path:stamps:off',  ()=> inst.setStamps(false));
 
+  // Decay toggles (für Debug/Tests)
+  window.addEventListener('cb:path:decay:off', ()=> inst.setDecayPaused(true));
+  window.addEventListener('cb:path:decay:on',  ()=> inst.setDecayPaused(false));
+
   // 4) Extra: sobald game start/registry ready: grid sicherstellen
   const kick = ()=>{ try{ inst.ensureGrid(); }catch(_){} };
   window.addEventListener('cb:game:start', kick);
@@ -677,9 +726,12 @@ onUnitMove(ev){
   window.PathOverlay = {
     version: CFG.VERSION,
     // API
+    toggle: (v)=> inst.setVisible(v),
     setVisible: (v)=> inst.setVisible(v),
     setHeatmap: (v)=> inst.setHeatmap(v),
     setStamps : (v)=> inst.setStamps(v),
+    setDecayPaused: (v)=> inst.setDecayPaused(v),
+    getState: ()=> inst.getState(),
     // debug
     _inst: inst,
   };
