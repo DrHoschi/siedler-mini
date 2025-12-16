@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Trampelpfade (Stamps) + Heatmap
- * Version : v4.2.0-stable-overlayhooks (2025-12-15)
+ * Version : v4.3.0-segment-stamping-supercover
  *
  * Ziel (Endlich stabil, ohne "wir drehen uns im Kreis"):
  *   1) EIN Koordinatensystem: Wir zeichnen über OverlayHooks auf dem
@@ -36,7 +36,7 @@
   // -------------------------------------------------------------------------
 
   const CFG = {
-    VERSION: 'v4.2.0-stable-overlayhooks',
+    VERSION: 'v4.3.0-segment-stamping-supercover',
 
     // Default: sichtbar ab Spielstart (wie von dir gewünscht)
     DEFAULT_VISIBLE: true,
@@ -158,6 +158,85 @@
     return { tx0, ty0, tx1, ty1 };
   }
 
+
+// Supercover-DDA: Liste aller Tiles, die ein Segment im Tile-Space durchschneidet.
+// Input/Output in Tile-Koordinaten (float).
+// Wir benutzen das fürs "Segment-Stempeln" im Trampelpfad-Overlay.
+function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
+  // Start/Goal Zelle
+  let cx = Math.floor(x0);
+  let cy = Math.floor(y0);
+  const gx = Math.floor(x1);
+  const gy = Math.floor(y1);
+
+  const out = [];
+  const seen = new Set();
+
+  const push = (tx,ty)=>{
+    const k = tx + ',' + ty;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ tx, ty });
+  };
+
+  push(cx, cy);
+  if (cx === gx && cy === gy) return out;
+
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+
+  const stepX = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
+  const stepY = dy > 0 ? 1 : (dy < 0 ? -1 : 0);
+
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  const tDeltaX = absDx > 0 ? (1 / absDx) : Infinity;
+  const tDeltaY = absDy > 0 ? (1 / absDy) : Infinity;
+
+  let tMaxX = Infinity;
+  let tMaxY = Infinity;
+
+  if (stepX !== 0){
+    const nextGridX = stepX > 0 ? (cx + 1) : cx;
+    tMaxX = (nextGridX - x0) / dx;
+    tMaxX = Math.abs(tMaxX);
+  }
+  if (stepY !== 0){
+    const nextGridY = stepY > 0 ? (cy + 1) : cy;
+    tMaxY = (nextGridY - y0) / dy;
+    tMaxY = Math.abs(tMaxY);
+  }
+
+  let guard = 0;
+  const maxIters = Math.min(limit + 8, 100000);
+
+  while (!(cx === gx && cy === gy) && guard++ < maxIters && out.length < limit){
+    if (tMaxX < tMaxY){
+      cx += stepX;
+      tMaxX += tDeltaX;
+    } else if (tMaxY < tMaxX){
+      cy += stepY;
+      tMaxY += tDeltaY;
+    } else {
+      // Ecke -> Supercover (beide Nachbarn)
+      const nx = cx + stepX;
+      const ny = cy + stepY;
+      push(nx, cy);
+      push(cx, ny);
+      cx = nx;
+      cy = ny;
+      tMaxX += tDeltaX;
+      tMaxY += tDeltaY;
+    }
+    push(cx, cy);
+  }
+
+  return out;
+}
+
+
+
   // -------------------------------------------------------------------------
   // KLASSE
   // -------------------------------------------------------------------------
@@ -259,6 +338,57 @@
 
       this._applyStepDetail({ ...d, tx, ty });
     }
+
+
+/**
+ * Segment-Event von GameUnits:
+ *  cb:unit:move { id, kind/type, from:{x,y}, to:{x,y}, ... }
+ *
+ * Wichtig:
+ *  - Wir stempeln entlang des Segments (Supercover-DDA), NICHT pro Tile-Step.
+ *  - Dadurch entstehen glatte Linien statt "Treppen".
+ */
+onUnitMove(ev){
+  if (!this.ensureGrid()) return;
+
+  const d = ev?.detail || {};
+  const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
+  const from = d.from;
+  const to   = d.to;
+  if (!from || !to) return;
+
+  const kind = String(d.kind || d.type || '');
+  const isW = isWorkerKind(kind);
+
+  const amt = (typeof d.weight === 'number')
+    ? d.weight
+    : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
+
+  // Tiles entlang der Linie (Tile-Space)
+  const tiles = tilesAlongSegmentSupercover(from.x, from.y, to.x, to.y, CFG.SEGMENT_MAX_TILES);
+
+  // Für Richtung/Delta wollen wir einen stabilen Startpunkt:
+  // setze "last" auf erstes Tile, damit _applyStepDetail die Deltas sauber berechnet.
+  if (tiles.length){
+    const t0 = tiles[0];
+    this._unitLast.set(String(id), { tx: t0.tx, ty: t0.ty });
+  }
+
+  for (const t of tiles){
+    this._applyStepDetail({
+      id,
+      kind,
+      weight: amt,
+      tx: t.tx,
+      ty: t.ty
+    });
+  }
+
+  // Debug
+  this.lastStep = { id, tx: tiles.at(-1)?.tx, ty: tiles.at(-1)?.ty, dx: 0, dy: 0, t: Date.now(), via:'move' };
+}
+
+
 
     _applyStepDetail(d){
       const tx = d.tx, ty = d.ty;
@@ -364,6 +494,8 @@
 
       // Grid sicherstellen (wenn Map spät initialisiert)
       if (!this.ensureGrid()) return;
+      // Wenn wir Segment-Events nutzen, ignorieren wir klassische Tile-Step Events.
+      if (CFG.USE_UNIT_MOVE && CFG.IGNORE_UNIT_STEP) return;
 
       // DBG (einmalig): Canvas + Cam + Grid + Flags (hilft gegen Cache/Koordinaten-Rätsel)
       if (!this._dbgLoggedDraw){
@@ -508,7 +640,11 @@
   // 1) Immer registrieren (damit ab Start sichtbar)
   inst.registerLayer();
 
-  // 2) Unit Steps immer tracken
+  // 2) Unit Move-Segmente bevorzugen (glatte Linien)
+  window.addEventListener('cb:unit:move', (e)=>{ try{ inst.onUnitMove(e); }catch(err){ WARN('onUnitMove err', err); } });
+
+  // 3) Unit Steps als Fallback (oder für andere Tools)
+  //    (werden optional ignoriert, siehe CFG.USE_UNIT_MOVE/IGNORE_UNIT_STEP)
   window.addEventListener('cb:unit:step', (e)=>{ try{ inst.onUnitStep(e); }catch(err){ WARN('onUnitStep err', err); } });
 
   // 3) Toggle-Events (Inspector)

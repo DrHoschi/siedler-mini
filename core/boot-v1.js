@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
- * Version  : v25.11.13-final3 (3-Gate: user+assets+registry)
+ * Version  : v25.12.16-final3 (3-Gate: user+assets+registry)
  * Startet  : cb:game:start ⇐ req:game:start + cb:assets-ready + cb:registry:ready
  * ========================================================================== */
 (function(){
@@ -13,7 +13,7 @@
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG, ...a);
 
   const state = {
-    version:'v25.11.13-final3',
+    version:'v25.12.16-final3',
     userReady:false,
     assetsReady:false,
     registryReady:false,

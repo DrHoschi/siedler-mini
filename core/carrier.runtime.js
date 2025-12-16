@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/carrier.runtime.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.12-carrier-runtime-v2 (tick-driven, no-RAF)
+ * Version : v25.12.16-carrier-step-disabled
  *
  * Zweck   :
  *   "Runtime"-Schicht zwischen JobEngine und GameUnits.
@@ -100,7 +100,7 @@
       _lastTileByUnitId.set(key, { tx, ty });
 
       // Event für PathOverlay/Traces/Debug
-      window.dispatchEvent(new CustomEvent('cb:unit:step', {
+      if (EMIT_UNIT_STEP) window.dispatchEvent(new CustomEvent('cb:unit:step', {
         detail: {
           id: id,
           tx, ty,
