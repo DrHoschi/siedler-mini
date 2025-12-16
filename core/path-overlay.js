@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Trampelpfade (Stamps) + Heatmap
- * Version : v4.3.0-segment-stamping-supercover
+ * Version : v4.3.1-segment-stamping-supercover-decay-ui
  *
  * Ziel (Endlich stabil, ohne "wir drehen uns im Kreis"):
  *   1) EIN Koordinatensystem: Wir zeichnen über OverlayHooks auf dem
@@ -36,7 +36,7 @@
   // -------------------------------------------------------------------------
 
   const CFG = {
-    VERSION: 'v4.3.0-segment-stamping-supercover',
+    VERSION: 'v4.3.1-segment-stamping-supercover-decay-ui',
 
     // Default: sichtbar ab Spielstart (wie von dir gewünscht)
     DEFAULT_VISIBLE: true,
@@ -61,9 +61,11 @@
 
     // Decay (VIEL langsamer + zeitbasiert)
     // Früher (0.01 alle 500ms) war der Pfad nach wenigen Sekunden weg.
-    // Jetzt: DECAY_PER_SEC pro Sekunde, dt-geclamped für Tab-Hintergrund.
+    // Jetzt: DECAY_BASE_PER_SEC pro Sekunde, dt-geclamped für Tab-Hintergrund.
+    // Der Inspector kann später per Slider eine SPEED_MULT (0..3) setzen.
     DECAY_ENABLED: true,
-    DECAY_PER_SEC: 0.0008,        // Intensität pro Sekunde (0.08 ≈ 100s)
+    DECAY_BASE_PER_SEC: 0.0008,   // Intensität pro Sekunde bei 100% (0.08 ≈ 100s)
+    DECAY_SPEED_DEFAULT: 1.0,     // 100%
     DECAY_MIN_DT_MS: 250,
     DECAY_MAX_DT_MS: 2000,
 // Texturen
@@ -285,6 +287,13 @@ function tilesAlongSegmentSupercover(x0, y0, x1, y1, limit=4096){
       // Decay
       this._decayTimer = 0;
       this._decayPaused = false;
+
+      // Decay-Speed (Inspector-Slider)
+      // - Base = CFG.DECAY_BASE_PER_SEC (100%)
+      // - Mult = 0..3 (0%..300%)
+      this._decayBasePerSec = CFG.DECAY_BASE_PER_SEC;
+      this._decaySpeedMult  = CFG.DECAY_SPEED_DEFAULT;
+      this._decayPerSec     = this._decayBasePerSec * this._decaySpeedMult;
 
       // OverlayHooks layer name
       this._layerName = 'trample-paths';
@@ -622,7 +631,7 @@ onUnitMove(ev){
 
       if (!this.map) return;
 
-      const step = CFG.DECAY_PER_SEC * (dt / 1000);
+      const step = this._decayPerSec * (dt / 1000);
       if (step <= 0) return;
 
       for (let i=0;i<this.map.length;i++){
@@ -638,12 +647,38 @@ onUnitMove(ev){
       this._emitState();
     }
 
+    // Inspector-Slider: "Decay Speed" (Faktor, 0..3)
+    // Beispiel: 0.5 = halb so schnell, 1.0 = normal, 2.0 = doppelt.
+    setDecaySpeed(mult){
+      const m = Number(mult);
+      if (!Number.isFinite(m)) return;
+      const clamped = Math.max(0, Math.min(3, m));
+      this._decaySpeedMult = clamped;
+      this._decayPerSec = this._decayBasePerSec * this._decaySpeedMult;
+      this._emitState();
+    }
+
+    // Absolute Einstellung (falls du lieber "pro Sekunde" steuern willst)
+    // Setzt BASE neu und setzt Mult auf 1.0
+    setDecayPerSec(perSec){
+      const p = Number(perSec);
+      if (!Number.isFinite(p)) return;
+      const clamped = Math.max(0, p);
+      this._decayBasePerSec = clamped;
+      this._decaySpeedMult  = 1.0;
+      this._decayPerSec     = this._decayBasePerSec;
+      this._emitState();
+    }
+
     getState(){
       return {
         visible: this.visible,
         stamps: this.showStamps,
         heatmap: this.showHeatmap,
         decayPaused: this._decayPaused,
+        decayPerSec: this._decayPerSec,
+        decayBasePerSec: this._decayBasePerSec,
+        decaySpeedMult: this._decaySpeedMult,
         cols: this.cols, rows: this.rows, tile: this.tile,
         stepCount: this.stepCount,
         lastStep: this.lastStep
@@ -713,6 +748,27 @@ onUnitMove(ev){
   window.addEventListener('cb:path:decay:off', ()=> inst.setDecayPaused(true));
   window.addEventListener('cb:path:decay:on',  ()=> inst.setDecayPaused(false));
 
+  // Inspector: Decay Speed (Slider)
+  // Erwartete Payloads (tolerant):
+  //   detail: { mult: 0..3 }  oder { percent: 0..300 } oder { perSec: number }
+  window.addEventListener('cb:path:decay:speed', (e)=>{
+    try{
+      const d = e?.detail || {};
+      if (d.perSec != null) return inst.setDecayPerSec(d.perSec);
+      if (d.mult != null)   return inst.setDecaySpeed(d.mult);
+      if (d.percent != null) return inst.setDecaySpeed(Number(d.percent)/100);
+    }catch(_){/*noop*/}
+  });
+
+  // Inspector: Freeze Toggle (optional)
+  window.addEventListener('cb:path:decay:freeze', (e)=>{
+    try{
+      const d = e?.detail || {};
+      if (typeof d.paused === 'boolean') return inst.setDecayPaused(d.paused);
+      inst.setDecayPaused(!inst._decayPaused);
+    }catch(_){/*noop*/}
+  });
+
   // 4) Extra: sobald game start/registry ready: grid sicherstellen
   const kick = ()=>{ try{ inst.ensureGrid(); }catch(_){} };
   window.addEventListener('cb:game:start', kick);
@@ -731,6 +787,8 @@ onUnitMove(ev){
     setHeatmap: (v)=> inst.setHeatmap(v),
     setStamps : (v)=> inst.setStamps(v),
     setDecayPaused: (v)=> inst.setDecayPaused(v),
+    setDecaySpeed: (mult)=> inst.setDecaySpeed(mult),
+    setDecayPerSec: (perSec)=> inst.setDecayPerSec(perSec),
     getState: ()=> inst.getState(),
     // debug
     _inst: inst,
