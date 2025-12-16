@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-15T21:18:05.761Z",
+  "createdAt": "2025-12-16T11:19:17.604Z",
   "root": ".",
-  "count": 527,
+  "count": 532,
   "entries": [
     {
       "type": "dir",
@@ -843,6 +843,16 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/deco/deco_plants_mega_atlas.json",
+      "size": 5799
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/deco_plants_mega_atlas.png",
+      "size": 2119651
+    },
+    {
+      "type": "file",
       "path": "assets/tex/deco/index.trees.html",
       "size": 8897
     },
@@ -1372,12 +1382,12 @@
     {
       "type": "file",
       "path": "core/adfinder.js",
-      "size": 1283
+      "size": 14289
     },
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 18089
+      "size": 19310
     },
     {
       "type": "file",
@@ -1472,7 +1482,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 25772
+      "size": 27240
     },
     {
       "type": "file",
@@ -1517,7 +1527,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 21706
+      "size": 26443
     },
     {
       "type": "file",
@@ -1562,7 +1572,22 @@
     {
       "type": "file",
       "path": "core/map.decorations.js",
-      "size": 19147
+      "size": 30854
+    },
+    {
+      "type": "file",
+      "path": "core/map.decorations.v2.js",
+      "size": 13389
+    },
+    {
+      "type": "file",
+      "path": "core/map.decorations.v3.js",
+      "size": 21856
+    },
+    {
+      "type": "file",
+      "path": "core/map.decorations.v4.js",
+      "size": 30853
     },
     {
       "type": "file",
@@ -1577,7 +1602,7 @@
     {
       "type": "file",
       "path": "core/overlay-hooks.js",
-      "size": 4120
+      "size": 5551
     },
     {
       "type": "file",
@@ -1587,7 +1612,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 16790
+      "size": 17422
     },
     {
       "type": "file",
@@ -1911,7 +1936,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.paths-v1.js",
-      "size": 7104
+      "size": 7738
     },
     {
       "type": "file",
@@ -1931,7 +1956,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.ui-v1.js",
-      "size": 13186
+      "size": 13517
     },
     {
       "type": "file",
@@ -1960,7 +1985,7 @@
     {
       "type": "file",
       "path": "inspector/inspector.bridges.js",
-      "size": 7678
+      "size": 8097
     },
     {
       "type": "file",
@@ -2536,12 +2561,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52368
+      "size": 52697
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20445
+      "size": 20588
     },
     {
       "type": "file",
@@ -2551,7 +2576,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 17040
+      "size": 17120
     },
     {
       "type": "file",
