@@ -75,7 +75,7 @@
     } catch(e){}
 
     function terrainOk(t){
-      if (t === 8) return false; // water
+      if (t === 8 || t === 9) return false; // water
       if (t === 5) return false; // forest (Start lieber nicht mitten rein)
       if (t === 6) return false; // rock
       return true;
@@ -83,6 +83,19 @@
 
     function areaOk(x0,y0){
       if (x0 < 0 || y0 < 0 || x0 + w > cols || y0 + h > rows) return false;
+      // Keine Überschneidung mit bereits existierenden Gebäuden
+      // (z.B. wenn Map/Debug später mal Gebäude vorgibt).
+      if (Array.isArray(Game.buildings) && Game.buildings.length){
+        for (const b of Game.buildings){
+          if (!b) continue;
+          const bx = b.x|0, by = b.y|0;
+          const bw = Math.max(1, (b.w|0) || 1);
+          const bh = Math.max(1, (b.h|0) || 1);
+          const overlap = (x0 < bx + bw) && (x0 + w > bx) && (y0 < by + bh) && (y0 + h > by);
+          if (overlap) return false;
+        }
+      }
+
       for (let y=y0; y<y0+h; y++){
         const row = grid[y];
         if (!row) return false;
@@ -119,13 +132,18 @@
   }
 
   function _centerCameraOnBuilding(b){
-    try{
-      const ts = Game.tileSize || 64;
-      const cx = (b.x + (b.w||1)/2) * ts;
-      const cy = (b.y + (b.h||1)/2) * ts;
-      window.GameCamera?.centerOn?.(cx, cy, { zoom: START_ZOOM });
-    } catch(e){}
-  }
+  // Wenn das Cinematic-Modul aktiv ist, soll ES die Kamera führen.
+  // (Sonst würden wir kurz "springen", bevor der Fit-to-Map-Start kommt.)
+  if (window.__SIEDLER_CINEMATIC_CAMERA_ACTIVE) return;
+
+  try{
+    const ts = Game.tileSize || 64;
+    const cx = (b.x + (b.w||1)/2) * ts;
+    const cy = (b.y + (b.h||1)/2) * ts;
+    window.GameCamera?.centerOn?.(cx, cy, { zoom: START_ZOOM });
+  } catch(e){}
+}
+
 
   /**
    * Stellt sicher, dass eine JobEngine existiert und eine push()/pop()-API hat.
