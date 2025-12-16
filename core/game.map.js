@@ -116,38 +116,43 @@
       const c = ctx.canvas;
       if (!c) return;
 
-      // iPad/Safari (Split-View, Toolbars, Rotation):
-      // window.innerWidth/innerHeight können vom "Layout-Viewport" stammen und
-      // NICHT der tatsächlich sichtbaren Canvas-Box entsprechen → Strecken/Versatz.
-      // Darum: erst BoundingClientRect (echte CSS-Box), dann visualViewport als Fallback.
-      let w = 0, h = 0;
+      // -------------------------------------------------------------------
+      // WICHTIG (iPad / Split-View / Safari-Toolbars):
+      //   window.innerWidth/innerHeight schwanken (Layout-Viewport vs.
+      //   tatsächliche sichtbare Box). Dadurch kann der Canvas-Backbuffer
+      //   zwischen CSS-Pixeln und "device px" hin- und herspringen.
+      //   Ergebnis: Tiles wirken gestreckt/verschoben.
+      //
+      // Lösung:
+      //   Wir nehmen IMMER die reale sichtbare CSS-Box des Canvas
+      //   (getBoundingClientRect) als Source of Truth.
+      // -------------------------------------------------------------------
 
-      try{
-        const r = c.getBoundingClientRect();
-        w = Math.round(r.width);
-        h = Math.round(r.height);
-      }catch(_){ /* ignore */ }
+      const r = c.getBoundingClientRect?.() || null;
+      const cssW = Math.max(1, Math.round(r?.width  || 0));
+      const cssH = Math.max(1, Math.round(r?.height || 0));
 
-      if (!w || !h){
-        const vv = window.visualViewport;
-        w = Math.round(vv?.width  || window.innerWidth  || document.documentElement.clientWidth  || c.width);
-        h = Math.round(vv?.height || window.innerHeight || document.documentElement.clientHeight || c.height);
+      // Fallback, falls Rect aus irgendeinem Grund 0 ist
+      const fallbackW = (window.innerWidth  || document.documentElement.clientWidth  || c.width)  | 0;
+      const fallbackH = (window.innerHeight || document.documentElement.clientHeight || c.height) | 0;
+
+      // Wenn Rect valide ist → nutzen. Sonst Fallback.
+      // Extra-Schutz: Wenn innerWidth plötzlich ~2x so groß ist (DPR-Effekt),
+      // dann NICHT übernehmen.
+      let w = cssW > 1 ? cssW : fallbackW;
+      let h = cssH > 1 ? cssH : fallbackH;
+
+      if (cssW > 1 && fallbackW > cssW * 1.35) {
+        // Typisches iPad-Symptom: fallbackW enthält devicePixel-Äquivalent.
+        w = cssW;
       }
 
-      w = Math.max(1, w|0);
-      h = Math.max(1, h|0);
-
+      // Resize nur, wenn wirklich nötig (verhindert Flip-Flop bei Minimaländerungen)
       if (!Mod.sized || c.width !== w || c.height !== h){
         c.width  = w;
         c.height = h;
         Mod.sized = true;
-
-        LOG('Canvasgröße gesetzt:', w, 'x', h, '(bbox/vv)');
-
-        // Optionales Event: andere Module (Overlay/Inspector) können darauf reagieren.
-        try{
-          window.dispatchEvent(new CustomEvent('cb:canvas:resize', { detail: { w, h } }));
-        }catch(_){}
+        LOG('Canvasgröße gesetzt:', w, 'x', h, '(cssRect=', cssW+'x'+cssH, 'fallback=', fallbackW+'x'+fallbackH, ')');
       }
     }catch(e){
       WARN('ensureCanvasSize Fehler:', e?.message || e);
@@ -744,4 +749,3 @@ if (window.GameWorkArea) {
   window.GameMap = { init, render, _state: Mod };
 
 })();
-

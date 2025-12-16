@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/overlay-hooks.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.15-overlayhooks-v3 (adds OverlayHooks.render + auto overlay canvas)
+ * Version : v25.12.03-overlayhooks-v2
  *
  * Zweck   :
  *   - Zentrales Overlay-Hooks-System
@@ -123,74 +123,47 @@
     }
   }
 
-  
-  // -------------------------------------------------------------------------
-  // DEFAULT OVERLAY CANVAS RENDERER
-  // -------------------------------------------------------------------------
-  // In deinem Projekt ruft core/game.js pro Frame OverlayHooks.render() auf.
-  // Früher gab es mehrere Varianten (drawOverlays im Renderer, eigenes Canvas,
-  // etc.). Damit wir ENDLICH konsistent sind, liefern wir hier render():
-  //   - nutzt das vorhandene <canvas id="overlay">
-  //   - synchronisiert Größe zum Game-Canvas
-  //   - cleared Screen-Space (Identity Transform)
-  //   - ruft danach draw(ctx) auf (Layer entscheiden selbst, ob sie Transform setzen)
-  //
-  // WICHTIG:
-  // - Overlays wie path-traces.overlay.js rechnen Kamera selbst in Screen-Space um.
-  // - PathOverlay setzt aktuell im draw() selbst ctx.setTransform(...) wie GameMap.
-  // → Deshalb lassen wir hier absichtlich Identity (kein Welt-Transform).
+  /**
+   * OverlayHooks.render()
+   *  - Kompatibilitäts-API, weil einige Game-Schleifen (z.B. core/game.js)
+   *    explizit OverlayHooks.render() aufrufen.
+   *  - Diese Funktion sorgt dafür, dass Overlays auch dann zuverlässig
+   *    gezeichnet werden, wenn (a) ein separater Renderer fehlt oder (b)
+   *    nur OverlayHooks genutzt wird.
+   *
+   * Verhalten:
+   *  - Sucht #overlay Canvas (Fallback: #game)
+   *  - synchronisiert Backbuffer-Größe an #game Canvas (Pixelgröße)
+   *  - cleart das Overlay und ruft OverlayHooks.draw(ctx)
+   */
+  function render(){
+    try{
+      // Primär: eigenes Overlay-Canvas
+      const overlay = document.getElementById('overlay');
+      const game    = document.getElementById('game');
+      const c = overlay || game;
+      if (!c) return;
 
-  let _overlayCanvas = null;
-  let _overlayCtx    = null;
+      const ctx = c.getContext('2d');
+      if (!ctx) return;
 
-  function _resolveOverlay(){
-    if (_overlayCanvas && _overlayCtx) return true;
-    _overlayCanvas = document.getElementById('overlay');
-    if (!_overlayCanvas) return false;
-    _overlayCtx = _overlayCanvas.getContext('2d');
-    return !!_overlayCtx;
-  }
+      // Wenn wir ein separates Overlay-Canvas haben, dann an #game koppeln.
+      // Wichtig: wir koppeln PIXEL-Backbuffer (width/height), nicht CSS.
+      if (overlay && game){
+        if (overlay.width  !== game.width)  overlay.width  = game.width;
+        if (overlay.height !== game.height) overlay.height = game.height;
+      }
 
-  function _syncOverlaySize(){
-    if (!_overlayCanvas) return;
+      // Overlay im Screen-Space clearen
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.clearRect(0,0,c.width,c.height);
 
-    // Referenz: Game-Canvas (falls vorhanden), sonst ClientSize des Overlay-Canvas
-    const gameCanvas =
-      window.Game?.canvas
-      || document.getElementById('game')
-      || document.querySelector('canvas#game');
-
-    const ref = gameCanvas || _overlayCanvas;
-    const cssW = Math.max(0, ref.clientWidth  | 0);
-    const cssH = Math.max(0, ref.clientHeight | 0);
-    if (!cssW || !cssH) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(1, Math.floor(cssW * dpr));
-    const h = Math.max(1, Math.floor(cssH * dpr));
-
-    if (_overlayCanvas.width !== w || _overlayCanvas.height !== h){
-      _overlayCanvas.width  = w;
-      _overlayCanvas.height = h;
-      _overlayCanvas.style.width  = cssW + 'px';
-      _overlayCanvas.style.height = cssH + 'px';
+      // Jetzt Layer zeichnen
+      draw(ctx);
+    }catch(e){
+      WARN('render Fehler:', e);
     }
   }
-
-  function render(){
-    if (!_globalEnabled) return;
-    if (!_resolveOverlay()) return;
-
-    _syncOverlaySize();
-
-    // Clear in Screen-Space
-    _overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
-    _overlayCtx.clearRect(0, 0, _overlayCanvas.width, _overlayCanvas.height);
-
-    // Zeichnen (Layer setzen Transform selbst, falls sie Welt-Koordinaten brauchen)
-    draw(_overlayCtx);
-  }
-
 
   // -------------------------------------------------------------------------
   // GLOBAL EXPORT
@@ -204,8 +177,8 @@
     enable,
     disable,
     setGlobal,
-    draw,
     render,
+    draw,
     _layers,
     _getState: function(){
       return {
@@ -215,6 +188,6 @@
     }
   });
 
-  LOG('Modul geladen – OverlayHooks bereit (API: register/enable/disable/draw/render).');
+  LOG('Modul geladen – OverlayHooks bereit.');
 
 })();
