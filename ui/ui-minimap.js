@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : ui/ui-minimap.js
  * Projekt : Neue Siedler – Siedler-Mini
- * Version : v25.12.16-minimap-mvp2
+ * Version : v25.12.16-minimap-mvp4
  *
  * Zweck   :
  *   - Kleine Minimap als UI-Overlay (separates Canvas, NICHT im Game-Canvas).
@@ -36,7 +36,7 @@
   // =========================================================================
   // [Konstanten]
   // =========================================================================
-  const VERSION   = 'v25.12.16-minimap-mvp2';
+  const VERSION   = 'v25.12.16-minimap-mvp4';
   const TAG     = '[ui.minimap]';
 
   const LOG  = (...a)=> (window.CBLog?.ok    ?? console.log)(TAG, ...a);
@@ -56,6 +56,20 @@
     autoMinH   : 700,   // dito (Höhe)
     remember   : true,  // Zustand in localStorage merken
     storageKey : 'siedler:minimap:minimized',
+// Position merken (Drag & Drop)
+rememberPos: true,
+storageKeyPos: 'siedler:minimap:pos',
+
+// Drag & Drop
+draggable: true,
+dragThresholdPx: 6,  // ab so viel Bewegung wird es ein Drag (sonst Klick)
+snapEnable: true,
+snapPx: 16,          // Snap an Bildschirmkanten (px)
+
+// Auto-Hide (wenn Build-Menü oder Inspector offen ist)
+autoHide: { build: true, inspector: true },
+autoHidePollMs: 250, // Fallback, falls ein "close"-Event fehlt
+
     fps       : 8,     // Overlay-Updates pro Sekunde (Terrain-Base wird nicht ständig neu gerendert)
     dotR      : 2.0,   // Basis-Radius (wird * DPR skaliert)
     showGrid  : false, // optional: sehr dezentes Grid (Debug)
@@ -220,6 +234,24 @@
       // UI-State
       this._minimized = false;
 
+// Auto-Hide (wenn andere UI offen ist)
+this._autoHidden = false;
+this._autoHideReasons = new Set();
+this._autoHideWired = false;
+this._autoHideTimer = 0;
+this._onBuildOpen = null;
+this._onBuildClose = null;
+this._onInspOpen = null;
+this._onInspClose = null;
+
+// Baseline: CSS-Top der Minimap im Portrait (unter HUD) – für Drag-Clamp
+this._minTopBaselinePx = NaN;
+
+// Drag & Drop Position
+this._pos = { custom:false, nx: null, ny: null }; // normiert 0..1
+this._dragUI = { active:false, moved:false, startX:0, startY:0, startL:0, startT:0 };
+
+
       // Offscreen: Terrain-Base
       this.baseCanvas = null;
       this.baseCtx    = null;
@@ -250,8 +282,21 @@
       }
 
       // Canvas neu anpassen (wenn schon init)
-      if (this.canvas) this._resizeCanvases();
-      this.rebuildBase(true);
+if (this.canvas){
+  this._resizeCanvases();
+  this._applySavedPos();
+}
+
+// Auto-Hide neu bewerten (falls Option geändert wurde)
+this._syncAutoHide();
+
+// Base + Overlay einmal frisch rendern
+this.rebuildBase(true);
+this._renderOverlay();
+
+// Render-Loop ggf. neu starten / stoppen
+if (this._minimized || this._autoHidden) this._stopTimer();
+else this._startTimer();
     }
 
     // -----------------------------------------------------------------------
@@ -290,14 +335,9 @@
         this.root.appendChild(this.toggleBtn);
       }
 
-      // Toggle-Handler (Button darf NICHT die Pointer-Events vom Canvas stören)
-      this.toggleBtn.onclick = (e)=>{
-        try{
-          e.preventDefault();
-          e.stopPropagation();
-        }catch{}
-        this.toggleMinimized();
-      };
+      // Toggle + Drag-Handle (Klick = minimieren, Drag = positionieren)
+this._bindToggleDrag();
+
 
       this.ctx = this.canvas.getContext('2d', { alpha:true });
 
@@ -317,6 +357,23 @@
       // Größe / HiDPI
       this._resizeCanvases();
 
+
+      // Baseline-MinTop aus CSS (Portrait unter HUD) – für Drag-Clamp
+      try{
+        const t = window.getComputedStyle(this.root).top;
+        const px = parseFloat(t);
+        this._minTopBaselinePx = Number.isFinite(px) ? px : 60;
+      }catch{
+        this._minTopBaselinePx = 60;
+      }
+
+      // Gespeicherte Position (Drag & Drop) laden & anwenden
+      this._loadSavedPos();
+      this._applySavedPos();
+
+      // Auto-Hide wiring + initialer Sync (z. B. wenn Inspector bereits offen)
+      this._wireAutoHide();
+      this._syncAutoHide();
       // Interaktion
       this._bindPointer();
 
@@ -333,9 +390,14 @@
 
     destroy(){
       this._stopTimer();
+      this._unwireAutoHide();
       if (this.toggleBtn){
-        this.toggleBtn.onclick = null;
-      }
+  this.toggleBtn.onclick = null;
+  this.toggleBtn.onpointerdown = null;
+  this.toggleBtn.onpointermove = null;
+  this.toggleBtn.onpointerup = null;
+  this.toggleBtn.onpointercancel = null;
+}
       if (this.canvas){
         this.canvas.onpointerdown = null;
         this.canvas.onpointermove = null;
@@ -429,7 +491,8 @@
       // Größen + Render-Loop
       try{
         if (this.canvas) this._resizeCanvases();
-        if (this._minimized){
+        this._applySavedPos();
+        if (this._minimized || this._autoHidden){
           this._stopTimer();
         }else{
           this.rebuildBase(true);
@@ -451,6 +514,289 @@
     toggleMinimized(){
       this.setMinimized(!this._minimized, true);
     }
+
+// -----------------------------------------------------------------------
+// Drag & Drop (Position)
+// -----------------------------------------------------------------------
+_loadSavedPos(){
+  if (!this.cfg.rememberPos || !this.cfg.storageKeyPos) return;
+  try{
+    const raw = window.localStorage.getItem(this.cfg.storageKeyPos);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    const nx = +obj.nx, ny = +obj.ny;
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+    this._pos.custom = true;
+    this._pos.nx = clamp(nx, 0, 1);
+    this._pos.ny = clamp(ny, 0, 1);
+  }catch{}
+}
+
+_savePos(nx, ny){
+  if (!this.cfg.rememberPos || !this.cfg.storageKeyPos) return;
+  try{
+    window.localStorage.setItem(this.cfg.storageKeyPos, JSON.stringify({
+      nx: clamp(nx, 0, 1),
+      ny: clamp(ny, 0, 1),
+      v:  1
+    }));
+  }catch{}
+}
+
+_clearPos(){
+  try{ window.localStorage.removeItem(this.cfg.storageKeyPos); }catch{}
+  this._pos.custom = false;
+  this._pos.nx = null;
+  this._pos.ny = null;
+  if (this.root){
+    // Inline-Position zurücksetzen → CSS übernimmt wieder
+    this.root.style.left = '';
+    this.root.style.top = '';
+    this.root.style.right = '';
+    this.root.style.bottom = '';
+  }
+}
+
+_getDragClampMinTop(){
+  const isLand = window.matchMedia && window.matchMedia('(orientation: landscape)').matches;
+  if (isLand) return 6;
+  const px = this._minTopBaselinePx;
+  return Number.isFinite(px) && px > 0 ? px : 60;
+}
+
+_applySavedPos(){
+  if (!this.root || !this._pos.custom) return;
+
+  const rect = this.root.getBoundingClientRect();
+  const w = rect.width  || (this._minimized ? (this.cfg.minimizedPx||34) : (this.cfg.cssSizePx||160));
+  const h = rect.height || (this._minimized ? (this.cfg.minimizedPx||34) : (this.cfg.cssSizePx||160));
+
+  const vw = window.innerWidth  || 1;
+  const vh = window.innerHeight || 1;
+
+  const minTop  = this._getDragClampMinTop();
+  const minLeft = 6;
+
+  const maxLeft = Math.max(minLeft, vw - w - 6);
+  const maxTop  = Math.max(minTop,  vh - h - 6);
+
+  const left = minLeft + this._pos.nx * (maxLeft - minLeft);
+  const top  = minTop  + this._pos.ny * (maxTop  - minTop);
+
+  this.root.style.left = left + 'px';
+  this.root.style.top  = top  + 'px';
+  this.root.style.right = 'auto';
+  this.root.style.bottom= 'auto';
+}
+
+_savePosFromPx(leftPx, topPx){
+  if (!this.root) return;
+
+  const rect = this.root.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+
+  const vw = window.innerWidth  || 1;
+  const vh = window.innerHeight || 1;
+
+  const minTop  = this._getDragClampMinTop();
+  const minLeft = 6;
+
+  const maxLeft = Math.max(minLeft, vw - w - 6);
+  const maxTop  = Math.max(minTop,  vh - h - 6);
+
+  const nx = (clamp(leftPx, minLeft, maxLeft) - minLeft) / Math.max(1, (maxLeft - minLeft));
+  const ny = (clamp(topPx,  minTop,  maxTop ) - minTop ) / Math.max(1, (maxTop  - minTop));
+
+  this._pos.custom = true;
+  this._pos.nx = nx;
+  this._pos.ny = ny;
+  this._savePos(nx, ny);
+}
+
+// -----------------------------------------------------------------------
+// Toggle-Button: Klick = minimieren, Drag = positionieren
+// -----------------------------------------------------------------------
+_bindToggleDrag(){
+  const btn = this.toggleBtn;
+  if (!btn) return;
+
+  // alte Handler sicher killen
+  btn.onclick = null;
+
+  btn.onpointerdown = (e)=>{
+    try{ e.preventDefault(); e.stopPropagation(); }catch{}
+
+    const r = this.root.getBoundingClientRect();
+    this._dragUI.active = true;
+    this._dragUI.moved  = false;
+    this._dragUI.startX = e.clientX;
+    this._dragUI.startY = e.clientY;
+    this._dragUI.startL = r.left;
+    this._dragUI.startT = r.top;
+
+    try{ btn.setPointerCapture(e.pointerId); }catch{}
+  };
+
+  btn.onpointermove = (e)=>{
+    if (!this._dragUI.active || !this.root) return;
+    if (!this.cfg.draggable) return;
+
+    const dx = e.clientX - this._dragUI.startX;
+    const dy = e.clientY - this._dragUI.startY;
+
+    const thr = Math.max(2, this.cfg.dragThresholdPx|0);
+    if (!this._dragUI.moved){
+      if (Math.abs(dx) < thr && Math.abs(dy) < thr) return;
+      this._dragUI.moved = true;
+      this.root.classList.add('is-dragging');
+    }
+
+    const rect = this.root.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    const vw = window.innerWidth  || 1;
+    const vh = window.innerHeight || 1;
+
+    const minTop  = this._getDragClampMinTop();
+    const minLeft = 6;
+
+    let left = this._dragUI.startL + dx;
+    let top  = this._dragUI.startT + dy;
+
+    left = clamp(left, minLeft, Math.max(minLeft, vw - w - 6));
+    top  = clamp(top,  minTop,  Math.max(minTop,  vh - h - 6));
+
+    if (this.cfg.snapEnable){
+      const snap = Math.max(0, this.cfg.snapPx|0);
+      const maxL = Math.max(minLeft, vw - w - 6);
+      const maxT = Math.max(minTop,  vh - h - 6);
+
+      if (Math.abs(left - minLeft) <= snap) left = minLeft;
+      if (Math.abs(top  - minTop ) <= snap) top  = minTop;
+      if (Math.abs(left - maxL)   <= snap) left = maxL;
+      if (Math.abs(top  - maxT)   <= snap) top  = maxT;
+    }
+
+    this.root.style.left  = left + 'px';
+    this.root.style.top   = top  + 'px';
+    this.root.style.right = 'auto';
+    this.root.style.bottom= 'auto';
+  };
+
+  btn.onpointerup = (e)=>{
+    if (!this._dragUI.active) return;
+
+    try{ btn.releasePointerCapture(e.pointerId); }catch{}
+    const wasDrag = this._dragUI.moved;
+    this._dragUI.active = false;
+
+    if (this.root) this.root.classList.remove('is-dragging');
+
+    if (!wasDrag){
+      // "Klick": minimieren / öffnen
+      this.toggleMinimized();
+      return;
+    }
+
+    // "Drag": Position speichern
+    if (this.root){
+      const r = this.root.getBoundingClientRect();
+      this._savePosFromPx(r.left, r.top);
+    }
+  };
+
+  btn.onpointercancel = ()=>{
+    this._dragUI.active = false;
+    this._dragUI.moved  = false;
+    if (this.root) this.root.classList.remove('is-dragging');
+  };
+
+  btn.style.touchAction = 'none';
+}
+
+// -----------------------------------------------------------------------
+// Auto-Hide (wenn Build-Menü oder Inspector offen ist)
+// -----------------------------------------------------------------------
+_wireAutoHide(){
+  if (this._autoHideWired) return;
+  this._autoHideWired = true;
+
+  this._onBuildOpen  = ()=> this._syncAutoHide();
+  this._onBuildClose = ()=> this._syncAutoHide();
+  this._onInspOpen   = ()=> this._syncAutoHide();
+  this._onInspClose  = ()=> this._syncAutoHide();
+
+  window.addEventListener('cb:build:open',  this._onBuildOpen);
+  window.addEventListener('cb:build:close', this._onBuildClose);
+  window.addEventListener('cb:insp:open',   this._onInspOpen);
+  window.addEventListener('cb:insp:close',  this._onInspClose);
+
+  // Fallback-Poll: falls irgendwo ein close-Event fehlt
+  const poll = Math.max(120, this.cfg.autoHidePollMs|0);
+  this._autoHideTimer = window.setInterval(()=> this._syncAutoHide(), poll);
+}
+
+_unwireAutoHide(){
+  if (!this._autoHideWired) return;
+  this._autoHideWired = false;
+
+  try{ window.clearInterval(this._autoHideTimer); }catch{}
+  this._autoHideTimer = 0;
+
+  window.removeEventListener('cb:build:open',  this._onBuildOpen);
+  window.removeEventListener('cb:build:close', this._onBuildClose);
+  window.removeEventListener('cb:insp:open',   this._onInspOpen);
+  window.removeEventListener('cb:insp:close',  this._onInspClose);
+
+  this._onBuildOpen = this._onBuildClose = this._onInspOpen = this._onInspClose = null;
+}
+
+_setAutoHidden(on, reason){
+  reason = reason || 'ui';
+  if (on) this._autoHideReasons.add(reason);
+  else this._autoHideReasons.delete(reason);
+
+  const next = this._autoHideReasons.size > 0;
+  if (this._autoHidden === next) return;
+  this._autoHidden = next;
+
+  if (this.root){
+    this.root.classList.toggle('is-auto-hidden', this._autoHidden);
+  }
+
+  // Timer-Logik: wenn auto-hidden -> stop, sonst ggf. wieder starten
+  if (this._autoHidden){
+    this._stopTimer();
+  } else {
+    if (!this._minimized){
+      this.rebuildBase(false);
+      this._renderOverlay();
+      this._startTimer();
+    }
+  }
+}
+
+_syncAutoHide(){
+  try{
+    // Inspector: zuverlässig über body.inspector-open
+    const inspOpen = document.body.classList.contains('inspector-open');
+    if (this.cfg.autoHide?.inspector) this._setAutoHidden(!!inspOpen, 'inspector');
+    else this._setAutoHidden(false, 'inspector');
+
+    // Build-Dock: robust über computed style
+    const dock = document.getElementById('build-dock');
+    let buildOpen = false;
+    if (dock){
+      const cs = window.getComputedStyle(dock);
+      buildOpen = (dock.hidden === false) && (cs.display !== 'none') && (cs.visibility !== 'hidden') && (parseFloat(cs.opacity || '1') > 0.01);
+    }
+
+    if (this.cfg.autoHide?.build) this._setAutoHidden(!!buildOpen, 'build');
+    else this._setAutoHidden(false, 'build');
+  }catch{}
+}
 
     // -----------------------------------------------------------------------
     // Pointer -> Kamera zentrieren
@@ -732,8 +1078,8 @@
     _startTimer(){
       this._stopTimer();
 
-      // wenn minimiert, kein Render-Loop (spart CPU auf kleinen Geräten)
-      if (this._minimized) return;
+      // wenn minimiert ODER auto-hidden, kein Render-Loop (spart CPU auf kleinen Geräten)
+      if (this._minimized || this._autoHidden) return;
 
       // zusätzlich: beim Resize Canvas neu setzen
       window.addEventListener('resize', this._onResize, { passive:true });
@@ -760,8 +1106,9 @@
       // Canvas neu skalieren und Base neu rendern
       try{
         if (!this.canvas) return;
-        if (this._minimized) return;
+        if (this._minimized || this._autoHidden) return;
         this._resizeCanvases();
+        this._applySavedPos();
         this.rebuildBase(true);
         this._renderOverlay();
       }catch(e){
