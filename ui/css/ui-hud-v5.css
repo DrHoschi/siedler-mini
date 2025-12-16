@@ -208,7 +208,17 @@
   border-radius: 10px;
   box-sizing: border-box;
   
-  top: calc(6px + env(safe-area-inset-top, 0px));
+  /*
+   * WICHTIG: Damit die Minimap / der Toggle-Button nichts von der HUD-Leiste
+   * (Ressourcen-Bar) überdeckt, schieben wir sie im Portrait knapp unter die HUD.
+   * In Landscape ist die HUD links vertikal → dort bleibt die Minimap oben.
+   */
+  top: calc(
+    6px
+    + env(safe-area-inset-top, 0px)
+    + var(--hud-cell-size)
+    + var(--hud-gap)
+  );
   right: calc(6px + env(safe-area-inset-right, 0px));
 
   z-index: 50;               /* über Canvas, unter Inspector */
@@ -217,6 +227,13 @@
 
   /* Startscreen: ausblenden */
   display: none;
+}
+
+/* Landscape: HUD ist links vertikal → Minimap darf wieder ganz nach oben */
+@media (orientation: landscape){
+  .minimap{
+    top: calc(6px + env(safe-area-inset-top, 0px));
+  }
 }
 
 body.is-playing .minimap{
