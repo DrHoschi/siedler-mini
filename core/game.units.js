@@ -834,7 +834,98 @@ u.task = {
   }
 
   // -------------------------------------------------------------------------
-  // EVENTS
+  
+
+  // -------------------------------------------------------------------------
+  // AUTO-INIT: Falls HQ schon existiert (z.B. vor Laden dieses Moduls platziert)
+  //           → HQPos setzen + Start-Carriers spawnen, damit Bau/Delivery läuft.
+  //
+  // Problem, das wir hier lösen:
+  // - Wenn das HQ bereits "im Save/Setup" existiert, aber kein cb:build:place
+  //   Event mehr feuert, bleibt _hqPos null → spawnInitialCarriers wird nie
+  //   aufgerufen → es gibt keine Träger → niemand baut/liefert.
+  // -------------------------------------------------------------------------
+  let _autoInitDone = false;
+  let _fallbackInitDone = false;
+
+  function _getBuildingsArraySafe(){
+    // möglichst kompatibel zu verschiedenen Projektständen
+    const g = window.Game || {};
+    const b = g.buildings;
+
+    // 1) manche Stände: Game.buildings ist ein ARRAY
+    if (Array.isArray(b)) return b;
+
+    // 2) häufig: Game.buildings ist ein Manager mit getAll()/list
+    if (b && typeof b.getAll === 'function') {
+      const arr = b.getAll();
+      if (Array.isArray(arr)) return arr;
+    }
+    if (b && Array.isArray(b.list)) return b.list;
+
+    // 3) alte Stände: global Buildings.list
+    if (Array.isArray(window.Buildings?.list)) return window.Buildings.list;
+
+    return [];
+  }
+
+  function _countCarriers(){
+    return _units.filter(u => u && u.type === 'carrier').length;
+  }
+
+  function _tryInitFromExistingHQ(reason){
+    if (_autoInitDone) return;
+    const arr = _getBuildingsArraySafe();
+    if (!arr.length) return;
+
+    const hq = arr.find(b => (b?.id || b?.buildingId) === 'b.hq');
+    if (!hq) return;
+
+    const w = Number(hq.w ?? 3);
+    const h = Number(hq.h ?? 3);
+    const tx = Number(hq.x ?? hq.tx ?? 0) + (Number.isFinite(w) ? w/2 : 1.5);
+    const ty = Number(hq.y ?? hq.ty ?? 0) + (Number.isFinite(h) ? h/2 : 1.5);
+
+    setHQPos({ tx, ty });
+
+    // nur wenn es wirklich noch keine Carriers gibt
+    if (_countCarriers() === 0){
+      spawnInitialCarriers(3);
+      LOG('AUTO-INIT: Start-Carriers gespawnt (HQ gefunden)', { reason, hq: { tx, ty } });
+    }
+
+    _autoInitDone = true;
+    _emitChanged('auto-init:hq');
+  }
+
+  // Fallback: Wenn der Nutzer ohne HQ schon irgendwas platziert (oder Setup hat kein HQ),
+  // dann lassen wir das Spiel nicht "tot" sein: wir initialisieren HQPos grob am ersten
+  // platzierten Gebäude und spawnen 3 Carriers.
+  function _fallbackInitNearBuilding(b, reason){
+    if (_fallbackInitDone) return;
+    if (!b) return;
+    if (_countCarriers() > 0) return; // wenn schon da → nix machen
+    if (_hqPos) return;               // wenn HQPos schon gesetzt → nix machen
+
+    const w = Number(b.w ?? 1);
+    const h = Number(b.h ?? 1);
+    const tx = Number(b.x ?? b.tx ?? 0) + (Number.isFinite(w) ? w/2 : 0.5);
+    const ty = Number(b.y ?? b.ty ?? 0) + (Number.isFinite(h) ? h/2 : 0.5);
+
+    setHQPos({ tx, ty });
+    spawnInitialCarriers(3);
+    _fallbackInitDone = true;
+
+    WARN('FALLBACK-INIT: Kein HQ gefunden – Carriers am ersten Gebäude gespawnt', { reason, at: { tx, ty }, building: (b.id || b.buildingId) });
+    _emitChanged('auto-init:fallback');
+  }
+
+  // mehrmals versuchen, weil Reihenfolge beim Laden (Safari/iOS) variieren kann
+  setTimeout(()=>_tryInitFromExistingHQ('timeout:250ms'), 250);
+  setTimeout(()=>_tryInitFromExistingHQ('timeout:1000ms'), 1000);
+  setTimeout(()=>_tryInitFromExistingHQ('timeout:2500ms'), 2500);
+
+// EVENTS
   // -------------------------------------------------------------------------
 
   // Game-Bindung, sobald das Spiel losläuft
@@ -847,7 +938,17 @@ u.task = {
   window.addEventListener('cb:build:place', ev => {
     const d  = ev?.detail || {};
     const id = d.buildingId || d.id || '';
-    if (id !== 'b.hq') return;
+
+    // 1) Falls HQ bereits existiert (Save/Setup), initialisieren wir es hier.
+    _tryInitFromExistingHQ('cb:build:place');
+
+    // 2) Fallback: Wenn noch gar kein HQ vorhanden ist, aber Gebäude platziert werden,
+    //    spawnen wir Träger am ersten Gebäude, damit der Prototyp nicht "tot" wirkt.
+    if (id !== 'b.hq') {
+      _fallbackInitNearBuilding(d.building, 'cb:build:place:first-non-hq');
+      return;
+    }
+
 
     const w  = d.w ?? 3;
     const h  = d.h ?? 3;
