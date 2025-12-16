@@ -22,6 +22,19 @@
   const heatOff = () => window.PathOverlay?.setHeatmap?.(false);
   const layerOn = () => { window.PathOverlay?.setVisible?.(true); window.PathOverlay?.setStamps?.(true); };
   const layerOff = () => window.PathOverlay?.setStamps?.(false);
+  // Decay (Trampelpfade ausblenden lassen) – Inspector Slider + Freeze
+  const decayOn   = () => window.PathOverlay?.setDecayPaused?.(false);
+  const decayOff  = () => window.PathOverlay?.setDecayPaused?.(true);
+  const decayFreeze = (e)=>{
+    const paused = !!(e && e.detail && e.detail.paused);
+    window.PathOverlay?.setDecayPaused?.(paused);
+  };
+  const decaySpeed = (e)=>{
+    const d = e?.detail || {};
+    if (d.perSec != null) return window.PathOverlay?.setDecayPerSec?.(d.perSec);
+    if (d.mult != null)   return window.PathOverlay?.setDecaySpeed?.(d.mult);
+    if (d.percent != null) return window.PathOverlay?.setDecaySpeed?.(Number(d.percent)/100);
+  };
   window.addEventListener('cb:path:overlay:on',   on);
   window.addEventListener('cb:path:overlay:off',  off);
   window.addEventListener('cb:path:heatmap:on',   heatOn);
@@ -30,6 +43,12 @@
   window.addEventListener('cb:path:layer:off',    layerOff);
   window.addEventListener('cb:path:stamps:on',    layerOn);
   window.addEventListener('cb:path:stamps:off',   layerOff);
+
+  // Decay Events
+  window.addEventListener('cb:path:decay:on',     decayOn);
+  window.addEventListener('cb:path:decay:off',    decayOff);
+  window.addEventListener('cb:path:decay:freeze', decayFreeze);
+  window.addEventListener('cb:path:decay:speed',  decaySpeed);
 
   /* ------------------------------------------------------------------ */
   /* [B] Ressourcen-Snapshot                                            */
