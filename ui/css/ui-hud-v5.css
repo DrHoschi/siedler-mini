@@ -225,6 +225,10 @@
   pointer-events: auto;
   user-select: none;
 
+/* Sanfte Animationen (Auto-Hide + Drag) */
+transition: opacity 160ms ease, transform 160ms ease;
+will-change: opacity, transform;
+
   /* Startscreen: ausblenden */
   display: none;
 }
@@ -238,6 +242,19 @@
 
 body.is-playing .minimap{
   display: block;
+}
+
+/* Auto-Hide: wenn z. B. Build-Dock oder Inspector offen ist */
+.minimap.is-auto-hidden{
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+}
+
+/* Drag-Feedback (nur optisch) */
+.minimap.is-dragging{
+  opacity: 0.96;
+  transform: scale(1.02);
 }
 
 .minimap__canvas{
@@ -271,8 +288,13 @@ body.is-playing .minimap{
   line-height: 26px;
   text-align: center;
 
-  cursor: pointer;
+  cursor: grab;
   -webkit-tap-highlight-color: transparent;
+
+/* Wenn gerade gezogen wird */
+.minimap.is-dragging .minimap__toggle{
+  cursor: grabbing;
+}
 }
 
 /* Minimierter Modus: Canvas weg, nur kleiner Button/Block */
