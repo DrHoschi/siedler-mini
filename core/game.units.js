@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.16-units-trail-move-events
+ * Version : v25.12.14-units-workers-spawnloop1
  *
  * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
@@ -41,25 +41,68 @@
 
   const SPEED_TILES_PER_SEC = 0.8;
 
-  // -------------------------------------------------------------------------
-  // TRAMPELPFAD / TRAIL SEGMENT EVENTS
-  // -------------------------------------------------------------------------
-  // Ziel: Nicht mehr nur tile-step stempeln, sondern echte Segmente entlang
-  //       der Bewegung (cb:unit:move). Gleichzeitig dürfen Spawn/Idle-
-  //       Micro-Bewegungen NICHT stempeln (HQ wird sonst sofort "dreckig").
-  const TRAIL_EMIT_STEP_TILES = 0.25; // alle ~0.25 Tiles ein Segment
-  const TRAIL_SPAWN_GRACE_MS  = 2500; // 2.5s nach Spawn keine Pfad-Stempel
+
+// -------------------------------------------------------------------------
+// TRAMPELPFAD: Segment-Events (cb:unit:move) als "Trail"
+//   Ziel: Linie statt Zickzack → regelmäßig während der Bewegung emitten
+//   - nur für Carrier (wichtig: Träger sollen Wege trampeln)
+//   - Idle/Spawn-Micro-Moves werden gefiltert
+// -------------------------------------------------------------------------
+const TRAIL_EMIT_STEP_TILES = 0.25;   // alle ~0.25 Tiles ein Segment
+const TRAIL_SPAWN_GRACE_MS  = 2500;   // nach Spawn kurz nichts stempeln
+
+function _trailInit(u){
+  if (u._trailInit) return;
+  u._trailInit = true;
+  u._trailLastX = u.x;
+  u._trailLastY = u.y;
+  u._trailSpawnMs = performance.now();
+}
+
+function _trailShouldEmit(u){
+  // Nur Carrier sollen "Wege" trampeln (Worker optional später)
+  if (!u || u.type !== 'carrier') return false;
+  // Ohne Task = Idle (kein Trampelpfad)
+  if (!u.task) return false;
+  // Wenn noch im Spawn-Grace: ignorieren
+  const now = performance.now();
+  if (now - (u._trailSpawnMs || 0) < TRAIL_SPAWN_GRACE_MS) return false;
+  return true;
+}
+
+function _trailMaybeEmit(u){
+  if (!_trailShouldEmit(u)) return;
+  _trailInit(u);
+
+  const dx = (u.x - u._trailLastX);
+  const dy = (u.y - u._trailLastY);
+  const dist = Math.hypot(dx, dy);
+  if (dist < TRAIL_EMIT_STEP_TILES) return;
+
+  const from = { x: u._trailLastX, y: u._trailLastY };
+  const to   = { x: u.x,          y: u.y };
+
+  u._trailLastX = u.x;
+  u._trailLastY = u.y;
+
+  try{
+    window.dispatchEvent(new CustomEvent('cb:unit:move', {
+      detail: {
+        id   : u.id,
+        type : u.type,
+        role : u.role || 'carrier',
+        from,
+        to
+      }
+    }));
+  }catch(e){ /* silent */ }
+}
 
   // -------------------------------------------------------------------------
   // HELFER
   // -------------------------------------------------------------------------
   function _rand(min, max){
     return min + Math.random() * (max - min);
-  }
-
-  function _nowMs(){
-    try{ return (performance && typeof performance.now === 'function') ? performance.now() : Date.now(); }
-    catch(_e){ return Date.now(); }
   }
 
   function _coord(src, key, fallback){
@@ -109,11 +152,6 @@
       task : null,
       carrying   : null,
       _idleTarget: null,
-
-      // Trampelpfad-Trail: Spawn-Timestamp + Event-Anker
-      _spawnMs    : _nowMs(),
-      _trailLastX : tx,
-      _trailLastY : ty,
 
       // Path-Navigation Cache (A*/Smoothing)
       // Wird von _moveTo() befüllt, wenn AdFinder aktiv ist.
@@ -170,11 +208,6 @@
       task : null,
       carrying   : null,
       _idleTarget: null,
-
-      // Trampelpfad-Trail: Spawn-Timestamp + Event-Anker
-      _spawnMs    : _nowMs(),
-      _trailLastX : tx,
-      _trailLastY : ty,
 
       // Path-Navigation Cache (A*/Smoothing)
       // Wird von _moveTo() befüllt, wenn AdFinder aktiv ist.
@@ -321,7 +354,21 @@ function spawnInitialCarriers(count){
     const source = { x: sx, y: sy };
     const dest   = { x: tx, y: ty };
 
-    u.task = {
+    
+
+// ---------------------------------------------------------
+// WICHTIG: Idle-Ziel löschen, sobald ein Job startet.
+// Sonst bleibt u._idleTarget gesetzt und Trail/Overlay werden als "idle"
+// interpretiert → keine cb:unit:move Segmente → keine Trampelpfade sichtbar.
+// ---------------------------------------------------------
+u._idleTarget = null;
+
+// Trail-Anker für neue Route sauber setzen (verhindert "Mega-Segment")
+u._trailInit  = false;
+u._trailLastX = u.x;
+u._trailLastY = u.y;
+
+u.task = {
       phase  : 'go_source',   // erst zur Quelle (HQ)
       job    : job,
       source : source,
@@ -386,81 +433,6 @@ function spawnInitialCarriers(count){
       }));
     }catch(e){ /* silent */ }
   }
-
-  // -------------------------------------------------------------------------
-  // TRAMPELPFAD: SEGMENT-EMIT (cb:unit:move)
-  //  - wird aus der echten Bewegung generiert (float), nicht aus Tile-Schritten
-  //  - ignoriert Spawn-Phase + Idle-Wanderung (HQ soll nicht sofort "dreckig" werden)
-  // -------------------------------------------------------------------------
-
-  function _trailInit(u){
-    if (!u) return;
-    if (!Number.isFinite(u._spawnMs)) u._spawnMs = _nowMs();
-    if (!Number.isFinite(u._trailLastX)) u._trailLastX = u.x;
-    if (!Number.isFinite(u._trailLastY)) u._trailLastY = u.y;
-  }
-
-  function _trailIsIdle(u){
-    if (!u) return true;
-    // Idle-Target ist unser klares Signal: das ist "rumstehen / wandern"
-    if (u._idleTarget) return true;
-    // Ohne Task = kein echter Job-Move
-    if (!u.task) return true;
-
-    // Task-Typ/Phase optional auswerten (robust gegen zukünftige Erweiterungen)
-    const t = u.task || {};
-    const type = String(t.type || t.job?.type || '');
-    if (/idle|wait|spawn/i.test(type)) return true;
-
-    return false;
-  }
-
-  function _trailMaybeEmit(u){
-    if (!u) return;
-    _trailInit(u);
-
-    const now = _nowMs();
-
-    // Spawn-Grace: NICHT stempeln, nur Anker nachziehen
-    if ((now - (u._spawnMs || 0)) < TRAIL_SPAWN_GRACE_MS){
-      u._trailLastX = u.x;
-      u._trailLastY = u.y;
-      return;
-    }
-
-    // Idle-Wanderung: niemals stempeln
-    if (_trailIsIdle(u)){
-      u._trailLastX = u.x;
-      u._trailLastY = u.y;
-      return;
-    }
-
-    const dx = (u.x - u._trailLastX);
-    const dy = (u.y - u._trailLastY);
-    const dist = Math.hypot(dx, dy);
-
-    if (dist < TRAIL_EMIT_STEP_TILES) return;
-
-    const from = { x: u._trailLastX, y: u._trailLastY };
-    const to   = { x: u.x,          y: u.y };
-
-    u._trailLastX = u.x;
-    u._trailLastY = u.y;
-
-    try{
-      window.dispatchEvent(new CustomEvent('cb:unit:move', {
-        detail: {
-          id   : u.id,
-          kind : u.kind,
-          type : u.type,
-          from,
-          to,
-          idle : false
-        }
-      }));
-    }catch(_e){ /* silent */ }
-  }
-
 
   function _moveTowards(u, target, dt){
     if (!target) return false;
@@ -978,3 +950,6 @@ function spawnInitialCarriers(count){
 
   LOG('Units geladen → Jobfähig (fix4, deliver + job:done)');
 })();
+
+
+--------------------------------------------------------------------------------

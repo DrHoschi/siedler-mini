@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/carrier.runtime.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.16-carrier-step-disabled
+ * Version : v25.12.12-carrier-runtime-v2 (tick-driven, no-RAF)
  *
  * Zweck   :
  *   "Runtime"-Schicht zwischen JobEngine und GameUnits.
@@ -34,6 +34,18 @@
    * ========================= */
   const TAG = '[carrier.runtime]';
   const VER = 'v25.12.12-carrier-runtime-v2';
+
+  // ---------------------------------------------------------
+  // FEATURE FLAG: cb:unit:step (für Debug/Legacy-Overlays)
+  // - Einige iOS/Safari Builds werfen sonst ReferenceError,
+  //   wenn EMIT_UNIT_STEP irgendwo referenziert wird.
+  // - Default: false (wir nutzen cb:unit:move Segmente als Quelle)
+  // ---------------------------------------------------------
+  const EMIT_UNIT_STEP = (typeof globalThis.EMIT_UNIT_STEP === 'boolean')
+    ? globalThis.EMIT_UNIT_STEP
+    : false;
+  globalThis.EMIT_UNIT_STEP = EMIT_UNIT_STEP;
+
 
   // Sanftes Logging (passt zu deinem Projekt: CBLog wenn vorhanden, sonst console)
   const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
@@ -100,16 +112,18 @@
       _lastTileByUnitId.set(key, { tx, ty });
 
       // Event für PathOverlay/Traces/Debug
-      if (EMIT_UNIT_STEP) window.dispatchEvent(new CustomEvent('cb:unit:step', {
-        detail: {
-          id: id,
-          tx, ty,
-          x: u.x, y: u.y,          // world/tile float falls vorhanden
-          type: u.type || 'carrier',
-          role: u.role || 'worker'
-        }
-      }));
-    }
+      if (EMIT_UNIT_STEP) {
+            window.dispatchEvent(new CustomEvent('cb:unit:step', {
+              detail: {
+                id: id,
+                tx, ty,
+                x: u.x, y: u.y,          // world/tile float falls vorhanden
+                type: u.type || 'carrier',
+                role: u.role || 'worker'
+              }
+            }));
+                }
+}
   }
 
   function _takeJobsAndAssign() {
@@ -199,3 +213,6 @@
 
   INFO('bereit', VER);
 })();
+
+
+--------------------------------------------------------------------------------
