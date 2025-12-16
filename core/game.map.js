@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-units-sprites
+ * Version : v25.12.16-renderorder-underlay-ySort-buildings
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -388,13 +388,86 @@
       }
     }
 
+    
+    // ---------------------------------------------------------------------
+    // Trampelpfade (UNDERLAY)
+    //   Ziel: Pfade direkt über dem Terrain, aber UNTER Gebäuden/Ressourcen/Deko.
+    //
+    //   Hinweis:
+    //   - PathOverlay wurde früher über OverlayHooks auf #overlay gezeichnet.
+    //   - Damit es wirklich "unter" den Gebäuden liegt, zeichnen wir hier
+    //     direkt auf dem Main-Canvas (WORLD-Space, gleiche Kamera-Transform).
+    //   - Um Doppelzeichnung zu vermeiden, deaktivieren wir bekannte
+    //     OverlayHooks-Layer-Namen einmalig.
+    // ---------------------------------------------------------------------
+    try{
+      if (!Game.__poUnderlayInit){
+        Game.__poUnderlayInit = true;
+        if (window.OverlayHooks && typeof window.OverlayHooks.disable === 'function'){
+          // häufige Layer-Namen (defensiv)
+          const names = ['trample-paths','path-overlay','paths','trample'];
+          for (const n of names) window.OverlayHooks.disable(n);
+        }
+      }
+
+      const PO = window.PathOverlay;
+      if (PO){
+        const camState = (window.GameCamera?.getState?.() || { x: camX, y: camY, zoom });
+        // Wir rufen defensiv eine der möglichen APIs auf (je nach Patch-Stand)
+        if (typeof PO.drawUnderlay === 'function') PO.drawUnderlay(ctx, camState, ts);
+        else if (typeof PO.drawOnMainCanvas === 'function') PO.drawOnMainCanvas(ctx, camState, ts);
+        else if (typeof PO.drawWorld === 'function') PO.drawWorld(ctx, camState, ts);
+        else if (typeof PO.draw === 'function') PO.draw(ctx, camState); // ältere API
+      }
+    }catch(e){
+      WARN('PathOverlay UNDERLAY Fehler:', e);
+    }
+
+// ---------------------------------------------------------------------
+// Ressourcen-Layer (Bäume/Steine/Fische)
+//  - unterstützt beide APIs:
+//      A) MapResources.drawWorld(ctx,{tileSize})
+//      B) MapResources.drawOnMainCanvas(ctx, cam, tileSize)
+// ---------------------------------------------------------------------
+if (window.MapResources) {
+  try {
+    // bevorzugt: Atlas-Version / neue API
+    if (typeof window.MapResources.drawOnMainCanvas === 'function') {
+      window.MapResources.drawOnMainCanvas(ctx, cam, ts);
+    }
+    // fallback: alte API (Platzhalter-Kreis/Quadrat)
+    else if (typeof window.MapResources.drawWorld === 'function') {
+      window.MapResources.drawWorld(ctx, { tileSize: ts });
+    }
+  } catch (e) {
+    WARN('MapResources draw Fehler:', e);
+  }
+}
+
+    // ---------------------------------------------------------------------
+// Deko-Layer (Pflanzen/Props, KEINE Ressourcen)
+//  - benötigt core/map.decorations.js
+//  - nutzt MapDecorations.drawOnMainCanvas(ctx, cam, tileSize)
+// ---------------------------------------------------------------------
+if (window.MapDecorations) {
+  try {
+    if (typeof window.MapDecorations.drawOnMainCanvas === 'function') {
+      window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
+    }
+  } catch (e) {
+    WARN('MapDecorations draw Fehler:', e);
+  }
+}
+    
     // ---------------------------------------------------------------------
     // Gebäude-Overlay (Baustellen + fertige Gebäude)
     // ---------------------------------------------------------------------
     if (Array.isArray(Game?.buildings) && Game.buildings.length){
       ensureBuildPlaceSprites();
 
-      for (const b of Game.buildings){
+      const __bldSorted = Game.buildings.slice().sort((a,b)=>((a.y+a.h)-(b.y+b.h)) || (a.x-b.x));
+
+      for (const b of __bldSorted){
         const bx = (b.x | 0) * ts;
         const by = (b.y | 0) * ts;
         const bw = (b.w || 1) * ts;
@@ -448,43 +521,8 @@
         }
       }
     }
-    // ---------------------------------------------------------------------
-// Ressourcen-Layer (Bäume/Steine/Fische)
-//  - unterstützt beide APIs:
-//      A) MapResources.drawWorld(ctx,{tileSize})
-//      B) MapResources.drawOnMainCanvas(ctx, cam, tileSize)
-// ---------------------------------------------------------------------
-if (window.MapResources) {
-  try {
-    // bevorzugt: Atlas-Version / neue API
-    if (typeof window.MapResources.drawOnMainCanvas === 'function') {
-      window.MapResources.drawOnMainCanvas(ctx, cam, ts);
-    }
-    // fallback: alte API (Platzhalter-Kreis/Quadrat)
-    else if (typeof window.MapResources.drawWorld === 'function') {
-      window.MapResources.drawWorld(ctx, { tileSize: ts });
-    }
-  } catch (e) {
-    WARN('MapResources draw Fehler:', e);
-  }
-}
-
-    // ---------------------------------------------------------------------
-// Deko-Layer (Pflanzen/Props, KEINE Ressourcen)
-//  - benötigt core/map.decorations.js
-//  - nutzt MapDecorations.drawOnMainCanvas(ctx, cam, tileSize)
-// ---------------------------------------------------------------------
-if (window.MapDecorations) {
-  try {
-    if (typeof window.MapDecorations.drawOnMainCanvas === 'function') {
-      window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
-    }
-  } catch (e) {
-    WARN('MapDecorations draw Fehler:', e);
-  }
-}
     
-    // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Arbeitsbereiche (WorkAreas) zeichnen
 //   - bevorzugt: drawWorld(ctx, {tileSize})
 //   - Fallback: drawOnMainCanvas(ctx, cam)
