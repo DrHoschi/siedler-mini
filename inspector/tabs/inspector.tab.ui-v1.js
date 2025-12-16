@@ -63,19 +63,12 @@
     // Canvas/Viewport
     const canvas = dbg.canvas || document.getElementById('game');
     const dpr    = (window.devicePixelRatio || 1);
-    let cssW = 0, cssH = 0;
-    try{
-      const r = canvas?.getBoundingClientRect?.();
-      cssW = r ? Math.round(r.width)  : 0;
-      cssH = r ? Math.round(r.height) : 0;
-    }catch(_){}
 
-    if (!cssW || !cssH){
-      // Fallback: sichtbarer Viewport (iOS Safari Toolbars / Split-View)
-      const vv = window.visualViewport;
-      cssW = Math.round(vv?.width  || window.innerWidth  || 0);
-      cssH = Math.round(vv?.height || window.innerHeight || 0);
-    }
+    // WICHTIG: canvas.style.width ist oft "100%" → parseInt("100%")=100 (falsch).
+    //          Daher immer echte CSS-Box via getBoundingClientRect() nutzen.
+    const r = canvas?.getBoundingClientRect?.() || null;
+    const cssW = Math.max(1, Math.round(r?.width  || 0)) || (window.innerWidth|0);
+    const cssH = Math.max(1, Math.round(r?.height || 0)) || (window.innerHeight|0);
 
     ST.css.w  = cssW|0;
     ST.css.h  = cssH|0;
@@ -103,19 +96,11 @@
     const canvas = document.getElementById('game');
     const dpr = (window.devicePixelRatio || 1);
 
-    let cssW = 0, cssH = 0;
-    try{
-      const r = canvas?.getBoundingClientRect?.();
-      cssW = r ? Math.round(r.width)  : 0;
-      cssH = r ? Math.round(r.height) : 0;
-    }catch(_){}
-
-    if (!cssW || !cssH){
-      // Fallback: sichtbarer Viewport (iOS Safari Toolbars / Split-View)
-      const vv = window.visualViewport;
-      cssW = Math.round(vv?.width  || window.innerWidth  || 0);
-      cssH = Math.round(vv?.height || window.innerHeight || 0);
-    }
+    // WICHTIG: canvas.style.width ist oft "100%" → parseInt("100%")=100 (falsch).
+    //          Daher immer echte CSS-Box via getBoundingClientRect() nutzen.
+    const r = canvas?.getBoundingClientRect?.() || null;
+    const cssW = Math.max(1, Math.round(r?.width  || 0)) || (window.innerWidth|0);
+    const cssH = Math.max(1, Math.round(r?.height || 0)) || (window.innerHeight|0);
 
     ST.css.w = cssW|0; ST.css.h = cssH|0; ST.css.dpr = dpr;
     ST.back.w = (canvas ? canvas.width  : (cssW * dpr)|0);
@@ -375,4 +360,3 @@
 
   INFO('UI-Diagnose geladen (v25.11.15-camdebug2-grid)');
 })();
-
