@@ -204,8 +204,12 @@
 
 .minimap{
   position: fixed;
-  top: 6px;
-  right: 6px;
+  overflow: hidden;
+  border-radius: 10px;
+  box-sizing: border-box;
+  
+  top: calc(6px + env(safe-area-inset-top, 0px));
+  right: calc(6px + env(safe-area-inset-right, 0px));
 
   z-index: 50;               /* über Canvas, unter Inspector */
   pointer-events: auto;
@@ -230,3 +234,46 @@ body.is-playing .minimap{
   touch-action: none;
 }
 
+
+/* Toggle-Button (Minimieren / Öffnen) */
+.minimap__toggle{
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.35);
+  color: rgba(255,255,255,0.95);
+
+  font-size: 18px;
+  line-height: 26px;
+  text-align: center;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Minimierter Modus: Canvas weg, nur kleiner Button/Block */
+.minimap.is-minimized{
+  background: rgba(0,0,0,0.25);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+}
+
+.minimap.is-minimized .minimap__canvas{
+  display: none;
+}
+
+/* Auf sehr kleinen Displays wirkt die Minimap sonst zu dominant -> leicht kleiner */
+@media (max-width: 520px), (max-height: 700px){
+  .minimap__toggle{
+    width: 26px;
+    height: 26px;
+    font-size: 17px;
+    line-height: 24px;
+  }
+}
