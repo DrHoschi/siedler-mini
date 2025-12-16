@@ -76,29 +76,17 @@
   // HQ & UNITS
   // -------------------------------------------------------------------------
   function setHQPos(pos) {
-  if (!pos) return;
-  if (!Number.isFinite(pos.tx) || !Number.isFinite(pos.ty)) return;
+    if (!pos) return;
+    if (!Number.isFinite(pos.tx) || !Number.isFinite(pos.ty)) return;
+    _hqPos = { tx: pos.tx, ty: pos.ty };
+    LOG('HQPos gesetzt', _hqPos);
 
-  const prev = _hqPos ? { tx:_hqPos.tx, ty:_hqPos.ty } : null;
-  _hqPos = { tx: pos.tx, ty: pos.ty };
-  LOG('HQPos gesetzt', _hqPos);
-
-  // -----------------------------------------------------------------------
-  // Hook für "Cinematic Start Zoom" / Kamera-Module / Inspector
-  // -----------------------------------------------------------------------
-  // Wir feuern bewusst EIN CustomEvent, sobald sich die HQ-Position geändert hat.
-  // So bleibt die Kamera-Logik sauber entkoppelt von Game.js / Spawn-Logik.
-  if (!prev || prev.tx !== _hqPos.tx || prev.ty !== _hqPos.ty){
-    const detail = {
-      tx     : _hqPos.tx,
-      ty     : _hqPos.ty,
-      source : pos.source || (pos.__autoStart ? 'auto' : 'setHQPos')
-    };
-    try { window.dispatchEvent(new CustomEvent('cb:hq:pos', { detail })); } catch {}
-    try { document.dispatchEvent(new CustomEvent('cb:hq:pos', { detail })); } catch {}
+    // Hook für Cinematic-Camera / andere Systeme:
+    // Sobald das HQ bekannt ist, können Module (ohne Game.js anfassen) reagieren.
+    try{
+      window.dispatchEvent(new CustomEvent('cb:hq:pos', { detail: { tx: _hqPos.tx, ty: _hqPos.ty } }));
+    } catch(e){ /* silent */ }
   }
-}
-
 
   function getHQPos(){
     return _hqPos ? { tx: _hqPos.tx, ty: _hqPos.ty } : null;

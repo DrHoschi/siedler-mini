@@ -55,14 +55,57 @@
   function _hasHQ(){
     return Array.isArray(Game.buildings) && Game.buildings.some(b => b && b.id === START_HQ_ID);
   }
-
-  function _pickRandomHQPos(map, w, h){
+  function _pickRandomHQPos(map, w, h, entrance0){
     const grid = map?.grid;
     const cols = map?.cols | 0;
     const rows = map?.rows | 0;
     if (!grid || !cols || !rows) return null;
 
+    // ---------------------------------------------------------------------
+    // HQ-Placement Constraints (User-Request):
+    //   - Abstand zum Rand (EDGE_MARGIN_TILES)
+    //   - Abstand zum Wasser (WATER_MARGIN_TILES)
+    //   - Wasser-Tiles NICHT hardcoden → aus map.legend / map.metadata.legend erkennen
+    //   - Nicht in Ressourcen-Nodes / nicht in andere Gebäude hinein
+    //   - Entrance-Tile muss innerhalb der Map liegen und darf kein Wasser sein
+    // ---------------------------------------------------------------------
+    const EDGE_MARGIN_TILES  = (window.__SIEDLER_HQ_EDGE_MARGIN_TILES  != null) ? (window.__SIEDLER_HQ_EDGE_MARGIN_TILES|0)  : 6;
+    const WATER_MARGIN_TILES = (window.__SIEDLER_HQ_WATER_MARGIN_TILES != null) ? (window.__SIEDLER_HQ_WATER_MARGIN_TILES|0) : 4;
+
+    // Legend (primary: map.legend, fallback: map.metadata.legend)
+    const legend = (map && map.legend) ? map.legend : (map?.metadata?.legend || {});
+    const waterIds  = new Set();
+    const forestIds = new Set();
+    const rockIds   = new Set();
+
+    try{
+      for (const [k, v] of Object.entries(legend || {})){
+        const name = (typeof v === 'string') ? v.toLowerCase() : '';
+        const id   = parseInt(k, 10);
+        if (!Number.isFinite(id)) continue;
+
+        if (name.includes('water'))  waterIds.add(id);
+        if (name.includes('forest')) forestIds.add(id);
+        if (name.includes('rock'))   rockIds.add(id);
+      }
+    } catch(e){ /* silent */ }
+
+    // Fallbacks (nur wenn Legend nichts hergibt)
+    if (!waterIds.size)  waterIds.add(8);   // konservativ: alte Demo/Default-Maps
+    if (!forestIds.size) forestIds.add(5);
+    if (!rockIds.size)   rockIds.add(6);
+
+    function isWater(t){ return waterIds.has(t|0); }
+    function isForbiddenTerrain(t){
+      const tt = t|0;
+      if (waterIds.has(tt)) return true;
+      if (forestIds.has(tt)) return true; // Start lieber nicht mitten in Wald
+      if (rockIds.has(tt))   return true;
+      return false;
+    }
+
     // Blocker-Set aus MapResources (falls schon bereit)
+    // + bereits platzierte Gebäude (Start kann z.B. Map-Spawn-Objekte enthalten)
     const blocked = new Set();
     try{
       const nodes = window.MapResources?.state?.nodes;
@@ -74,8 +117,110 @@
       }
     } catch(e){}
 
+    try{
+      if (Array.isArray(Game.buildings)){
+        for (const b of Game.buildings){
+          if (!b) continue;
+          const bx = (b.x|0), by = (b.y|0);
+          const bw = (b.w|0) || 1, bh = (b.h|0) || 1;
+          for (let yy=by; yy<by+bh; yy++){
+            for (let xx=bx; xx<bx+bw; xx++){
+              blocked.add(xx+','+yy);
+            }
+          }
+        }
+      }
+    } catch(e){}
+
+    // Entrance default: Option 1 (entrances[0]) – falls nicht vorhanden: "mittig unten"
+    const ent = entrance0 ? { dx:(entrance0.dx|0), dy:(entrance0.dy|0) } : { dx: Math.floor(w/2), dy: h };
+
+    // Aus Sampling-Gründen: berechne grobe Start-Range, damit wir nicht ewig rand/door-out-of-bounds picken
+    const minX0 = EDGE_MARGIN_TILES - Math.min(0, ent.dx);
+    const minY0 = EDGE_MARGIN_TILES - Math.min(0, ent.dy);
+    const maxX0 = (cols - EDGE_MARGIN_TILES - 1) - Math.max((w-1), ent.dx);
+    const maxY0 = (rows - EDGE_MARGIN_TILES - 1) - Math.max((h-1), ent.dy);
+    if (maxX0 < minX0 || maxY0 < minY0) return null;
+
+    function areaOk(x0,y0){
+      const ex = x0 + ent.dx;
+      const ey = y0 + ent.dy;
+
+      // Bounds: Footprint + Entrance müssen innerhalb der Map sein
+      const minX = Math.min(x0, ex);
+      const minY = Math.min(y0, ey);
+      const maxX = Math.max(x0 + w - 1, ex);
+      const maxY = Math.max(y0 + h - 1, ey);
+      if (minX < 0 || minY < 0 || maxX >= cols || maxY >= rows) return false;
+
+      // Rand-Margin
+      if (minX < EDGE_MARGIN_TILES || minY < EDGE_MARGIN_TILES) return false;
+      if (maxX >= (cols - EDGE_MARGIN_TILES) || maxY >= (rows - EDGE_MARGIN_TILES)) return false;
+
+      // Footprint: Terrain + Blocker
+      for (let y=y0; y<y0+h; y++){
+        const row = grid[y];
+        if (!row) return false;
+        for (let x=x0; x<x0+w; x++){
+          const t = row[x] | 0;
+          if (isForbiddenTerrain(t)) return false;
+          if (blocked.has(x+','+y)) return false;
+        }
+      }
+
+      // Entrance: Terrain + Blocker
+      {
+        const rowE = grid[ey];
+        if (!rowE) return false;
+        const te = rowE[ex] | 0;
+        if (isForbiddenTerrain(te)) return false;
+        if (blocked.has(ex+','+ey)) return false;
+      }
+
+      // Wasser-Margin: im erweiterten Bounding-Box-Ring darf kein Wasser liegen
+      const wx0 = Math.max(0, minX - WATER_MARGIN_TILES);
+      const wy0 = Math.max(0, minY - WATER_MARGIN_TILES);
+      const wx1 = Math.min(cols-1, maxX + WATER_MARGIN_TILES);
+      const wy1 = Math.min(rows-1, maxY + WATER_MARGIN_TILES);
+      for (let y=wy0; y<=wy1; y++){
+        const row = grid[y];
+        if (!row) return false;
+        for (let x=wx0; x<=wx1; x++){
+          const t = row[x] | 0;
+          if (isWater(t)) return false;
+        }
+      }
+
+      return true;
+    }
+
+    // Random Sampling
+    for (let i=0; i<1200; i++){
+      const x = (minX0 + Math.random() * (maxX0 - minX0 + 1)) | 0;
+      const y = (minY0 + Math.random() * (maxY0 - minY0 + 1)) | 0;
+      if (areaOk(x,y)) return { tx:x, ty:y };
+    }
+
+    // Fallback: Map-Spawn[0] (wenn vorhanden)
+    const s0 = map?.spawns?.[0];
+    if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)){
+      const x = (s0.x|0), y = (s0.y|0);
+      if (areaOk(x,y)) return { tx:x, ty:y };
+    }
+
+    // Fallback: Scan (kostet, aber robust)
+    for (let y=minY0; y<=maxY0; y++){
+      for (let x=minX0; x<=maxX0; x++){
+        if (areaOk(x,y)) return { tx:x, ty:y };
+      }
+    }
+    return null;
+  }
+      }
+    } catch(e){}
+
     function terrainOk(t){
-      if (t === 8 || t === 9) return false; // water
+      if (t === 8) return false; // water
       if (t === 5) return false; // forest (Start lieber nicht mitten rein)
       if (t === 6) return false; // rock
       return true;
@@ -83,19 +228,6 @@
 
     function areaOk(x0,y0){
       if (x0 < 0 || y0 < 0 || x0 + w > cols || y0 + h > rows) return false;
-      // Keine Überschneidung mit bereits existierenden Gebäuden
-      // (z.B. wenn Map/Debug später mal Gebäude vorgibt).
-      if (Array.isArray(Game.buildings) && Game.buildings.length){
-        for (const b of Game.buildings){
-          if (!b) continue;
-          const bx = b.x|0, by = b.y|0;
-          const bw = Math.max(1, (b.w|0) || 1);
-          const bh = Math.max(1, (b.h|0) || 1);
-          const overlap = (x0 < bx + bw) && (x0 + w > bx) && (y0 < by + bh) && (y0 + h > by);
-          if (overlap) return false;
-        }
-      }
-
       for (let y=y0; y<y0+h; y++){
         const row = grid[y];
         if (!row) return false;
@@ -132,18 +264,13 @@
   }
 
   function _centerCameraOnBuilding(b){
-  // Wenn das Cinematic-Modul aktiv ist, soll ES die Kamera führen.
-  // (Sonst würden wir kurz "springen", bevor der Fit-to-Map-Start kommt.)
-  if (window.__SIEDLER_CINEMATIC_CAMERA_ACTIVE) return;
-
-  try{
-    const ts = Game.tileSize || 64;
-    const cx = (b.x + (b.w||1)/2) * ts;
-    const cy = (b.y + (b.h||1)/2) * ts;
-    window.GameCamera?.centerOn?.(cx, cy, { zoom: START_ZOOM });
-  } catch(e){}
-}
-
+    try{
+      const ts = Game.tileSize || 64;
+      const cx = (b.x + (b.w||1)/2) * ts;
+      const cy = (b.y + (b.h||1)/2) * ts;
+      window.GameCamera?.centerOn?.(cx, cy, { zoom: START_ZOOM });
+    } catch(e){}
+  }
 
   /**
    * Stellt sicher, dass eine JobEngine existiert und eine push()/pop()-API hat.
@@ -580,7 +707,8 @@
     const w   = (def && def.size && Number.isFinite(def.size.w)) ? (def.size.w|0) : 3;
     const h   = (def && def.size && Number.isFinite(def.size.h)) ? (def.size.h|0) : 3;
 
-    const pos = _pickRandomHQPos(map, w, h);
+    const ent0 = (def && Array.isArray(def.entrances) && def.entrances.length) ? def.entrances[0] : { dx: Math.floor(w/2), dy: h };
+    const pos = _pickRandomHQPos(map, w, h, ent0);
     if (!pos){
       WARN('Auto-Start-HQ: keine Position gefunden (Map/Blocker)');
       return;
@@ -595,9 +723,13 @@
     }
 
     // Kamera nachziehen (nächster Tick, damit HQ sicher in Game.buildings steht)
+    // Wenn Cinematic aktiv ist, übernimmt core/camera.cinematic.js und wir vermeiden einen Jump.
     setTimeout(()=>{
       const hq = (Array.isArray(Game.buildings) ? Game.buildings.find(b => b && b.id === START_HQ_ID) : null);
-      if (hq) _centerCameraOnBuilding(hq);
+      if (!hq) return;
+
+      const cineWants = !!(window.CameraCinematic && typeof window.CameraCinematic.wantsControl === 'function' && window.CameraCinematic.wantsControl());
+      if (!cineWants) _centerCameraOnBuilding(hq);
     }, 0);
   });
 
