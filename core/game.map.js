@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.16-renderorder-underlay-ySort-buildings
+ * Version : v25.12.13-units-sprites
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -182,6 +182,26 @@
     Mod.cols     = cols;
     Mod.tileSize = Array.isArray(json.size) ? (json.size[0] || 64) : 64;
 
+    // ---------------------------------------------------------------------
+    // Spawn-Punkt aus der Map merken
+    //  - Map-epoch1.json enthält bereits ein "spawns" Array.
+    //  - Wir speichern den ersten Spawn als {tx,ty,...}, damit andere Module
+    //    (z.B. GameUnits) das HQ & Start-Units robust platzieren können.
+    // ---------------------------------------------------------------------
+    Mod.spawn = null;
+    try{
+      const sp = Array.isArray(json.spawns) ? json.spawns[0] : null;
+      if (sp && Number.isFinite(sp.x) && Number.isFinite(sp.y)){
+        Mod.spawn = {
+          player   : sp.player ?? 1,
+          tx       : sp.x,
+          ty       : sp.y,
+          resources: (sp.resources && typeof sp.resources === 'object') ? sp.resources : null
+        };
+        LOG('Map-Spawn erkannt:', Mod.spawn);
+      }
+    }catch(_e){}
+
     const grid = new Array(rows);
     for (let y = 0; y < rows; y++){
       const row = Array.isArray(tiles[y]) ? tiles[y] : [];
@@ -199,6 +219,22 @@
     } else {
       LOG('Map übernommen – warte noch auf Tileset …');
     }
+
+    // ---------------------------------------------------------------------
+    // Event: Map-Daten sind da (Tiles + optional Spawn)
+    // Damit können Units/HQ auch dann initialisieren, wenn Reihenfolge
+    // zwischen cb:game:start und Map-Load mal anders ist.
+    // ---------------------------------------------------------------------
+    try{
+      window.dispatchEvent(new CustomEvent('cb:map:ready', {
+        detail:{
+          id   : json.id || Mod.name,
+          cols : Mod.cols,
+          rows : Mod.rows,
+          spawn: Mod.spawn
+        }
+      }));
+    }catch(_e){}
   }
 
   // -------------------------------------------------------------------------
@@ -388,86 +424,13 @@
       }
     }
 
-    
-    // ---------------------------------------------------------------------
-    // Trampelpfade (UNDERLAY)
-    //   Ziel: Pfade direkt über dem Terrain, aber UNTER Gebäuden/Ressourcen/Deko.
-    //
-    //   Hinweis:
-    //   - PathOverlay wurde früher über OverlayHooks auf #overlay gezeichnet.
-    //   - Damit es wirklich "unter" den Gebäuden liegt, zeichnen wir hier
-    //     direkt auf dem Main-Canvas (WORLD-Space, gleiche Kamera-Transform).
-    //   - Um Doppelzeichnung zu vermeiden, deaktivieren wir bekannte
-    //     OverlayHooks-Layer-Namen einmalig.
-    // ---------------------------------------------------------------------
-    try{
-      if (!Game.__poUnderlayInit){
-        Game.__poUnderlayInit = true;
-        if (window.OverlayHooks && typeof window.OverlayHooks.disable === 'function'){
-          // häufige Layer-Namen (defensiv)
-          const names = ['trample-paths','path-overlay','paths','trample'];
-          for (const n of names) window.OverlayHooks.disable(n);
-        }
-      }
-
-      const PO = window.PathOverlay;
-      if (PO){
-        const camState = (window.GameCamera?.getState?.() || { x: camX, y: camY, zoom });
-        // Wir rufen defensiv eine der möglichen APIs auf (je nach Patch-Stand)
-        if (typeof PO.drawUnderlay === 'function') PO.drawUnderlay(ctx, camState, ts);
-        else if (typeof PO.drawOnMainCanvas === 'function') PO.drawOnMainCanvas(ctx, camState, ts);
-        else if (typeof PO.drawWorld === 'function') PO.drawWorld(ctx, camState, ts);
-        else if (typeof PO.draw === 'function') PO.draw(ctx, camState); // ältere API
-      }
-    }catch(e){
-      WARN('PathOverlay UNDERLAY Fehler:', e);
-    }
-
-// ---------------------------------------------------------------------
-// Ressourcen-Layer (Bäume/Steine/Fische)
-//  - unterstützt beide APIs:
-//      A) MapResources.drawWorld(ctx,{tileSize})
-//      B) MapResources.drawOnMainCanvas(ctx, cam, tileSize)
-// ---------------------------------------------------------------------
-if (window.MapResources) {
-  try {
-    // bevorzugt: Atlas-Version / neue API
-    if (typeof window.MapResources.drawOnMainCanvas === 'function') {
-      window.MapResources.drawOnMainCanvas(ctx, cam, ts);
-    }
-    // fallback: alte API (Platzhalter-Kreis/Quadrat)
-    else if (typeof window.MapResources.drawWorld === 'function') {
-      window.MapResources.drawWorld(ctx, { tileSize: ts });
-    }
-  } catch (e) {
-    WARN('MapResources draw Fehler:', e);
-  }
-}
-
-    // ---------------------------------------------------------------------
-// Deko-Layer (Pflanzen/Props, KEINE Ressourcen)
-//  - benötigt core/map.decorations.js
-//  - nutzt MapDecorations.drawOnMainCanvas(ctx, cam, tileSize)
-// ---------------------------------------------------------------------
-if (window.MapDecorations) {
-  try {
-    if (typeof window.MapDecorations.drawOnMainCanvas === 'function') {
-      window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
-    }
-  } catch (e) {
-    WARN('MapDecorations draw Fehler:', e);
-  }
-}
-    
     // ---------------------------------------------------------------------
     // Gebäude-Overlay (Baustellen + fertige Gebäude)
     // ---------------------------------------------------------------------
     if (Array.isArray(Game?.buildings) && Game.buildings.length){
       ensureBuildPlaceSprites();
 
-      const __bldSorted = Game.buildings.slice().sort((a,b)=>((a.y+a.h)-(b.y+b.h)) || (a.x-b.x));
-
-      for (const b of __bldSorted){
+      for (const b of Game.buildings){
         const bx = (b.x | 0) * ts;
         const by = (b.y | 0) * ts;
         const bw = (b.w || 1) * ts;
@@ -521,8 +484,43 @@ if (window.MapDecorations) {
         }
       }
     }
-    
+    // ---------------------------------------------------------------------
+// Ressourcen-Layer (Bäume/Steine/Fische)
+//  - unterstützt beide APIs:
+//      A) MapResources.drawWorld(ctx,{tileSize})
+//      B) MapResources.drawOnMainCanvas(ctx, cam, tileSize)
 // ---------------------------------------------------------------------
+if (window.MapResources) {
+  try {
+    // bevorzugt: Atlas-Version / neue API
+    if (typeof window.MapResources.drawOnMainCanvas === 'function') {
+      window.MapResources.drawOnMainCanvas(ctx, cam, ts);
+    }
+    // fallback: alte API (Platzhalter-Kreis/Quadrat)
+    else if (typeof window.MapResources.drawWorld === 'function') {
+      window.MapResources.drawWorld(ctx, { tileSize: ts });
+    }
+  } catch (e) {
+    WARN('MapResources draw Fehler:', e);
+  }
+}
+
+    // ---------------------------------------------------------------------
+// Deko-Layer (Pflanzen/Props, KEINE Ressourcen)
+//  - benötigt core/map.decorations.js
+//  - nutzt MapDecorations.drawOnMainCanvas(ctx, cam, tileSize)
+// ---------------------------------------------------------------------
+if (window.MapDecorations) {
+  try {
+    if (typeof window.MapDecorations.drawOnMainCanvas === 'function') {
+      window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
+    }
+  } catch (e) {
+    WARN('MapDecorations draw Fehler:', e);
+  }
+}
+    
+    // ---------------------------------------------------------------------
 // Arbeitsbereiche (WorkAreas) zeichnen
 //   - bevorzugt: drawWorld(ctx, {tileSize})
 //   - Fallback: drawOnMainCanvas(ctx, cam)
