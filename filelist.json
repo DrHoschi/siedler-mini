@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-16T11:19:17.604Z",
+  "createdAt": "2025-12-16T22:01:02.360Z",
   "root": ".",
-  "count": 532,
+  "count": 531,
   "entries": [
     {
       "type": "dir",
@@ -1382,7 +1382,7 @@
     {
       "type": "file",
       "path": "core/adfinder.js",
-      "size": 14289
+      "size": 14728
     },
     {
       "type": "file",
@@ -1407,7 +1407,7 @@
     {
       "type": "file",
       "path": "core/carrier.runtime.js",
-      "size": 5978
+      "size": 6695
     },
     {
       "type": "file",
@@ -1472,17 +1472,17 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 17504
+      "size": 19049
     },
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 13300
+      "size": 19497
     },
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 27240
+      "size": 28077
     },
     {
       "type": "file",
@@ -1527,7 +1527,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 26443
+      "size": 26783
     },
     {
       "type": "file",
@@ -1612,7 +1612,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 17422
+      "size": 24989
     },
     {
       "type": "file",
@@ -1936,7 +1936,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.paths-v1.js",
-      "size": 7738
+      "size": 13226
     },
     {
       "type": "file",
@@ -1985,7 +1985,7 @@
     {
       "type": "file",
       "path": "inspector/inspector.bridges.js",
-      "size": 8097
+      "size": 9037
     },
     {
       "type": "file",
@@ -2416,7 +2416,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-hud-v5.css",
-      "size": 5136
+      "size": 8098
     },
     {
       "type": "file",
@@ -2535,6 +2535,11 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-minimap.js",
+      "size": 38200
+    },
+    {
+      "type": "file",
       "path": "ui/ui-notify.js",
       "size": 1434
     },
@@ -2561,32 +2566,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52697
+      "size": 53227
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20588
-    },
-    {
-      "type": "file",
-      "path": "game.production.js",
-      "size": 16750
+      "size": 20808
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 17120
+      "size": 17200
     },
     {
       "type": "file",
       "path": "package.json",
       "size": 180
-    },
-    {
-      "type": "file",
-      "path": "production.res-validate.js",
-      "size": 6693
     },
     {
       "type": "file",
