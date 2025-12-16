@@ -84,6 +84,44 @@
     return null;
   }
 
+  // -----------------------------------------------------------------------
+  // Erweiterte Lookup-Hilfen
+  // -----------------------------------------------------------------------
+  function findBuildingByUid(uid){
+    if (!uid) return null;
+    const list = getBuildings();
+    for (const b of list){
+      if (b && b.uid === uid) return b;
+    }
+    return null;
+  }
+
+  function _getEntranceTiles(b){
+    const bx = toNumber(b.x, NaN);
+    const by = toNumber(b.y, NaN);
+    const bw = toNumber(b.w, 1);
+    const bh = toNumber(b.h, 1);
+    if (!Number.isFinite(bx) || !Number.isFinite(by)) return [];
+    const ent = Array.isArray(b.entrances) ? b.entrances : null;
+    if (ent && ent.length){
+      return ent.map(e => ({ x: (bx + toNumber(e.dx, 0)), y: (by + toNumber(e.dy, 0)) }));
+    }
+    // Fallback: südliche Mitte außerhalb des Footprints
+    return [{ x: (bx + Math.floor(bw/2)), y: (by + bh) }];
+  }
+
+  function findBuildingByEntrance(posX, posY){
+    const list = getBuildings();
+    for (const b of list){
+      if (!b) continue;
+      const tiles = _getEntranceTiles(b);
+      for (const t of tiles){
+        if (posX === t.x && posY === t.y) return b;
+      }
+    }
+    return null;
+  }
+
   /**
    * Grundzustand für Baustellen-Felder sicherstellen.
    *
@@ -344,9 +382,19 @@
       return;
     }
 
-    const b = findBuildingAt(posX, posY);
+    let b = null;
+
+    // 1) Wenn möglich, direkt per buildingUid zuordnen (Türkachel-Lieferung)
+    b = findBuildingByUid(d.buildingUid || d.uid || null);
+
+    // 2) Klassisch: innerhalb des Footprints
+    if (!b) b = findBuildingAt(posX, posY);
+
+    // 3) Fallback: Lieferung an Entrance-Tile
+    if (!b) b = findBuildingByEntrance(posX, posY);
+
     if (!b){
-      WARN('cb:build:deliver – kein Gebäude an Position gefunden', { posX, posY, detail:d });
+      WARN('cb:build:deliver – kein Gebäude gefunden (pos/uid)', { posX, posY, uid:(d.buildingUid||null), detail:d });
       return;
     }
 

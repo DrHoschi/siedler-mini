@@ -182,26 +182,6 @@
     Mod.cols     = cols;
     Mod.tileSize = Array.isArray(json.size) ? (json.size[0] || 64) : 64;
 
-    // ---------------------------------------------------------------------
-    // Spawn-Punkt aus der Map merken
-    //  - Map-epoch1.json enthält bereits ein "spawns" Array.
-    //  - Wir speichern den ersten Spawn als {tx,ty,...}, damit andere Module
-    //    (z.B. GameUnits) das HQ & Start-Units robust platzieren können.
-    // ---------------------------------------------------------------------
-    Mod.spawn = null;
-    try{
-      const sp = Array.isArray(json.spawns) ? json.spawns[0] : null;
-      if (sp && Number.isFinite(sp.x) && Number.isFinite(sp.y)){
-        Mod.spawn = {
-          player   : sp.player ?? 1,
-          tx       : sp.x,
-          ty       : sp.y,
-          resources: (sp.resources && typeof sp.resources === 'object') ? sp.resources : null
-        };
-        LOG('Map-Spawn erkannt:', Mod.spawn);
-      }
-    }catch(_e){}
-
     const grid = new Array(rows);
     for (let y = 0; y < rows; y++){
       const row = Array.isArray(tiles[y]) ? tiles[y] : [];
@@ -213,28 +193,33 @@
     }
     Mod.grid = grid;
 
+    // ---------------------------------------------------------------------
+    // Map-Metadaten & Spawns merken (für Auto-Start-HQ / Kamera-Fokus)
+    // ---------------------------------------------------------------------
+    Mod.spawns = Array.isArray(json.spawns) ? json.spawns : [];
+    Mod.legend = (json.metadata && json.metadata.legend) ? json.metadata.legend : {};
+
+    // Event: Map ist geladen (Grid/Size/Spawns vorhanden)
+    // Achtung: Tileset kann ggf. noch nachladen – für Gameplay (HQ-Start) reicht das Grid.
+    try{
+      window.dispatchEvent(new CustomEvent('cb:map:ready', {
+        detail: {
+          mapId : json.id || Mod.name || 'map',
+          cols  : Mod.cols,
+          rows  : Mod.rows,
+          spawns: Mod.spawns,
+          legend: Mod.legend
+        }
+      }));
+    } catch(e){ /* silent */ }
+
+
     if (Mod.tileset){
       Mod.ready = true;
       LOG('Map übernommen:', json, '→ renderfähig');
     } else {
       LOG('Map übernommen – warte noch auf Tileset …');
     }
-
-    // ---------------------------------------------------------------------
-    // Event: Map-Daten sind da (Tiles + optional Spawn)
-    // Damit können Units/HQ auch dann initialisieren, wenn Reihenfolge
-    // zwischen cb:game:start und Map-Load mal anders ist.
-    // ---------------------------------------------------------------------
-    try{
-      window.dispatchEvent(new CustomEvent('cb:map:ready', {
-        detail:{
-          id   : json.id || Mod.name,
-          cols : Mod.cols,
-          rows : Mod.rows,
-          spawn: Mod.spawn
-        }
-      }));
-    }catch(_e){}
   }
 
   // -------------------------------------------------------------------------

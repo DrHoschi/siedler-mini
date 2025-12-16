@@ -36,18 +36,6 @@
   /** @type {{tx:number,ty:number}|null} */
   let _hqPos = null;
 
-  // -----------------------------------------------------------------------
-  // Auto-Init Guard (HQ + Start-Units)
-  // -----------------------------------------------------------------------
-  // Hintergrund:
-  //  - Die Map enthält bereits einen Spawn-Punkt (map-epoch1.json → spawns[0]).
-  //  - Wenn der Spieler das HQ NICHT manuell platziert, möchten wir trotzdem
-  //    ein Start-HQ + Träger + Bauarbeiter haben, damit Baustellen überhaupt
-  //    gebaut werden können.
-  //  - Außerdem schützt das gegen Event-Reihenfolgen (cb:map:ready vs cb:game:start).
-  let _autoInitDone = false;
-  let _autoInitTry  = 0;
-
   /** optional Referenz aufs Game-Objekt (für spätere Erweiterungen) */
   let _game = null;
 
@@ -96,147 +84,6 @@
 
   function getHQPos(){
     return _hqPos ? { tx: _hqPos.tx, ty: _hqPos.ty } : null;
-  }
-
-  // -------------------------------------------------------------------------
-  // AUTO HQ + START-UNITS
-  // -------------------------------------------------------------------------
-
-  function _findHQBuildingInGame(){
-    try{
-      const list = window.Game?.buildings;
-      if (!Array.isArray(list)) return null;
-      return list.find(b => (b?.id === 'b.hq' || b?.buildingId === 'b.hq')) || null;
-    }catch(_e){
-      return null;
-    }
-  }
-
-  function _tryGetHQFromMapSpawn(){
-    try{
-      const sp = window.GameMap?._state?.spawn;
-      if (sp && Number.isFinite(sp.tx) && Number.isFinite(sp.ty)){
-        return { tx: sp.tx, ty: sp.ty, reason:'map-spawn' };
-      }
-    }catch(_e){}
-    return null;
-  }
-
-  function _tryGetHQFromMapCenter(){
-    try{
-      const cols = window.GameMap?._state?.cols;
-      const rows = window.GameMap?._state?.rows;
-      if (Number.isFinite(cols) && Number.isFinite(rows) && cols > 1 && rows > 1){
-        return { tx: cols/2, ty: rows/2, reason:'map-center' };
-      }
-    }catch(_e){}
-    return null;
-  }
-
-  function _ensureHQBuildingRecord(hqTx, hqTy){
-    // Wenn bereits ein HQ existiert (z.B. manuell platziert) → nichts tun.
-    const existing = _findHQBuildingInGame();
-    if (existing) return existing;
-
-    // Größe aus Registry holen (Fallback 5x5)
-    let w = 5, h = 5;
-    try{
-      const def = window.Registry?.get?.('buildings', 'b.hq')
-              || window.Registry?.getBuilding?.('b.hq')
-              || null;
-      const sz = def?.size || def?.sprite?.size || null;
-      w = (sz?.w ?? sz?.width  ?? def?.w ?? 5) | 0;
-      h = (sz?.h ?? sz?.height ?? def?.h ?? 5) | 0;
-      if (w <= 0) w = 5;
-      if (h <= 0) h = 5;
-    }catch(_e){}
-
-    const x = Math.max(0, Math.floor(hqTx - w/2));
-    const y = Math.max(0, Math.floor(hqTy - h/2));
-
-    const b = {
-      id         : 'b.hq',
-      x, y, w, h,
-      // Als START-HQ behandeln wir es als "fertig".
-      buildStage : 2,
-      buildTimer : 0,
-
-      // Baustellen-Felder (kompat)
-      needs      : {},
-      delivered  : {},
-      status     : 'done',
-      dropSlots  : [],
-
-      // Hilfsflag, damit wir später erkennen können:
-      __auto     : true
-    };
-
-    try{
-      if (!Array.isArray(window.Game.buildings)) window.Game.buildings = [];
-      window.Game.buildings.push(b);
-    }catch(_e){}
-
-    LOG('Auto-HQ erzeugt (Record in Game.buildings)', b);
-    return b;
-  }
-
-  function _autoInitHQAndUnits(reason){
-    // mehrfacher Aufruf ist ok – wir steigen sauber aus.
-    if (_autoInitDone) return;
-
-    // 1) HQPos ermitteln (nur wenn noch nicht gesetzt)
-    if (!_hqPos){
-      // 1a) HQ aus Game.buildings ableiten (falls HQ schon existiert)
-      const hb = _findHQBuildingInGame();
-      if (hb){
-        setHQPos({ tx: hb.x + (hb.w||1)/2, ty: hb.y + (hb.h||1)/2 });
-      }
-
-      // 1b) Spawn aus Map
-      if (!_hqPos){
-        const fromSpawn = _tryGetHQFromMapSpawn();
-        if (fromSpawn){
-          setHQPos({ tx: fromSpawn.tx, ty: fromSpawn.ty });
-          LOG('Auto-HQPos aus Map-Spawn', fromSpawn);
-        }
-      }
-
-      // 1c) Letzter Fallback: Map-Center
-      if (!_hqPos){
-        const fromCenter = _tryGetHQFromMapCenter();
-        if (fromCenter){
-          setHQPos({ tx: fromCenter.tx, ty: fromCenter.ty });
-          LOG('Auto-HQPos aus Map-Center', fromCenter);
-        }
-      }
-    }
-
-    if (!_hqPos){
-      // immer noch nicht? Dann wird es später nochmal probiert.
-      _autoInitTry++;
-      if (_autoInitTry < 10){
-        setTimeout(()=>_autoInitHQAndUnits('retry'), 200);
-      }
-      return;
-    }
-
-    // 5) HQ-Record sicherstellen (damit man das HQ im Spiel auch sieht)
-    _ensureHQBuildingRecord(_hqPos.tx, _hqPos.ty);
-
-    // 6) Start-Träger nur dann spawnen, wenn noch keine Carrier existieren
-    const hasCarrier = _units.some(u => (u.type === 'carrier' || u.kind === 'u.carrier'));
-    if (!hasCarrier){
-      spawnInitialCarriers(3);
-    }
-
-    // Optional: 1 Builder als Worker, damit direkt gebaut werden kann
-    const hasBuilder = _units.some(u => u.kind === 'u.builder');
-    if (!hasBuilder){
-      try{ spawn('u.builder', 1, { at:'hq' }); }catch(_e){}
-    }
-
-    _autoInitDone = true;
-    _emitChanged('autoInit:'+String(reason||''));
   }
 
   function _spawnCarrierAt(tx, ty) {
@@ -733,6 +580,9 @@ function spawnInitialCarriers(count){
               tx : tileX,
               ty : tileY,
               res: u.carrying,
+              // Zuordnung zur Baustelle (wichtig, wenn wir zur Türkachel liefern)
+              buildingUid: t.job?.buildingUid || null,
+              buildingId : t.job?.buildingId  || null,
               jobId: t.job?.id
             }
           }));
@@ -921,18 +771,6 @@ function spawnInitialCarriers(count){
   window.addEventListener('cb:game:start', ev => {
     const game = ev?.detail?.game ?? window.Game ?? null;
     if (game) _ensureGameBinding(game);
-
-    // Auto-Init: falls kein HQ manuell platziert wird, trotzdem Start-Setup.
-    // Wir machen 2 kurze Versuche: sofort + etwas später (wenn Map/Registry nachzieht).
-    try{
-      setTimeout(()=>_autoInitHQAndUnits('game:start'), 0);
-      setTimeout(()=>_autoInitHQAndUnits('game:start:late'), 500);
-    }catch(_e){}
-  });
-
-  // Map ist bereit → Auto-Init erneut anstoßen (hilft bei Reihenfolgeproblemen)
-  window.addEventListener('cb:map:ready', ()=>{
-    try{ setTimeout(()=>_autoInitHQAndUnits('map:ready'), 0); }catch(_e){}
   });
 
   // HQ-Position merken & Start-Träger spawnen, wenn HQ platziert wird
@@ -948,6 +786,8 @@ function spawnInitialCarriers(count){
 
     setHQPos({ tx, ty });
     spawnInitialCarriers(3);
+    // Zusätzlich 1 Bauarbeiter am HQ (Baustellen-Phasen / später Job-Zuweisung)
+    try { spawn('u.builder', 1, { at: _hqPos }); } catch(e) {}
     _emitChanged('hq:placed');
   });
 

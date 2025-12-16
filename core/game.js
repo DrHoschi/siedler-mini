@@ -42,6 +42,90 @@
 
   // Laufende Nummer für Jobs (nur für Debug / Logs)
   let jobIdCounter = 0;
+  let buildingUidCounter = 0;
+
+  // -------------------------------------------------------------------------
+  //  AUTO-START-HQ (Start-HQ automatisch platzieren + Kamera fokussieren)
+  // -------------------------------------------------------------------------
+  let __autoStartHQDone = false;
+  const START_HQ_ID   = 'b.hq';
+  const START_ZOOM    = (window.__SIEDLER_START_ZOOM != null) ? Number(window.__SIEDLER_START_ZOOM) : 1.20;
+  const AUTO_HQ_ENABLED = (window.__SIEDLER_DISABLE_AUTO_HQ !== true);
+
+  function _hasHQ(){
+    return Array.isArray(Game.buildings) && Game.buildings.some(b => b && b.id === START_HQ_ID);
+  }
+
+  function _pickRandomHQPos(map, w, h){
+    const grid = map?.grid;
+    const cols = map?.cols | 0;
+    const rows = map?.rows | 0;
+    if (!grid || !cols || !rows) return null;
+
+    // Blocker-Set aus MapResources (falls schon bereit)
+    const blocked = new Set();
+    try{
+      const nodes = window.MapResources?.state?.nodes;
+      if (Array.isArray(nodes)){
+        for (const n of nodes){
+          const tx = (n.tx|0), ty = (n.ty|0);
+          blocked.add(tx+','+ty);
+        }
+      }
+    } catch(e){}
+
+    function terrainOk(t){
+      if (t === 8) return false; // water
+      if (t === 5) return false; // forest (Start lieber nicht mitten rein)
+      if (t === 6) return false; // rock
+      return true;
+    }
+
+    function areaOk(x0,y0){
+      if (x0 < 0 || y0 < 0 || x0 + w > cols || y0 + h > rows) return false;
+      for (let y=y0; y<y0+h; y++){
+        const row = grid[y];
+        if (!row) return false;
+        for (let x=x0; x<x0+w; x++){
+          const t = row[x] | 0;
+          if (!terrainOk(t)) return false;
+          if (blocked.has(x+','+y)) return false;
+        }
+      }
+      return true;
+    }
+
+    // Random Sampling
+    for (let i=0; i<800; i++){
+      const x = (Math.random() * (cols - w)) | 0;
+      const y = (Math.random() * (rows - h)) | 0;
+      if (areaOk(x,y)) return { tx:x, ty:y };
+    }
+
+    // Fallback: Map-Spawn[0] (wenn vorhanden)
+    const s0 = map?.spawns?.[0];
+    if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)){
+      const x = (s0.x|0), y = (s0.y|0);
+      if (areaOk(x,y)) return { tx:x, ty:y };
+    }
+
+    // Fallback: Scan
+    for (let y=0; y<=rows-h; y++){
+      for (let x=0; x<=cols-w; x++){
+        if (areaOk(x,y)) return { tx:x, ty:y };
+      }
+    }
+    return null;
+  }
+
+  function _centerCameraOnBuilding(b){
+    try{
+      const ts = Game.tileSize || 64;
+      const cx = (b.x + (b.w||1)/2) * ts;
+      const cy = (b.y + (b.h||1)/2) * ts;
+      window.GameCamera?.centerOn?.(cx, cy, { zoom: START_ZOOM });
+    } catch(e){}
+  }
 
   /**
    * Stellt sicher, dass eine JobEngine existiert und eine push()/pop()-API hat.
@@ -93,15 +177,31 @@
     const bw = Number.isFinite(building.w) ? building.w : 1;
     const bh = Number.isFinite(building.h) ? building.h : 1;
 
+    // Ziel: Entrance-Tile (Türkachel) statt Building-Center,
+    // damit Delivery optisch stimmt und wir später Construction/Finished sauber trennen können.
+    const def = window.Registry?.getBuilding?.(building.id) || null;
+    const entrances = (def && Array.isArray(def.entrances) && def.entrances.length)
+      ? def.entrances
+      : (Array.isArray(building.entrances) ? building.entrances : null);
+
+    let destTx, destTy;
+    if (entrances && entrances.length){
+      destTx = (building.x|0) + (entrances[0].dx|0);
+      destTy = (building.y|0) + (entrances[0].dy|0);
+    } else {
+      destTx = (building.x|0) + Math.floor(bw/2);
+      destTy = (building.y|0) + bh; // südlich außerhalb des Footprints
+    }
+
     const centerX = building.x + bw / 2;
     const centerY = building.y + bh / 2;
 
-    // Ziel-Koordinate für CarrierRuntime / JobEngine
+    // Ziel-Koordinate für CarrierRuntime / JobEngine (Tile-Space)
     const dest = {
-      x  : centerX,
-      y  : centerY,
-      tx : centerX | 0,
-      ty : centerY | 0
+      x  : destTx + 0.5,
+      y  : destTy + 0.5,
+      tx : destTx,
+      ty : destTy
     };
 
     const job = {
@@ -113,7 +213,8 @@
       to         : dest,        // <-- wichtig: assignJob() nutzt job.to.x / job.to.y
       targetX    : centerX,
       targetY    : centerY,
-      buildingId : building.id
+      buildingId : building.id,
+      buildingUid: building.uid || null
     };
 
     if (typeof eng.push === 'function'){
@@ -274,13 +375,57 @@
                Number.isFinite(d.tx) ? (d.tx|0) : NaN;
     const y  = Number.isFinite(d.y)  ? (d.y|0)  :
                Number.isFinite(d.ty) ? (d.ty|0) : NaN;
-    const w  = (d.w|0) || 3;
-    const h  = (d.h|0) || 3;
+    let w  = (d.w|0) || 3;
+    let h  = (d.h|0) || 3;
 
     if (!id || !Number.isFinite(x) || !Number.isFinite(y)){
       WARN('placeBuildingFromEvent → unvollständige Daten', d);
       return;
     }
+
+    // Registry-Definition (Größe/Entrances) – defensiv
+    const def = window.Registry?.getBuilding?.(id) || null;
+    if (def && def.size){
+      // Wenn Event keine Größe liefert, nehmen wir die Registry-Größe
+      if (!(d.w|0) && Number.isFinite(def.size.w)) w = def.size.w|0;
+      if (!(d.h|0) && Number.isFinite(def.size.h)) h = def.size.h|0;
+    }
+    const entrances = (def && Array.isArray(def.entrances)) ? def.entrances : [];
+
+    // HQ: nur 1x erlaubt und sofort fertig (Startpunkt/Spawn)
+    if (id === 'b.hq'){
+      if (Array.isArray(Game.buildings) && Game.buildings.some(b => b && b.id === 'b.hq')){
+        WARN('HQ ist bereits vorhanden – zweites HQ wird ignoriert');
+        return;
+      }
+
+      const uid = 'bld-' + (++buildingUidCounter);
+      const building = {
+        uid,
+        id,
+        x, y, w, h,
+        entrances,
+        buildStage : 3,
+        buildTimer : 0,
+        hasMaterial: true,
+        needs      : {},
+        delivered  : {},
+        status     : 'done',
+        dropSlots  : []
+      };
+      if (!Array.isArray(Game.buildings)) Game.buildings = [];
+      Game.buildings.push(building);
+
+      // Optional: Completion-Event (macht Inspector/Worker-Spawn einfacher)
+      try{
+        window.dispatchEvent(new CustomEvent('cb:build:complete', { detail: { id:'b.hq', buildingUid: uid, x, y, w, h } }));
+      } catch(e){}
+
+      LOG('Start-HQ gesetzt (sofort fertig)', building);
+      return;
+    }
+
+    const uid = 'bld-' + (++buildingUidCounter);
 
     // -----------------------------------------------------------------------
     // Baustellen-Metadaten: needs / delivered / status / drops
@@ -351,8 +496,10 @@
 
     // Einfaches Building-Objekt – GameConstruction arbeitet direkt mit Game.buildings
     const building = {
+      uid,
       id,
       x, y, w, h,
+      entrances,
       buildStage : 0,       // 0 = SITE
       buildTimer : 0,
       hasMaterial: false,
@@ -402,6 +549,40 @@
     LOG('cb:game:start Event erhalten');
     init();
   });
+
+  // Map ready → Auto-Start-HQ platzieren (wenn noch keines existiert)
+  window.addEventListener('cb:map:ready', (ev)=>{
+    if (__autoStartHQDone) return;
+    __autoStartHQDone = true;
+    if (!AUTO_HQ_ENABLED) return;
+    if (_hasHQ()) return;
+
+    const map = Game.map || ev?.detail?.map || null;
+    const def = window.Registry?.getBuilding?.(START_HQ_ID) || null;
+    const w   = (def && def.size && Number.isFinite(def.size.w)) ? (def.size.w|0) : 3;
+    const h   = (def && def.size && Number.isFinite(def.size.h)) ? (def.size.h|0) : 3;
+
+    const pos = _pickRandomHQPos(map, w, h);
+    if (!pos){
+      WARN('Auto-Start-HQ: keine Position gefunden (Map/Blocker)');
+      return;
+    }
+
+    try{
+      window.dispatchEvent(new CustomEvent('cb:build:place', {
+        detail: { __autoStart:true, buildingId: START_HQ_ID, x: pos.tx, y: pos.ty, w, h }
+      }));
+    } catch(e){
+      WARN('Auto-Start-HQ: cb:build:place dispatch fehlgeschlagen', e);
+    }
+
+    // Kamera nachziehen (nächster Tick, damit HQ sicher in Game.buildings steht)
+    setTimeout(()=>{
+      const hq = (Array.isArray(Game.buildings) ? Game.buildings.find(b => b && b.id === START_HQ_ID) : null);
+      if (hq) _centerCameraOnBuilding(hq);
+    }, 0);
+  });
+
 
   // Gebäude-Platzierung vom Build-Ghost / UI
   window.addEventListener('cb:build:place', (ev)=>{

@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei: core/adfinder.js
  * Projekt: Neue Siedler
- * Version: v1.2.0 (A* + Supercover-LOS Smoothing + Default-Obstacles)
+ * Version: v1.1.0 (A* + optional Smoothing + Default-Obstacles)
  * Zweck: Hybrid-Pathfinding (A* + Heatmap-Bias) – jetzt REAL (nicht mehr Stub).
  * Datum: 2025-12-16
  *
@@ -28,7 +28,7 @@
   const LOG  = (...a)=> (window.CBLog?.info ?? console.info)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  const ADFINDER_VERSION = "v1.2.0-supercover-los";
+  const ADFINDER_VERSION = "v1.1.0";
 
   // =========================================================================
   // KONSTANTEN
@@ -36,7 +36,7 @@
   const SQRT2 = Math.SQRT2;
 
   // Wasser-Tile-IDs: konservativ – später über Registry/Terrain-Regeln ersetzen.
-  const DEFAULT_WATER_TILE_IDS = new Set([8, 9]);
+  const DEFAULT_WATER_TILE_IDS = new Set([8]);
 
   // =========================================================================
   // HILFSFUNKTIONEN
@@ -65,91 +65,28 @@
 
   // Bresenham / Supercover-ähnlich: wir prüfen alle Tiles auf einer Linie.
   // Für "string pulling" reicht das in Grid-Spielen meist sehr gut.
-  // Supercover Line-of-Sight (DDA/Amanatides-Woo) in Tile-Space.
-// Prüft ALLE Tiles, die die Linie (Center(a) -> Center(b)) durchschneidet.
-//
-// Warum?
-// - Klassischer Bresenham kann bei flachen Winkeln "Tiles überspringen".
-// - Für Smoothing ("string pulling") wollen wir NO-CORNER-CUTTING auch beim
-//   Sichtlinien-Test, sonst entstehen Eck-Cheats (diagonal zwischen Blockern).
-function lineOfSight(a, b, isBlocked, allow){
-  // Ray von Tile-Center zu Tile-Center
-  const x0 = (a.x|0) + 0.5;
-  const y0 = (a.y|0) + 0.5;
-  const x1 = (b.x|0) + 0.5;
-  const y1 = (b.y|0) + 0.5;
+  function lineOfSight(a, b, isBlocked, allow){
+    let x0 = a.x|0, y0 = a.y|0;
+    const x1 = b.x|0, y1 = b.y|0;
 
-  let cx = Math.floor(x0);
-  let cy = Math.floor(y0);
-  const gx = Math.floor(x1);
-  const gy = Math.floor(y1);
+    let dx = Math.abs(x1 - x0);
+    let dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
 
-  if (cx === gx && cy === gy) return true;
+    let err = dx - dy;
 
-  const dx = x1 - x0;
-  const dy = y1 - y0;
+    // Wir prüfen Start NICHT (damit "im Gebäude starten" geht),
+    // aber alle Zwischenpunkte + Ziel.
+    while (!(x0 === x1 && y0 === y1)) {
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 <  dx) { err += dx; y0 += sy; }
 
-  const stepX = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
-  const stepY = dy > 0 ? 1 : (dy < 0 ? -1 : 0);
-
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-
-  const tDeltaX = absDx > 0 ? (1 / absDx) : Infinity;
-  const tDeltaY = absDy > 0 ? (1 / absDy) : Infinity;
-
-  // tMax = Parametervalue, an der wir die NÄCHSTE Grid-Grenze in X/Y erreichen.
-  // (in 0..∞, wir brauchen kein normiertes 0..1)
-  let tMaxX = Infinity;
-  let tMaxY = Infinity;
-
-  if (stepX !== 0){
-    const nextGridX = stepX > 0 ? (cx + 1) : cx;
-    tMaxX = (nextGridX - x0) / dx; // dx signed
-    tMaxX = Math.abs(tMaxX);
-  }
-  if (stepY !== 0){
-    const nextGridY = stepY > 0 ? (cy + 1) : cy;
-    tMaxY = (nextGridY - y0) / dy; // dy signed
-    tMaxY = Math.abs(tMaxY);
-  }
-
-  // Safety (Freeze-Schutz)
-  const maxIters = 8 + Math.abs(gx - cx) + Math.abs(gy - cy) + 64;
-  let it = 0;
-
-  // Starttile NICHT prüfen (damit "im Gebäude starten" möglich bleibt),
-  // aber jeden folgenden Schritt inkl. Ziel.
-  while (!(cx === gx && cy === gy)){
-    if (++it > maxIters) break;
-
-    if (tMaxX < tMaxY){
-      cx += stepX;
-      tMaxX += tDeltaX;
-    } else if (tMaxY < tMaxX){
-      cy += stepY;
-      tMaxY += tDeltaY;
-    } else {
-      // Wir kreuzen exakt eine Ecke: Supercover → beide orthogonalen Nachbarn prüfen.
-      const nx = cx + stepX;
-      const ny = cy + stepY;
-
-      // Wichtig: Diese Checks verhindern "Eck-Cheat", wenn z.B. (nx,cy) und (cx,ny)
-      // jeweils Blocker sind.
-      if (isBlocked(nx, cy, allow)) return false;
-      if (isBlocked(cx, ny, allow)) return false;
-
-      cx = nx;
-      cy = ny;
-      tMaxX += tDeltaX;
-      tMaxY += tDeltaY;
+      if (isBlocked(x0, y0, allow)) return false;
     }
-
-    if (isBlocked(cx, cy, allow)) return false;
+    return true;
   }
-
-  return true;
-}
 
   // =========================================================================
   // MIN-HEAP (Priority Queue) für Open-Set
@@ -262,6 +199,13 @@ function lineOfSight(a, b, isBlocked, allow){
           const bw = Math.max(1, toInt(b.w, 1));
           const bh = Math.max(1, toInt(b.h, 1));
           if (!Number.isFinite(bx) || !Number.isFinite(by)) continue;
+          // Nur fertige Gebäude blockieren den Weg.
+          // Baustellen (buildStage 0..2 / status pending/building) bleiben begehbar,
+          // damit Träger optisch zur Türkachel liefern können.
+          const stage = (typeof b.buildStage === 'number') ? b.buildStage : -1;
+          const isDone = (stage >= 3) || (b.status === 'done') || (b.buildPhase === 'complete') || (b.buildPhase === 3);
+          if (!isDone) continue;
+
           if (tx >= bx && tx < bx + bw && ty >= by && ty < by + bh) return true;
         }
       }
