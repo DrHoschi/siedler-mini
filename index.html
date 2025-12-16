@@ -168,6 +168,9 @@
    <!-- JOB / CARRIER / RES / PROD -->
   <script src="core/warehouse.js"></script>
 
+  <!-- NEU: Pathfinding (A* + Smoothing) – wird von GameUnits genutzt -->
+  <script src="core/adfinder.js?v=1.1.0"></script>
+
   <!-- NEU: Zentrales Units-System (muss VOR JobEngine + CarrierRuntime geladen werden) -->
   <script src="core/game.units.js"></script>
 
@@ -220,13 +223,14 @@
   <script src="core/game.bootstrap.js"></script>
   <script src="core/game.tick.js"></script>
   <script src="core/game.js"></script>
-
-  <!-- Overlay-System (EINE Pipeline): OverlayHooks zuerst, dann Layer-Module -->
-  <script src="core/overlay-hooks.js"></script>
+ 
+     
+  <!-- Overlay-System -->
   <script src="core/path-overlay.js?v=4.2.0"></script>
-  <!--script src="core/adfinder.js"></script-->
+  <script src="core/overlay-hooks.js"></script>
   <script src="core/path-traces.overlay.js"></script>
-<!-- NEU: Unit-Overlay zum Zeichnen der Träger (nutzt OverlayHooks + GameUnits) -->
+
+  <!-- NEU: Unit-Overlay zum Zeichnen der Träger (nutzt OverlayHooks + GameUnits) -->
   <script src="core/unit-overlay.js"></script>
   <script src="core/game.production.wood.js"></script>
   <script src="core/game.production.stone.js"></script>
