@@ -193,3 +193,40 @@
     image-rendering: -webkit-optimize-contrast;
   }
 }
+
+/* =============================================================================
+ * MINIMAP (UI-Overlay)
+ * -----------------------------------------------------------------------------
+ * - Eigenes Canvas, unabhängig vom Game-Canvas-Transform (Zoom/Pan)
+ * - Sichtbar nur während "is-playing" (Layout-Schalter aus ui/ui-layout.js)
+ * - Klick/Drag: Kamera zentrieren (siehe ui/ui-minimap.js)
+ * ============================================================================= */
+
+.minimap{
+  position: fixed;
+  top: 6px;
+  right: 6px;
+
+  z-index: 50;               /* über Canvas, unter Inspector */
+  pointer-events: auto;
+  user-select: none;
+
+  /* Startscreen: ausblenden */
+  display: none;
+}
+
+body.is-playing .minimap{
+  display: block;
+}
+
+.minimap__canvas{
+  display: block;
+
+  border-radius: 10px;
+  background: rgba(0,0,0,0.25);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+
+  /* Touch: verhindert "Scroll" beim Draggen */
+  touch-action: none;
+}
+
