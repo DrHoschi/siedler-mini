@@ -37,6 +37,72 @@
   let lastTime = 0;
 
   // -------------------------------------------------------------------------
+  //  BUILDING HELPERS: Tile-Aliases + Entrance-Resolver (Patch D/E)
+  // -------------------------------------------------------------------------
+  // Ziel:
+  //  - building.tx/ty intern immer verfügbar (TopLeft in Tile-Koordinaten)
+  //  - entrances (Registry: [{dx,dy}]) → entrancesAbs [{tx,ty,dx,dy}]
+  //  - Default-Türtile: building.entranceTx / building.entranceTy
+  // Hinweis:
+  //  - Wir ändern KEINE Events/Details – nur das interne Building-Objekt.
+  //  - Wir überschreiben building.entrances NICHT (bleibt Relativ-Offsets).
+  function _ensureBuildingTileAndEntranceFields(b){
+    if (!b) return b;
+
+    // 1) TopLeft (Tile)
+    if (!Number.isFinite(b.tx)) b.tx = Number.isFinite(b.x) ? (b.x|0) : (b.tx|0);
+    if (!Number.isFinite(b.ty)) b.ty = Number.isFinite(b.y) ? (b.y|0) : (b.ty|0);
+
+    // Legacy-Fallback: falls jemand nur tx/ty setzt
+    if (!Number.isFinite(b.x)) b.x = (b.tx|0);
+    if (!Number.isFinite(b.y)) b.y = (b.ty|0);
+
+    // 2) Entrances absolut ableiten (dx/dy → tx/ty)
+    const rel = Array.isArray(b.entrances) ? b.entrances : [];
+    const abs = [];
+    for (const e of rel){
+      if (!e) continue;
+
+      // Unterstützt beide Welten:
+      //  a) Relativ: {dx,dy}
+      //  b) Absolut: {tx,ty} (falls irgendwo schon umgerechnet)
+      const etx = Number(e.tx);
+      const ety = Number(e.ty);
+
+      if (Number.isFinite(etx) && Number.isFinite(ety)){
+        abs.push({ tx: etx|0, ty: ety|0, dx: (e.dx|0)||0, dy: (e.dy|0)||0 });
+      } else {
+        const dx = (e.dx|0) || 0;
+        const dy = (e.dy|0) || 0;
+        abs.push({ tx: (b.tx|0) + dx, ty: (b.ty|0) + dy, dx, dy });
+      }
+    }
+
+    b.entrancesAbs = abs;
+
+    // Default Entrance
+    if (abs.length){
+      b.entranceTx = abs[0].tx|0;
+      b.entranceTy = abs[0].ty|0;
+    } else {
+      // defensiver Fallback: südliche Mitte außerhalb des Footprints
+      const bw = Math.max(1, (b.w|0) || 1);
+      const bh = Math.max(1, (b.h|0) || 1);
+      b.entranceTx = (b.tx|0) + ((bw/2)|0);
+      b.entranceTy = (b.ty|0) + (bh|0);
+    }
+
+    return b;
+  }
+
+  // Building lookup (für Jobs, die nur buildingUid tragen)
+  Game.getBuildingByUid = function(uid){
+    if (!uid) return null;
+    const list = Game.buildings || [];
+    return list.find(b => b && b.uid === uid) || null;
+  };
+
+  // -------------------------------------------------------------------------
   //  JOB-ENGINE / BAUSTELLEN-JOBS
   // -------------------------------------------------------------------------
 
@@ -283,16 +349,27 @@
       ? def.entrances
       : (Array.isArray(building.entrances) ? building.entrances : null);
 
-    let destTx, destTy;
-    if (entrances && entrances.length){
-      destTx = (building.x|0) + (entrances[0].dx|0);
-      destTy = (building.y|0) + (entrances[0].dy|0);
-    } else {
-      destTx = (building.x|0) + Math.floor(bw/2);
-      destTy = (building.y|0) + bh; // südlich außerhalb des Footprints
-    }
+    // Ziel: Entrance-Tile (Türkachel) statt Building-Center,
+// damit Delivery optisch stimmt und wir später Construction/Finished sauber trennen können.
+_ensureBuildingTileAndEntranceFields(building);
 
-    const centerX = building.x + bw / 2;
+// Default: bereits berechnete Türtile
+let destTx = (building.entranceTx|0);
+let destTy = (building.entranceTy|0);
+
+// Zusätzlicher Fallback: falls jemand building.entranceTx/Ty wieder löscht,
+// nehmen wir direkt die Registry-Offests (entrances[0]) oder südliche Mitte.
+if (!Number.isFinite(destTx) || !Number.isFinite(destTy)){
+  if (entrances && entrances.length){
+    destTx = (building.x|0) + (entrances[0].dx|0);
+    destTy = (building.y|0) + (entrances[0].dy|0);
+  } else {
+    destTx = (building.x|0) + Math.floor(bw/2);
+    destTy = (building.y|0) + (bh|0);
+  }
+}
+
+const centerX = building.x + bw / 2;
     const centerY = building.y + bh / 2;
 
     // Ziel-Koordinate für CarrierRuntime / JobEngine (Tile-Space)
@@ -512,6 +589,7 @@
         status     : 'done',
         dropSlots  : []
       };
+      _ensureBuildingTileAndEntranceFields(building);
       if (!Array.isArray(Game.buildings)) Game.buildings = [];
       Game.buildings.push(building);
 
@@ -609,6 +687,7 @@
       status    : 'pending',// pending | building | done
       dropSlots : []        // Boden-Ressourcen (Holz/Stein-Kugeln)
     };
+    _ensureBuildingTileAndEntranceFields(building);
 
     if (!Array.isArray(Game.buildings)){
       Game.buildings = [];

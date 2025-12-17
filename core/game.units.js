@@ -296,9 +296,49 @@ function spawnInitialCarriers(count){
     const sx = _coord(job.from || hq, 'x',  hq.tx);
     const sy = _coord(job.from || hq, 'y',  hq.ty);
 
-    // Ziel – tolerant gegenüber {x,y} / {tx,ty}
-    const tx = _coord(job.to   || {}, 'x',  sx);
-    const ty = _coord(job.to   || {}, 'y',  sy);
+    // Ziel – tolerant gegenüber verschiedenen Job-Formaten:
+    //  - Modern: job.to = {x,y} (Tile-Float, idealerweise Tile-Mitte)
+    //  - Legacy: job.tx/job.ty oder job.to.tx/job.to.ty (Tile-Int)
+    //  - Safety: falls nur buildingUid bekannt ist → Ziel = building.entranceTx/Ty
+    let tx = Number(job?.to?.x);
+    let ty = Number(job?.to?.y);
+
+    // Legacy: Tile-Ints
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)){
+      const ltx = Number.isFinite(Number(job?.tx)) ? (job.tx|0) : (Number.isFinite(Number(job?.to?.tx)) ? (job.to.tx|0) : NaN);
+      const lty = Number.isFinite(Number(job?.ty)) ? (job.ty|0) : (Number.isFinite(Number(job?.to?.ty)) ? (job.to.ty|0) : NaN);
+      if (Number.isFinite(ltx) && Number.isFinite(lty)){
+        tx = ltx + 0.5;
+        ty = lty + 0.5;
+      }
+    }
+
+    // buildingUid-Fallback: Türtile als Ziel
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)){
+      const b = (window.Game?.getBuildingByUid?.(job?.buildingUid))
+             || ((window.Game?.getBuildings?.() || window.Game?.buildings || []).find(bb => bb && bb.uid === job?.buildingUid))
+             || null;
+
+      if (b){
+        const ex = Number.isFinite(Number(b.entranceTx)) ? (b.entranceTx|0) : NaN;
+        const ey = Number.isFinite(Number(b.entranceTy)) ? (b.entranceTy|0) : NaN;
+
+        if (Number.isFinite(ex) && Number.isFinite(ey)){
+          tx = ex + 0.5;
+          ty = ey + 0.5;
+        } else if (Array.isArray(b.entrances) && b.entrances.length){
+          const dx = (b.entrances[0]?.dx|0) || 0;
+          const dy = (b.entrances[0]?.dy|0) || 0;
+          tx = (b.x|0) + dx + 0.5;
+          ty = (b.y|0) + dy + 0.5;
+        }
+      }
+    }
+
+    // Letzter Fallback: bleib bei Quelle
+    if (!Number.isFinite(tx)) tx = sx;
+    if (!Number.isFinite(ty)) ty = sy;
+
 
     const source = { x: sx, y: sy };
     const dest   = { x: tx, y: ty };
@@ -482,6 +522,58 @@ function spawnInitialCarriers(count){
     // Timer hochzählen (dt in Sekunden)
     u._nav.tSinceCalc += dt;
 
+    // -----------------------------------------------------------------------
+    // Fallback-Ziele (Tür/Goal blockiert, Off-Map etc.)
+    // Idee:
+    //  - Wenn der direkte Pfad zum Goal nicht geht, versuchen wir automatisch
+    //    ein paar Nachbar-Tiles um das Ziel herum (kleiner Ring).
+    //  - Das macht "Delivery an Tür" deutlich robuster, ohne überall Spezial-
+    //    Code zu verteilen.
+    function _tryFallbackGoalPath(startTile, goalTile, allowRects){
+      const maxR = 3; // bewusst klein halten (Performance)
+      const cand = [];
+
+      // Ringe um das Ziel (r = 1..maxR)
+      for (let r = 1; r <= maxR; r++){
+        for (let dx = -r; dx <= r; dx++){
+          for (let dy = -r; dy <= r; dy++){
+            // nur Rand des Quadrats (Ring), nicht Fläche
+            if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+
+            const gx = (goalTile.x|0) + dx;
+            const gy = (goalTile.y|0) + dy;
+
+            // Skip: identisch
+            if (gx === (goalTile.x|0) && gy === (goalTile.y|0)) continue;
+
+            const dist = Math.abs(dx) + Math.abs(dy);
+            cand.push({ x: gx, y: gy, dist });
+          }
+        }
+      }
+
+      // näher zuerst
+      cand.sort((a,b)=> a.dist - b.dist);
+
+      for (const c of cand){
+        const p = PF.findPath(
+          { x: startTile.x, y: startTile.y },
+          { x: c.x,         y: c.y         },
+          {
+            allowDiagonal: true,
+            smooth       : true,
+            allowRects   : allowRects || undefined
+          }
+        );
+        if (Array.isArray(p) && p.length){
+          return { goal: { x: c.x, y: c.y }, path: p };
+        }
+      }
+
+      return null;
+    }
+
+
     // Recalc?
     const goalChanged = (u._nav.lastGoalX !== goalTile.x || u._nav.lastGoalY !== goalTile.y);
     const needCalc = (u._nav.key !== key) || !u._nav.path || goalChanged;
@@ -489,7 +581,8 @@ function spawnInitialCarriers(count){
     if (needCalc && u._nav.tSinceCalc >= NAV_RECALC_COOLDOWN){
       const allowRects = _buildAllowRects(startTile, goalTile);
 
-      const path = PF.findPath(
+      let goalForNav = goalTile;
+      let path = PF.findPath(
         { x: startTile.x, y: startTile.y },
         { x: goalTile.x,  y: goalTile.y  },
         {
@@ -499,12 +592,23 @@ function spawnInitialCarriers(count){
         }
       );
 
-      u._nav.key = key;
+      // Wenn direkter Pfad nicht geht → Nachbar-Ziele probieren
+      if (!(Array.isArray(path) && path.length)){
+        const fb = _tryFallbackGoalPath(startTile, goalTile, allowRects);
+        if (fb){
+          goalForNav = fb.goal;
+          path = fb.path;
+        }
+      }
+
+      const key2 = _navKey(startTile, goalForNav);
+
+      u._nav.key = key2;
       u._nav.path = Array.isArray(path) ? path : null;
       u._nav.idx  = 0;
       u._nav.tSinceCalc = 0;
-      u._nav.lastGoalX = goalTile.x;
-      u._nav.lastGoalY = goalTile.y;
+      u._nav.lastGoalX = goalForNav.x;
+      u._nav.lastGoalY = goalForNav.y;
     }
 
     // Wenn kein Pfad gefunden: fallback (damit Unit nicht "tot" wirkt)
