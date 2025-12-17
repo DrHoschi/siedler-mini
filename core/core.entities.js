@@ -248,15 +248,33 @@
     if (a.startsWith('place-')) place(a.slice(6));
   });
 
-  // Auto-HQ beim Start (MVP)
-  window.addEventListener('cb:game-start', ()=>{
-    if (S.list.some(e=>e.kind==='rathaus' || e.kind==='hq')) return;
-    const t = ensureXY('rathaus'); // Kameramitte
-    const b = place('rathaus', t.x, t.y);
-    LOG('Auto-HQ platziert:', b?.x, b?.y);
-  });
-
-  /* ==========================================================================
+  // ========================================================================
+// ❌ LEGACY / DEAKTIVIERT: Auto-HQ beim Start (MVP) – ENTITIES-DEMO
+// ------------------------------------------------------------------------
+// Warum auskommentiert?
+// - Diese Logik platziert KEIN echtes Building (b.hq), sondern ein "rathaus"
+//   in der alten Entities-Demo-Liste.
+// - Das kollidiert mit unserem echten Building-System in core/game.js
+//   (Auto-HQ + Cinematic + Jobs/Carrier).
+// - Ergebnis der Kollision kann sein: "Träger ohne HQ" oder Kamera findet
+//   kein HQ für die Start-Fahrt.
+//
+// Was ist stattdessen korrekt?
+// - Start-HQ wird ab jetzt ausschließlich in core/game.js gesetzt
+//   (Building-ID: b.hq), damit Kamera/Jobs/Placement-Regeln EIN System sind.
+//
+// Später:
+// - Wenn wir Legacy-Ordner endgültig entfernen, kann dieser Block gelöscht werden.
+// ========================================================================
+//
+// window.addEventListener('cb:game-start', ()=>{
+//   if (S.list.some(e=>e.kind==='rathaus' || e.kind==='hq')) return;
+//   const t = ensureXY('rathaus'); // Kameramitte
+//   const b = place('rathaus', t.x, t.y);
+//   LOG('Auto-HQ platziert:', b?.x, b?.y);
+// });
+//
+///* ==========================================================================
    * [Exports – Public API]
    * ========================================================================== */
   window.Entities = {

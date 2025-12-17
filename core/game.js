@@ -31,7 +31,221 @@
     getUnits(){ return this.units; },
     getBuildings(){ return this.buildings; }
   };
-  window.Game = Game;     // global verfügbar für andere Module
+  window.Game = Game;
+
+  // ========================================================================
+  // PLACEMENT / WALKABILITY RULES (Step 5 – konsolidiert)
+  // ------------------------------------------------------------------------
+  // Ziel:
+  // - UI-Ghost (core/game.place.js) fragt Game.canPlaceBuildingAt()
+  // - Build-Confirm (cb:build:place) validiert NOCHMAL hart (kein "Cheat-Place")
+  // - Auto-HQ nutzt dieselben Regeln (kein 2. Regelwerk, kein Hardcode)
+  //
+  // Außerdem:
+  // - Kleine Ressourcen (tree/stone stage===0) sind "räumbar" durch Bauarbeiter:
+  //   Beim Platzieren werden sie automatisch entfernt (MapResources.clearAt).
+  // - Große Bäume (stage===3) bleiben blockierend (später Holzfäller).
+  // - Große Steine (stage===3) bleiben blockierend (dauerhaft).
+  // - Wasser bleibt blockierend, außer spezielle Gebäude (Fischer: 1 Wasser-Tile).
+  //
+  // Debug:
+  // - Letzte Entscheidung liegt immer in window.__SIEDLER_LAST_PLACE_INFO
+  // ========================================================================
+
+  function _legendSets(map){
+    const legend = (map && map.legend) ? map.legend : (map?.metadata?.legend || {});
+    const waterIds  = new Set();
+    const forestIds = new Set();
+    const rockIds   = new Set();
+
+    try{
+      for (const [k, v] of Object.entries(legend || {})){
+        const name = (typeof v === 'string') ? v.toLowerCase() : '';
+        const id   = parseInt(k, 10);
+        if (!Number.isFinite(id)) continue;
+        if (name.includes('water'))  waterIds.add(id);
+        if (name.includes('forest')) forestIds.add(id);
+        if (name.includes('rock'))   rockIds.add(id);
+      }
+    }catch(e){ /* silent */ }
+
+    // Fallbacks (nur falls Legend fehlt/leer ist)
+    if (!waterIds.size)  waterIds.add(8); // konservativ
+    if (!forestIds.size) forestIds.add(9);
+    if (!rockIds.size)   rockIds.add(7);
+
+    return { waterIds, forestIds, rockIds };
+  }
+
+  function _tileId(map, tx, ty){
+    const cols = map?.cols|0;
+    const grid = map?.grid;
+    if (!grid || !cols) return -1;
+    const i = (ty|0)*cols + (tx|0);
+    return (i>=0 && i<grid.length) ? (grid[i]|0) : -1;
+  }
+
+  function _isWater(map, tx, ty, sets){
+    const id = _tileId(map, tx, ty);
+    return sets.waterIds.has(id);
+  }
+
+  function _isInside(map, tx, ty){
+    const cols = map?.cols|0, rows = map?.rows|0;
+    return (tx>=0 && ty>=0 && tx<cols && ty<rows);
+  }
+
+  function _footprintTiles(tx, ty, w, h){
+    const out = [];
+    for (let yy=0; yy<h; yy++){
+      for (let xx=0; xx<w; xx++){
+        out.push({ tx: (tx+xx)|0, ty: (ty+yy)|0 });
+      }
+    }
+    return out;
+  }
+
+  function _buildingOverlapsExisting(tx, ty, w, h){
+    if (!Array.isArray(Game.buildings)) return false;
+    const a = { x:tx, y:ty, w, h };
+    for (const b of Game.buildings){
+      if (!b) continue;
+      const bx = (b.tx ?? b.x ?? 0)|0;
+      const by = (b.ty ?? b.y ?? 0)|0;
+      const bw = (b.w|0)||1;
+      const bh = (b.h|0)||1;
+
+      // Baustellen sind begehbar, aber sie sind trotzdem ein Footprint-Objekt.
+      // Fürs Bauen blockieren wir auch Baustellen (sonst kann man stapeln).
+      const overlap = !(a.x + a.w <= bx || bx + bw <= a.x || a.y + a.h <= by || by + bh <= a.y);
+      if (overlap) return true;
+    }
+    return false;
+  }
+
+  function _collectClearablesForFootprint(buildingId, tiles){
+    const MR = window.MapResources;
+    if (!MR || typeof MR.nodeAt !== 'function') return [];
+    const clear = [];
+    for (const t of tiles){
+      const n = MR.nodeAt(t.tx, t.ty);
+      if (!n) continue;
+
+      // nur bestimmte Ressourcen dürfen "automatisch" geräumt werden
+      const isSmall = (n.stage|0) === 0;
+
+      if (n.kind === 'tree'){
+        if (isSmall) clear.push({ tx:t.tx, ty:t.ty, kind:'tree', id:n.id });
+        else return [{ deny:true, reason:'tree_big', tx:t.tx, ty:t.ty, node:n }];
+      }
+      if (n.kind === 'stone'){
+        if (isSmall) clear.push({ tx:t.tx, ty:t.ty, kind:'stone', id:n.id });
+        else return [{ deny:true, reason:'stone_big', tx:t.tx, ty:t.ty, node:n }];
+      }
+      if (n.kind === 'fish'){
+        // Fisch-Nodes blockieren Bauplätze (außer wir definieren später Pier/Boat etc.)
+        return [{ deny:true, reason:'fish_node', tx:t.tx, ty:t.ty, node:n }];
+      }
+    }
+    return clear;
+  }
+
+  /**
+   * Kern-Regel: Darf ein Gebäude an (tx,ty) platziert werden?
+   * @returns {boolean} ok
+   */
+  Game.canPlaceBuildingAt = function(buildingId, tx, ty, w, h){
+    const info = Game.getPlaceInfo(buildingId, tx, ty, w, h);
+    return !!info.ok;
+  };
+
+  /**
+   * Liefert Detail-Info (für Debug/Inspector/Reason-Codes).
+   */
+  Game.getPlaceInfo = function(buildingId, tx, ty, w, h){
+    const map = Game.map || window.Map || window.__MAP__;
+    const sets = _legendSets(map);
+
+    tx = tx|0; ty = ty|0;
+    w  = (w|0)||1; h = (h|0)||1;
+
+    const tiles = _footprintTiles(tx, ty, w, h);
+
+    // 1) Bounds
+    for (const t of tiles){
+      if (!_isInside(map, t.tx, t.ty)){
+        return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'out_of_bounds', buildingId, tx, ty, w, h });
+      }
+    }
+
+    // 2) Nur ein HQ erlauben
+    if (buildingId === 'b.hq' && _hasHQ()){
+      return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'already_has_hq', buildingId, tx, ty, w, h });
+    }
+
+    // 3) Gebäude-Überlappung
+    if (_buildingOverlapsExisting(tx, ty, w, h)){
+      return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'overlap_building', buildingId, tx, ty, w, h });
+    }
+
+    // 4) Terrain-Regeln (Wasser)
+    let waterCount = 0;
+    for (const t of tiles){
+      if (_isWater(map, t.tx, t.ty, sets)) waterCount++;
+    }
+
+    // Sonderfall: Fischer darf 1 Wasser-Tile "berühren"
+    if (buildingId === 'b.fisher'){
+      if (waterCount > 1){
+        return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'too_much_water', buildingId, tx, ty, w, h, waterCount });
+      }
+      // entrance sollte nicht im Wasser liegen
+      // (entrances: [{dx,dy}] → absolute = tx+dx, ty+dy)
+      const def = (window.Registry?.buildings && window.Registry.buildings[buildingId]) || null;
+      const e0  = def?.entrances?.[0] || { dx:1, dy:h }; // fallback
+      const ex = (tx + (e0.dx|0))|0;
+      const ey = (ty + (e0.dy|0))|0;
+      if (_isWater(map, ex, ey, sets)){
+        return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'entrance_in_water', buildingId, tx, ty, w, h, ex, ey });
+      }
+    } else {
+      if (waterCount > 0){
+        return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'water', buildingId, tx, ty, w, h, waterCount });
+      }
+    }
+
+    // 5) Ressourcen auf Footprint
+    const clear = _collectClearablesForFootprint(buildingId, tiles);
+    if (clear.length && clear[0]?.deny){
+      return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:clear[0].reason, buildingId, tx, ty, w, h, at:{tx:clear[0].tx, ty:clear[0].ty} });
+    }
+
+    // 6) HQ-Sondermargins (Rand/Wasser-Abstand) – nur fürs AutoHQ/Start-HQ kritisch
+    // (beim manuellen HQ-Bau kann man das später auch erzwingen, aktuell nur basic)
+    if (buildingId === 'b.hq'){
+      const EDGE_MARGIN_TILES  = (window.__SIEDLER_HQ_EDGE_MARGIN_TILES  != null) ? (window.__SIEDLER_HQ_EDGE_MARGIN_TILES|0)  : 6;
+      const WATER_MARGIN_TILES = (window.__SIEDLER_HQ_WATER_MARGIN_TILES != null) ? (window.__SIEDLER_HQ_WATER_MARGIN_TILES|0) : 4;
+
+      const cols = map?.cols|0, rows = map?.rows|0;
+      if (tx < EDGE_MARGIN_TILES || ty < EDGE_MARGIN_TILES || (tx+w) > (cols-EDGE_MARGIN_TILES) || (ty+h) > (rows-EDGE_MARGIN_TILES)){
+        return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'hq_edge_margin', buildingId, tx, ty, w, h });
+      }
+
+      // Wasser-Margin: wir prüfen um den Footprint herum
+      for (let yy = ty - WATER_MARGIN_TILES; yy < ty + h + WATER_MARGIN_TILES; yy++){
+        for (let xx = tx - WATER_MARGIN_TILES; xx < tx + w + WATER_MARGIN_TILES; xx++){
+          if (!_isInside(map, xx, yy)) continue;
+          if (_isWater(map, xx, yy, sets)){
+            return (window.__SIEDLER_LAST_PLACE_INFO = { ok:false, reason:'hq_water_margin', buildingId, tx, ty, w, h });
+          }
+        }
+      }
+    }
+
+    return (window.__SIEDLER_LAST_PLACE_INFO = { ok:true, buildingId, tx, ty, w, h, clear });
+  };
+
+     // global verfügbar für andere Module
 
   // Zeitbasis für dt
   let lastTime = 0;
@@ -122,44 +336,190 @@
     return Array.isArray(Game.buildings) && Game.buildings.some(b => b && b.id === START_HQ_ID);
   }
   function _pickRandomHQPos(map, w, h, entrance0){
+    const grid = map?.grid;
     const cols = map?.cols | 0;
     const rows = map?.rows | 0;
-    if (!cols || !rows) return null;
+    if (!grid || !cols || !rows) return null;
 
-    // Patch F: AutoHQ nutzt dasselbe Regelwerk wie Placement + Walkability.
+    // ---------------------------------------------------------------------
+    // HQ-Placement Constraints (User-Request):
+    //   - Abstand zum Rand (EDGE_MARGIN_TILES)
+    //   - Abstand zum Wasser (WATER_MARGIN_TILES)
+    //   - Wasser-Tiles NICHT hardcoden → aus map.legend / map.metadata.legend erkennen
+    //   - Nicht in Ressourcen-Nodes / nicht in andere Gebäude hinein
+    //   - Entrance-Tile muss innerhalb der Map liegen und darf kein Wasser sein
+    // ---------------------------------------------------------------------
     const EDGE_MARGIN_TILES  = (window.__SIEDLER_HQ_EDGE_MARGIN_TILES  != null) ? (window.__SIEDLER_HQ_EDGE_MARGIN_TILES|0)  : 6;
     const WATER_MARGIN_TILES = (window.__SIEDLER_HQ_WATER_MARGIN_TILES != null) ? (window.__SIEDLER_HQ_WATER_MARGIN_TILES|0) : 4;
 
-    const ent = entrance0 ? { dx:(entrance0.dx|0), dy:(entrance0.dy|0) } : { dx: Math.floor(w/2), dy: h };
+    // Legend (primary: map.legend, fallback: map.metadata.legend)
+    const legend = (map && map.legend) ? map.legend : (map?.metadata?.legend || {});
+    const waterIds  = new Set();
+    const forestIds = new Set();
+    const rockIds   = new Set();
 
     try{
-      const GR = window.GameRules;
-      if (GR && typeof GR.findAutoPlacement === 'function'){
-        // Nutzt Registry-Parameter (blockedTerrains / minMargin) + unsere Overrides
-        const pos = GR.findAutoPlacement(START_HQ_ID, {
-          map,
-          w, h,
-          entrance0: ent,
-          edgeMarginTiles : EDGE_MARGIN_TILES,
-          waterMarginTiles: WATER_MARGIN_TILES,
-          tries: 1200
-        });
-        if (pos) return pos;
+      for (const [k, v] of Object.entries(legend || {})){
+        const name = (typeof v === 'string') ? v.toLowerCase() : '';
+        const id   = parseInt(k, 10);
+        if (!Number.isFinite(id)) continue;
+
+        if (name.includes('water'))  waterIds.add(id);
+        if (name.includes('forest')) forestIds.add(id);
+        if (name.includes('rock'))   rockIds.add(id);
       }
-    }catch(e){
-      WARN('AutoHQ: GameRules.findAutoPlacement Fehler', e);
+    } catch(e){ /* silent */ }
+
+    // Fallbacks (nur wenn Legend nichts hergibt)
+    if (!waterIds.size)  waterIds.add(8);   // konservativ: alte Demo/Default-Maps
+    if (!forestIds.size) forestIds.add(5);
+    if (!rockIds.size)   rockIds.add(6);
+
+    function isWater(t){ return waterIds.has(t|0); }
+    function isForbiddenTerrain(t){
+      const tt = t|0;
+      if (waterIds.has(tt)) return true;
+      if (forestIds.has(tt)) return true; // Start lieber nicht mitten in Wald
+      if (rockIds.has(tt))   return true;
+      return false;
     }
 
-    // Super defensiver Fallback: randnah vermeiden + nur Bounds prüfen
-    // (Wenn Rules nicht greifen, soll das Spiel trotzdem starten.)
-    const minX = Math.max(0, EDGE_MARGIN_TILES);
-    const minY = Math.max(0, EDGE_MARGIN_TILES);
-    const maxX = Math.max(minX, cols - EDGE_MARGIN_TILES - (w|0));
-    const maxY = Math.max(minY, rows - EDGE_MARGIN_TILES - (h|0));
-    for (let i=0; i<600; i++){
-      const x = (minX + Math.random() * Math.max(1, (maxX - minX + 1))) | 0;
-      const y = (minY + Math.random() * Math.max(1, (maxY - minY + 1))) | 0;
-      return { tx:x, ty:y };
+    // Blocker-Set aus MapResources (falls schon bereit)
+    // + bereits platzierte Gebäude (Start kann z.B. Map-Spawn-Objekte enthalten)
+    const blocked = new Set();
+    try{
+      const nodes = window.MapResources?.state?.nodes;
+      if (Array.isArray(nodes)){
+        for (const n of nodes){
+          const tx = (n.tx|0), ty = (n.ty|0);
+          blocked.add(tx+','+ty);
+        }
+      }
+    } catch(e){}
+
+    try{
+      if (Array.isArray(Game.buildings)){
+        for (const b of Game.buildings){
+          if (!b) continue;
+          const bx = (b.x|0), by = (b.y|0);
+          const bw = (b.w|0) || 1, bh = (b.h|0) || 1;
+          for (let yy=by; yy<by+bh; yy++){
+            for (let xx=bx; xx<bx+bw; xx++){
+              blocked.add(xx+','+yy);
+            }
+          }
+        }
+      }
+    } catch(e){}
+
+    // Entrance default: Option 1 (entrances[0]) – falls nicht vorhanden: "mittig unten"
+    const ent = entrance0 ? { dx:(entrance0.dx|0), dy:(entrance0.dy|0) } : { dx: Math.floor(w/2), dy: h };
+
+    // Aus Sampling-Gründen: berechne grobe Start-Range, damit wir nicht ewig rand/door-out-of-bounds picken
+    const minX0 = EDGE_MARGIN_TILES - Math.min(0, ent.dx);
+    const minY0 = EDGE_MARGIN_TILES - Math.min(0, ent.dy);
+    const maxX0 = (cols - EDGE_MARGIN_TILES - 1) - Math.max((w-1), ent.dx);
+    const maxY0 = (rows - EDGE_MARGIN_TILES - 1) - Math.max((h-1), ent.dy);
+    if (maxX0 < minX0 || maxY0 < minY0) return null;
+
+    function areaOk(x0,y0){
+      const ex = x0 + ent.dx;
+      const ey = y0 + ent.dy;
+
+      // Bounds: Footprint + Entrance müssen innerhalb der Map sein
+      const minX = Math.min(x0, ex);
+      const minY = Math.min(y0, ey);
+      const maxX = Math.max(x0 + w - 1, ex);
+      const maxY = Math.max(y0 + h - 1, ey);
+      if (minX < 0 || minY < 0 || maxX >= cols || maxY >= rows) return false;
+
+      // Rand-Margin
+      if (minX < EDGE_MARGIN_TILES || minY < EDGE_MARGIN_TILES) return false;
+      if (maxX >= (cols - EDGE_MARGIN_TILES) || maxY >= (rows - EDGE_MARGIN_TILES)) return false;
+
+      // Footprint: Terrain + Blocker
+      for (let y=y0; y<y0+h; y++){
+        const row = grid[y];
+        if (!row) return false;
+        for (let x=x0; x<x0+w; x++){
+          const t = row[x] | 0;
+          if (isForbiddenTerrain(t)) return false;
+          if (blocked.has(x+','+y)) return false;
+        }
+      }
+
+      // Entrance: Terrain + Blocker
+      {
+        const rowE = grid[ey];
+        if (!rowE) return false;
+        const te = rowE[ex] | 0;
+        if (isForbiddenTerrain(te)) return false;
+        if (blocked.has(ex+','+ey)) return false;
+      }
+
+      // Wasser-Margin: im erweiterten Bounding-Box-Ring darf kein Wasser liegen
+      const wx0 = Math.max(0, minX - WATER_MARGIN_TILES);
+      const wy0 = Math.max(0, minY - WATER_MARGIN_TILES);
+      const wx1 = Math.min(cols-1, maxX + WATER_MARGIN_TILES);
+      const wy1 = Math.min(rows-1, maxY + WATER_MARGIN_TILES);
+      for (let y=wy0; y<=wy1; y++){
+        const row = grid[y];
+        if (!row) return false;
+        for (let x=wx0; x<=wx1; x++){
+          const t = row[x] | 0;
+          if (isWater(t)) return false;
+        }
+      }
+
+      return true;
+    }
+
+    // Random Sampling
+    for (let i=0; i<1200; i++){
+      const x = (minX0 + Math.random() * (maxX0 - minX0 + 1)) | 0;
+      const y = (minY0 + Math.random() * (maxY0 - minY0 + 1)) | 0;
+      if (areaOk(x,y)) // Letzte Instanz: dieselbe Regel-Engine wie UI/Build-Confirm verwenden
+        // (damit AutoHQ nicht in "Spezialregeln" abdriftet)
+        const info = (Game && typeof Game.getPlaceInfo === 'function')
+          ? Game.getPlaceInfo('b.hq', x, y, w, h)
+          : { ok:true };
+
+        if (info.ok){
+          return { tx:x, ty:y };
+        }
+        // sonst weiter suchen
+    }
+
+    // Fallback: Map-Spawn[0] (wenn vorhanden)
+    const s0 = map?.spawns?.[0];
+    if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)){
+      const x = (s0.x|0), y = (s0.y|0);
+      if (areaOk(x,y)) // Letzte Instanz: dieselbe Regel-Engine wie UI/Build-Confirm verwenden
+        // (damit AutoHQ nicht in "Spezialregeln" abdriftet)
+        const info = (Game && typeof Game.getPlaceInfo === 'function')
+          ? Game.getPlaceInfo('b.hq', x, y, w, h)
+          : { ok:true };
+
+        if (info.ok){
+          return { tx:x, ty:y };
+        }
+        // sonst weiter suchen
+    }
+
+    // Fallback: Scan (kostet, aber robust)
+    for (let y=minY0; y<=maxY0; y++){
+      for (let x=minX0; x<=maxX0; x++){
+        if (areaOk(x,y)) // Letzte Instanz: dieselbe Regel-Engine wie UI/Build-Confirm verwenden
+        // (damit AutoHQ nicht in "Spezialregeln" abdriftet)
+        const info = (Game && typeof Game.getPlaceInfo === 'function')
+          ? Game.getPlaceInfo('b.hq', x, y, w, h)
+          : { ok:true };
+
+        if (info.ok){
+          return { tx:x, ty:y };
+        }
+        // sonst weiter suchen
+      }
     }
     return null;
   }
@@ -435,6 +795,41 @@ const centerX = building.x + bw / 2;
     let w  = (d.w|0) || 3;
     let h  = (d.h|0) || 3;
 
+    // --------------------------------------------------------------
+    // Placement-Regeln (Step 5): immer prüfen (auch beim Confirm)
+    // --------------------------------------------------------------
+    const placeInfo = (Game && typeof Game.getPlaceInfo === 'function')
+      ? Game.getPlaceInfo(id, x, y, w, h)
+      : { ok:true };
+
+    if (!placeInfo.ok){
+      const detail = { buildingId:id, x, y, w, h, reason: placeInfo.reason || 'invalid' };
+      try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
+      try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
+      WARN('Build DENY (Placement)', detail);
+      return;
+    }
+
+    // --------------------------------------------------------------
+    // Baustellen-Clearing: kleine Ressourcen entfernen (stage===0)
+    // --------------------------------------------------------------
+    if (Array.isArray(placeInfo.clear) && placeInfo.clear.length){
+      const MR = window.MapResources;
+      if (MR && typeof MR.clearAt === 'function'){
+        const removedAll = [];
+        for (const c of placeInfo.clear){
+          const removed = MR.clearAt(c.tx, c.ty, { onlyKinds:[c.kind] }) || [];
+          removedAll.push(...removed);
+        }
+        if (removedAll.length){
+          const detail = { buildingId:id, x, y, w, h, removed: removedAll.map(r=>({id:r.id, kind:r.kind, stage:r.stage})) };
+          try{ window.dispatchEvent(new CustomEvent('cb:build:cleared', { detail })); }catch(_){}
+          try{ document.dispatchEvent(new CustomEvent('cb:build:cleared', { detail })); }catch(_){}
+          LOG('Baustelle räumt kleine Ressourcen', detail);
+        }
+      }
+    }
+
     if (!id || !Number.isFinite(x) || !Number.isFinite(y)){
       WARN('placeBuildingFromEvent → unvollständige Daten', d);
       return;
@@ -448,31 +843,6 @@ const centerX = building.x + bw / 2;
       if (!(d.h|0) && Number.isFinite(def.size.h)) h = def.size.h|0;
     }
     const entrances = (def && Array.isArray(def.entrances)) ? def.entrances : [];
-
-    // ---------------------------------------------------------------------
-    // Patch F: Placement-Validierung (eine Quelle: GameRules)
-    //  - verhindert ungültige Bauten auch dann, wenn Ghost/UI mal falsch ist
-    //  - liefert Reason-Codes (optional) für spätere UI/Inspector-Ausgabe
-    // ---------------------------------------------------------------------
-    try{
-      const GR = window.GameRules;
-      if (GR && typeof GR.canPlaceBuildingAt === 'function'){
-        const chk = GR.canPlaceBuildingAt(id, x, y, w, h, { withReason:true, source:'placeBuildingFromEvent' });
-        if (!chk?.ok){
-          const deny = {
-            buildingId : id,
-            x, y, w, h,
-            reason    : 'invalidPlacement',
-            placeReason: chk?.reason || 'invalid',
-            detail    : chk?.detail || null
-          };
-          try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail: deny })); }catch(_){ }
-          try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail: deny })); }catch(_){ }
-          WARN('Bau abgelehnt (Placement-Regeln)', deny);
-          return;
-        }
-      }
-    }catch(e){ /* defensiv: nicht blockieren */ }
 
     // HQ: nur 1x erlaubt und sofort fertig (Startpunkt/Spawn)
     if (id === 'b.hq'){
