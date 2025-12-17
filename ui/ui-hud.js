@@ -41,12 +41,7 @@ const warn = (m)=> (window.CBLog?.warn  || console.warn)(`${TAG} ${m}`);
 /* ---------------------------------------------------------------------------
  * Hilfsfunktionen
  * ------------------------------------------------------------------------ */
-// NOTE (Safari/iOS): "$" wird in mehreren Dateien definiert.
-// `const $ = ...` im globalen Scope führt beim 2. Vorkommen zu:
-//   "Can't create duplicate variable: '$'"
-// → Map/Spiel-Loop lädt dann nicht mehr vollständig.
-// Darum: `var` ist hier bewusst erlaubt und idempotent.
-var $ = (s,ctx=document)=> ctx.querySelector(s);
+const $ = (s,ctx=document)=> ctx.querySelector(s);
 const el = (tag,cls)=>{ const n=document.createElement(tag); if(cls) n.className=cls; return n; };
 
 let INIT_DONE = false;
