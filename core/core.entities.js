@@ -1,3 +1,5 @@
+--------------------------------------------------------------------------------
+
 /* ============================================================================
  * Datei   : core/entities.js
  * Projekt : Neue Siedler
@@ -248,33 +250,28 @@
     if (a.startsWith('place-')) place(a.slice(6));
   });
 
-  // ========================================================================
-// ❌ LEGACY / DEAKTIVIERT: Auto-HQ beim Start (MVP) – ENTITIES-DEMO
-// ------------------------------------------------------------------------
-// Warum auskommentiert?
-// - Diese Logik platziert KEIN echtes Building (b.hq), sondern ein "rathaus"
-//   in der alten Entities-Demo-Liste.
-// - Das kollidiert mit unserem echten Building-System in core/game.js
-//   (Auto-HQ + Cinematic + Jobs/Carrier).
-// - Ergebnis der Kollision kann sein: "Träger ohne HQ" oder Kamera findet
-//   kein HQ für die Start-Fahrt.
-//
-// Was ist stattdessen korrekt?
-// - Start-HQ wird ab jetzt ausschließlich in core/game.js gesetzt
-//   (Building-ID: b.hq), damit Kamera/Jobs/Placement-Regeln EIN System sind.
-//
-// Später:
-// - Wenn wir Legacy-Ordner endgültig entfernen, kann dieser Block gelöscht werden.
-// ========================================================================
-//
-// window.addEventListener('cb:game-start', ()=>{
-//   if (S.list.some(e=>e.kind==='rathaus' || e.kind==='hq')) return;
-//   const t = ensureXY('rathaus'); // Kameramitte
-//   const b = place('rathaus', t.x, t.y);
-//   LOG('Auto-HQ platziert:', b?.x, b?.y);
-// });
-//
-///* ==========================================================================
+  // ❌ DEAKTIVIERT: Legacy Auto-HQ (Entities-Demo)
+  // ---------------------------------------------------------------------
+  // Warum deaktiviert?
+  // - Diese Entities-Demo platziert ein 'rathaus' als *Entity* in S.list,
+  //   NICHT als echtes Building (b.hq) im Building-System.
+  // - Das kollidiert mit unserem echten Auto-HQ in core/game.js (b.hq)
+  //   und führt zu "Träger da, HQ fehlt" und kaputter Kamera-Fokussierung.
+  // - Sobald das Building-System stabil ist, kann dieser Block endgültig gelöscht werden.
+  // ---------------------------------------------------------------------
+  /*
+
+
+  // Auto-HQ beim Start (MVP)
+  window.addEventListener('cb:game-start', ()=>{
+    if (S.list.some(e=>e.kind==='rathaus' || e.kind==='hq')) return;
+    const t = ensureXY('rathaus'); // Kameramitte
+    const b = place('rathaus', t.x, t.y);
+    LOG('Auto-HQ platziert:', b?.x, b?.y);
+  });
+  */
+
+  /* ==========================================================================
    * [Exports – Public API]
    * ========================================================================== */
   window.Entities = {
@@ -288,3 +285,6 @@
 
   LOG('Modul geladen ('+VERSION+') – drawEntities global verfügbar.');
 })();
+
+
+--------------------------------------------------------------------------------

@@ -1,3 +1,5 @@
+--------------------------------------------------------------------------------
+
 /* ============================================================================
  * Datei   : core/map.resources.js
  * Projekt : Neue Siedler – Epoche 1
@@ -222,27 +224,7 @@
         x, y,
         frame,
         // vorbereitet für Wachstum / Abbau
-        stage: (function(){
-          // --------------------------------------------------------------
-          // Ressourcen-Größe / Baustellen-Clearing
-          // --------------------------------------------------------------
-          // Ziel:
-          // - kleine Bäume / kleine Steine dürfen von Bauarbeitern beim Bauen entfernt werden
-          // - große Bäume werden erst durch Holzfäller entfernt/abgebaut (späteres Feature)
-          // - große Steine bleiben blockierend (auch später), Wasser bleibt blockierend
-          //
-          // Umsetzung (Stage):
-          // - stage = 0  => "klein" (baustellen-removable)
-          // - stage = 3  => "groß"  (blockierend)
-          //
-          // Hinweis:
-          // - Wir nutzen hier nur 0/3, damit es kompatibel bleibt mit späterem
-          //   Wachstum/Stages (1..2 optional).
-          // --------------------------------------------------------------
-          if (kind === 'tree')  return (rng() < 0.35) ? 0 : 3;
-          if (kind === 'stone') return (rng() < 0.55) ? 0 : 3;
-          return 0; // fish
-        })()
+        stage: (kind === 'tree') ? 3 : 0
       };
 
       State.nodes.push(node);
@@ -442,76 +424,6 @@ function snapshot(options = {}){
 // WICHTIG: init() darf NICHT "initialized=true" setzen, wenn Map noch nicht ready ist.
 // => Wir erzwingen init nur, wenn getMap() grid/rows/cols hat.
 // (Falls du das schon anders gelöst hast: passt trotzdem.)
-
-  // =========================================================================
-  // TILE HELPERS (für Placement / Baustellen-Clearing)
-  // =========================================================================
-
-  /**
-   * Liefert die erste Resource-Node auf einem Tile (tx,ty) oder null.
-   * Wird von Placement/Rules benutzt, um z. B. kleine Bäume als "räumbar"
-   * zu behandeln.
-   */
-  function nodeAt(tx, ty){
-    tx = tx|0; ty = ty|0;
-    const n = State.nodes;
-    for (let i=0;i<n.length;i++){
-      const it = n[i];
-      if (!it) continue;
-      if ((it.x|0) === tx && (it.y|0) === ty) return it;
-    }
-    return null;
-  }
-
-  /**
-   * Entfernt Resource-Nodes auf einem Tile (tx,ty).
-   * Nutzung:
-   * - Beim Bau-Confirm können "kleine" Ressourcen (stage===0) entfernt werden.
-   *
-   * Wichtig:
-   * - Große Bäume (stage===3) sollen NICHT automatisch entfernt werden.
-   *   Diese Logik entscheidet der Aufrufer (GameRules/Placement).
-   */
-  function clearAt(tx, ty, opts = {}){
-    tx = tx|0; ty = ty|0;
-    const onlyKinds = Array.isArray(opts.onlyKinds) ? opts.onlyKinds : null;
-
-    const removed = [];
-    const keep = [];
-
-    for (const it of State.nodes){
-      if (!it) continue;
-      const match = ((it.x|0) === tx && (it.y|0) === ty);
-      const kindOk = (!onlyKinds || onlyKinds.includes(it.kind));
-      if (match && kindOk){
-        removed.push(it);
-      } else {
-        keep.push(it);
-      }
-    }
-
-    if (removed.length){
-      State.nodes = keep;
-
-      // rebuild fast lists (einfach & sicher)
-      State.trees  = [];
-      State.stones = [];
-      State.fish   = [];
-      for (const it of State.nodes){
-        if (it.kind === 'tree')  State.trees.push(it);
-        if (it.kind === 'stone') State.stones.push(it);
-        if (it.kind === 'fish')  State.fish.push(it);
-      }
-
-      // Debug/Inspector Hook
-      const detail = { tx, ty, removed: removed.map(r=>({id:r.id, kind:r.kind, stage:r.stage})) };
-      try{ window.dispatchEvent(new CustomEvent('cb:mapres:cleared', { detail })); }catch(_){}
-      try{ document.dispatchEvent(new CustomEvent('cb:mapres:cleared', { detail })); }catch(_){}
-    }
-
-    return removed;
-  }
-
 function _mapIsReady(){
   const map = getMap();
   return !!(map && map.grid && map.rows && map.cols);
@@ -590,3 +502,6 @@ window.addEventListener('req:mapres:clear', ()=>{
   LOG('bereit', window.MapResources.version);
 
 })();
+
+
+--------------------------------------------------------------------------------
