@@ -223,26 +223,6 @@
         }
       }
 
-      // Patch F: zentraler Rules-Stack (wenn vorhanden)
-      try{
-        const GR = window.GameRules;
-        if (GR && typeof GR.isNavBlocked === 'function'){
-          // Baseline: zentrale Walkability-Regeln (Wasser + Ressourcen + fertige Buildings)
-          if (GR.isNavBlocked(tx, ty, A)) return true;
-
-          // Optional: nach Legend-Name blockieren (wenn konfiguriert)
-          if (blockedTerrainNames){
-            const tid = grid?.[ty]?.[tx];
-            const lname = _legendNameForTileId(map, tid);
-            if (lname && blockedTerrainNames.has(String(lname))) return true;
-          }
-          return false;
-        }
-      }catch(e){ /* ignore */ }
-
-      // -------------------------------------------------------------------
-      // Legacy-Fallback (wenn GameRules nicht geladen ist)
-      // -------------------------------------------------------------------
       // 1) Bounds
       if (tx < 0 || ty < 0) return true;
       if (cols && tx >= cols) return true;
@@ -260,7 +240,8 @@
         }
       }catch(e){ /* ignore */ }
 
-      // 3) MapResources (Trees/Stones/Fish)
+      // 3) MapResources (Trees/Stones/Fish): jede Ressource blockiert aktuell
+      //    (später ggf. "walkThrough" oder "passable" pro Resource-Typ)
       if (Array.isArray(nodes) && nodes.length){
         for (const n of nodes){
           if (!n) continue;
@@ -268,7 +249,7 @@
         }
       }
 
-      // 4) Buildings-Footprints (nur DONE)
+      // 4) Buildings-Footprints
       if (Array.isArray(buildings) && buildings.length){
         for (const b of buildings){
           if (!b) continue;
@@ -277,7 +258,9 @@
           const bw = Math.max(1, toInt(b.w, 1));
           const bh = Math.max(1, toInt(b.h, 1));
           if (!Number.isFinite(bx) || !Number.isFinite(by)) continue;
-
+          // Nur fertige Gebäude blockieren den Weg.
+          // Baustellen (buildStage 0..2 / status pending/building) bleiben begehbar,
+          // damit Träger optisch zur Türkachel liefern können.
           const stage = (typeof b.buildStage === 'number') ? b.buildStage : -1;
           const isDone = (stage >= 3) || (b.status === 'done') || (b.buildPhase === 'complete') || (b.buildPhase === 3);
           if (!isDone) continue;

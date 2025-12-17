@@ -19,10 +19,7 @@
   const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // NOTE (Safari/iOS): wenn diese Datei irgendwann per <script> global eingebunden
-  // wird und andere Dateien ebenfalls "$" definieren, kann es zu
-  // "Can't create duplicate variable: '$'" kommen. Darum var.
-  var $ = (s, r=document)=> r.querySelector(s);
+  const $ = (s, r=document)=> r.querySelector(s);
 
   const layout = {
     el: {

@@ -31,9 +31,7 @@
   // Produktionstakt (einfacher Stub, bis echte Worker-Logik kommt)
   const FISH_CYCLE_MS    = 7000;
 
-  // Patch F: Wasser nicht hardcoden. Primär: Legend via GameRules.
-  // Fallback (nur wenn Rules/Legend fehlen): IDs 8/9.
-  const WATER_TILE_IDS_FALLBACK = new Set([8, 9]);
+  const WATER_TILE_IDS = new Set([8, 9]);
 
   const FishFields = new Map();
 
@@ -62,18 +60,13 @@
   }
 
   function isWaterTile(tx, ty){
-    // 1) Zentrales Regelwerk (Legend-basiert)
-    try{
-      const GR = window.GameRules;
-      if (GR && typeof GR.isWaterTile === 'function'){
-        return !!GR.isWaterTile(tx, ty);
-      }
-    }catch(e){ /* ignore */ }
-
-    // 2) Fallback: TileId-Check (wenn verfügbar)
     const id = getTileIdAt(tx, ty);
-    if (id === null) return false;
-    return WATER_TILE_IDS_FALLBACK.has(id);
+    if (id === null) {
+      // Wenn wir die Map nicht abfragen können, blocken wir nicht hart,
+      // damit das Modul nicht "tot" ist.
+      return true;
+    }
+    return WATER_TILE_IDS.has(id);
   }
 
   // ------------------------------------------------------------------------

@@ -698,87 +698,6 @@
     }
   }
 
-
-// =========================================================================
-// GLOBAL Y-SORT SUPPORT
-// =========================================================================
-/**
- * Sammle Drawables für den globalen Y-Sort-Renderer (core/game.map.js).
- * out.push({ sortY, z, kind, draw(ctx) })
- *
- * Hinweis:
- * - Wir nutzen exakt dieselbe Logik wie drawOnMainCanvas, aber pro Node als draw()-Closure.
- * - EcoTick passiert weiterhin in drawOnMainCanvas – für den Y-Sort-Renderpfad
- *   machen wir hier absichtlich KEIN Eco-Tick (sonst doppelt / unvorhersehbar).
- */
-function collectDrawables(out, cam, tileSize){
-  if (!Array.isArray(out)) return out;
-
-  if (!State.initialized){
-    if (!_mapIsReady()) return out;
-    init();
-  }
-
-  const ts = tileSize || (window.GameMap?.tileSize) || 64;
-  const baseAtlasScale = ts / 256;
-
-  const now = (typeof performance !== 'undefined' && performance.now)
-    ? (performance.now() * 0.001)
-    : (Date.now() * 0.001);
-
-  const ecoGrowth = CFG.eco.growthCycle;
-  const ecoAmp = (CFG.eco.enabled && ecoGrowth.enabled) ? (ecoGrowth.amp ?? 0.0) : 0.0;
-
-  for (const n of State.nodes){
-    const wx = (n.x * ts) + ts * (0.5 + (n.ox || 0));
-    const wy = (n.y * ts) + ts * (0.82 + (n.oy || 0));
-
-    out.push({
-      sortY: wy,
-      z: 20,          // Deko leicht vor Ressourcen bei Tie
-      kind: 'deco',
-      draw: (ctx)=>{
-        // Wobble
-        const wCfg = CFG.wobble.perKind[n.kind] || { wobbleScale: 0.0, speedMin: 0.05, speedMax: 0.10 };
-        const wobbleScale = (CFG.wobble.enabled ? (wCfg.wobbleScale ?? 0.0) : 0.0);
-
-        const tiltCfg = CFG.tilt[n.kind] || { wobbleRotDeg: 0.0 };
-        const wobbleRotDeg = (CFG.wobble.enabled ? (tiltCfg.wobbleRotDeg ?? 0.0) : 0.0);
-        const wobbleRot = wobbleRotDeg * (Math.PI/180);
-
-        const sLoop = wobbleScale ? (1 + wobbleScale * Math.sin(now * (n.speed || 0.1) + (n.phase || 0))) : 1;
-        const rLoop = wobbleRot ? (wobbleRot * Math.sin(now * (n.speed2 || 0.08) + (n.phase2 || 0))) : 0;
-
-        // Eco Growth Cycle (sehr langsam)
-        let ecoLoop = 1;
-        if (ecoAmp && (n.ecoSpeed || 0) > 0){
-          ecoLoop = 1 + ecoAmp * Math.sin((now * (n.ecoSpeed || 0)) + (n.ecoPhase || 0));
-        }
-
-        const scale = baseAtlasScale * (n.sBase || 0.7) * (n.sMul || 1) * sLoop * ecoLoop;
-        const rot   = (n.rotBase || 0) + rLoop;
-
-        if (n.frame){
-          const ok = drawAtlasFrameRot(ctx, CFG.atlasName, n.frame, wx, wy, scale, rot);
-          if (ok) return;
-        }
-
-        // Fallback
-        ctx.save();
-        ctx.fillStyle = 'rgba(0,200,0,0.70)';
-        if (n.kind === 'waterlily') ctx.fillStyle = 'rgba(20,170,120,0.85)';
-        if (n.kind === 'rocksSmall' || n.kind === 'rocksLarge' || n.kind === 'boulders') ctx.fillStyle = 'rgba(160,160,160,0.85)';
-        ctx.beginPath();
-        ctx.arc(wx, wy, ts * 0.09, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-    });
-  }
-
-  return out;
-}
-
   // =========================================================================
   // TOOLS API (regen/clear/snapshot/export/import + eco toggles)
   // =========================================================================
@@ -920,12 +839,11 @@ function collectDrawables(out, cam, tileSize){
   // PUBLIC
   // =========================================================================
   window.MapDecorations = {
-    version: 'v25.12.17-mapdecorations-ysort-collect-v1',
+    version: 'v25.12.15-mapdecorations-deco-atlas-v4',
     state: State,
     cfg: CFG,
     init,
     drawOnMainCanvas,
-    collectDrawables,
 
     // Tools
     regen,

@@ -262,35 +262,19 @@
    *  - Sonst: immer true (aktuelles Verhalten)
    */
   function canPlaceAt(tx,ty){
-    // Patch F: wir wollen IMMER das gleiche Regelwerk nutzen.
-    // - bevorzugt: window.GameRules.canPlaceBuildingAt(...) (liefert {ok, reason, ...})
-    // - fallback:  window.Game.canPlaceBuildingAt(...) (legacy bool)
     try{
-      // 1) zentrale Rules (liefert ok + reason)
-      const GR = window.GameRules;
-      if (GR && typeof GR.canPlaceBuildingAt === 'function'){
-        const r = GR.canPlaceBuildingAt(currentTool, tx, ty, lastSize.w, lastSize.h, {
-          withReason: true,
-          source    : 'GamePlace'
-        });
-        // Debug: letzte Reason global merken (Inspector/Tests können das später anzeigen)
-        window.__SIEDLER_LAST_PLACE_REASON = r?.reason || null;
-        return !!r?.ok;
-      }
-
-      // 2) Legacy: Game kann nur bool liefern
       const g = window.Game;
       if (g && typeof g.canPlaceBuildingAt === 'function'){
-        const ok = !!g.canPlaceBuildingAt(currentTool, tx, ty, lastSize.w, lastSize.h);
-        window.__SIEDLER_LAST_PLACE_REASON = ok ? null : 'invalid';
-        return ok;
+        return !!g.canPlaceBuildingAt(
+          currentTool,
+          tx, ty,
+          lastSize.w, lastSize.h
+        );
       }
     }catch(e){
       WARN('canPlaceAt Fehler', e);
     }
-
     // Fallback: wie bisher – immer gültig
-    window.__SIEDLER_LAST_PLACE_REASON = null;
     return true;
   }
 

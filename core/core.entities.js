@@ -1,5 +1,3 @@
---------------------------------------------------------------------------------
-
 /* ============================================================================
  * Datei   : core/entities.js
  * Projekt : Neue Siedler
@@ -250,18 +248,6 @@
     if (a.startsWith('place-')) place(a.slice(6));
   });
 
-  // ❌ DEAKTIVIERT: Legacy Auto-HQ (Entities-Demo)
-  // ---------------------------------------------------------------------
-  // Warum deaktiviert?
-  // - Diese Entities-Demo platziert ein 'rathaus' als *Entity* in S.list,
-  //   NICHT als echtes Building (b.hq) im Building-System.
-  // - Das kollidiert mit unserem echten Auto-HQ in core/game.js (b.hq)
-  //   und führt zu "Träger da, HQ fehlt" und kaputter Kamera-Fokussierung.
-  // - Sobald das Building-System stabil ist, kann dieser Block endgültig gelöscht werden.
-  // ---------------------------------------------------------------------
-  /*
-
-
   // Auto-HQ beim Start (MVP)
   window.addEventListener('cb:game-start', ()=>{
     if (S.list.some(e=>e.kind==='rathaus' || e.kind==='hq')) return;
@@ -269,7 +255,6 @@
     const b = place('rathaus', t.x, t.y);
     LOG('Auto-HQ platziert:', b?.x, b?.y);
   });
-  */
 
   /* ==========================================================================
    * [Exports – Public API]
@@ -285,6 +270,3 @@
 
   LOG('Modul geladen ('+VERSION+') – drawEntities global verfügbar.');
 })();
-
-
---------------------------------------------------------------------------------
