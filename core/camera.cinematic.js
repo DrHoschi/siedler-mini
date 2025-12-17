@@ -1,303 +1,329 @@
 /* ============================================================================
  * Datei   : core/camera.cinematic.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.17-cinematic-skip-firstRun
- * Zweck   : "Genialer Start-Zoom-Effekt" als entkoppeltes Modul
+ * Version : v25.12.17-cinematic-restore-flyin
+ * Zweck   : Start-"Cinematic": Erst Map-Übersicht (Fit-to-Map), dann sanft zum HQ
+ *           zoomen (Ease-Out) – ohne die Kamera-Logik zu verknoten.
  *
- * Idee:
- *  - Startet NICHT in game.js, sondern reagiert nur auf Events / globale APIs.
- *  - Dadurch keine Kamera-Logik-Verknotung mit Game/Map/Units.
+ * WICHTIG:
+ *   • "Abbrechen" bedeutet NICHT, dass du etwas tippen MUSST.
+ *     Es ist nur ein Sicherheitsnetz:
+ *       Wenn während der Kamerafahrt irgendeine User-Interaktion passiert
+ *       (Tippen/Draggen/Pinch/Scroll), wird die Fahrt sofort gestoppt und du
+ *       hast volle Kontrolle.
  *
- * Ablauf:
- *  (1) Beim ersten HQ-Positions-Event cb:hq:pos {tx,ty}:
- *      - Kamera kurz auf "Max Overview / Fit-to-Map"
- *  (2) Danach Tween (ease-out) zum HQ und Ziel-Zoom (Option 1 = aktueller Zoom)
+ * Trigger / Daten:
+ *   • hört auf cb:hq:pos  (detail: {tx, ty})  -> HQ Tile-Position
+ *   • wartet zusätzlich darauf, dass GameMap renderfähig ist (GameMap._state.ready)
  *
- * Quality-of-Life:
- *  - Skip/Cancel bei User-Input (pointerdown / wheel / touchstart / keydown)
- *  - Optional: nur beim ersten Start (LocalStorage Flag)
- *  - Optional: Query-Overrides (?cinematic=1 / ?cinematic=0)
+ * Konfiguration (optional):
+ *   • URL:
+ *       ?cinematic=0   -> aus
+ *       ?cinematic=1   -> erzwingen (auch wenn schon gelaufen)
+ *   • Global:
+ *       window.__DISABLE_CINEMATIC__ = true  -> aus
  *
- * Abhängigkeiten:
- *  - window.GameCamera (core/camera.js)
- *  - window.GameMap._state (core/game.map.js) für cols/rows/tileSize
- *
- * Events:
- *  - hört: cb:hq:pos
- *  - sendet (optional): cb:cinematic:start / cb:cinematic:done / cb:cinematic:cancel
- * ========================================================================== */
+ * Hinweis:
+ *   • Wir laufen standardmäßig bei JEDEM Start. (Kein "once-only" Default!)
+ *     Wenn du später "nur beim ersten Start" willst, bauen wir das als Option ein.
+ * ============================================================================ */
 
-(function(){
+(() => {
   'use strict';
 
-  /* ===========================================
-   * Konfiguration
-   * =========================================== */
-
+  /* ==========================================================================
+   * [Konstanten / Logger]
+   * ========================================================================== */
   const TAG  = '[cinematic]';
-  const LOG  = (...a)=> (window.CBLog?.info  || console.info )(TAG, ...a);
-  const OK   = (...a)=> (window.CBLog?.ok    || console.log  )(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn  || console.warn )(TAG, ...a);
+  const LOG  = (...a) => (window.CBLog?.info  ?? console.log )(TAG, ...a);
+  const WARN = (...a) => (window.CBLog?.warn  ?? console.warn)(TAG, ...a);
 
-  // Dauer des Zoom-Flugs (ms)
+  // Zoom-Limits (müssen zu core/camera.js passen; dort: 0.25 .. 4.0)
+  const ZOOM_MIN = 0.25;
+  const ZOOM_MAX = 4.0;
+
+  // Dauer der "Fahrt" (ms)
   const DURATION_MS = 1200;
 
-  // Kleine Verzögerung nach Fit-to-Map, damit der erste Render sicher passiert
-  const START_DELAY_MS = 120;
+  // Wie lange wir maximal warten, bis Map+Camera verfügbar sind (ms)
+  const WAIT_TIMEOUT_MS = 5000;
 
-  // LocalStorage Flag (versioniert, damit spätere Änderungen sauber neu laufen können)
-  const LS_KEY = 'siedler.cinematic.seen.v1';
+  // "Ease-Out" (quadratisch) – wirkt natürlich: schnell am Anfang, weich am Ende
+  const easeOutQuad = (t) => 1 - (1 - t) * (1 - t);
 
-  // Debug/Override: Du kannst in der Konsole schnell testen:
-  //   window.__CINEMATIC_FORCE__ = true;  // erzwingen
-  //   window.__CINEMATIC_DISABLE__ = true; // deaktivieren
-  //   window.__SIEDLER_HQ_EDGE_MARGIN_TILES / __SIEDLER_HQ_WATER_MARGIN_TILES (anderen Patch)
-  const FORCE   = !!window.__CINEMATIC_FORCE__;
-  const DISABLE = !!window.__CINEMATIC_DISABLE__;
+  /* ==========================================================================
+   * [State]
+   * ========================================================================== */
+  let hqTile = null;          // {tx,ty}
+  let started = false;        // ob die Fahrt schon gestartet wurde (pro Session)
+  let running = false;        // ob gerade animiert wird
+  let rafId = 0;              // requestAnimationFrame id
+  let cancelBound = false;    // ob Cancel-Listener gebunden sind
 
-  /* ===========================================
-   * Hilfsfunktionen
-   * =========================================== */
+  /* ==========================================================================
+   * [Utilities]
+   * ========================================================================== */
 
-  function emit(name, detail = {}) {
-    try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch(_) {}
+  /** Query-Parameter lesen (klein, robust) */
+  function getQueryParam(name){
+    try{
+      const u = new URL(window.location.href);
+      return u.searchParams.get(name);
+    } catch { return null; }
   }
 
-  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+  /** Clamp */
+  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
-  // Ease-Out Cubic (schnell am Anfang, weich zum Ende)
-  function easeOutCubic(t){
-    t = clamp(t, 0, 1);
-    return 1 - Math.pow(1 - t, 3);
+  /** Tile -> Welt (Pixel) – Zentrum des Tiles */
+  function tileToWorldCenter(tx, ty){
+    const ms = window.GameMap?._state;
+    const ts = ms?.tileSize || 64;
+    return { wx: (tx + 0.5) * ts, wy: (ty + 0.5) * ts };
   }
 
-  function getCanvas(){
-    return document.querySelector('#game');
-  }
-
-  function getMapState(){
-    // GameMap ist bewusst "einfach": GameMap._state enthält cols/rows/tileSize
-    return window.GameMap?._state || null;
-  }
-
-  function getCameraApi(){
-    // GameCamera ist als globales Objekt implementiert (siehe core/camera.js)
-    return window.GameCamera || null;
-  }
-
-  function getCameraState(cam){
-    // Einige Teile des Codes lesen direkt cam.x/cam.y/cam.zoom,
-    // deshalb unterstützen wir beide Varianten.
-    if (!cam) return { x:0, y:0, zoom:1 };
-    if (typeof cam.getState === 'function') return cam.getState();
-    return { x: cam.x ?? 0, y: cam.y ?? 0, zoom: cam.zoom ?? 1 };
-  }
-
-  function setCameraState(cam, st){
-    if (!cam) return;
-    if (typeof cam.setState === 'function') {
-      cam.setState(st);
-      return;
+  /** Viewport-Größe aus Canvas */
+  function getViewSize(){
+    const c = window.Render?.ctx?.canvas || document.getElementById('game');
+    if (!c) return { w: 0, h: 0 };
+    try{
+      const r = c.getBoundingClientRect();
+      return { w: r.width || c.width || 0, h: r.height || c.height || 0 };
+    } catch {
+      return { w: c.width || 0, h: c.height || 0 };
     }
-    // Fallback: direkte Felder setzen (sollte selten nötig sein)
-    if (typeof st.x === 'number') cam.x = st.x;
-    if (typeof st.y === 'number') cam.y = st.y;
-    if (typeof st.zoom === 'number') cam.zoom = st.zoom;
   }
 
-  function centerOffsetFor(worldX, worldY, canvasW, canvasH, zoom){
-    // Kamera-Offset (Top-Left) so berechnen, dass worldX/worldY in der Mitte liegt
-    const viewW = canvasW / zoom;
-    const viewH = canvasH / zoom;
-    return {
-      x: worldX - viewW / 2,
-      y: worldY - viewH / 2
-    };
-  }
-
-  function computeFitToMap(cam, mapState, canvas){
-    // Fit Zoom: ganze Map sichtbar (mit kleinem Padding)
-    const cols = mapState?.cols ?? 1;
-    const rows = mapState?.rows ?? 1;
-    const ts   = mapState?.tileSize ?? 64;
+  /** Fit-to-Map Zoom berechnen: min(viewW/worldW, viewH/worldH) */
+  function computeFitZoom(){
+    const ms = window.GameMap?._state;
+    const cols = ms?.cols || 1;
+    const rows = ms?.rows || 1;
+    const ts   = ms?.tileSize || 64;
 
     const worldW = cols * ts;
     const worldH = rows * ts;
 
-    const r = canvas.getBoundingClientRect();
-    const canvasW = Math.max(1, r.width);
-    const canvasH = Math.max(1, r.height);
+    const { w: viewW, h: viewH } = getViewSize();
+    if (!worldW || !worldH || !viewW || !viewH) return 1;
 
-    // Fit so, dass Welt ins Canvas passt
-    let fitZoom = Math.min(canvasW / worldW, canvasH / worldH);
-    // leichtes Padding (damit "Rand" sichtbar bleibt)
-    fitZoom *= 0.98;
+    // kleine Sicherheitsmarge, damit wirklich "alles sichtbar" ist
+    const margin = 0.96;
 
-    // Wenn Kamera clamped: versuche an Min/Max zu halten (falls verfügbar)
-    // Wir kennen ZOOM_MIN/ZOOM_MAX nicht direkt; setState wird intern clampen.
-    // Trotzdem: harte Grenzen vermeiden (0 oder negative)
-    fitZoom = Math.max(0.05, fitZoom);
-
-    // Zentrum der Welt in der Mitte halten
-    const center = centerOffsetFor(worldW/2, worldH/2, canvasW, canvasH, fitZoom);
-
-    return { fitZoom, centerX: center.x, centerY: center.y, canvasW, canvasH, worldW, worldH };
+    const z = Math.min(viewW / worldW, viewH / worldH) * margin;
+    return clamp(z, ZOOM_MIN, ZOOM_MAX);
   }
 
-  /* ===========================================
-   * Hauptlogik
-   * =========================================== */
+  /** Kamera so setzen, dass die Map möglichst komplett sichtbar ist */
+  function setOverview(){
+    const ms = window.GameMap?._state;
+    const cols = ms?.cols || 1;
+    const rows = ms?.rows || 1;
+    const ts   = ms?.tileSize || 64;
 
-  // Singleton-Guard (falls Skript doppelt eingebunden ist)
-  if (window.__CINEMATIC_START__){
-    LOG('bereits aktiv – skip');
-    return;
-  }
-  window.__CINEMATIC_START__ = true;
+    const worldW = cols * ts;
+    const worldH = rows * ts;
 
-  // Query Overrides: ?cinematic=0 oder ?cinematic=1
-  const qs = new URLSearchParams(location.search);
-  const qsVal = qs.get('cinematic');
-  const qsDisable = (qsVal === '0' || qsVal === 'false' || qsVal === 'off');
-  const qsForce   = (qsVal === '1' || qsVal === 'true'  || qsVal === 'on');
+    const z = computeFitZoom();
+    const { w: viewW, h: viewH } = getViewSize();
+    if (!viewW || !viewH) return;
 
-  // First-Run check (wenn nicht force)
-  const seen = (()=>{
-    try { return localStorage.getItem(LS_KEY) === '1'; } catch(_) { return false; }
-  })();
+    // GameCamera.x/y = Weltkoordinaten der linken oberen Ecke
+    const viewWorldW = viewW / z;
+    const viewWorldH = viewH / z;
 
-  if ((DISABLE || qsDisable) && !FORCE && !qsForce){
-    LOG('deaktiviert (Flag/Query).');
-    return;
-  }
-  if (seen && !FORCE && !qsForce){
-    LOG('bereits gesehen (LocalStorage) – skip.');
-    return;
+    const x = (worldW - viewWorldW) / 2;
+    const y = (worldH - viewWorldH) / 2;
+
+    window.GameCamera?.setState?.({ x, y, zoom: z });
+    // Hinweis: setState emittiert cb:camera-change in core/camera.js
+    LOG('overview gesetzt', { zoom: z, x, y, worldW, worldH, viewW, viewH });
   }
 
-  let running = false;
-  let cancelled = false;
-  let rafId = 0;
-
+  /** Cancel / Abbrechen: Stoppt die Animation und gibt Kontrolle */
   function cancel(reason){
-    if (!running || cancelled) return;
-    cancelled = true;
+    if (!running) return;
     running = false;
     if (rafId) cancelAnimationFrame(rafId);
-    detachSkipInputs();
-    WARN('cancel', reason || 'user');
-    emit('cb:cinematic:cancel', { reason: String(reason||'user') });
+    rafId = 0;
+    LOG('cancel', { reason });
   }
 
-  let skipHandlersAttached = false;
-  const onUserInput = (ev)=> cancel(ev?.type || 'input');
+  /** Cancel-Listener nur während der Fahrt aktivieren */
+  function bindCancelListeners(){
+    if (cancelBound) return;
+    cancelBound = true;
 
-  function attachSkipInputs(){
-    if (skipHandlersAttached) return;
-    skipHandlersAttached = true;
-    // Sobald Spieler irgendwas macht: abbrechen
-    window.addEventListener('pointerdown', onUserInput, { passive:true, once:true });
-    window.addEventListener('touchstart', onUserInput, { passive:true, once:true });
-    window.addEventListener('wheel',      onUserInput, { passive:true, once:true });
-    window.addEventListener('keydown',    onUserInput, { passive:true, once:true });
+    const onAnyInput = (e) => {
+      // wenn der User interagiert, sofort abbrechen
+      cancel(e?.type || 'input');
+      unbindCancelListeners();
+    };
+
+    // Auf dem ganzen Window, damit es sicher greift (Canvas/DOM egal)
+    window.addEventListener('pointerdown', onAnyInput, { passive: true, capture: true });
+    window.addEventListener('touchstart',  onAnyInput, { passive: true, capture: true });
+    window.addEventListener('wheel',       onAnyInput, { passive: true, capture: true });
+    window.addEventListener('keydown',     onAnyInput, { passive: true, capture: true });
+
+    // Merken fürs Entfernen:
+    bindCancelListeners._handler = onAnyInput;
   }
 
-  function detachSkipInputs(){
-    if (!skipHandlersAttached) return;
-    skipHandlersAttached = false;
-    window.removeEventListener('pointerdown', onUserInput);
-    window.removeEventListener('touchstart', onUserInput);
-    window.removeEventListener('wheel',      onUserInput);
-    window.removeEventListener('keydown',    onUserInput);
+  function unbindCancelListeners(){
+    if (!cancelBound) return;
+    cancelBound = false;
+
+    const h = bindCancelListeners._handler;
+    if (!h) return;
+
+    window.removeEventListener('pointerdown', h, { capture: true });
+    window.removeEventListener('touchstart',  h, { capture: true });
+    window.removeEventListener('wheel',       h, { capture: true });
+    window.removeEventListener('keydown',     h, { capture: true });
+
+    bindCancelListeners._handler = null;
   }
 
-  function markSeen(){
-    try { localStorage.setItem(LS_KEY, '1'); } catch(_) {}
-  }
+  /** Haupt-Animation: von overview -> HQ */
+  function flyToHQ(){
+    if (!hqTile) return;
 
-  // Der Cinematic startet NUR beim ersten cb:hq:pos.
-  addEventListener('cb:hq:pos', (ev)=>{
-    if (running || cancelled) return;
-
-    const cam = getCameraApi();
-    const mapState = getMapState();
-    const canvas = getCanvas();
-
-    if (!cam || !canvas || !mapState){
-      WARN('fehlende Abhängigkeiten:', { cam: !!cam, canvas: !!canvas, mapState: !!mapState });
+    const cam = window.GameCamera;
+    if (!cam?.getState || !cam?.setState){
+      WARN('GameCamera API fehlt – kann nicht fliegen.');
       return;
     }
 
-    const tx = ev?.detail?.tx;
-    const ty = ev?.detail?.ty;
-    if (typeof tx !== 'number' || typeof ty !== 'number'){
-      WARN('cb:hq:pos ohne tx/ty', ev?.detail);
-      return;
-    }
+    // 1) Overview setzen
+    setOverview();
 
-    // Zielzoom = Option 1: aktueller GameCamera-Zoom (vor Fit-to-Map)
-    const before = getCameraState(cam);
-    const targetZoom = before.zoom ?? 1;
+    // 2) Start/Ziel definieren
+    const start = cam.getState(); // {x,y,zoom}
+    const targetZoom = clamp(start.zoom, ZOOM_MIN, ZOOM_MAX); // Option 1: "dein" Zoom? -> wir nehmen den aktuell eingestellten Zielzoom
+    // ACHTUNG: In vielen Setups ist "dein" Zielzoom bereits in cam.zoom gespeichert.
+    // Wenn du einen fixen Zielzoom willst, können wir hier z.B. 1.25 setzen.
 
-    // Fit-to-Map State berechnen & setzen
-    const fit = computeFitToMap(cam, mapState, canvas);
-    setCameraState(cam, { x: fit.centerX, y: fit.centerY, zoom: fit.fitZoom });
+    // Ziel: HQ in der Mitte, Zoom = targetZoom
+    const { wx, wy } = tileToWorldCenter(hqTile.tx, hqTile.ty);
+    const { w: viewW, h: viewH } = getViewSize();
 
-    // Zielpunkt = Mitte der HQ-Tile (Weltkoordinaten)
-    const ts = mapState.tileSize ?? 64;
-    const hqWorldX = (tx + 0.5) * ts;
-    const hqWorldY = (ty + 0.5) * ts;
+    // Um HQ zu zentrieren: x = wx - (viewW/zoom)/2
+    const endX = wx - (viewW / targetZoom) / 2;
+    const endY = wy - (viewH / targetZoom) / 2;
 
-    const r = canvas.getBoundingClientRect();
-    const canvasW = Math.max(1, r.width);
-    const canvasH = Math.max(1, r.height);
+    const end = { x: endX, y: endY, zoom: targetZoom };
 
-    const targetOffset = centerOffsetFor(hqWorldX, hqWorldY, canvasW, canvasH, targetZoom);
-
-    // Startzustand für Tween = aktueller (nach Fit)
-    const start = getCameraState(cam);
-
-    // Cinematic aktiv
     running = true;
-    cancelled = false;
-    attachSkipInputs();
-    emit('cb:cinematic:start', { tx, ty, targetZoom });
+    bindCancelListeners();
 
-    LOG('start', {
-      fitZoom: fit.fitZoom,
-      targetZoom,
-      start,
-      target: { x: targetOffset.x, y: targetOffset.y }
-    });
+    const t0 = performance.now();
+    LOG('start', { hqTile: {...hqTile}, start, end, durationMs: DURATION_MS });
 
-    const t0 = performance.now() + START_DELAY_MS;
+    const step = (now) => {
+      if (!running) return;
 
-    function tick(now){
-      if (!running || cancelled) return;
+      const t = clamp((now - t0) / DURATION_MS, 0, 1);
+      const e = easeOutQuad(t);
 
-      const t = (now - t0) / DURATION_MS;
-      const k = easeOutCubic(t);
+      const nx = start.x + (end.x - start.x) * e;
+      const ny = start.y + (end.y - start.y) * e;
+      const nz = start.zoom + (end.zoom - start.zoom) * e;
 
-      // Interpolation
-      const x = start.x + (targetOffset.x - start.x) * k;
-      const y = start.y + (targetOffset.y - start.y) * k;
-      const z = start.zoom + (targetZoom     - start.zoom) * k;
-
-      setCameraState(cam, { x, y, zoom: z });
+      cam.setState({ x: nx, y: ny, zoom: nz });
 
       if (t < 1){
-        rafId = requestAnimationFrame(tick);
+        rafId = requestAnimationFrame(step);
       } else {
-        // Ende
         running = false;
-        detachSkipInputs();
-        markSeen();
-        OK('done');
-        emit('cb:cinematic:done', { tx, ty, targetZoom });
+        unbindCancelListeners();
+        rafId = 0;
+        LOG('done', { end });
       }
+    };
+
+    rafId = requestAnimationFrame(step);
+  }
+
+  /** Startbedingungen prüfen + auslösen */
+  function maybeStart(){
+    if (started) return;
+
+    // Globale Deaktivierung
+    if (window.__DISABLE_CINEMATIC__){
+      LOG('skip (global __DISABLE_CINEMATIC__)');
+      started = true;
+      return;
     }
 
-    rafId = requestAnimationFrame(tick);
+    // URL-Steuerung
+    const qp = getQueryParam('cinematic');
+    if (qp === '0'){
+      LOG('skip (?cinematic=0)');
+      started = true;
+      return;
+    }
+
+    // Map + Camera ready?
+    const ms = window.GameMap?._state;
+    const cam = window.GameCamera;
+
+    if (!hqTile) return;
+    if (!ms?.ready) return;
+    if (!cam?.setState) return;
+
+    // Erzwingen per URL: ?cinematic=1  -> auch wenn wir schon mal gelaufen wären
+    // In diesem Modul läuft es ohnehin pro Session nur einmal (started), daher:
+    started = true;
+    flyToHQ();
+  }
+
+  /** Wartet bis Voraussetzungen da sind (polling mit Timeout) */
+  function waitForReady(){
+    const t0 = performance.now();
+
+    const poll = () => {
+      maybeStart();
+      if (started) return;
+
+      const dt = performance.now() - t0;
+      if (dt > WAIT_TIMEOUT_MS){
+        WARN('timeout – cinematic wurde nicht gestartet (Voraussetzungen fehlten)', {
+          hqTile,
+          mapReady: !!window.GameMap?._state?.ready,
+          hasCamera: !!window.GameCamera
+        });
+        started = true; // nicht endlos weiter pollen
+        return;
+      }
+      setTimeout(poll, 50);
+    };
+
+    poll();
+  }
+
+  /* ==========================================================================
+   * [Events / Hook]
+   * ========================================================================== */
+
+  // Event "HQ Position gesetzt" (aus GameUnits)
+  window.addEventListener('cb:hq:pos', (ev) => {
+    const d = ev?.detail || null;
+    if (!d || typeof d.tx !== 'number' || typeof d.ty !== 'number') return;
+
+    // Wir nehmen immer die ERSTE HQ-Pos pro Session als "Kamera-Ziel".
+    // (Es gibt bei dir aktuell Hinweise auf ein "zweites HQ"; das ignorieren wir.)
+    if (!hqTile){
+      hqTile = { tx: d.tx, ty: d.ty };
+      LOG('hq-pos', { ...hqTile });
+      waitForReady();
+    }
+  });
+
+  // Debug: direkt beim Laden zeigen, dass das Modul überhaupt aktiv ist
+  LOG('module loaded', {
+    disableGlobal: !!window.__DISABLE_CINEMATIC__,
+    qpCinematic: getQueryParam('cinematic')
   });
 
 })();
