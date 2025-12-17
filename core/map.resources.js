@@ -255,46 +255,7 @@
   // =========================================================================
   // DRAW
   // =========================================================================
-  
-  // ----------------------------------------------------------
-  // GLOBAL Y-SORT SUPPORT
-  //  - draw one node (used by drawOnMainCanvas + collectDrawables)
-  // ----------------------------------------------------------
-  function _drawResourceNode(ctx, n, ts, A){
-          const wx = (n.x * ts) + ts * 0.5;   // Tile center
-          const wy = (n.y * ts) + ts * 0.8;   // "Fußpunkt" unten am Tile
-
-          // Atlas-Draw, wenn vorhanden
-          if (A && A.state?.ready && n.frame){
-            let atlasName = null;
-            let scale = 1;
-
-            if (n.kind === 'tree'){  atlasName = 'trees_mega_atlas';  scale = CFG.drawScale.tree; }
-            if (n.kind === 'stone'){ atlasName = 'stones_mega_atlas'; scale = CFG.drawScale.stone; }
-            if (n.kind === 'fish'){  atlasName = 'fish_mega_atlas';   scale = CFG.drawScale.fish; }
-
-            if (atlasName){
-              const ok = A.drawAtlasFrame(ctx, atlasName, n.frame, wx, wy, {
-                scale: (ts/128) * scale,   // Frames sind typ. 128-ish → auf tileSize anpassen
-                align: 'pivot'
-              });
-              if (ok) return; // wenn gezeichnet → fertig
-            }
-          }
-
-          // Fallback (wenn Atlas fehlt)
-          ctx.save();
-          if (n.kind === 'tree'){  ctx.fillStyle = 'rgba(0,160,0,0.8)'; }
-          if (n.kind === 'stone'){ ctx.fillStyle = 'rgba(140,140,140,0.9)'; }
-          if (n.kind === 'fish'){  ctx.fillStyle = 'rgba(0,120,255,0.9)'; }
-          ctx.beginPath();
-          ctx.arc(wx, wy, ts * 0.18, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-    
-  }
-
-function drawOnMainCanvas(ctx, cam, tileSize){
+  function drawOnMainCanvas(ctx, cam, tileSize){
   if (!ctx) return;
 
   // WICHTIG:
@@ -318,37 +279,25 @@ if (!map || !map.grid || !map.rows || !map.cols) {
 
     // Mittelpunkt der Tile-Oberfläche, NICHT der Unterkante
     for (const n of State.nodes){
-      _drawResourceNode(ctx, n, ts, A);
-    });
-          if (ok) return; // wenn gezeichnet → fertig
+      const wx = (n.x * ts) + ts * 0.5;   // Tile center
+      const wy = (n.y * ts) + ts * 0.8;   // "Fußpunkt" unten am Tile
+
+      // Atlas-Draw, wenn vorhanden
+      if (A && A.state?.ready && n.frame){
+        let atlasName = null;
+        let scale = 1;
+
+        if (n.kind === 'tree'){  atlasName = 'trees_mega_atlas';  scale = CFG.drawScale.tree; }
+        if (n.kind === 'stone'){ atlasName = 'stones_mega_atlas'; scale = CFG.drawScale.stone; }
+        if (n.kind === 'fish'){  atlasName = 'fish_mega_atlas';   scale = CFG.drawScale.fish; }
+
+        if (atlasName){
+          const ok = A.drawAtlasFrame(ctx, atlasName, n.frame, wx, wy, {
+            scale: (ts/128) * scale,   // Frames sind typ. 128-ish → auf tileSize anpassen
+            align: 'pivot'
+          });
+          if (ok) continue; // wenn gezeichnet → fertig
         }
-
-  /**
-   * GLOBAL Y-SORT: sammelt pro Ressource ein Drawable-Objekt,
-   * das dann vom Map-Renderer gemeinsam mit Deko/Gebäuden/Units
-   * sortiert und gezeichnet werden kann.
-   *
-   * out.push({ sortY, z, draw(ctx) })
-   */
-  function collectDrawables(out, cam, tileSize){
-    if (!Array.isArray(out)) return out;
-    const map = window.GameMap?._state;
-    if (!map || !map.grid || !map.rows || !map.cols) return out;
-    if (!State.initialized){ init(); }
-    const ts = tileSize || (window.GameMap?.tileSize) || 64;
-    const A  = window.Assets;
-    for (const n of State.nodes){
-      const sortY = (n.y * ts) + ts * 0.80;
-      out.push({
-        sortY,
-        z: 10, // Ressourcen leicht hinter Deko/Gebäuden bei Tie
-        kind: 'res',
-        draw: (ctx)=> _drawResourceNode(ctx, n, ts, A)
-      });
-    }
-    return out;
-  }
-
       }
 
       // Fallback (wenn Atlas fehlt)
@@ -363,7 +312,73 @@ if (!map || !map.grid || !map.rows || !map.cols) {
     }
   }
 
-  // ============================================================================
+  
+// =========================================================================
+// GLOBAL Y-SORT SUPPORT
+// =========================================================================
+/**
+ * Sammle Drawables für den globalen Y-Sort-Renderer (core/game.map.js).
+ * out.push({ sortY, z, kind, draw(ctx) })
+ *
+ * Wichtig:
+ * - Wir initialisieren erst, wenn die Map wirklich bereit ist.
+ * - Keine harten Abhängigkeiten: funktioniert auch ohne Assets (Fallback Kreise).
+ */
+function collectDrawables(out, cam, tileSize){
+  if (!Array.isArray(out)) return out;
+
+  const map = window.GameMap?._state;
+  // Map ist bereit, sobald Grid existiert und Dimensionen > 0 haben
+  if (!map || !map.grid || !map.rows || !map.cols) return out;
+
+  if (!State.initialized) init();
+
+  const ts = tileSize || (window.GameMap?.tileSize) || 64;
+  const A  = window.Assets;
+
+  for (const n of State.nodes){
+    const wx = (n.x * ts) + ts * 0.5;
+    const wy = (n.y * ts) + ts * 0.8;
+
+    out.push({
+      sortY: wy,
+      z: 10,          // Ressourcen eher "hinter" Gebäuden bei Tie (Tie-Break)
+      kind: 'res',
+      draw: (ctx)=>{
+        // 1:1 Draw-Logik wie drawOnMainCanvas
+        if (A && A.state?.ready && n.frame){
+          let atlasName = null;
+          let scale = 1;
+
+          if (n.kind === 'tree'){  atlasName = 'trees_mega_atlas';  scale = CFG.drawScale.tree; }
+          if (n.kind === 'stone'){ atlasName = 'stones_mega_atlas'; scale = CFG.drawScale.stone; }
+          if (n.kind === 'fish'){  atlasName = 'fish_mega_atlas';   scale = CFG.drawScale.fish; }
+
+          if (atlasName){
+            const ok = A.drawAtlasFrame(ctx, atlasName, n.frame, wx, wy, {
+              scale: (ts/128) * scale,
+              align: 'pivot'
+            });
+            if (ok) return;
+          }
+        }
+
+        // Fallback (wenn Atlas fehlt)
+        ctx.save();
+        if (n.kind === 'tree'){  ctx.fillStyle = 'rgba(0,160,0,0.8)'; }
+        if (n.kind === 'stone'){ ctx.fillStyle = 'rgba(140,140,140,0.9)'; }
+        if (n.kind === 'fish'){  ctx.fillStyle = 'rgba(0,120,255,0.9)'; }
+        ctx.beginPath();
+        ctx.arc(wx, wy, ts * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+  }
+  return out;
+}
+
+// ============================================================================
 // STEP 1 – Debug/Tools API: regen / clear / snapshot + Events für Inspector
 // ============================================================================
 
@@ -468,7 +483,7 @@ window.addEventListener('req:mapres:clear', ()=>{
   }
 
   window.MapResources = {
-    version: 'v25.12.12-mapresources-atlas-render',
+    version: 'v25.12.17-mapresources-ysort-collect-v1',
     state: State,
     cfg: CFG,
     init,
