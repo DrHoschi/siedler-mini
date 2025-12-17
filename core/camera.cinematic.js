@@ -1,46 +1,32 @@
 /* ============================================================================
  * Datei   : core/camera.cinematic.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.17-cinematic-proper-longer-zoomtohq
+ * Version : v25.12.17-cinematic-tuned-holdshort-easeinout
  *
- * Ziel:
- *   • EXACT wie unser "guter Stand": erst komplette Karten-Übersicht,
- *     dann eine saubere, sichtbare Kamerafahrt zum HQ – und am Ende
- *     auf DEINEM Ziel-Zoom (Option 1).
+ * Feinjustage nach Feedback:
+ *   • Kürzeres Warten in der Overview.
+ *   • Fahrt: langsam los -> schneller -> am Ende wieder langsam (Ease-In-Out).
+ *   • Direkt Richtung HQ + Zoom (wie bisher).
  *
- * WICHTIG:
- *   • Keine "once-only" Logik mehr als Default (kein LocalStorage-Blocker).
- *   • Kein "du musst tippen" – aber falls du während der Fahrt interagierst,
- *     brechen wir sofort ab, damit du Kontrolle hast (Sicherheitsnetz).
- *
- * Konfiguration (optional, fürs Tuning ohne Patch):
- *   window.__CINEMATIC_HOLD_MS__ = 1500;  // wie lange Overview stehen bleibt
- *   window.__CINEMATIC_FLY_MS__  = 1800;  // Dauer der Fahrt zum HQ
- *   window.__DISABLE_CINEMATIC__ = true;  // komplett aus
- *
- * URL:
- *   ?cinematic=0  -> aus
- *   ?cinematic=1  -> an (Default ist ohnehin an)
+ * Konfiguration (optional):
+ *   window.__CINEMATIC_HOLD_MS__ = 900;   // kürzeres Warten
+ *   window.__CINEMATIC_FLY_MS__  = 1900;  // Fahrtzeit
+ *   window.__DISABLE_CINEMATIC__ = true;  // aus
  * ============================================================================ */
 
 (() => {
   'use strict';
 
-  /* ==========================================================================
-   * Logger
-   * ========================================================================== */
   const TAG  = '[cinematic]';
   const LOG  = (...a) => (window.CBLog?.info ?? console.log)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  /* ==========================================================================
-   * Tuning / Defaults
-   * ========================================================================== */
   const ZOOM_MIN = 0.25;
   const ZOOM_MAX = 4.0;
 
-  const HOLD_MS_DEFAULT = 1500;  // <-- Overview sichtbar stehen lassen
-  const FLY_MS_DEFAULT  = 1800;  // <-- sichtbare Fahrt, nicht "zack fertig"
+  // Defaults (Feinjustage)
+  const HOLD_MS_DEFAULT = 900;   // vorher 1500
+  const FLY_MS_DEFAULT  = 1900;  // vorher 1800 (minimal länger, wirkt "runder")
 
   const HOLD_MS = Number.isFinite(window.__CINEMATIC_HOLD_MS__)
     ? Math.max(0, window.__CINEMATIC_HOLD_MS__)
@@ -50,26 +36,22 @@
     ? Math.max(200, window.__CINEMATIC_FLY_MS__)
     : FLY_MS_DEFAULT;
 
-  /* ==========================================================================
-   * Helpers
-   * ========================================================================== */
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+  // Genau dein Wunsch: langsam los -> schneller -> langsam enden
+  const easeInOutCubic = (t) =>
+    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
   function getQueryParam(name){
-    try{
-      return new URL(window.location.href).searchParams.get(name);
-    } catch { return null; }
+    try{ return new URL(window.location.href).searchParams.get(name); }
+    catch { return null; }
   }
 
   function getViewSize(){
     const c = window.Render?.ctx?.canvas || document.getElementById('game');
     if (!c) return { w: 0, h: 0 };
     const r = c.getBoundingClientRect?.();
-    return {
-      w: (r?.width  || c.width  || 0),
-      h: (r?.height || c.height || 0)
-    };
+    return { w: (r?.width || c.width || 0), h: (r?.height || c.height || 0) };
   }
 
   function tileToWorldCenter(tx, ty){
@@ -86,7 +68,6 @@
 
     const worldW = cols * ts;
     const worldH = rows * ts;
-
     const { w: viewW, h: viewH } = getViewSize();
     if (!worldW || !worldH || !viewW || !viewH) return 1;
 
@@ -118,9 +99,6 @@
     LOG('overview gesetzt', { zoom: z, x, y });
   }
 
-  /* ==========================================================================
-   * State
-   * ========================================================================== */
   let hqTile = null;
   let started = false;
   let running = false;
@@ -139,7 +117,6 @@
 
     running = false;
     unbindCancelListeners();
-
     LOG('cancel', { reason });
   }
 
@@ -147,9 +124,7 @@
     if (cancelBound) return;
     cancelBound = true;
 
-    const onAnyInput = (e) => {
-      cancel(e?.type || 'input');
-    };
+    const onAnyInput = (e) => { cancel(e?.type || 'input'); };
 
     window.addEventListener('pointerdown', onAnyInput, { passive: true, capture: true });
     window.addEventListener('touchstart',  onAnyInput, { passive: true, capture: true });
@@ -174,9 +149,6 @@
     bindCancelListeners._h = null;
   }
 
-  /* ==========================================================================
-   * Cinematic: Overview -> Hold -> FlyTo HQ
-   * ========================================================================== */
   function flyToHQ(){
     const cam = window.GameCamera;
     if (!cam?.getState || !cam?.setState){
@@ -185,14 +157,11 @@
     }
     if (!hqTile) return;
 
-    // OPTION 1: Zielzoom = Zoom VOR dem Overview (deine Einstellung)
+    // Option 1: Zielzoom = Zoom VOR der Overview (deine Einstellung)
     const pre = cam.getState();
-    const targetZoom = clamp(pre?.zoom ?? 1, 0.25, 4.0);
+    const targetZoom = clamp(pre?.zoom ?? 1, ZOOM_MIN, ZOOM_MAX);
 
-    // 1) Overview setzen
     setOverview();
-
-    // 2) Hold (damit du es siehst)
     bindCancelListeners();
 
     holdTimer = setTimeout(() => {
@@ -205,8 +174,7 @@
 
       const endX = wx - (viewW / targetZoom) / 2;
       const endY = wy - (viewH / targetZoom) / 2;
-
-      const end = { x: endX, y: endY, zoom: targetZoom };
+      const end  = { x: endX, y: endY, zoom: targetZoom };
 
       running = true;
       const t0 = performance.now();
@@ -216,13 +184,13 @@
         if (!running) return;
 
         const t = clamp((now - t0) / FLY_MS, 0, 1);
-        const e = easeOutCubic(t);
+        const e = easeInOutCubic(t);
 
-        const nx = start.x + (end.x - start.x) * e;
-        const ny = start.y + (end.y - start.y) * e;
-        const nz = start.zoom + (end.zoom - start.zoom) * e;
-
-        cam.setState({ x: nx, y: ny, zoom: nz });
+        cam.setState({
+          x: start.x + (end.x - start.x) * e,
+          y: start.y + (end.y - start.y) * e,
+          zoom: start.zoom + (end.zoom - start.zoom) * e,
+        });
 
         if (t < 1){
           rafId = requestAnimationFrame(step);
@@ -254,7 +222,7 @@
       return;
     }
 
-    const ms = window.GameMap?._state;
+    const ms  = window.GameMap?._state;
     const cam = window.GameCamera;
 
     if (!hqTile) return;
