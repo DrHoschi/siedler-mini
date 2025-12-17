@@ -135,6 +135,43 @@
   function ensureConstructionState(b){
     if (!b) return;
 
+    // ---------------------------------------------------------------
+    // HQ-Sonderfall
+    // ---------------------------------------------------------------
+    // HQ ist Startzentrum und wird NICHT gebaut. Ohne Sonderfall würde das
+    // HQ hier in den Fallback ({wood:2,stone:1}) laufen und als "Baustelle 0"
+    // erscheinen.
+    if (b.id === 'b.hq' || b.type === 'b.hq' || b.buildingId === 'b.hq') {
+      b.needs     = {};
+      b.delivered = {};
+      if (!Array.isArray(b.drops)) b.drops = [];
+
+      b.buildPhase    = PHASE.COMPLETE;
+      b.buildStage    = 3;
+      b.buildSubStage = 2;
+      b.buildProgress = 1;
+      b.status        = 'done';
+
+      // Falls HQ über einen Pfad kam, der cb:build:complete nicht feuert,
+      // emittieren wir es einmalig hier.
+      if (!b.__hqCompleteEmitted) {
+        b.__hqCompleteEmitted = true;
+        try {
+          window.dispatchEvent(new CustomEvent('cb:build:complete', {
+            detail: {
+              id: 'b.hq',
+              buildingId: 'b.hq',
+              buildingUid: b.uid,
+              uid: b.uid,
+              x: b.x, y: b.y, w: b.w, h: b.h,
+              status: 'done'
+            }
+          }));
+        } catch (e) {}
+      }
+      return;
+    }
+
     // Soll-Kosten
     if (!b.needs || typeof b.needs !== 'object'){
       const src = (b.cost && typeof b.cost === 'object') ? b.cost : null;
