@@ -151,6 +151,15 @@
   // Default isBlocked (Registry/Legend/Buildings/Resources)
   // --------------------------------------------------------------------------
   function defaultIsBlocked(tx, ty, allow){
+    // Patch F: wenn das zentrale Regelwerk vorhanden ist, nutzen wir das.
+    // Dadurch sind A* / LOS / Movement konsistent mit Placement + AutoHQ.
+    try{
+      const GR = window.GameRules;
+      if (GR && typeof GR.isNavBlocked === 'function'){
+        return !!GR.isNavBlocked(tx, ty, allow);
+      }
+    }catch(e){ /* ignore */ }
+
     const map  = getMapState();
     const grid = getGrid(map);
     const cols = toInt(map?.cols ?? map?.width, 0);

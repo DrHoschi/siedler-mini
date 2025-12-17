@@ -28,8 +28,9 @@
   // =========================================================================
   // KONFIG / FILTER
   // =========================================================================
-  // Wasser-Tiles in deiner Map (wie bei Fish-Production bereits üblich)  [oai_citation:5‡CODES_MONOLITH_Siedler-v4.0.txt](file-service://file-5bTfqQ9UDwP1giK7J39zht)
-  const WATER_TILE_IDS = new Set([8, 9]);
+  // Patch F: Wasser NICHT mehr hardcoden (8/9). Primär: Legend via GameRules,
+  // Fallback (nur wenn Legend/Rules fehlen): alte Default-IDs 8/9.
+  const WATER_TILE_IDS_FALLBACK = new Set([8, 9]);
 
   // Basismengen (Start-Sandbox)
   const CFG = {
@@ -114,7 +115,14 @@
   }
 
   function isWater(x,y){
-    return WATER_TILE_IDS.has(getTileId(x,y));
+    // 1) Zentrales Regelwerk (Legend-basiert)
+    try{
+      if (window.GameRules && typeof window.GameRules.isWaterTile === 'function'){
+        return !!window.GameRules.isWaterTile(x,y);
+      }
+    }catch(e){ /* ignore */ }
+    // 2) Fallback (nur wenn Rules fehlen)
+    return WATER_TILE_IDS_FALLBACK.has(getTileId(x,y));
   }
 
   // Trees sollen NICHT auf Wasser und NICHT direkt auf Stein liegen (vereinfachtes Regelwerk)
