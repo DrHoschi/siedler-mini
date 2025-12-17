@@ -309,7 +309,21 @@ function spawnInitialCarriers(count){
       source : source,
       dest   : dest,
       target : source,        // aktuelles Bewegungsziel
-      pickupTimer : 0
+      pickupTimer : 0,
+
+      // ---------------------------------------------------------------
+      // Step-2 (Delivery an Entrance): Zuordnung zur Baustelle sichern.
+      // WICHTIG: JobEngine hat in älteren Versionen Zusatzfelder
+      // "weg-normalisiert". Auch wenn das inzwischen gefixt ist,
+      // behalten wir die Infos zusätzlich direkt am Task.
+      // ---------------------------------------------------------------
+      buildingUid : job?.buildingUid || null,
+      buildingId  : job?.buildingId  || null,
+
+      // Merke auch Ziel-Tile als INTEGER (für Construction-Lookups)
+      // Falls job.tx/ty fehlt, leiten wir es aus dest.x/dest.y ab.
+      destTx : Number.isFinite(job?.tx) ? (job.tx|0) : Math.floor(dest.x),
+      destTy : Number.isFinite(job?.ty) ? (job.ty|0) : Math.floor(dest.y)
     };
 
     LOG('Carrier übernimmt Job', {
@@ -574,6 +588,10 @@ function spawnInitialCarriers(count){
       const tileX   = t.dest.x;
       const tileY   = t.dest.y;
 
+      // Integer-Tile für Construction (Entrance/Footprint-Match!)
+      const txi = Number.isFinite(t.destTx) ? (t.destTx|0) : Math.floor(tileX);
+      const tyi = Number.isFinite(t.destTy) ? (t.destTy|0) : Math.floor(tileY);
+
       if (jobType === 'deliver'){
         // Klassischer Bau-Job → Bau-Subsystem informieren
         try{
@@ -583,12 +601,12 @@ function spawnInitialCarriers(count){
               x  : tileX,
               y  : tileY,
               // zusätzlich Tile-Koordinaten, weil ältere Module tx/ty erwarten
-              tx : tileX,
-              ty : tileY,
+              tx : txi,
+              ty : tyi,
               res: u.carrying,
               // Zuordnung zur Baustelle (wichtig, wenn wir zur Türkachel liefern)
-              buildingUid: t.job?.buildingUid || null,
-              buildingId : t.job?.buildingId  || null,
+              buildingUid: t.buildingUid || t.job?.buildingUid || null,
+              buildingId : t.buildingId  || t.job?.buildingId  || null,
               jobId: t.job?.id
             }
           }));

@@ -372,8 +372,13 @@
 
   window.addEventListener('cb:build:deliver', (ev)=>{
     const d     = ev.detail || {};
-    const posX  = toNumber(d.x, NaN);
-    const posY  = toNumber(d.y, NaN);
+    // ---------------------------------------------------------------
+    // Step-2: Delivery kommt oft am Tile-CENTER (x+0.5) an.
+    // Für Building-Lookups (Footprint/Entrance) brauchen wir aber
+    // TILE-INDIZES (Integer). Deshalb: bevorzugt tx/ty nutzen.
+    // ---------------------------------------------------------------
+    const posX  = Number.isFinite(Number(d.tx)) ? toNumber(d.tx, NaN) : toNumber(d.x, NaN);
+    const posY  = Number.isFinite(Number(d.ty)) ? toNumber(d.ty, NaN) : toNumber(d.y, NaN);
     const res   = String(d.res || 'wood');
     const amount= toNumber(d.amount, 1) || 1;
 

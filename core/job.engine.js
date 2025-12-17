@@ -47,14 +47,20 @@
       WARN('add(job) mit ungültigem Job aufgerufen', job);
       return;
     }
-    // kleine Normalisierung
-    const norm = {
-      id   : job.id   || `job-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      type : job.type || 'build',
-      res  : job.res  || 'res.wood',
-      from : job.from || null,
-      to   : job.to   || null
-    };
+    // ---------------------------------------------------------------------
+    // WICHTIG (Bugfix v25.12.17):
+    // Wir dürfen NICHT auf ein Minimal-Shape "normalisieren", weil sonst
+    // Zusatzfelder wie buildingUid/buildingId/tx/ty verloren gehen.
+    // Genau diese Felder brauchen wir für Step-2 (Delivery an Entrance).
+    // ---------------------------------------------------------------------
+    // Erst ALLES übernehmen, dann Defaults auffüllen (damit undefined nicht
+    // aus Versehen unsere Defaults überschreibt).
+    const norm = { ...job };
+    norm.id   = norm.id   || `job-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    norm.type = norm.type || 'build';
+    norm.res  = norm.res  || 'res.wood';
+    norm.from = norm.from || null;
+    norm.to   = norm.to   || null;
     Queue.push(norm);
     LOG('Job hinzugefügt', norm);
   }
