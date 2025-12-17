@@ -278,7 +278,16 @@ if (!map || !map.grid || !map.rows || !map.cols) {
     const A = window.Assets;
 
     // Mittelpunkt der Tile-Oberfläche, NICHT der Unterkante
-    for (const n of State.nodes){
+        // Y-Sort: Ressourcen stabil nach y/x zeichnen (Settlers-Look)
+    const _nodes = State.nodes.slice().sort((a,b)=>{
+      const ay = (a?.y ?? 0);
+      const by = (b?.y ?? 0);
+      if (ay !== by) return ay - by;
+      return (a?.x ?? 0) - (b?.x ?? 0);
+    });
+
+    for (const n of _nodes){
+
       const wx = (n.x * ts) + ts * 0.5;   // Tile center
       const wy = (n.y * ts) + ts * 0.8;   // "Fußpunkt" unten am Tile
 

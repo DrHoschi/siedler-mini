@@ -38,6 +38,52 @@
   // Wasser-Tile-IDs: konservativ – später über Registry/Terrain-Regeln ersetzen.
   const DEFAULT_WATER_TILE_IDS = new Set([8]);
 
+  // Dynamische Erkennung über Map-Legend (GameMap._state.legend), falls vorhanden.
+  // legend Beispiel: { "8": "water", "9": "water_deep", ... }
+  function _legendNameForTileId(map, tid){
+    const legend = map?.legend || map?.metadata?.legend || null;
+    if (!legend) return null;
+    const v = (legend[String(tid)] ?? legend[tid]) ?? null;
+    if (typeof v === 'string') return v;
+    if (v && typeof v === 'object'){
+      if (typeof v.name  === 'string') return v.name;
+      if (typeof v.label === 'string') return v.label;
+      if (typeof v.type  === 'string') return v.type;
+    }
+    return null;
+  }
+
+  function _buildWaterTileIdSet(map){
+    const out = new Set();
+
+    const legend = map?.legend || map?.metadata?.legend || null;
+    if (legend && typeof legend === 'object'){
+      for (const [k,v] of Object.entries(legend)){
+        const id = parseInt(k, 10);
+        if (!Number.isFinite(id)) continue;
+
+        const name = (typeof v === 'string') ? v : (v?.name || v?.label || v?.type || '');
+        const s = String(name || '').toLowerCase();
+
+        // sehr tolerant (de/en + typische Bezeichner)
+        if (
+          s.includes('water') || s.includes('wasser') ||
+          s.includes('sea')   || s.includes('ocean')  ||
+          s.includes('river') || s.includes('lake')
+        ){
+          out.add(id);
+        }
+      }
+    }
+
+    // Fallback: konservative Defaults
+    if (!out.size){
+      for (const id of DEFAULT_WATER_TILE_IDS) out.add(id);
+    }
+    return out;
+  }
+
+
   // =========================================================================
   // HILFSFUNKTIONEN
   // =========================================================================
@@ -147,6 +193,13 @@
     const cols = toInt(map?.cols, 0);
     const rows = toInt(map?.rows, 0);
 
+
+    // Wasser-ID-Set (aus Legend, fallback: DEFAULT_WATER_TILE_IDS)
+    const waterIds = _buildWaterTileIdSet(map);
+
+    // Optional: zusätzliche Terrain-Namen blockieren (z.B. aus Registry-Regeln)
+    const blockedTerrainNames = Array.isArray(opts?.blockedTerrainNames) ? new Set(opts.blockedTerrainNames.map(s=>String(s))) : null;
+
     // MapResources
     const nodes = window.MapResources?.state?.nodes || [];
 
@@ -178,7 +231,13 @@
       // 2) Wasser / Terrain
       try{
         const tid = grid?.[ty]?.[tx];
-        if (DEFAULT_WATER_TILE_IDS.has(tid)) return true;
+        if (waterIds.has(tid)) return true;
+
+        // Optional: nach Legend-Name blockieren (wenn konfiguriert)
+        if (blockedTerrainNames){
+          const lname = _legendNameForTileId(map, tid);
+          if (lname && blockedTerrainNames.has(String(lname))) return true;
+        }
       }catch(e){ /* ignore */ }
 
       // 3) MapResources (Trees/Stones/Fish): jede Ressource blockiert aktuell

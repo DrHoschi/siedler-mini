@@ -655,7 +655,15 @@
     const ecoGrowth = CFG.eco.growthCycle;
     const ecoAmp = (CFG.eco.enabled && ecoGrowth.enabled) ? (ecoGrowth.amp ?? 0.0) : 0.0;
 
-    for (const n of State.nodes){
+    // Y-Sort: Deko stabil nach y/x zeichnen (Settlers-Look)
+    const _nodes = State.nodes.slice().sort((a,b)=>{
+      const ay = (a?.y ?? 0);
+      const by = (b?.y ?? 0);
+      if (ay !== by) return ay - by;
+      return (a?.x ?? 0) - (b?.x ?? 0);
+    });
+
+    for (const n of _nodes){
       // world pos (wie Ressourcen)
       const wx = (n.x * ts) + ts * (0.5 + (n.ox || 0));
       const wy = (n.y * ts) + ts * (0.82 + (n.oy || 0));

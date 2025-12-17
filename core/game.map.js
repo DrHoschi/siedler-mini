@@ -410,12 +410,38 @@
     }
 
     // ---------------------------------------------------------------------
-    // Gebäude-Overlay (Baustellen + fertige Gebäude)
+    
+    // ---------------------------------------------------------------------
+    // Trampelpfad-Overlay als UNDERLAY (über Terrain, unter Gebäuden/Ressourcen/Deko/Units)
+    //  - Damit das wirklich "unter" allem liegt, zeichnen wir es hier direkt auf dem MainCanvas,
+    //    NACH dem Terrain und VOR allen Sprites/Overlays.
+    //  - Zusätzlich unterdrücken wir das Zeichnen im separaten Overlay-Canvas (siehe path-overlay.js).
+    // ---------------------------------------------------------------------
+    try{
+      if (window.PathOverlay && window.PathOverlay._inst && typeof window.PathOverlay._inst.draw === 'function'){
+        // Default: underlay (kann per window.__PATHOVERLAY_TARGET__ = 'overlay' überschrieben werden)
+        window.PathOverlay._inst.renderTarget = (window.__PATHOVERLAY_TARGET__ || 'underlay');
+        const camObj = { x: camX, y: camY, zoom: zoom };
+        window.PathOverlay._inst.draw(ctx, camObj);
+      }
+    }catch(e){
+      // nicht fatal – Overlay ist optional
+    }
+
+// Gebäude-Overlay (Baustellen + fertige Gebäude)
     // ---------------------------------------------------------------------
     if (Array.isArray(Game?.buildings) && Game.buildings.length){
       ensureBuildPlaceSprites();
 
-      for (const b of Game.buildings){
+      // Y-Sort: Gebäude nach Unterkante (y+h) sortieren, damit Overlaps stabil sind
+      const _bList = Game.buildings.slice().sort((a,b)=>{
+        const ay = ((a?.y||0) + (a?.h||1));
+        const by = ((b?.y||0) + (b?.h||1));
+        if (ay !== by) return ay - by;
+        return (a?.x||0) - (b?.x||0);
+      });
+
+      for (const b of _bList){
         const bx = (b.x | 0) * ts;
         const by = (b.y | 0) * ts;
         const bw = (b.w || 1) * ts;
@@ -531,7 +557,14 @@ if (window.GameWorkArea) {
     // ---------------------------------------------------------------------
     // Einheiten: erst Sprite versuchen, sonst Fallback-Punkte
     // ---------------------------------------------------------------------
-    const units = getUnitsForDraw();
+    const _unitsRaw = getUnitsForDraw();
+    // Y-Sort innerhalb der Units (stabilere Darstellung bei Überlappungen)
+    const units = (_unitsRaw && _unitsRaw.length) ? _unitsRaw.slice().sort((a,b)=>{
+      const ay = (a?.y ?? 0);
+      const by = (b?.y ?? 0);
+      if (ay !== by) return ay - by;
+      return (a?.x ?? 0) - (b?.x ?? 0);
+    }) : [];
     if (units.length){
       const Assets = window.Assets;
 
