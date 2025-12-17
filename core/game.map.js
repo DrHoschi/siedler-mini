@@ -384,6 +384,8 @@
 
     // Gebäude
     if (Array.isArray(window.Game?.buildings)){
+      // IMPORTANT: Baustellen-Sprites initialisieren, sonst sehen wir nur Fallback-Rechtecke
+      try { ensureBuildPlaceSprites(); } catch (e) { /* ignore */ }
       let bi = 0;
       for (const b of window.Game.buildings){
         const sortY = ((b.y | 0) + (b.h || 1)) * ts;

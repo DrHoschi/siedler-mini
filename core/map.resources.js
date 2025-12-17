@@ -278,7 +278,7 @@
                 scale: (ts/128) * scale,   // Frames sind typ. 128-ish → auf tileSize anpassen
                 align: 'pivot'
               });
-              if (ok) continue; // wenn gezeichnet → fertig
+              if (ok) return; // wenn gezeichnet → fertig
             }
           }
 
@@ -320,7 +320,7 @@ if (!map || !map.grid || !map.rows || !map.cols) {
     for (const n of State.nodes){
       _drawResourceNode(ctx, n, ts, A);
     });
-          if (ok) continue; // wenn gezeichnet → fertig
+          if (ok) return; // wenn gezeichnet → fertig
         }
 
   /**

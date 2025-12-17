@@ -87,7 +87,7 @@
 
                 if (n.frame){
                   const ok = drawAtlasFrameRot(ctx, CFG.atlasName, n.frame, wx, wy, scale, rot);
-                  if (ok) continue;
+                  if (ok) return;
                 }
 
                 // Fallback
@@ -770,7 +770,7 @@ window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
 
       if (n.frame){
         const ok = drawAtlasFrameRot(ctx, CFG.atlasName, n.frame, wx, wy, scale, rot);
-        if (ok) continue;
+        if (ok) return;
       }
 
       // Fallback
