@@ -1,10 +1,20 @@
 /* ============================================================================
  * Datei   : ui/css/ui-layer.patch.css
- * Version : v25.11.14-ghost-fix
- * Zweck   : Verhindert, dass UI-Layer Canvas-Ereignisse „schlucken“
+ * Projekt : Neue Siedler
+ * Version : v25.12.18-fix-ui-layer-pointers
+ * Zweck   : Fix für kaputte CSS-Datei (enthielt '...' Placeholder).
+ *           Stellt sicher, dass Overlay-Canvas NIE Klicks schluckt und
+ *           UI-Buttons / BuildDock / Inspector zuverlässig bedienbar bleiben.
+ *
+ * HINTERGRUND:
+ *  - Mehrere Canvas-Layer (overlay / paths-overlay / units-overlay) liegen
+ *    über dem Game-Canvas. Wenn pointer-events nicht korrekt gesetzt sind,
+ *    sind HUD/Build-Button "tot" → Baumenü öffnet nicht.
  * ========================================================================== */
 
-/* Alle Overlay-Layer durchsichtig für Pointer – Basisregel */
+/* ---------------------------------------------------------------------------
+ * 1) UI-Wurzeln: Standardmäßig keine Pointer-Events (damit Map-Pan/Zoom sauber)
+ * ------------------------------------------------------------------------ */
 .ui-layer,
 #ui-root,
 #hud-root,
@@ -12,35 +22,43 @@
   pointer-events: none;
 }
 
-/* Interaktive Inseln wieder aktivieren */
-#btn-build, #btn-inspector, #inspector, #build-dock,
-#toast, .ui-button, .ui-card {
+/* ---------------------------------------------------------------------------
+ * 2) Interaktive Inseln: gezielt wieder aktivieren
+ *    (wichtig: #btn-build liegt außerhalb von #ui-root, aber wir lassen es
+ *     hier trotzdem drin, falls sich Layouts ändern)
+ * ------------------------------------------------------------------------ */
+#btn-build,
+#build-dock,
+#place-overlay,
+#place-overlay .place-btn,
+#inspector,
+#inspector-fab,
+.minimap,
+.minimap__toggle,
+.dialog,
+.modal {
   pointer-events: auto;
 }
 
-/* Sicherheit: kein unsichtbarer Fullscreen-Hitbox */
-#build-dock, #hud-root, #inspector {
-  background: transparent; /* keine „unsichtbare Wand“ */
-}
-
-/* =====================================================================================
-   CANVAS-LAYER STACK – alle Spiel-Layer exakt übereinander legen
-   ===================================================================================== */
-canvas#game,
+/* ---------------------------------------------------------------------------
+ * 3) Overlay-Canvas: volle Größe, ABER niemals Pointer-Events
+ *    + z-index unter HUD/BuildDock halten
+ * ------------------------------------------------------------------------ */
 canvas#overlay,
 canvas#paths-overlay,
 canvas#units-overlay {
-    position: absolute;
-    inset: 0;
-    width: 100% !important;
-    height: 100% !important;
-    display: block;
-    z-index: 1;
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  pointer-events: none !important; /* <-- der wichtigste Fix */
+  z-index: 2;                      /* #game = 1 (ui-layout-v0.css) */
 }
 
-/* Zeichensatz für Overlays */
-canvas#overlay,
-canvas#paths-overlay,
-canvas#units-overlay {
-    pointer-events: none;   /* wichtig, sonst blockieren sie Klicks */
+/* Optional: falls ein Overlay-Canvas fälschlich fixed wird */
+canvas#overlay[style*="position: fixed"],
+canvas#paths-overlay[style*="position: fixed"],
+canvas#units-overlay[style*="position: fixed"]{
+  position: absolute !important;
 }
