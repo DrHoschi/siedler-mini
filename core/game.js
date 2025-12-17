@@ -216,52 +216,6 @@
     }
     return null;
   }
-      }
-    } catch(e){}
-
-    function terrainOk(t){
-      if (t === 8) return false; // water
-      if (t === 5) return false; // forest (Start lieber nicht mitten rein)
-      if (t === 6) return false; // rock
-      return true;
-    }
-
-    function areaOk(x0,y0){
-      if (x0 < 0 || y0 < 0 || x0 + w > cols || y0 + h > rows) return false;
-      for (let y=y0; y<y0+h; y++){
-        const row = grid[y];
-        if (!row) return false;
-        for (let x=x0; x<x0+w; x++){
-          const t = row[x] | 0;
-          if (!terrainOk(t)) return false;
-          if (blocked.has(x+','+y)) return false;
-        }
-      }
-      return true;
-    }
-
-    // Random Sampling
-    for (let i=0; i<800; i++){
-      const x = (Math.random() * (cols - w)) | 0;
-      const y = (Math.random() * (rows - h)) | 0;
-      if (areaOk(x,y)) return { tx:x, ty:y };
-    }
-
-    // Fallback: Map-Spawn[0] (wenn vorhanden)
-    const s0 = map?.spawns?.[0];
-    if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)){
-      const x = (s0.x|0), y = (s0.y|0);
-      if (areaOk(x,y)) return { tx:x, ty:y };
-    }
-
-    // Fallback: Scan
-    for (let y=0; y<=rows-h; y++){
-      for (let x=0; x<=cols-w; x++){
-        if (areaOk(x,y)) return { tx:x, ty:y };
-      }
-    }
-    return null;
-  }
 
   function _centerCameraOnBuilding(b){
     try{
