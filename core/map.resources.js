@@ -34,8 +34,8 @@
 
   // Basismengen (Start-Sandbox)
   const CFG = {
-    trees: { count: 240, clusterChance: 0.45 },
-    stones:{ count: 118, clusterChance: 0.35 },
+    trees: { count: 140, clusterChance: 0.45 },
+    stones:{ count: 68, clusterChance: 0.35 },
     fish:  { count: 22, clusterChance: 0.55 },
 
     // Zeichnungs-Skalierung relativ zu tileSize:
