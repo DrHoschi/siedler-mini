@@ -45,7 +45,14 @@ const CFG = {
 /* --------------------------------------------------------------------------
  * Hilfsfunktionen
  * -------------------------------------------------------------------------- */
-const $  = (sel, root=document)=> root.querySelector(sel);
+// NOTE (Safari/iOS):
+// In diesem Projekt gibt es mehrere Dateien, die eine "$"-Hilfsfunktion
+// definieren. Wenn diese als `const $ = ...` im globalen Scope deklariert wird,
+// wirft Safari beim zweiten Auftreten einen SyntaxError:
+//   "Can't create duplicate variable: '$'"
+// Danach bricht das Nachladen weiterer Scripts ab (Map/Render bleibt schwarz).
+// Darum hier bewusst `var` (darf mehrfach deklariert werden).
+var $  = (sel, root=document)=> root.querySelector(sel);
 const el = (tag, cls)=> Object.assign(document.createElement(tag), { className: cls||'' });
 
 /**

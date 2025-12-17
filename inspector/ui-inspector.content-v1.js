@@ -23,7 +23,10 @@
   let mounted = false;
 
   // ---------- Tools ----------
-  const $ = (sel, root = document) => root.querySelector(sel);
+  // NOTE (Safari/iOS): "$" wird in mehreren Dateien global definiert.
+  // `const $` im globalen Scope kollidiert über Script-Grenzen hinweg.
+  // Darum hier `var` und zusätzlich innerhalb des IIFE gehalten.
+  var $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
   function ensureHost(host) {
