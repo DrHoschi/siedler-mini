@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-16T22:01:02.360Z",
+  "createdAt": "2025-12-17T17:21:21.062Z",
   "root": ".",
-  "count": 531,
+  "count": 533,
   "entries": [
     {
       "type": "dir",
@@ -1382,7 +1382,12 @@
     {
       "type": "file",
       "path": "core/adfinder.js",
-      "size": 14728
+      "size": 16805
+    },
+    {
+      "type": "file",
+      "path": "core/adfinder.registry-rules.js",
+      "size": 11195
     },
     {
       "type": "file",
@@ -1401,13 +1406,18 @@
     },
     {
       "type": "file",
+      "path": "core/camera.cinematic.js",
+      "size": 7665
+    },
+    {
+      "type": "file",
       "path": "core/camera.js",
       "size": 14547
     },
     {
       "type": "file",
       "path": "core/carrier.runtime.js",
-      "size": 6695
+      "size": 6612
     },
     {
       "type": "file",
@@ -1472,17 +1482,17 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 19049
+      "size": 20731
     },
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 19497
+      "size": 27193
     },
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 28077
+      "size": 42027
     },
     {
       "type": "file",
@@ -1527,7 +1537,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 26783
+      "size": 31841
     },
     {
       "type": "file",
@@ -1552,7 +1562,7 @@
     {
       "type": "file",
       "path": "core/job.engine.js",
-      "size": 8794
+      "size": 9328
     },
     {
       "type": "file",
@@ -1567,12 +1577,12 @@
     {
       "type": "file",
       "path": "core/map-runtime.bridge.js",
-      "size": 7226
+      "size": 2134
     },
     {
       "type": "file",
       "path": "core/map.decorations.js",
-      "size": 30854
+      "size": 33850
     },
     {
       "type": "file",
@@ -1592,7 +1602,7 @@
     {
       "type": "file",
       "path": "core/map.resources.js",
-      "size": 13693
+      "size": 15949
     },
     {
       "type": "file",
@@ -1612,7 +1622,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 24989
+      "size": 24988
     },
     {
       "type": "file",
@@ -2561,22 +2571,22 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1413
+      "size": 1361
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53227
+      "size": 53128
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20808
+      "size": 20771
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 17200
+      "size": 17292
     },
     {
       "type": "file",
