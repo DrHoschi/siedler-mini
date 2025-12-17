@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-17T17:21:21.062Z",
+  "createdAt": "2025-12-17T23:03:04.133Z",
   "root": ".",
-  "count": 533,
+  "count": 534,
   "entries": [
     {
       "type": "dir",
@@ -1531,6 +1531,11 @@
     },
     {
       "type": "file",
+      "path": "core/game.rules.js",
+      "size": 18209
+    },
+    {
+      "type": "file",
       "path": "core/game.tick.js",
       "size": 2359
     },
@@ -1770,7 +1775,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 2690
+      "size": 2934
     },
     {
       "type": "file",
@@ -1911,7 +1916,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.audit-v1.js",
-      "size": 21169
+      "size": 21305
     },
     {
       "type": "file",
@@ -1936,7 +1941,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.layer-v1.js",
-      "size": 15573
+      "size": 15709
     },
     {
       "type": "file",
@@ -2010,12 +2015,12 @@
     {
       "type": "file",
       "path": "inspector/ui-inspector-v1.js",
-      "size": 7992
+      "size": 8411
     },
     {
       "type": "file",
       "path": "inspector/ui-inspector.content-v1.js",
-      "size": 5403
+      "size": 5612
     },
     {
       "type": "dir",
@@ -2576,17 +2581,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53128
+      "size": 53328
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20771
+      "size": 20847
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 17292
+      "size": 17958
     },
     {
       "type": "file",
