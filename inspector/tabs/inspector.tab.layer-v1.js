@@ -118,7 +118,9 @@
   }
 
   /* ================================= Utils ================================= */
-  const $ = (s,sc=document)=> sc.querySelector(s);
+  // NOTE: lokal, aber wir nutzen `var` um Safari-Doppel-Declaration-Probleme
+  // bei zukünftigen Refactors (Auslagerung) zu vermeiden.
+  var $ = (s,sc=document)=> sc.querySelector(s);
   function css(el){ try{ return getComputedStyle(el); }catch(_){ return {}; } }
   function z(el,cs){ const v=(cs||css(el)).zIndex; return (v==null||v==='auto')?'auto':String(v); }
   function fmtBBox(el){

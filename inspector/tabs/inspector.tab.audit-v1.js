@@ -95,7 +95,9 @@
   }
 
   /* ================================ Utils ================================== */
-  const $ = (s,sc=document)=> sc.querySelector(s);
+  // NOTE: lokal, aber wir nutzen `var` um Safari-Doppel-Declaration-Probleme
+  // bei zukünftigen Refactors (Auslagerung) zu vermeiden.
+  var $ = (s,sc=document)=> sc.querySelector(s);
   const $$ = (s,sc=document)=> Array.from(sc.querySelectorAll(s));
   function hash32(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return (h>>>0).toString(16); }
   function csvEscape(s){ return `"${String(s).replace(/"/g,'""')}"`; }
