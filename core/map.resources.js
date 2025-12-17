@@ -255,7 +255,46 @@
   // =========================================================================
   // DRAW
   // =========================================================================
-  function drawOnMainCanvas(ctx, cam, tileSize){
+  
+  // ----------------------------------------------------------
+  // GLOBAL Y-SORT SUPPORT
+  //  - draw one node (used by drawOnMainCanvas + collectDrawables)
+  // ----------------------------------------------------------
+  function _drawResourceNode(ctx, n, ts, A){
+          const wx = (n.x * ts) + ts * 0.5;   // Tile center
+          const wy = (n.y * ts) + ts * 0.8;   // "Fußpunkt" unten am Tile
+
+          // Atlas-Draw, wenn vorhanden
+          if (A && A.state?.ready && n.frame){
+            let atlasName = null;
+            let scale = 1;
+
+            if (n.kind === 'tree'){  atlasName = 'trees_mega_atlas';  scale = CFG.drawScale.tree; }
+            if (n.kind === 'stone'){ atlasName = 'stones_mega_atlas'; scale = CFG.drawScale.stone; }
+            if (n.kind === 'fish'){  atlasName = 'fish_mega_atlas';   scale = CFG.drawScale.fish; }
+
+            if (atlasName){
+              const ok = A.drawAtlasFrame(ctx, atlasName, n.frame, wx, wy, {
+                scale: (ts/128) * scale,   // Frames sind typ. 128-ish → auf tileSize anpassen
+                align: 'pivot'
+              });
+              if (ok) continue; // wenn gezeichnet → fertig
+            }
+          }
+
+          // Fallback (wenn Atlas fehlt)
+          ctx.save();
+          if (n.kind === 'tree'){  ctx.fillStyle = 'rgba(0,160,0,0.8)'; }
+          if (n.kind === 'stone'){ ctx.fillStyle = 'rgba(140,140,140,0.9)'; }
+          if (n.kind === 'fish'){  ctx.fillStyle = 'rgba(0,120,255,0.9)'; }
+          ctx.beginPath();
+          ctx.arc(wx, wy, ts * 0.18, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+    
+  }
+
+function drawOnMainCanvas(ctx, cam, tileSize){
   if (!ctx) return;
 
   // WICHTIG:
@@ -278,35 +317,38 @@ if (!map || !map.grid || !map.rows || !map.cols) {
     const A = window.Assets;
 
     // Mittelpunkt der Tile-Oberfläche, NICHT der Unterkante
-        // Y-Sort: Ressourcen stabil nach y/x zeichnen (Settlers-Look)
-    const _nodes = State.nodes.slice().sort((a,b)=>{
-      const ay = (a?.y ?? 0);
-      const by = (b?.y ?? 0);
-      if (ay !== by) return ay - by;
-      return (a?.x ?? 0) - (b?.x ?? 0);
+    for (const n of State.nodes){
+      _drawResourceNode(ctx, n, ts, A);
     });
-
-    for (const n of _nodes){
-
-      const wx = (n.x * ts) + ts * 0.5;   // Tile center
-      const wy = (n.y * ts) + ts * 0.8;   // "Fußpunkt" unten am Tile
-
-      // Atlas-Draw, wenn vorhanden
-      if (A && A.state?.ready && n.frame){
-        let atlasName = null;
-        let scale = 1;
-
-        if (n.kind === 'tree'){  atlasName = 'trees_mega_atlas';  scale = CFG.drawScale.tree; }
-        if (n.kind === 'stone'){ atlasName = 'stones_mega_atlas'; scale = CFG.drawScale.stone; }
-        if (n.kind === 'fish'){  atlasName = 'fish_mega_atlas';   scale = CFG.drawScale.fish; }
-
-        if (atlasName){
-          const ok = A.drawAtlasFrame(ctx, atlasName, n.frame, wx, wy, {
-            scale: (ts/128) * scale,   // Frames sind typ. 128-ish → auf tileSize anpassen
-            align: 'pivot'
-          });
           if (ok) continue; // wenn gezeichnet → fertig
         }
+
+  /**
+   * GLOBAL Y-SORT: sammelt pro Ressource ein Drawable-Objekt,
+   * das dann vom Map-Renderer gemeinsam mit Deko/Gebäuden/Units
+   * sortiert und gezeichnet werden kann.
+   *
+   * out.push({ sortY, z, draw(ctx) })
+   */
+  function collectDrawables(out, cam, tileSize){
+    if (!Array.isArray(out)) return out;
+    const map = window.GameMap?._state;
+    if (!map || !map.grid || !map.rows || !map.cols) return out;
+    if (!State.initialized){ init(); }
+    const ts = tileSize || (window.GameMap?.tileSize) || 64;
+    const A  = window.Assets;
+    for (const n of State.nodes){
+      const sortY = (n.y * ts) + ts * 0.80;
+      out.push({
+        sortY,
+        z: 10, // Ressourcen leicht hinter Deko/Gebäuden bei Tie
+        kind: 'res',
+        draw: (ctx)=> _drawResourceNode(ctx, n, ts, A)
+      });
+    }
+    return out;
+  }
+
       }
 
       // Fallback (wenn Atlas fehlt)
@@ -431,6 +473,7 @@ window.addEventListener('req:mapres:clear', ()=>{
     cfg: CFG,
     init,
     drawOnMainCanvas,
+    collectDrawables,
     debugDump,
 
     // Step 1

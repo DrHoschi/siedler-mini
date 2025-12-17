@@ -364,6 +364,342 @@
   // -------------------------------------------------------------------------
   // RENDER – Map + Gebäude + Units
   // -------------------------------------------------------------------------
+
+  function _isGlobalYSortEnabled(){
+    // Default: an. Kann im Inspector/Devtools temporär deaktiviert werden:
+    // window.__GLOBAL_YSORT__ = false;
+    if (window.__GLOBAL_YSORT__ === false) return false;
+    if (window.__GLOBAL_YSORT__ === true)  return true;
+    return true;
+  }
+
+  function drawWorldGlobalYSort(ctx, cam, ts){
+    const z = [];
+    const MR = window.MapResources;
+    const MD = window.MapDecorations;
+
+    // Ressourcen + Deko (pro-node drawables)
+    if (MR?.collectDrawables) MR.collectDrawables(z, cam, ts);
+    if (MD?.collectDrawables) MD.collectDrawables(z, cam, ts);
+
+    // Gebäude
+    if (Array.isArray(window.Game?.buildings)){
+      let bi = 0;
+      for (const b of window.Game.buildings){
+        const sortY = ((b.y | 0) + (b.h || 1)) * ts;
+        z.push({
+          sortY,
+          z: 30,
+          i: bi++,
+          kind: 'bld',
+          draw: (ctx)=> _drawOneBuildingYS(ctx, cam, ts, b)
+        });
+      }
+    }
+
+    // Units
+    const units = getUnitsForDraw();
+    if (units.length){
+      const S = _makeUnitDrawShared();
+      for (let i = 0; i < units.length; i++){
+        const u = units[i];
+        const sortY = (u.y * ts) + ts * 0.95;
+        z.push({
+          sortY,
+          z: 40,
+          i,
+          kind: 'unit',
+          draw: (ctx)=> _drawOneUnitYS(ctx, cam, ts, u, i, S)
+        });
+      }
+    }
+
+    // Sort: y (world) → layer bias (z) → stabil (i)
+    z.sort((a,b)=> (a.sortY - b.sortY) || (a.z - b.z) || ((a.i||0)-(b.i||0)));
+
+    for (const it of z){
+      it.draw(ctx);
+    }
+  }
+
+  function _drawOneBuildingYS(ctx, cam, ts, b){
+            const bx = (b.x | 0) * ts;
+            const by = (b.y | 0) * ts;
+            const bw = (b.w || 1) * ts;
+            const bh = (b.h || 1) * ts;
+
+            const stage = typeof b.buildStage === 'number' ? b.buildStage : 3;
+
+            // Standard-Farben
+            let col = 'rgba(80,200,80,0.9)';   // fertig
+            if (stage === 0) col = 'rgba(200,150,50,0.6)';
+            if (stage === 1) col = 'rgba(220,180,80,0.7)';
+            if (stage === 2) col = 'rgba(140,200,120,0.8)';
+
+            let useFallback = false;
+
+            if (stage < 3){
+              // Baustelle 0/1/2
+              const idx    = Math.max(0, Math.min(2, stage));
+              const imgSite = BuildPlaceSprites[idx];
+
+              if (isDrawableImage(imgSite)){
+                try{
+                  ctx.drawImage(imgSite, bx, by, bw, bh);
+                }catch(e){
+                  WARN('drawImage Baustelle-Fehler:', e?.message || e);
+                  useFallback = true;
+                }
+              } else {
+                // Bild noch nicht fertig oder defekt → Fallback-Rechteck
+                useFallback = true;
+              }
+            } else {
+              // Fertiges Gebäude
+              const imgB = getBuildingSprite(b.id);
+              if (isDrawableImage(imgB)){
+                try{
+                  ctx.drawImage(imgB, bx, by, bw, bh);
+                }catch(e){
+                  WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
+                  useFallback = true;
+                }
+              } else {
+                // Sprite noch nicht da oder kaputt → Fallback-Rechteck
+                useFallback = true;
+              }
+            }
+
+            if (useFallback){
+              ctx.fillStyle = col;
+              ctx.fillRect(bx, by, bw, bh);
+            }
+      
+  }
+
+
+  function _makeUnitDrawShared(){
+    const Assets = window.Assets;
+    const hasAssets = !!(Assets && (Assets.getImage || Assets.getAtlas));
+    // Hinweis: carrierOk heißt nur "Atlas verfügbar", nicht "Unit existiert".
+    let carrierOk = false;
+    try{
+      if (hasAssets && Assets.getAtlas){
+        const a = Assets.getAtlas('characters');
+        carrierOk = !!(a && (a.frames || a.textures || a.ok));
+      }
+    }catch(e){ /* ignore */ }
+
+    const tNow = (typeof performance !== 'undefined' && performance.now)
+      ? (performance.now() * 0.001)
+      : (Date.now() * 0.001);
+
+    // Unit-Registry/Defs (optional): wir lesen defensiv.
+    function _getUnitDef(kind){
+      const reg = window.Registry;
+      const units = reg?.units || reg?.data?.units || reg?.get?.('units');
+      if (!units) return null;
+      return units[kind] || units[String(kind)] || null;
+    }
+
+    // Normalisierung für id/kind – damit alte + neue Strukturen funktionieren.
+    function _normalizeUnitId(u){
+      return (u?.id ?? u?.uid ?? u?.unitId ?? u?.name ?? '').toString();
+    }
+
+    function _getUnitKind(u){
+      return (u?.kind ?? u?.job ?? u?.type ?? 'carrier').toString();
+    }
+
+    return { Assets, hasAssets, carrierOk, tNow, _getUnitDef, _normalizeUnitId, _getUnitKind };
+  }
+
+  function _drawOneUnitYS(ctx, cam, ts, u, idx, S){
+    const Assets = S.Assets;
+    const hasAssets = S.hasAssets;
+    const carrierOk = S.carrierOk;
+    const tNow = S.tNow;
+    const _getUnitDef = S._getUnitDef;
+    const _normalizeUnitId = S._normalizeUnitId;
+    const _getUnitKind = S._getUnitKind;
+            const ui = idx;
+            // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
+            const tx = (u.x || 0);
+            const ty = (u.y || 0);
+
+            // Richtung schätzen: bei Task Richtung zur Zielposition, sonst letzte Richtung behalten
+            let dir = u._dir || 'S';
+            const target = u.task?.target || u.task?.dest || u.task?.source;
+            if (target && Number.isFinite(target.x) && Number.isFinite(target.y)){
+              dir = _dir4FromDelta((target.x - tx), (target.y - ty));
+              u._dir = dir;
+            }
+
+            // moving?
+            const moving = !!u.task && (Math.hypot((target?.x ?? tx) - tx, (target?.y ?? ty) - ty) > 0.01);
+
+            // Registry → AtlasKey (falls vorhanden)
+            const kind = _getUnitKind(u);
+            const def  = _getUnitDef(kind) || {};
+
+            // Anim-Zeit (stabil): benutzt performance.now(), mit Seed pro Unit
+            const animT = _unitAnimTime(u, kind, ui, tNow);
+
+            // atlasKey kann direkt am Def stehen oder aus sprite.* kommen
+            const desiredAtlasKey =
+              def.atlasKey ||
+              def.spriteAtlasKey ||
+              def.sprite?.atlasKey ||
+              def.sprite?.atlas ||
+              null;
+
+            // finaler Atlas: erst Wunsch, dann Carrier, dann Punkt
+            let atlasKey = null;
+            if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) atlasKey = desiredAtlasKey;
+            else if (carrierOk) atlasKey = CARRIER_ATLAS;
+
+            // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
+            const wx = tx * ts + ts/2;
+            const wy = ty * ts + ts - 2;
+
+            if (hasAssets && atlasKey){
+              const a = Assets.getAtlas(atlasKey);
+
+              // Frame wählen:
+              // - Wenn Carrier-Atlas: nutze bestehende Mapping + einfache Animation
+              // - Sonst: defaultFrame aus Def (oder erstes Frame)
+              let frameName = null;
+
+              if (atlasKey === CARRIER_ATLAS){
+                const fps = 6;
+                const cycle = moving ? 'walk' : 'idle';
+                const frames = CARRIER_SPRITES[cycle]?.[dir] || CARRIER_SPRITES[cycle]?.S;
+                if (frames && frames.length){
+                  const frameIdx = Math.floor(animT * fps) % frames.length;
+                  frameName = frames[frameIdx];
+                }
+                // falls Mapping nicht passt: erstes Frame
+                if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
+                if (!frameName) frameName = 'frame_0_4'; // Center als safe-default
+                if (frameName && !(a.frames && a.frames[frameName])) frameName = _pickFirstFrame(a);
+              } else {
+                // -----------------------------------------------------------------
+                // Nicht-Carrier-Units: Frame-Auswahl über UnitAnim (8-dir, datadriven)
+                //
+                // Warum?
+                //  - Wir wollen *nicht* mehr stur def.defaultFrame (meist "frame_0_0") zeichnen.
+                //  - UnitAnim kann (a) dir8 + (b) idle/walk/carry/work + (c) Auto-Fallbacks.
+                // -----------------------------------------------------------------
+                if (window.UnitAnim && typeof window.UnitAnim.getFrameForUnit === 'function') {
+                  // Richtung 8-dir aus Task ableiten (falls vorhanden). Das hilft insbesondere
+                  // bei Units, die ohne vx/vy "direkt" über x/y bewegt werden.
+                  const tgt8 = target;
+                  if (tgt8 && Number.isFinite(tgt8.x) && Number.isFinite(tgt8.y)) {
+                    const dx8 = (tgt8.x - tx);
+                    const dy8 = (tgt8.y - ty);
+                    u._dir8 = window.UnitAnim.dir8FromDelta(dx8, dy8);
+                  }
+
+                  // Anim-State nur setzen, wenn nichts "stärkeres" vorgegeben wurde
+                  // (Worker-Loop setzt z.B. work/carry explizit).
+                  if (!u.__animState || u.__animState === 'idle' || u.__animState === 'walk') {
+                    u.__animState = moving ? 'walk' : 'idle';
+                  }
+
+                  const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
+                  frameName = info?.frame || null;
+
+                  // Safety
+                  if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
+                }
+
+                // Wenn UnitAnim nicht verfügbar oder kein passender Frame gefunden wurde:
+                if (!frameName) {
+                  // -----------------------------------------------------------------
+                  // Nicht-Carrier-Units: einfache Idle-Animation (Frame-Cycling)
+                  //
+                  // Ziel:
+                  //  - Units wirken nicht mehr "starr", auch wenn wir noch keine
+                  //    vollständigen Richtung-/Walk-/Carry-States implementiert haben.
+                  //
+                  // Datenquellen (in dieser Reihenfolge):
+                  //  1) def.idleFrames (Array von Frame-Namen)
+                  //  2) def.anims?.idle?.frames
+                  //  3) def.sprite?.idleFrames / def.sprite?.anims?.idle?.frames
+                  //
+                  // Fallback:
+                  //  - Wenn nichts definiert ist: versuche frame_0_0 + frame_0_1
+                  //  - sonst: nimm die ersten Frames (sortiert) als Mini-Zyklus
+                  // -----------------------------------------------------------------
+                  const animIdle = def.anims?.idle || def.sprite?.anims?.idle || null;
+                  const fps = Number(def.idleFps ?? animIdle?.fps ?? 2) || 2;
+
+                  let frames =
+                    def.idleFrames ||
+                    animIdle?.frames ||
+                    def.sprite?.idleFrames ||
+                    null;
+
+                  if (!frames || !frames.length){
+                    const keys = Object.keys(a.frames || {});
+                    const has00 = keys.includes('frame_0_0');
+                    const has01 = keys.includes('frame_0_1');
+
+                    if (has00 && has01){
+                      frames = ['frame_0_0', 'frame_0_1'];
+                    } else {
+                      const sorted = keys.slice().sort();
+                      frames = sorted.slice(0, Math.min(4, sorted.length));
+                    }
+                  }
+
+                  frameName = _pickAnimFrame(frames, animT, fps);
+
+                  // Safety: wenn Frame nicht existiert → zurückfallen
+                  if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
+
+                  // Wenn anim nicht möglich war, nutze expliziten defaultFrame oder erstes Frame
+                  if (!frameName){
+                    frameName = def.defaultFrame || def.sprite?.defaultFrame || _pickFirstFrame(a);
+                  }
+
+                  if (frameName && !(a.frames && a.frames[frameName])) frameName = _pickFirstFrame(a);
+                }
+              }
+
+              // Skalierung: wir targeten ca. 1.4 Tiles Höhe
+              let scale = 1;
+              const fr = frameName ? a.frames?.[frameName] : null;
+              if (fr && fr.h){
+                const desiredH = ts * 1.4;
+                scale = desiredH / fr.h;
+              }
+
+              const ok = frameName
+                ? Assets.drawAtlasFrame(ctx, atlasKey, frameName, wx, wy, { scale, align:'pivot' })
+                : false;
+
+              if (!ok){
+                // Fallback: Punkt (nur wenn Sprite nicht gezeichnet werden konnte)
+                ctx.fillStyle   = 'rgba(255,255,255,0.95)';
+                ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+                ctx.beginPath();
+                ctx.arc(wx, wy - ts/2, 6, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+              }
+            } else {
+              // reiner Fallback: weiße Punkte (wenn Assets nicht ready)
+              ctx.fillStyle   = 'rgba(255,255,255,0.95)';
+              ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+              ctx.beginPath();
+              ctx.arc(wx, wy - ts/2, 6, 0, Math.PI*2);
+              ctx.fill();
+              ctx.stroke();
+            }
+      
+  }
+
   function render(Game){
     const ctx = Game?.ctx;
     if (!ctx) return;
@@ -410,22 +746,17 @@
     }
 
     // ---------------------------------------------------------------------
-    
-    // ---------------------------------------------------------------------
-    // Trampelpfad-Overlay als UNDERLAY (über Terrain, unter Gebäuden/Ressourcen/Deko/Units)
-    //  - Damit das wirklich "unter" allem liegt, zeichnen wir es hier direkt auf dem MainCanvas,
-    //    NACH dem Terrain und VOR allen Sprites/Overlays.
-    //  - Zusätzlich unterdrücken wir das Zeichnen im separaten Overlay-Canvas (siehe path-overlay.js).
-    // ---------------------------------------------------------------------
-    try{
-      if (window.PathOverlay && window.PathOverlay._inst && typeof window.PathOverlay._inst.draw === 'function'){
-        // Default: underlay (kann per window.__PATHOVERLAY_TARGET__ = 'overlay' überschrieben werden)
-        window.PathOverlay._inst.renderTarget = (window.__PATHOVERLAY_TARGET__ || 'underlay');
-        const camObj = { x: camX, y: camY, zoom: zoom };
-        window.PathOverlay._inst.draw(ctx, camObj);
+        // -----------------------------------------------------------
+    // GLOBAL Y-SORT: Ressourcen + Deko + Gebäude + Units in EINEM Lauf
+    // -----------------------------------------------------------
+    if (_isGlobalYSortEnabled()){
+      try{
+        drawWorldGlobalYSort(ctx, cam, ts);
+      }catch(e){
+        WARN('GLOBAL_YSORT failed – fallback to legacy order', e);
       }
-    }catch(e){
-      // nicht fatal – Overlay ist optional
+      ctx.restore();
+      return;
     }
 
 // Gebäude-Overlay (Baustellen + fertige Gebäude)
@@ -433,15 +764,7 @@
     if (Array.isArray(Game?.buildings) && Game.buildings.length){
       ensureBuildPlaceSprites();
 
-      // Y-Sort: Gebäude nach Unterkante (y+h) sortieren, damit Overlaps stabil sind
-      const _bList = Game.buildings.slice().sort((a,b)=>{
-        const ay = ((a?.y||0) + (a?.h||1));
-        const by = ((b?.y||0) + (b?.h||1));
-        if (ay !== by) return ay - by;
-        return (a?.x||0) - (b?.x||0);
-      });
-
-      for (const b of _bList){
+      for (const b of Game.buildings){
         const bx = (b.x | 0) * ts;
         const by = (b.y | 0) * ts;
         const bw = (b.w || 1) * ts;
@@ -557,14 +880,7 @@ if (window.GameWorkArea) {
     // ---------------------------------------------------------------------
     // Einheiten: erst Sprite versuchen, sonst Fallback-Punkte
     // ---------------------------------------------------------------------
-    const _unitsRaw = getUnitsForDraw();
-    // Y-Sort innerhalb der Units (stabilere Darstellung bei Überlappungen)
-    const units = (_unitsRaw && _unitsRaw.length) ? _unitsRaw.slice().sort((a,b)=>{
-      const ay = (a?.y ?? 0);
-      const by = (b?.y ?? 0);
-      if (ay !== by) return ay - by;
-      return (a?.x ?? 0) - (b?.x ?? 0);
-    }) : [];
+    const units = getUnitsForDraw();
     if (units.length){
       const Assets = window.Assets;
 

@@ -19,7 +19,94 @@
  * Integration:
  *   - Atlas-Key: CFG.atlasName = 'deco_plants_mega_atlas'
  *   - Render: game.map.js nach Ressourcen, vor WorkAreas/Units:
- *       window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
+ *       
+  /**
+   * GLOBAL Y-SORT: sammelt pro Deko-Node ein Drawable-Objekt.
+   * Damit kann core/game.map.js Ressourcen+Deko+Gebäude+Units
+   * in EINEM Sortierlauf (y-sort) zeichnen.
+   */
+  function collectDrawables(out, cam, tileSize){
+    if (!Array.isArray(out)) return out;
+    if (!State.initialized){
+      if (!_mapIsReady()) return out;
+      init();
+    }
+    const ts = tileSize || (window.GameMap?.tileSize) || 64;
+    const baseAtlasScale = ts / 256;
+    const now = (typeof performance !== 'undefined' && performance.now)
+      ? (performance.now() * 0.001)
+      : (Date.now() * 0.001);
+    if (State._lastT == null) State._lastT = now;
+    const dt = Math.min(0.2, Math.max(0, now - State._lastT));
+    State._lastT = now;
+    State._ecoAcc += dt;
+    if (CFG.eco.enabled && State._ecoAcc >= (CFG.eco.tickEverySec || 4.0)){
+      const acc = State._ecoAcc;
+      State._ecoAcc = 0;
+      ecoTick(acc);
+    }
+    const ecoGrowth = CFG.ecoGrowth;
+    const ecoAmp = (ecoGrowth && ecoGrowth.enabled) ? (ecoGrowth.amp ?? 0.0) : 0.0;
+    const F = { ts, baseAtlasScale, now, ecoAmp };
+
+    for (const n of State.nodes){
+      const sortY = (n.y * ts) + ts * (0.82 + (n.oy || 0));
+      out.push({
+        sortY,
+        z: 20,
+        kind: 'deco',
+        draw: (ctx)=>{
+          const ts = F.ts;
+          const baseAtlasScale = F.baseAtlasScale;
+          const now = F.now;
+          const ecoAmp = F.ecoAmp;
+                // world pos (wie Ressourcen)
+                const wx = (n.x * ts) + ts * (0.5 + (n.ox || 0));
+                const wy = (n.y * ts) + ts * (0.82 + (n.oy || 0));
+
+                // Wobble
+                const wCfg = CFG.wobble.perKind[n.kind] || { wobbleScale: 0.0, speedMin: 0.05, speedMax: 0.10 };
+                const wobbleScale = (CFG.wobble.enabled ? (wCfg.wobbleScale ?? 0.0) : 0.0);
+
+                const tiltCfg = CFG.tilt[n.kind] || { wobbleRotDeg: 0.0 };
+                const wobbleRotDeg = (CFG.wobble.enabled ? (tiltCfg.wobbleRotDeg ?? 0.0) : 0.0);
+                const wobbleRot = wobbleRotDeg * (Math.PI/180);
+
+                const sLoop = wobbleScale ? (1 + wobbleScale * Math.sin(now * (n.speed || 0.1) + (n.phase || 0))) : 1;
+                const rLoop = wobbleRot ? (wobbleRot * Math.sin(now * (n.speed2 || 0.08) + (n.phase2 || 0))) : 0;
+
+                // Eco Growth Cycle (langsam): zusätzliche Scale Drift (nicht "wackelig")
+                // -> wir nutzen sin, aber sehr langsam; du kannst amp runterdrehen.
+                let ecoLoop = 1;
+                if (ecoAmp && (n.ecoSpeed || 0) > 0){
+                  ecoLoop = 1 + ecoAmp * Math.sin((now * (n.ecoSpeed || 0)) + (n.ecoPhase || 0));
+                }
+
+                const scale = baseAtlasScale * (n.sBase || 0.7) * (n.sMul || 1) * sLoop * ecoLoop;
+                const rot   = (n.rotBase || 0) + rLoop;
+
+                if (n.frame){
+                  const ok = drawAtlasFrameRot(ctx, CFG.atlasName, n.frame, wx, wy, scale, rot);
+                  if (ok) continue;
+                }
+
+                // Fallback
+                ctx.save();
+                ctx.fillStyle = 'rgba(0,200,0,0.70)';
+                if (n.kind === 'waterlily') ctx.fillStyle = 'rgba(20,170,120,0.85)';
+                if (n.kind === 'rocksSmall' || n.kind === 'rocksLarge' || n.kind === 'boulders') ctx.fillStyle = 'rgba(160,160,160,0.85)';
+                ctx.beginPath();
+                ctx.arc(wx, wy, ts * 0.09, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+    
+        }
+      });
+    }
+    return out;
+  }
+
+window.MapDecorations.drawOnMainCanvas(ctx, cam, ts);
  * ========================================================================== */
 
 (function(){
@@ -655,15 +742,7 @@
     const ecoGrowth = CFG.eco.growthCycle;
     const ecoAmp = (CFG.eco.enabled && ecoGrowth.enabled) ? (ecoGrowth.amp ?? 0.0) : 0.0;
 
-    // Y-Sort: Deko stabil nach y/x zeichnen (Settlers-Look)
-    const _nodes = State.nodes.slice().sort((a,b)=>{
-      const ay = (a?.y ?? 0);
-      const by = (b?.y ?? 0);
-      if (ay !== by) return ay - by;
-      return (a?.x ?? 0) - (b?.x ?? 0);
-    });
-
-    for (const n of _nodes){
+    for (const n of State.nodes){
       // world pos (wie Ressourcen)
       const wx = (n.x * ts) + ts * (0.5 + (n.ox || 0));
       const wy = (n.y * ts) + ts * (0.82 + (n.oy || 0));
@@ -852,6 +931,7 @@
     cfg: CFG,
     init,
     drawOnMainCanvas,
+    collectDrawables,
 
     // Tools
     regen,

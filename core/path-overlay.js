@@ -47,7 +47,7 @@
     // - Move-Segmente (cb:unit:move) sind die neue Hauptquelle (glatte Linie)
     // - Step-Fallback (cb:unit:step) optional, standardmäßig AUS um Zickzack zu vermeiden
     USE_MOVE_EVENTS_DEFAULT  : true,
-    USE_STEP_FALLBACK_DEFAULT: false,
+    USE_STEP_FALLBACK_DEFAULT: true,
 
     // Darstellung
     MIN_VISIBLE: 0.02,
@@ -179,13 +179,6 @@
       this.visible = CFG.DEFAULT_VISIBLE;
       this.showStamps = CFG.DEFAULT_STAMPS;
       this.showHeatmap = CFG.DEFAULT_HEATMAP;
-      // Render-Ziel: 'overlay' (Default) oder 'underlay'
-      //  - underlay: wird auf dem Haupt-Canvas unter Gebäuden/Ressourcen gezeichnet
-      //  - overlay : wird auf dem separaten #overlay Canvas gezeichnet
-      // WICHTIG: Wenn underlay aktiv ist, unterdrücken wir das Zeichnen im Overlay-Canvas,
-      //          damit keine Doppelzeichnung entsteht.
-      this.renderTarget = (window.__PATHOVERLAY_TARGET__ || CFG.DEFAULT_TARGET || 'underlay');
-
 
       // Grid
       this.cols = 0;
@@ -494,14 +487,6 @@
 
     setHeatmap(flag){ this.showHeatmap = !!flag; this._emitState('heatmap'); }
     setStamps(flag){ this.showStamps = !!flag; this._emitState('stamps'); }
-    setRenderTarget(t){
-      // akzeptiert: 'underlay' | 'overlay'
-      const v = (t === 'overlay') ? 'overlay' : 'underlay';
-      this.renderTarget = v;
-      try{ window.__PATHOVERLAY_TARGET__ = v; }catch(_e){}
-      this._emitState('target');
-    }
-
 
     // ----------------------------
     // INSPECTOR-API (Decay + State)
@@ -568,14 +553,6 @@
       // Wenn nicht sichtbar -> nichts zeichnen
       if (!this.visible) return;
       if (!this.showHeatmap && !this.showStamps) return;
-
-      // UNDERLAY-MODUS: wenn wir in den Haupt-Canvas zeichnen, wollen wir NICHT
-      // zusätzlich im Overlay-Canvas zeichnen (sonst doppelt / zu dunkel).
-      // OverlayHooks.render() zeichnet typischerweise auf canvas#overlay.
-      if (this.renderTarget === 'underlay'){
-        const id = ctx?.canvas?.id || '';
-        if (id === 'overlay') return;
-      }
 
       // Grid sicherstellen (wenn Map spät initialisiert)
       if (!this.ensureGrid()) return;
@@ -784,7 +761,6 @@
     setVisible: (v)=> inst.setVisible(v),
     setHeatmap: (v)=> inst.setHeatmap(v),
     setStamps : (v)=> inst.setStamps(v),
-    setRenderTarget: (t)=> inst.setRenderTarget(t),
     // debug
     _inst: inst,
   };
