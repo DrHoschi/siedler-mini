@@ -159,6 +159,8 @@
  
   <!-- Neue, schlanke Registry – genau DIE brauchen wir -->
   <script src="core/registry.js"></script> 
+  <!-- Patch F: EIN Regelwerk für Blocker/Walkability/Placement/AutoHQ -->
+  <script src="core/game.rules.js?v=25.12.17"></script>
   <!-- Cache-Bust: wichtig, weil iOS/Safari diese Datei gern hart cached -->
   <script src="core/production.res-validate.js?v=25.12.13"></script>
 <script src="core/diag.boot.js"></script>
@@ -213,7 +215,14 @@
   <!-- GAME BOOTSTRAP + GAME LOOP -->
   <script src="core/game.buildings.js"></script>
   <script src="core/game.renderer.js"></script>
-  <script src="core/game.build.js"></script>
+  <!--
+    IMPORTANT (Patch F / Step 5):
+    core/game.build.js ist ein älteres, parallel laufendes Build-System und war
+    in Logs als "Chaosquelle" (doppelte Init / buildings.json Fallback) sichtbar.
+    Wir lassen die Datei im Repo (nichts löschen), aber binden sie NICHT mehr ein.
+    Aktives Build-System: core/game.place.js + core/game.js + core/game.construction.js
+  -->
+  <!-- <script src="core/game.build.js"></script> -->
      <script src="core/map.decorations.js?v=25.12.17"></script>
      <script src="core/map.resources.js?v=25.12.17"></script>
   <script src="core/game.map.js?v=25.12.17"></script>
