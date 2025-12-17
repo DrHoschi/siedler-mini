@@ -47,7 +47,7 @@
     // Dichte (Counts) – Zielbestand. Dynamik versucht über Zeit wieder dorthin.
     // ---------------------------------------------------------------------
     counts: {
-      grassClumps: 78,
+      grassClumps: 58,
       shrubs:      42,
       flowers:     30,
       mushrooms:   18,
