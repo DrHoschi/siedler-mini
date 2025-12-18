@@ -146,10 +146,39 @@
 
   <!-- ===== Build-Menü Button → Event ===== -->
   <script>
-  document.getElementById('btn-build')?.addEventListener('click', ()=>{
-    window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'button' }}));
-  });
-  </script>
+  // =====================================================================
+  // Build Button Failsafe (v25.12.18)
+  // Warum:
+  // - Wenn ui/ui-build.js wegen Cache/404/Parse-Stop nicht ausgeführt wird,
+  //   bleibt #build-dock oft im Zustand hidden=true (display:none) und der
+  //   Button wirkt "tot".
+  // - Dieser Handler ist ABSICHTLICH minimal und greift nur ein, wenn das
+  //   Build-System nicht selbst öffnet.
+  // =====================================================================
+  (function(){
+    const btn  = document.getElementById('btn-build');
+    const dock = document.getElementById('build-dock');
+    if(!btn || !dock) return;
+
+    btn.addEventListener('click', ()=>{
+      // 1) Erst: normales Event (für das echte Build-System)
+      try{
+        window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'button' }}));
+      }catch(_){}
+
+      // 2) Failsafe: wenn Dock nach kurzer Zeit immer noch versteckt ist, toggle es hart.
+      setTimeout(()=>{
+        // Wenn ui-build aktiv ist, wird es selbst hidden=false setzen → dann machen wir nichts.
+        const stillHidden = !!dock.hidden || getComputedStyle(dock).display === 'none';
+        if (stillHidden){
+          dock.hidden = false;
+          document.body.classList.add('build-open');
+          try{ window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'failsafe' }})); }catch(_){}
+        }
+      }, 60);
+    }, { passive:true });
+  })();
+</script>
 
   <!-- BOOT -->
   <script src="core/boot-v1.js"></script>
@@ -261,12 +290,12 @@
   <!-- HUD + BUILD -->
   <script src="ui/ui-hud.js?v=25.12.18"></script>
   <script src="ui/ui-build.js?v=25.12.18"></script>
-  <script src="ui/ui-building-menu.js"></script>
+  <script src="ui/ui-building-menu.js?v=25.12.18"></script>
   <script src="ui/ui-dialog.js"></script>
   <script src="ui/ui-notify.js?v=25.11.05"></script>
 
   <!-- LAYOUT -->
-  <script src="ui/ui-layout.js"></script>
+  <script src="ui/ui-layout.js?v=25.12.18"></script>
 
    <!-- MINIMAP -->
   <script src="ui/ui-minimap.js?v=25.12.16"></script>
