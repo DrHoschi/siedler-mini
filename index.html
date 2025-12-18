@@ -159,6 +159,8 @@
  
   <!-- Neue, schlanke Registry – genau DIE brauchen wir -->
   <script src="core/registry.js"></script> 
+    <!-- Patch F: EIN Regelwerk für Blocker/Walkability/Placement/AutoHQ -->
+  <script src="core/game.rules.js?v=25.12.17"></script>
   <!-- Cache-Bust: wichtig, weil iOS/Safari diese Datei gern hart cached -->
   <script src="core/production.res-validate.js?v=25.12.13"></script>
 <script src="core/diag.boot.js"></script>
@@ -207,6 +209,8 @@
      
   <!-- *** WICHTIG: genau EINE Kamera laden → hier die stabile core/camera.js *** -->
   <script src="core/camera.js"></script>
+     <!-- ✅ Cinematic (Overview → FlyToHQ + Zoom, abbrechbar bei Input) -->
+<script src="core/camera.cinematic.js?v=25.12.17"></script> 
        <!-- MAP LOAD + MAP RUNTIME/RENDER -->
 <!-- <script src="core/map-runtime.bridge.js"></script>-->
   
