@@ -152,6 +152,9 @@
   </script>
 
   <!-- BOOT -->
+  <!-- Compat-Bridge: fängt evtl. verbliebene Bindestrich-Events ab und mappt auf Doppelpunkt-Events -->
+  <script src="core/event.compat.js?v=25.12.18"></script>
+
   <script src="core/boot-v1.js"></script>
 
   <!-- CORE ESSENCE -->
@@ -164,7 +167,7 @@
   <!-- Cache-Bust: wichtig, weil iOS/Safari diese Datei gern hart cached -->
   <script src="core/production.res-validate.js?v=25.12.13"></script>
 <script src="core/diag.boot.js"></script>
- <script src="core/event.compat.js"></script>
+ 
    
      
    <!-- JOB / CARRIER / RES / PROD -->
