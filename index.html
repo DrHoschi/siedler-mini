@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="ui/css/ui-hud-v5.css">
 
   <link rel="stylesheet" href="ui/css/ui-build-v14.css">
-  <link rel="stylesheet" href="ui/css/ui-layer.patch.css?v=25.12.18">
+  <link rel="stylesheet" href="ui/css/ui-layer.patch.css">
   <link rel="stylesheet" href="ui/css/ui-place.css">
 
   <link rel="stylesheet" href="inspector/ui-inspector-v1.css">
@@ -146,39 +146,10 @@
 
   <!-- ===== Build-Menü Button → Event ===== -->
   <script>
-  // =====================================================================
-  // Build Button Failsafe (v25.12.18)
-  // Warum:
-  // - Wenn ui/ui-build.js wegen Cache/404/Parse-Stop nicht ausgeführt wird,
-  //   bleibt #build-dock oft im Zustand hidden=true (display:none) und der
-  //   Button wirkt "tot".
-  // - Dieser Handler ist ABSICHTLICH minimal und greift nur ein, wenn das
-  //   Build-System nicht selbst öffnet.
-  // =====================================================================
-  (function(){
-    const btn  = document.getElementById('btn-build');
-    const dock = document.getElementById('build-dock');
-    if(!btn || !dock) return;
-
-    btn.addEventListener('click', ()=>{
-      // 1) Erst: normales Event (für das echte Build-System)
-      try{
-        window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'button' }}));
-      }catch(_){}
-
-      // 2) Failsafe: wenn Dock nach kurzer Zeit immer noch versteckt ist, toggle es hart.
-      setTimeout(()=>{
-        // Wenn ui-build aktiv ist, wird es selbst hidden=false setzen → dann machen wir nichts.
-        const stillHidden = !!dock.hidden || getComputedStyle(dock).display === 'none';
-        if (stillHidden){
-          dock.hidden = false;
-          document.body.classList.add('build-open');
-          try{ window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'failsafe' }})); }catch(_){}
-        }
-      }, 60);
-    }, { passive:true });
-  })();
-</script>
+  document.getElementById('btn-build')?.addEventListener('click', ()=>{
+    window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'button' }}));
+  });
+  </script>
 
   <!-- BOOT -->
   <script src="core/boot-v1.js"></script>
@@ -188,8 +159,6 @@
  
   <!-- Neue, schlanke Registry – genau DIE brauchen wir -->
   <script src="core/registry.js"></script> 
-  <!-- Patch F: EIN Regelwerk für Blocker/Walkability/Placement/AutoHQ -->
-  <script src="core/game.rules.js?v=25.12.17"></script>
   <!-- Cache-Bust: wichtig, weil iOS/Safari diese Datei gern hart cached -->
   <script src="core/production.res-validate.js?v=25.12.13"></script>
 <script src="core/diag.boot.js"></script>
@@ -238,23 +207,13 @@
      
   <!-- *** WICHTIG: genau EINE Kamera laden → hier die stabile core/camera.js *** -->
   <script src="core/camera.js"></script>
-   <!-- ✅ Cinematic (Overview → FlyToHQ + Zoom, abbrechbar bei Input) -->
-<script src="core/camera.cinematic.js?v=25.12.17"></script> 
-     
-     <!-- MAP LOAD + MAP RUNTIME/RENDER -->
+       <!-- MAP LOAD + MAP RUNTIME/RENDER -->
 <!-- <script src="core/map-runtime.bridge.js"></script>-->
   
   <!-- GAME BOOTSTRAP + GAME LOOP -->
   <script src="core/game.buildings.js"></script>
   <script src="core/game.renderer.js"></script>
-  <!--
-    IMPORTANT (Patch F / Step 5):
-    core/game.build.js ist ein älteres, parallel laufendes Build-System und war
-    in Logs als "Chaosquelle" (doppelte Init / buildings.json Fallback) sichtbar.
-    Wir lassen die Datei im Repo (nichts löschen), aber binden sie NICHT mehr ein.
-    Aktives Build-System: core/game.place.js + core/game.js + core/game.construction.js
-  -->
-  <!-- <script src="core/game.build.js"></script> -->
+  <script src="core/game.build.js"></script>
      <script src="core/map.decorations.js?v=25.12.17"></script>
      <script src="core/map.resources.js?v=25.12.17"></script>
   <script src="core/game.map.js?v=25.12.17"></script>
@@ -288,14 +247,14 @@
   <script src="ui/ui-events.js"></script>
 
   <!-- HUD + BUILD -->
-  <script src="ui/ui-hud.js?v=25.12.18"></script>
-  <script src="ui/ui-build.js?v=25.12.18"></script>
-  <script src="ui/ui-building-menu.js?v=25.12.18"></script>
+  <script src="ui/ui-hud.js"></script>
+  <script src="ui/ui-build.js"></script>
+  <script src="ui/ui-building-menu.js"></script>
   <script src="ui/ui-dialog.js"></script>
   <script src="ui/ui-notify.js?v=25.11.05"></script>
 
   <!-- LAYOUT -->
-  <script src="ui/ui-layout.js?v=25.12.18"></script>
+  <script src="ui/ui-layout.js"></script>
 
    <!-- MINIMAP -->
   <script src="ui/ui-minimap.js?v=25.12.16"></script>
