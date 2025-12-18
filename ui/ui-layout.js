@@ -61,15 +61,3 @@
   // Debug/Manuell
   window.LayoutGlue = { enable, disable };
 })();
-
-
-// PATCH v25.12.18: Self-heal wenn ui-layout.js nach cb:game:start geladen wurde
-;(function(){
-  try{
-    const started = !!(window.__GAME_STARTED || document.documentElement?.dataset?.gameStarted === '1');
-    if (started && !document.body.classList.contains('is-playing')){
-      document.body.classList.add('is-playing');
-      (window.CBLog?.info || console.info)('[layout] PATCH: is-playing nachträglich aktiviert (Event verpasst)');
-    }
-  }catch(e){}
-})();
