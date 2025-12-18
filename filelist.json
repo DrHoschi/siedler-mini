@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-17T23:03:04.133Z",
+  "createdAt": "2025-12-18T19:40:28.875Z",
   "root": ".",
   "count": 534,
   "entries": [
@@ -1775,7 +1775,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 2934
+      "size": 2690
     },
     {
       "type": "file",
@@ -2581,17 +2581,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53328
+      "size": 53419
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20847
+      "size": 20876
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 17958
+      "size": 17567
     },
     {
       "type": "file",
