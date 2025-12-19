@@ -53,7 +53,7 @@
       });
   }
 
-  function loadImage(url){
+  function withTimeout(loadImage(url), 15000, 'image'){
     return new Promise((resolve, reject)=>{
       try{
         const img = new Image();
@@ -228,9 +228,9 @@
     // --------------------------------------------------------------
     getImage(key){ return this.images.get(key) || null; },
 
-    async loadImage(key, url){
+    async withTimeout(loadImage(key, url), 15000, 'image'){
       try{
-        const img = await loadImage(url);
+        const img = await withTimeout(loadImage(url), 15000, 'image');
         this.images.set(key, img);
         LOG('Image geladen:', key, url, img.naturalWidth+'x'+img.naturalHeight);
         return img;
@@ -253,7 +253,7 @@
      * - imageUrl ist OPTIONAL:
      *   - wenn meta.image im JSON falsch ist, kannst du hier override setzen
      */
-    async loadAtlas(name, jsonUrlOrList, imageUrlOverride){
+    async withTimeout(loadAtlas(name, jsonUrlOrList, imageUrlOverride), 15000, 'atlas'){
       // jsonUrlOrList kann string ODER Array sein (Candidate-Loading)
       // Beispiel: [['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],'assets/characters/woodcutter.json']
       const candidates = Array.isArray(jsonUrlOrList) ? jsonUrlOrList : [jsonUrlOrList];
@@ -289,7 +289,7 @@
 
           entry.imageUrl = imageUrl;
 
-          const img = await loadImage(imageUrl);
+          const img = await withTimeout(loadImage(imageUrl), 15000, 'image');
           entry.img = img;
 
           const norm = normalizeFrames(json);
@@ -415,29 +415,32 @@
       //
       // WICHTIG: fish-json liegt bei dir im Repo als .json (bei Upload hier .txt),
       // wir laden im Spiel natürlich den .json Pfad.
-      const tasks = [];
+      const tasks = [
+      // NOTE: Timeout pro Asset ist bewusst konservativ gewählt.
+      // Wenn etwas „hängt“, sehen wir im Inspector exakt welches Asset.
+];
 
       // Trees: wir setzen imageUrl OVERRIDE passend zum gleichen Ordner,
       // falls meta.image mal abweicht.
-      tasks.push(this.loadAtlas(
+      tasks.push(this.withTimeout(loadAtlas(
         'trees_mega_atlas',
         'assets/resources/wood/trees_mega_atlas.json',
         'assets/resources/wood/trees_mega_atlas.png'
-      ));
+      ), 15000, 'atlas'));
 
       // Stones: meta.image ist bereits korrekt im JSON  [oai_citation:1‡stones_mega_atlas.json](sediment://file_00000000cb30720aafc246ea388e8c07)
-      tasks.push(this.loadAtlas(
+      tasks.push(this.withTimeout(loadAtlas(
         'stones_mega_atlas',
         'assets/resources/stone/stones_mega_atlas.json',
         'assets/resources/stone/stones_mega_atlas.png'
-      ));
+      ), 15000, 'atlas'));
 
       // Fish: meta.image ist korrekt im JSON  [oai_citation:2‡fish_mega_atlas.json.txt](sediment://file_000000007ed8720abe7ae44d1239f904)
-      tasks.push(this.loadAtlas(
+      tasks.push(this.withTimeout(loadAtlas(
         'fish_mega_atlas',
         'assets/resources/fish/fish_mega_atlas.json',
         'assets/resources/fish/fish_mega_atlas.png'
-      ));
+      ), 15000, 'atlas'));
 
 
 
@@ -454,52 +457,52 @@
       //   assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.json
       //   assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.png
       // --------------------------------------------------------------------
-      tasks.push(this.loadAtlas(
+      tasks.push(this.withTimeout(loadAtlas(
         'deco_plants_mega_atlas',
         [
           'assets/tex/deco/deco_plants_mega_atlas.json',
           'assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.json',
           'assets/tex/deco/deco_plants_iso_settlersstyle_v4_atlas_compact.json'
         ],
-        // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer)
+        // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer), 15000, 'atlas')
         'assets/tex/deco/deco_plants_mega_atlas.png'
       ));
       // Characters / Units: Carrier (Träger)
       // Hinweis: JSON kann meta.image="carrier.png" enthalten, deshalb geben wir
       // imageUrl explizit mit an, damit es immer stimmt.
-      tasks.push(this.loadAtlas(
+      tasks.push(this.withTimeout(loadAtlas(
         'carrier_atlas',
         'assets/characters/carrier_atlas.json',
         'assets/characters/carrier.png'
-      ));
+      ), 15000, 'atlas'));
 
 // Characters / Units: Builder
-tasks.push(this.loadAtlas(
+tasks.push(this.withTimeout(loadAtlas(
   'builder_atlas',
   'assets/characters/builder_atlas.json',
   'assets/characters/builder.png'
-));
+), 15000, 'atlas'));
 
 // Characters / Units: Woodcutter
-tasks.push(this.loadAtlas(
+tasks.push(this.withTimeout(loadAtlas(
   'woodcutter_atlas',
   ['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],
   'assets/characters/woodcutter.png'
-));
+), 15000, 'atlas'));
 
 // Characters / Units: Fisherman
-tasks.push(this.loadAtlas(
+tasks.push(this.withTimeout(loadAtlas(
   'fisherman_atlas',
   ['assets/characters/fisherman_atlas.json','assets/characters/fisherman.json'],
   'assets/characters/fisherman.png'
-));
+), 15000, 'atlas'));
 
 // Characters / Units: Stonecutter
-tasks.push(this.loadAtlas(
+tasks.push(this.withTimeout(loadAtlas(
   'stonecutter_atlas',
   ['assets/characters/stonecutter_atlas.json','assets/characters/stonecutter.json'],
   'assets/characters/stonecutter.png'
-));
+), 15000, 'atlas'));
       
 
       await Promise.allSettled(tasks);
@@ -534,3 +537,15 @@ tasks.push(this.loadAtlas(
   });
 
 })();
+// -------------------------------------------------------------
+// Watchdog: einzelne Assets dürfen den kompletten Boot nicht „2 Minuten“
+// blockieren. Wir loggen slow Assets und brechen notfalls ab.
+// -------------------------------------------------------------
+function withTimeout(promise, ms, label){
+  let to;
+  const timeout = new Promise((_, rej)=>{
+    to = setTimeout(()=>rej(new Error(`TIMEOUT ${ms}ms: ${label}`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(()=>clearTimeout(to));
+}
+

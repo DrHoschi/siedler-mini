@@ -36,10 +36,8 @@
     INFO('cb:game:start emittiert');
   }
 
-  
-  // Nutzer klickt "Start" ODER "Weiterspielen" → beides gilt als "userReady"
-     addEventListener('req:game:start',    ()=>{ state.userReady = true; maybeStart(); }, { once:true });
-     addEventListener('req:game:continue', ()=>{ state.userReady = true; maybeStart(); }, { once:true });
+  // Nutzer klickt "Start"
+  addEventListener('req:game:start', ()=>{ state.userReady = true; maybeStart(); }, { once:true });
 
   // Assets einmalig
   addEventListener('cb:assets-ready', (e)=>{ if (state.assetsReady) return;
