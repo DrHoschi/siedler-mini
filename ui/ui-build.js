@@ -1,34 +1,22 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.11.16-final+costs-json2+hook
- * Modul    : Baumenü – Kategorien + Gebäude-Karten + Kostenanzeige
- * Hinweis  : KEIN HUD IN DIESER DATEI!
+ * Version  : v25.12.19-force-open-debug
+ * Zweck    : Baumenü/Dock – Robust-Open + Debug-Instrumentation
  *
- * Funktionen:
- *  - Stellt das Baumenü-Dock (#build-dock) bereit
- *  - Lädt Gebäudeliste vorzugsweise aus Registry, sonst aus data/buildings.json
- *  - Erzeugt Kategorien-Leiste (Buttons)
- *  - Rendert Karten mit:
- *      • Name oben links
- *      • Gebäude-Icon mittig
- *      • Kosten-Chips unten (Icons + Zahl) innerhalb des Holzrahmens
- *  - Öffnen/Schließen über #btn-build und Close-Button
- *  - Klick-Handling fürs Platzieren übernimmt ui/ui-build-hook.js
+ * Problem-Hintergrund:
+ * - In manchen Ständen kommt der Klick/Event an, aber das Dock bleibt unsichtbar.
+ * - Oder: der Klick erreicht den Handler nicht (Overlay/Pointer/Capture).
+ *
+ * Lösung in diesem Patch:
+ *  1) Dock wird IMMER als DOM-Knoten garantiert (failsafe).
+ *  2) Minimal-Template wird gebaut, wenn im DOM nichts drin ist.
+ *  3) Open/Close/Toggle hört auf window UND document:
+ *     - cb:build:open / cb:build:close / cb:build:toggle
+ *  4) #btn-build wird direkt gebunden (pointerdown+click) UND zusätzlich per
+ *     Capture-Listener überwacht, damit wir im Log sicher sehen, ob der Tap ankommt.
+ *  5) openDock() setzt: hidden=false + display:block (Failsafe gegen CSS/hidden)
  * ========================================================================== */
-
-(function EnsureDock(){
-  const ok  = (m)=> (window.CBLog?.ok || console.log)('[build]', m);
-  let el = document.getElementById('build-dock');
-  if (!el){
-    el = document.createElement('div');
-    el.id = 'build-dock';
-    el.hidden = true;
-    el.style.overflow = 'auto';
-    document.body.appendChild(el);
-    ok('Failsafe: #build-dock erzeugt.');
-  }
-})();
 
 (function(){
   'use strict';
@@ -39,466 +27,126 @@
   const WRN = (...m)=> (window.CBLog?.warn  || console.warn)('[build]', ...m);
   const ERR = (...m)=> (window.CBLog?.error || console.error)('[build]', ...m);
 
-  /* ------------------------------- DOM-Refs ------------------------------- */
-  const $dock = document.getElementById('build-dock');
-  if (!$dock){
-    ERR('DOM: #build-dock fehlt – Abbruch.');
-    return;
-  }
-  const getBtnBuild = () => document.getElementById('btn-build');
-
-  /* -----------------------------------------------------------------------
-   * HOTFIX v25.12.19-build-open-visible
-   *
-   * Problem (dein aktueller Stand):
-   * - #btn-build ist sichtbar und die Click/Touch-Events kommen an
-   * - aber das Dock bleibt „unsichtbar“, weil die UI-Initialisierung
-   *   (buildDockDom/renderGrid) nie läuft oder zu spät läuft.
-   *
-   * Ursache:
-   * - In einigen Ständen kommt cb:registry:ready später / anders benannt
-   *   (z.B. cb:registry-ready) oder buildings.json fehlt/404.
-   * - Dann wird buildDockDom() nie ausgeführt → Dock bleibt leer/hidden.
-   *
-   * Lösung:
-   * - Dock-Template SOFORT bauen (leer, mit Hinweistext).
-   * - #btn-build verdrahten, egal ob Registry/JSON schon da ist.
-   * - openDock() sorgt dafür, dass das Template existiert.
-   * - Zusätzlich auf mehrere Registry-Event-Namen hören.
-   * --------------------------------------------------------------------- */
-
-  /* ------------------------------ State ----------------------------------- */
-  let BUILDINGS   = [];
-  let CATEGORIES  = [];
-  let ACTIVE_CAT  = 'all';
-  let IS_OPEN     = false;
-  let INIT_DONE   = false;
-
-  // Icons-Basis (kann durch buildings.json.iconsBase überschrieben werden)
-  let ICONS_BASE_BUILDINGS = 'assets/icons/buildings/';
-
-  // DOM-Handles nach Template-Bau:
-  let $head, $titleBox, $countLabel, $btnClose;
-  let $body, $cats, $grid, $empty;
-
-  /* ------------------------------ Helper ---------------------------------- */
-  const iconRes = id => `assets/icons/resources/${id}.png`;
-  const iconBld = id => (ICONS_BASE_BUILDINGS || 'assets/icons/buildings/') + (id || 'unknown') + '.png';
-  const emit    = (name, detail={}) =>
-    window.dispatchEvent(new CustomEvent(name, { detail }));
-
-  /**
-   * Verdrahtet #btn-build robust (iOS/Safari): click + pointerup + touchend.
-   * - Wird mehrfach aufgerufen? Kein Problem – wir schützen per Flag.
-   */
-  let _BTN_WIRED = false;
-  function wireBuildButton(){
-    if (_BTN_WIRED) return;
-    const btn = getBtnBuild();
-    if (!btn) return;
-
-    const onToggle = (ev)=>{
-      try{ ev?.preventDefault?.(); }catch(_){ }
-      toggleDock();
-    };
-
-    btn.addEventListener('click',    onToggle, { passive:false });
-    btn.addEventListener('pointerup',onToggle, { passive:false });
-    btn.addEventListener('touchend', onToggle, { passive:false });
-    _BTN_WIRED = true;
-    INF('#btn-build wired (click/pointerup/touchend).');
-  }
-
-  /** Kategorie-Filter: nutzt b.categories / b.category / b.cat */
-  function filterByCategory(list, catId){
-    if (catId === 'all') return list;
-    return list.filter(b => {
-      if (!b) return false;
-      if (Array.isArray(b.categories) && b.categories.includes(catId)) return true;
-      if (typeof b.category === 'string' && b.category === catId) return true;
-      if (typeof b.cat === 'string' && b.cat === catId) return true;
-      return false;
-    });
-  }
-
-  /** Kosten zu [{id, amount}] normalisieren (tolerant) */
-  function normalizeCosts(b){
-    if (!b) return [];
-    const src = b.costs || b.cost || b.price;
-    if (!src) return [];
-
-    // Array-Variante: [{id, qty} oder {id, amount}]
-    if (Array.isArray(src)){
-      return src
-        .filter(c =>
-          c && c.id &&
-          (typeof c.amount === 'number' || typeof c.qty === 'number')
-        )
-        .map(c => ({
-          id: String(c.id),
-          amount: (typeof c.amount === 'number') ? c.amount : c.qty
-        }));
+  /* ------------------------------- DOM ------------------------------------ */
+  function ensureDock(){
+    let dock = document.getElementById('build-dock');
+    if (!dock){
+      dock = document.createElement('div');
+      dock.id = 'build-dock';
+      dock.hidden = true;
+      document.body.appendChild(dock);
+      INF('Failsafe: #build-dock erzeugt.');
     }
-
-    // Objekt-Variante: { wood: 3, stone: 1 }
-    if (typeof src === 'object'){
-      return Object.entries(src)
-        .filter(([id, amount]) => typeof amount === 'number' && amount > 0)
-        .map(([id, amount]) => ({ id: String(id), amount }));
-    }
-
-    return [];
+    // Minimal-Failsafe-Styles (nur wenn CSS/hidden uns killt)
+    dock.style.pointerEvents = 'auto';
+    return dock;
   }
 
-  /** Kategorien erzeugen, falls keine expliziten Kategorien vorliegen */
-  function deriveCategories(buildings){
-    const map = new Map();
-    map.set('all', { id: 'all', label: 'Alles' });
+  function buildTemplateIfEmpty(dock){
+    // Wenn bereits Template vorhanden, nichts machen
+    if (dock.querySelector('.build-dock__body')) return;
 
-    buildings.forEach(b => {
-      if (!b) return;
-      let cats = [];
-      if (Array.isArray(b.categories) && b.categories.length){
-        cats = b.categories;
-      } else if (typeof b.category === 'string'){
-        cats = [b.category];
-      } else if (typeof b.cat === 'string'){
-        cats = [b.cat];
-      }
-
-      cats.forEach(id => {
-        if (!id || typeof id !== 'string') return;
-        if (!map.has(id)){
-          const label = id.charAt(0).toUpperCase() + id.slice(1);
-          map.set(id, { id, label });
-        }
-      });
-    });
-
-    return Array.from(map.values());
-  }
-
-  /** JSON-Struktur aus data/buildings.json in lokale State-Variablen übernehmen */
-  function applyBuildingsJson(json){
-    if (!json || typeof json !== 'object') return;
-
-    if (json.iconsBase && typeof json.iconsBase === 'string'){
-      ICONS_BASE_BUILDINGS = json.iconsBase;
-    }
-
-    if (Array.isArray(json.buildings)){
-      // enabled=false rausfiltern
-      BUILDINGS = json.buildings.filter(b => b && b.enabled !== false);
-    } else {
-      BUILDINGS = [];
-    }
-
-    if (Array.isArray(json.categories) && json.categories.length){
-      CATEGORIES = json.categories.map(c => ({
-        id: c.id,
-        label: c.label || c.id
-      }));
-      // sicherstellen, dass "all" existiert
-      if (!CATEGORIES.some(c => c.id === 'all')){
-        CATEGORIES.unshift({ id: 'all', label: 'Alles' });
-      }
-    } else {
-      CATEGORIES = deriveCategories(BUILDINGS);
-    }
-
-    INF('applyBuildingsJson:', BUILDINGS.length, 'Gebäude,', CATEGORIES.length, 'Kategorien.');
-  }
-
-  /** buildings.json direkt laden (Fallback, wenn Registry nichts liefert) */
-  function loadFromJson(tag){
-    INF('loadFromJson gestartet:', tag);
-    fetch('data/buildings.json')
-      .then(res => {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(json => {
-        INF('buildings.json geladen:', json && json.buildings ? json.buildings.length : 0, 'Einträge.');
-        applyBuildingsJson(json);
-        buildDockDom();
-        renderCategories();
-        renderGrid();
-      })
-      .catch(err => {
-        ERR('Fehler bei loadFromJson(', tag, '):', err);
-      });
-  }
-
-  /* --------------------------- DOM / Template ----------------------------- */
-  function buildDockDom(){
-    if (INIT_DONE) return;
-
-    const html = `
-      <div class="build-panel">
+    dock.innerHTML = `
+      <div class="build-dock__body">
         <div class="build-dock__head">
           <div class="build-dock__title">
-            <span>Baumenü</span>
-            <span id="build-count">– Gebäude</span>
+            <span>Bauen</span>
+            <span id="build-count">…</span>
           </div>
-          <button type="button" class="build-dock__close" id="build-close">×</button>
+          <button type="button" class="build-dock__close" aria-label="Schließen">✕</button>
         </div>
-        <div class="build-dock__body">
-          <div class="build-cats"  id="build-cats"></div>
-          <div class="build-grid"  id="build-grid"></div>
-          <div class="build-empty hidden" id="build-empty">
-            Keine Gebäude gefunden. Prüfe data/buildings.json / Registry.
-          </div>
+        <div class="build-dock__cats" id="build-cats"></div>
+        <div class="build-dock__grid" id="build-grid"></div>
+        <div class="build-dock__empty" id="build-empty" style="display:none; padding:10px;">
+          (keine Gebäude)
         </div>
       </div>
-    `.trim();
+    `;
 
-    $dock.innerHTML = html;
-
-    $head       = $dock.querySelector('.build-dock__head');
-    $titleBox   = $dock.querySelector('.build-dock__title');
-    $countLabel = $dock.querySelector('#build-count');
-    $btnClose   = $dock.querySelector('#build-close');
-    $body       = $dock.querySelector('.build-dock__body');
-    $cats       = $dock.querySelector('#build-cats');
-    $grid       = $dock.querySelector('#build-grid');
-    $empty      = $dock.querySelector('#build-empty');
-
-    if ($btnClose){
-      $btnClose.addEventListener('click', closeDock);
-    }
-
-    // #btn-build wird zusätzlich unten global verdrahtet.
-    // Hier lassen wir es bewusst weg, um doppelte Handler zu vermeiden.
-
-    INIT_DONE = true;
+    const btnClose = dock.querySelector('.build-dock__close');
+    btnClose?.addEventListener('click', ()=> closeDock());
+    INF('Template gebaut (failsafe).');
   }
 
-  // (bindBuildButton) wurde durch wireBuildButton() ersetzt.
+  const $dock = ensureDock();
+  buildTemplateIfEmpty($dock);
 
-  /* ------------------------- Render Kategorien ---------------------------- */
-  function renderCategories(){
-    if (!$cats) return;
-    $cats.innerHTML = '';
+  /* ------------------------------ State ----------------------------------- */
+  let IS_OPEN = false;
 
-    if (!CATEGORIES.length){
-      CATEGORIES = deriveCategories(BUILDINGS);
-    }
-
-    CATEGORIES.forEach(cat => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = cat.label || cat.id;
-      btn.dataset.cat = cat.id;
-      if (cat.id === ACTIVE_CAT) btn.classList.add('is-active');
-
-      btn.addEventListener('click', () => {
-        ACTIVE_CAT = cat.id;
-        renderCategories();
-        renderGrid();
-      });
-
-      $cats.appendChild(btn);
-    });
-  }
-
-  /* ------------------------ Render Kosten-Chips --------------------------- */
-  function buildCostChips(building){
-    const wrap = document.createElement('div');
-    wrap.className = 'build-costs';
-
-    const list = normalizeCosts(building);
-    if (!list.length) return wrap;
-
-    list.forEach(c => {
-      const chip = document.createElement('div');
-      chip.className = 'build-cost';
-
-      const icon = document.createElement('img');
-      icon.className = 'build-cost__icon';
-      icon.src = iconRes(c.id);
-      icon.alt = c.id;
-
-      const txt = document.createElement('span');
-      txt.textContent = String(c.amount);
-
-      chip.appendChild(icon);
-      chip.appendChild(txt);
-      wrap.appendChild(chip);
-    });
-
-    return wrap;
-  }
-
-  /* ------------------------ Render Karten-Grid ---------------------------- */
-  // Hinweis: Klick-Handling für Platzieren kommt aus ui/ui-build-hook.js
-  function renderGrid(){
-    if (!$grid || !$empty) return;
-    $grid.innerHTML = '';
-
-    const list = filterByCategory(BUILDINGS, ACTIVE_CAT);
-    if (!list.length){
-      $empty.classList.remove('hidden');
-    } else {
-      $empty.classList.add('hidden');
-    }
-
-    list.forEach(b => {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'build-card';
-
-      // **************** WICHTIG für build-hook ****************************
-      if (b.id){
-        card.setAttribute('data-building-id', b.id);   // vom Hook ausgelesen
-      }
-
-      // Größe bestimmen (w/h oder size[0]/[1]), Fallback 3x3
-      const w =
-        (b.w | 0) ||
-        (b.size && (b.size.w | 0)) ||
-        (Array.isArray(b.size) && (b.size[0] | 0)) ||
-        3;
-      const h =
-        (b.h | 0) ||
-        (b.size && (b.size.h | 0)) ||
-        (Array.isArray(b.size) && (b.size[1] | 0)) ||
-        3;
-
-      card.setAttribute('data-w', w);
-      card.setAttribute('data-h', h);
-      // ********************************************************************
-
-      const titleEl = document.createElement('div');
-      titleEl.className = 'build-card__title';
-      titleEl.textContent = b.name || b.title || b.id || 'Unbenannt';
-
-      const img = document.createElement('img');
-      img.className = 'build-card__img';
-      img.alt = b.name || b.id || '';
-      img.src = b.icon || iconBld(b.id || 'unknown');
-
-      const costsEl = buildCostChips(b);
-
-      // Innerer Container, damit Bild + Kosten zusammen im Holzrahmen sitzen
-      const inner = document.createElement('div');
-      inner.className = 'build-card__inner';
-      inner.appendChild(img);
-      inner.appendChild(costsEl);
-
-      card.appendChild(titleEl);
-      card.appendChild(inner);
-
-      // KEIN eigener Click-Handler hier!
-      // → ui/ui-build-hook.js fängt den Klick auf [data-building-id] ab
-      $grid.appendChild(card);
-    });
-
-    if ($countLabel){
-      $countLabel.textContent = `${BUILDINGS.length} Gebäude`;
-    }
-  }
-
-  /* -------------------------- Open / Close -------------------------------- */
-  function openDock(){
-    // Template sicherstellen, damit das Dock überhaupt sichtbar sein kann.
-    if (!INIT_DONE) buildDockDom();
-    if (IS_OPEN) return;
+  /* ------------------------------ Open/Close ------------------------------ */
+  function openDock(src='unknown'){
     IS_OPEN = true;
+    // Wichtig: hidden entfernen UND display erzwingen
     $dock.hidden = false;
-    emit('cb:build:open', { open: true });
+    $dock.style.display = 'block';
+    $dock.setAttribute('data-open', '1');
+    INF('openDock()', {src});
   }
 
-  function closeDock(){
-    if (!INIT_DONE) buildDockDom();
-    if (!IS_OPEN) return;
+  function closeDock(src='unknown'){
     IS_OPEN = false;
     $dock.hidden = true;
-    emit('cb:build:close', { open: false });
+    $dock.style.display = '';
+    $dock.removeAttribute('data-open');
+    INF('closeDock()', {src});
   }
 
-  function toggleDock(){
-    IS_OPEN ? closeDock() : openDock();
+  function toggleDock(src='unknown'){
+    if (IS_OPEN || !$dock.hidden) closeDock(src);
+    else openDock(src);
   }
 
-  /* ------------------------- Init aus Registry ---------------------------- */
-  function readBuildingsFromRegistry(){
-    if (window.Registry && typeof window.Registry.list === 'function'){
-      try{
-        const list = window.Registry.list('buildings');
-        if (Array.isArray(list) && list.length){
-          return list;
-        }
-      } catch(e){
-        WRN('Registry.list("buildings") Fehler:', e);
-      }
+  /* ------------------------------ Button Bind ----------------------------- */
+  function bindBtnBuild(){
+    const btn = document.getElementById('btn-build');
+    if (!btn){
+      WRN('DOM: #btn-build fehlt (kann trotzdem per cb:build:* geöffnet werden).');
+      return;
     }
+    // Mehrfachbindung vermeiden
+    if (btn.dataset.buildBound === '1') return;
+    btn.dataset.buildBound = '1';
 
-    if (window.Registry && Array.isArray(window.Registry.buildings)){
-      return window.Registry.buildings;
-    }
-    if (Array.isArray(window.BUILD_BUILDINGS)){
-      return window.BUILD_BUILDINGS;
-    }
+    const handler = (ev)=>{
+      INF('btn-build input → toggleDock()', {type: ev.type});
+      toggleDock('btn-build:'+ev.type);
+    };
 
-    return [];
+    // iOS: pointerdown ist zuverlässig, click manchmal delayed
+    btn.addEventListener('pointerdown', handler, {passive:true});
+    btn.addEventListener('click', handler, {passive:true});
+
+    INF('#btn-build gebunden (pointerdown+click).');
   }
 
-  function initFromRegistry(tag){
-    try{
-      const list = readBuildingsFromRegistry();
-      if (Array.isArray(list) && list.length){
-        BUILDINGS = list;
-        INF(`InitFromRegistry (${tag}): ${BUILDINGS.length} Gebäude.`);
-        buildDockDom();
-        if (!CATEGORIES.length){
-          CATEGORIES = deriveCategories(BUILDINGS);
-        }
-        renderCategories();
-        renderGrid();
-      } else {
-        WRN('Registry liefert keine Gebäude – Fallback auf buildings.json.');
-        loadFromJson('registry-fallback:' + tag);
-      }
-    } catch(err){
-      ERR('initFromRegistry Fehler:', err);
-      loadFromJson('registry-error:' + tag);
+  // Sofort binden + nach DOMContentLoaded nochmal (falls Script früh lädt)
+  bindBtnBuild();
+  document.addEventListener('DOMContentLoaded', bindBtnBuild);
+
+  /* ------------------------------ Capture Debug --------------------------- */
+  // Damit wir IMMER sehen, ob überhaupt ein Tap auf btn-build ankommt.
+  document.addEventListener('pointerdown', (ev)=>{
+    const t = ev.target;
+    const id = t && t.id;
+    if (id === 'btn-build'){
+      INF('CAPTURE pointerdown auf #btn-build', {tag: t.tagName});
     }
+  }, {capture:true, passive:true});
+
+  /* ------------------------------ Event Wiring ---------------------------- */
+  function on(name, fn){
+    window.addEventListener(name, fn);
+    document.addEventListener(name, fn);
   }
 
-  /* --------------------------- Event-Wiring ------------------------------- */
-  window.addEventListener('cb:registry:ready', (ev) => {
-    const detail = ev.detail || {};
-    if (Array.isArray(detail.buildings) && detail.buildings.length){
-      BUILDINGS = detail.buildings.slice();
-      INF(`cb:registry:ready: ${BUILDINGS.length} Gebäude aus Detail.`);
-      buildDockDom();
-      if (!CATEGORIES.length){
-        CATEGORIES = deriveCategories(BUILDINGS);
-      }
-      renderCategories();
-      renderGrid();
-    } else {
-      initFromRegistry('cb:registry:ready');
-    }
-  }, { once:true });
+  on('cb:build:open',   (ev)=> openDock('event:'+ev.type));
+  on('cb:build:close',  (ev)=> closeDock('event:'+ev.type));
+  on('cb:build:toggle', (ev)=> toggleDock('event:'+ev.type));
 
-  // Kompatibilität: ältere Stände mit Bindestrich oder Punkt.
-  window.addEventListener('cb:registry-ready',  (ev)=> window.dispatchEvent(new CustomEvent('cb:registry:ready', { detail: ev?.detail||{} })), { once:true });
-  window.addEventListener('cb:registry.ready',  (ev)=> window.dispatchEvent(new CustomEvent('cb:registry:ready', { detail: ev?.detail||{} })), { once:true });
+  // Zusätzlich: wenn das Spiel startet, bleibt Dock standardmäßig zu,
+  // aber wir loggen den Zustand.
+  on('cb:game:start', ()=> INF('cb:game:start gesehen; build-dock ready.', {hidden: $dock.hidden}));
 
-  // Failsafe: Template + Button sofort bereitstellen (auch ohne Registry/JSON).
-  buildDockDom();
-  wireBuildButton();
-
-  setTimeout(() => {
-    if (!BUILDINGS.length){
-      if (window.Registry){
-        initFromRegistry('timeout-fallback');
-      } else {
-        loadFromJson('timeout-no-registry');
-      }
-    }
-  }, 200);
-
-  LOG('ui-build geladen (v25.11.16-final+costs-json2+hook).');
+  INF('ui-build geladen (force-open-debug).');
 })();
