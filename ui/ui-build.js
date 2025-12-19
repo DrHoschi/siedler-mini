@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.11.16-final+costs-json2+hook
+ * Version  : v25.12.19-build-open-fix3
  * Modul    : Baumenü – Kategorien + Gebäude-Karten + Kostenanzeige
  * Hinweis  : KEIN HUD IN DIESER DATEI!
  *
@@ -64,8 +64,13 @@
   /* ------------------------------ Helper ---------------------------------- */
   const iconRes = id => `assets/icons/resources/${id}.png`;
   const iconBld = id => (ICONS_BASE_BUILDINGS || 'assets/icons/buildings/') + (id || 'unknown') + '.png';
-  const emit    = (name, detail={}) =>
+  const emit    = (name, detail={}) => {
+    // Markiere Quelle, um Event-Schleifen zu vermeiden
+    if (detail && typeof detail === 'object' && !detail.__src) detail.__src = 'ui-build';
     window.dispatchEvent(new CustomEvent(name, { detail }));
+    // Manche Legacy-Teile dispatchen auf document – deshalb spiegeln wir optional
+    try { document.dispatchEvent(new CustomEvent(name, { detail })); } catch(e) {}
+  };
 
   /** Kategorie-Filter: nutzt b.categories / b.category / b.cat */
   function filterByCategory(list, catId){
@@ -377,15 +382,6 @@
     IS_OPEN ? closeDock() : openDock();
   }
 
-
-/* ------------------- External Events (Index/Hotkeys) ------------------- */
-// Die index.html feuert aktuell cb:build:open beim Klick auf den Build-FAB.
-// Ältere/andere Stände können auch cb:build:toggle/close verwenden.
-// Wichtig: openDock() hat einen Guard (IS_OPEN), daher ist das re-emit unkritisch.
-window.addEventListener('cb:build:open',   ()=>{ try{ openDock(); }catch(e){ ERR('cb:build:open Fehler:', e);} });
-window.addEventListener('cb:build:close',  ()=>{ try{ closeDock(); }catch(e){ ERR('cb:build:close Fehler:', e);} });
-window.addEventListener('cb:build:toggle', ()=>{ try{ toggleDock(); }catch(e){ ERR('cb:build:toggle Fehler:', e);} });
-
   /* ------------------------- Init aus Registry ---------------------------- */
   function readBuildingsFromRegistry(){
     if (window.Registry && typeof window.Registry.list === 'function'){
@@ -458,5 +454,70 @@ window.addEventListener('cb:build:toggle', ()=>{ try{ toggleDock(); }catch(e){ E
     }
   }, 200);
 
-  LOG('ui-build geladen (v25.11.16-final+costs-json2+hook).');
+
+/* --------------------- External Open/Close/Toggles ---------------------- */
+function wireExternalControls(){
+  const on = (target, evt, fn) => {
+    try { target.addEventListener(evt, fn); } catch(e) {}
+  };
+
+  // Reagiere auf UI-/Inline-Events aus index.html oder anderen Modulen
+  const onOpen = (ev) => {
+    const d = ev?.detail || {};
+    if (d.__src === 'ui-build') return; // Schleife vermeiden
+    INF('Event empfangen:', 'cb:build:open', d);
+    openDock();
+  };
+  const onClose = (ev) => {
+    const d = ev?.detail || {};
+    if (d.__src === 'ui-build') return;
+    INF('Event empfangen:', 'cb:build:close', d);
+    closeDock();
+  };
+  const onToggle = (ev) => {
+    const d = ev?.detail || {};
+    if (d.__src === 'ui-build') return;
+    INF('Event empfangen:', 'cb:build:toggle', d);
+    toggleDock();
+  };
+
+  // Wichtig: manche Stände dispatchen CustomEvents auf document statt window
+  ['cb:build:open','cb:build:close','cb:build:toggle'].forEach((evt)=>{
+    on(window, evt, evt==='cb:build:open'?onOpen:evt==='cb:build:close'?onClose:onToggle);
+    on(document, evt, evt==='cb:build:open'?onOpen:evt==='cb:build:close'?onClose:onToggle);
+  });
+
+  // Zusätzlicher robust binding: pointerdown + click auf #btn-build
+  const bindBtn = () => {
+    const btn = getBtnBuild();
+    if (!btn) return;
+    // Mehrfach-Bindung verhindern
+    if (btn.__cbBuildBound) return;
+    btn.__cbBuildBound = true;
+
+    const handler = (e) => {
+      try{
+        INF('btn-build input → toggleDock()', { type: e.type });
+        toggleDock();
+      } catch(err){
+        ERR('btn-build handler Fehler:', err);
+      }
+    };
+
+    btn.addEventListener('pointerdown', handler, { passive:true });
+    btn.addEventListener('click', handler, { passive:true });
+    INF('#btn-build gebunden (pointerdown+click).');
+  };
+
+  // Beim Laden + nach game:start nochmal versuchen
+  document.addEventListener('DOMContentLoaded', bindBtn, { once:true });
+  window.addEventListener('cb:game:start', bindBtn);
+  // Sofort versuchen (falls Script spät geladen wurde)
+  setTimeout(bindBtn, 0);
+  setTimeout(bindBtn, 250);
+}
+
+wireExternalControls();
+
+  LOG('ui-build geladen (v25.12.19-build-open-fix3).');
 })();
