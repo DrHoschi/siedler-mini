@@ -47,6 +47,27 @@
   }
   const getBtnBuild = () => document.getElementById('btn-build');
 
+/* -------------------------- Button-Binding ------------------------------ */
+// Manche Stände ersetzen den Button (oder laden UI-Skripte in anderer Reihenfolge).
+// Dann ist ein einmaliges addEventListener() zu früh. Deshalb binden wir robust nach.
+function bindBuildButton(){
+  const btn = getBtnBuild();
+  if (!btn) return false;
+  if (btn.__cbBuildBound) return true;
+  btn.__cbBuildBound = true;
+
+  btn.addEventListener('click', (ev)=>{
+    try{
+      ok('btn-build Klick → toggleDock()');
+      toggleDock();
+    }catch(e){
+      ERR('btn-build Klick fehlgeschlagen:', e);
+    }
+  });
+  return true;
+}
+
+
   /* ------------------------------ State ----------------------------------- */
   let BUILDINGS   = [];
   let CATEGORIES  = [];
@@ -378,6 +399,13 @@
   }
 
   /* ------------------------- Init aus Registry ---------------------------- */
+
+  // DEBUG_CLICK_BIND: Button-Binding so spät wie möglich, aber ohne auf Game-Events angewiesen.
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const okBound = bindBuildButton();
+    if (!okBound) WRN('DOM: #btn-build noch nicht gefunden (Binding wird bei init erneut versucht).');
+  });
+
   function readBuildingsFromRegistry(){
     if (window.Registry && typeof window.Registry.list === 'function'){
       try{

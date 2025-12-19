@@ -45,9 +45,7 @@
 
     const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--start-bg').trim();
     const m   = cssVar.match(/url\((['"]?)(.*?)\1\)/);
-    // Fallback-Pfad (Projekt-Root): wir vermeiden "../../" weil das je nach Einbindepfad
-    // und iOS/Safari schnell in 404s endet.
-    const url = m ? m[2] : 'assets/ui/start-bg.jpg';
+    const url = m ? m[2] : '../../assets/ui/start-bg.jpg';
     const img = new Image();
     img.onerror = () => warn('Splash-Bild nicht gefunden:', url);
     img.src = url;
@@ -108,7 +106,7 @@
     // UI bereit (nur 1×, falls noch nicht passiert)
     if (!window.__UI_READY_EMITTED__) {
       window.__UI_READY_EMITTED__ = true;
-      window.dispatchEvent(new CustomEvent('cb:ui:ready', { detail: { ok: true } }));
+      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { ok: true } }));
     }
     // Spielstart anfordern (JETZT erst!)
     window.dispatchEvent(new CustomEvent('req:game:start', { detail: { mode: 'new' } }));
@@ -120,7 +118,7 @@
   panel.querySelector('#btn-continue')?.addEventListener('click', () => {
     if (!window.__UI_READY_EMITTED__) {
       window.__UI_READY_EMITTED__ = true;
-      window.dispatchEvent(new CustomEvent('cb:ui:ready', { detail: { ok: true } }));
+      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { ok: true } }));
     }
     window.dispatchEvent(new CustomEvent('req:game:continue', { detail: { mode: 'continue' } }));
     // Schließen ebenfalls erst, wenn das Spiel signalisiert, dass es läuft.
