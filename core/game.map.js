@@ -226,29 +226,102 @@
   // Tileset laden
   // -------------------------------------------------------------------------
   function loadTileset(Game){
-    const canvas     = Game?.ctx?.canvas;
-    const tilesetUrl = canvas?.getAttribute('data-tileset')
-                     || 'assets/tiles/tileset.terrain.png';
+    // Robust gegen iOS/Safari: Image-Referenz halten + Watchdog + Fetch-Blob-Retry
+    const canvasEl   = Game?.ctx?.canvas || document.getElementById('game');
+    const tilesetUrl = canvasEl?.getAttribute?.('data-tileset')
+                    || 'assets/tiles/tileset.terrain.png';
 
     Mod.tilesetUrl = tilesetUrl;
 
-    const img = new Image();
-    Mod._tilesetImg = img; // iOS/Safari: Referenz halten, damit onload sicher feuert
-    img.onload = ()=>{
+    // Schon fertig?
+    if (Mod.tileset && Mod.tileset.complete && Mod.tileset.naturalWidth > 0) return Mod;
+
+    // Wenn ein Load bereits läuft, nicht erneut starten (sonst iOS-Deadlocks möglich)
+    if (Mod._tilesetLoading) return Mod;
+    Mod._tilesetLoading = true;
+
+    const clearWatchdog = ()=>{
+      try{
+        if (Mod._tilesetWatchdog) clearTimeout(Mod._tilesetWatchdog);
+      }catch(e){}
+      Mod._tilesetWatchdog = null;
+    };
+
+    const finishOk = (img, srcLabel)=>{
+      clearWatchdog();
+      Mod._tilesetLoading = false;
+
       Mod.tileset = img;
       Mod.tilesetCols = Math.max(1, Math.floor(img.width / Mod.tileSize) || 1);
-      LOG('Tileset geladen:', tilesetUrl, 'Cols=', Mod.tilesetCols);
-      if (Mod.grid) {
+
+      LOG('Tileset geladen:', tilesetUrl, 'Cols=', Mod.tilesetCols, 'via=', srcLabel);
+      if (Mod.grid){
         Mod.ready = true;
         LOG('Map + Tileset bereit → renderfähig');
       }
     };
-    img.onerror = (e)=>{
-      WARN('Fehler beim Laden des Tilesets:', tilesetUrl, e);
+
+    const finishFail = (srcLabel, err)=>{
+      clearWatchdog();
+      Mod._tilesetLoading = false;
+      WARN('Fehler beim Laden des Tilesets:', tilesetUrl, 'via=', srcLabel, err);
     };
+
+    const fetchBlobRetryOnce = ()=>{
+      if (Mod._tilesetRetryDone) return;
+      Mod._tilesetRetryDone = true;
+
+      LOG('Tileset Retry via fetch(blob) …', tilesetUrl);
+
+      const ac = new AbortController();
+      const t  = setTimeout(()=>{ try{ ac.abort(); }catch(e){} }, 9000);
+
+      fetch(tilesetUrl, { cache:'no-store', signal: ac.signal })
+        .then(r=>{
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.blob();
+        })
+        .then(blob=>{
+          const objUrl = URL.createObjectURL(blob);
+          const img2 = new Image();
+          Mod._tilesetImg = img2; // Referenz halten!
+          img2.onload = ()=>{
+            try{ setTimeout(()=>URL.revokeObjectURL(objUrl), 1000); }catch(e){}
+            finishOk(img2, 'fetch-blob');
+          };
+          img2.onerror = (e)=>{
+            try{ URL.revokeObjectURL(objUrl); }catch(_e){}
+            finishFail('fetch-blob', e);
+          };
+          img2.src = objUrl;
+        })
+        .catch(err=>{
+          finishFail('fetch-blob', err);
+        })
+        .finally(()=>{ try{ clearTimeout(t); }catch(e){} });
+    };
+
+    // Normaler Image-Load
+    const img = new Image();
+    Mod._tilesetImg = img; // iOS/Safari: Referenz halten, damit onload sicher feuert
+
+    img.onload = ()=> finishOk(img, 'img');
+    img.onerror = (e)=>{
+      // Erst loggen, dann einmal Retry mit fetch(blob)
+      WARN('Tileset img.onerror – versuche fetch-blob Retry …', tilesetUrl, e);
+      fetchBlobRetryOnce();
+    };
+
+    // Watchdog: wenn iOS weder onload noch onerror feuert → Retry
+    clearWatchdog();
+    Mod._tilesetWatchdog = setTimeout(()=>{
+      WARN('Tileset Watchdog TIMEOUT – versuche fetch-blob Retry …', tilesetUrl);
+      fetchBlobRetryOnce();
+    }, 3500);
+
     img.src = tilesetUrl;
 
-    LOG('init() – Map-Renderer vorbereitet');
+    LOG('init() – Map-Renderer vorbereitet (Tileset load start)');
     return Mod;
   }
 
