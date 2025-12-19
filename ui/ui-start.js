@@ -45,7 +45,11 @@
 
     const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--start-bg').trim();
     const m   = cssVar.match(/url\((['"]?)(.*?)\1\)/);
-    const url = m ? m[2] : '../../assets/ui/start-bg.jpg';
+    // Default-Pfad: in GitHub Pages / Root-Projekt ist das meist: ./assets/ui/start-bg.jpg
+    // (Der alte ../../-Fallback kann je nach Ordnerstruktur ins Leere laufen.)
+    let url = m ? m[2] : './assets/ui/start-bg.jpg';
+    // Mini-Normalisierung für "././" (kommt manchmal aus CSS-Variablen)
+    url = url.replace(/^\.\/\.\//, './');
     const img = new Image();
     img.onerror = () => warn('Splash-Bild nicht gefunden:', url);
     img.src = url;
@@ -103,6 +107,8 @@
 
   // a) "Spiel starten" → neues Spiel
   panel.querySelector('#btn-start')?.addEventListener('click', () => {
+    log('Klick: Spiel starten');
+    log('Klick: Spiel starten');
     // UI bereit (nur 1×, falls noch nicht passiert)
     if (!window.__UI_READY_EMITTED__) {
       window.__UI_READY_EMITTED__ = true;
@@ -116,6 +122,8 @@
 
   // b) "Weiterspielen" → Fortsetzen
   panel.querySelector('#btn-continue')?.addEventListener('click', () => {
+    log('Klick: Weiterspielen');
+    log('Klick: Weiterspielen');
     if (!window.__UI_READY_EMITTED__) {
       window.__UI_READY_EMITTED__ = true;
       window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { ok: true } }));
@@ -126,6 +134,7 @@
 
   // c) "Reset" → Speicher löschen + Reset-Event
   panel.querySelector('#btn-reset')?.addEventListener('click', () => {
+    log('Klick: Reset');
     try { localStorage.clear(); } catch {}
     window.dispatchEvent(new CustomEvent('req:game:reset'));
     // Panel bleibt offen – der Nutzer entscheidet danach, was er macht.
