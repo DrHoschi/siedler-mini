@@ -24,6 +24,14 @@
   const LOG  = (window.CBLog?.ok    || console.log ).bind(console, TAG);
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
   const ERR  = (window.CBLog?.error || console.error).bind(console, TAG);
+  // =========================================================================
+  // TIMEOUTS (wichtig gegen „hängt 2 Minuten“ / Safari+iOS Fetch- oder Image-Hänger)
+  // =========================================================================
+  const TIMEOUT = {
+    JSON_MS: 15000,   // fetch(json) max 15s
+    IMG_MS : 15000,   // image load max 15s
+  };
+
 
   // --------------------------------------------------------------------------
   // Globaler Asset-Status (für Inspector/Debug)
@@ -45,20 +53,60 @@
     return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
   }
 
-  function fetchJson(url){
-    return fetch(url, { cache: 'no-store' })
+  function fetchJson(url, timeoutMs = TIMEOUT.JSON_MS){
+    // iOS/Safari: fetch kann „hängen“ ohne Fehler → wir brechen hart ab
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const sig  = ctrl ? ctrl.signal : undefined;
+
+    let t = null;
+    if (ctrl){
+      t = setTimeout(()=>{ try{ ctrl.abort(); }catch(_e){} }, timeoutMs);
+    }
+
+    return fetch(url, { cache: 'no-store', signal: sig })
       .then(r => {
+        if (t) clearTimeout(t);
         if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
         return r.json();
+      })
+      .catch(e=>{
+        if (t) clearTimeout(t);
+        // AbortError normalisieren (damit wir im Asset-Status ein sauberes msg haben)
+        const msg = (e && (e.name === 'AbortError'))
+          ? `TIMEOUT fetchJson(${timeoutMs}ms): ${url}`
+          : (e?.message || String(e));
+        throw new Error(msg);
       });
   }
 
-  function withTimeout(loadImage(url), 15000, 'image'){
+  function loadImage(url, timeoutMs = TIMEOUT.IMG_MS){
+    // iOS/Safari: Image kann selten „ewig pending“ bleiben → Timeout + klare Logs
     return new Promise((resolve, reject)=>{
       try{
         const img = new Image();
-        img.onload = ()=> resolve(img);
-        img.onerror = (e)=> reject(new Error(`Image load failed: ${url}`));
+
+        let done = false;
+        const finishOk = ()=>{
+          if (done) return; done = true;
+          clearTimeout(timer);
+          resolve(img);
+        };
+        const finishErr = (msg)=>{
+          if (done) return; done = true;
+          clearTimeout(timer);
+          reject(new Error(msg));
+        };
+
+        const timer = setTimeout(()=>{
+          // Wichtig: Handler lösen und SRC leeren, damit nichts weiter hängt
+          try{ img.onload = null; img.onerror = null; img.src = ''; }catch(_e){}
+          finishErr(`TIMEOUT loadImage(${timeoutMs}ms): ${url}`);
+        }, timeoutMs);
+
+        // Hint: decode() ist nice-to-have, aber nicht überall stabil → wir nutzen onload/onerror
+        img.onload  = ()=> finishOk();
+        img.onerror = ()=> finishErr(`Image load failed: ${url}`);
+
         img.src = url;
       }catch(e){
         reject(e);
@@ -228,9 +276,9 @@
     // --------------------------------------------------------------
     getImage(key){ return this.images.get(key) || null; },
 
-    async withTimeout(loadImage(key, url), 15000, 'image'){
+    async loadImage(key, url){
       try{
-        const img = await withTimeout(loadImage(url), 15000, 'image');
+        const img = await loadImage(url);
         this.images.set(key, img);
         LOG('Image geladen:', key, url, img.naturalWidth+'x'+img.naturalHeight);
         return img;
@@ -253,7 +301,7 @@
      * - imageUrl ist OPTIONAL:
      *   - wenn meta.image im JSON falsch ist, kannst du hier override setzen
      */
-    async withTimeout(loadAtlas(name, jsonUrlOrList, imageUrlOverride), 15000, 'atlas'){
+    async loadAtlas(name, jsonUrlOrList, imageUrlOverride){
       // jsonUrlOrList kann string ODER Array sein (Candidate-Loading)
       // Beispiel: [['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],'assets/characters/woodcutter.json']
       const candidates = Array.isArray(jsonUrlOrList) ? jsonUrlOrList : [jsonUrlOrList];
@@ -289,7 +337,7 @@
 
           entry.imageUrl = imageUrl;
 
-          const img = await withTimeout(loadImage(imageUrl), 15000, 'image');
+          const img = await loadImage(imageUrl);
           entry.img = img;
 
           const norm = normalizeFrames(json);
@@ -415,32 +463,29 @@
       //
       // WICHTIG: fish-json liegt bei dir im Repo als .json (bei Upload hier .txt),
       // wir laden im Spiel natürlich den .json Pfad.
-      const tasks = [
-      // NOTE: Timeout pro Asset ist bewusst konservativ gewählt.
-      // Wenn etwas „hängt“, sehen wir im Inspector exakt welches Asset.
-];
+      const tasks = [];
 
       // Trees: wir setzen imageUrl OVERRIDE passend zum gleichen Ordner,
       // falls meta.image mal abweicht.
-      tasks.push(this.withTimeout(loadAtlas(
+      tasks.push(this.loadAtlas(
         'trees_mega_atlas',
         'assets/resources/wood/trees_mega_atlas.json',
         'assets/resources/wood/trees_mega_atlas.png'
-      ), 15000, 'atlas'));
+      ));
 
       // Stones: meta.image ist bereits korrekt im JSON  [oai_citation:1‡stones_mega_atlas.json](sediment://file_00000000cb30720aafc246ea388e8c07)
-      tasks.push(this.withTimeout(loadAtlas(
+      tasks.push(this.loadAtlas(
         'stones_mega_atlas',
         'assets/resources/stone/stones_mega_atlas.json',
         'assets/resources/stone/stones_mega_atlas.png'
-      ), 15000, 'atlas'));
+      ));
 
       // Fish: meta.image ist korrekt im JSON  [oai_citation:2‡fish_mega_atlas.json.txt](sediment://file_000000007ed8720abe7ae44d1239f904)
-      tasks.push(this.withTimeout(loadAtlas(
+      tasks.push(this.loadAtlas(
         'fish_mega_atlas',
         'assets/resources/fish/fish_mega_atlas.json',
         'assets/resources/fish/fish_mega_atlas.png'
-      ), 15000, 'atlas'));
+      ));
 
 
 
@@ -457,52 +502,52 @@
       //   assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.json
       //   assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.png
       // --------------------------------------------------------------------
-      tasks.push(this.withTimeout(loadAtlas(
+      tasks.push(this.loadAtlas(
         'deco_plants_mega_atlas',
         [
           'assets/tex/deco/deco_plants_mega_atlas.json',
           'assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.json',
           'assets/tex/deco/deco_plants_iso_settlersstyle_v4_atlas_compact.json'
         ],
-        // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer), 15000, 'atlas')
+        // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer)
         'assets/tex/deco/deco_plants_mega_atlas.png'
       ));
       // Characters / Units: Carrier (Träger)
       // Hinweis: JSON kann meta.image="carrier.png" enthalten, deshalb geben wir
       // imageUrl explizit mit an, damit es immer stimmt.
-      tasks.push(this.withTimeout(loadAtlas(
+      tasks.push(this.loadAtlas(
         'carrier_atlas',
         'assets/characters/carrier_atlas.json',
         'assets/characters/carrier.png'
-      ), 15000, 'atlas'));
+      ));
 
 // Characters / Units: Builder
-tasks.push(this.withTimeout(loadAtlas(
+tasks.push(this.loadAtlas(
   'builder_atlas',
   'assets/characters/builder_atlas.json',
   'assets/characters/builder.png'
-), 15000, 'atlas'));
+));
 
 // Characters / Units: Woodcutter
-tasks.push(this.withTimeout(loadAtlas(
+tasks.push(this.loadAtlas(
   'woodcutter_atlas',
   ['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],
   'assets/characters/woodcutter.png'
-), 15000, 'atlas'));
+));
 
 // Characters / Units: Fisherman
-tasks.push(this.withTimeout(loadAtlas(
+tasks.push(this.loadAtlas(
   'fisherman_atlas',
   ['assets/characters/fisherman_atlas.json','assets/characters/fisherman.json'],
   'assets/characters/fisherman.png'
-), 15000, 'atlas'));
+));
 
 // Characters / Units: Stonecutter
-tasks.push(this.withTimeout(loadAtlas(
+tasks.push(this.loadAtlas(
   'stonecutter_atlas',
   ['assets/characters/stonecutter_atlas.json','assets/characters/stonecutter.json'],
   'assets/characters/stonecutter.png'
-), 15000, 'atlas'));
+));
       
 
       await Promise.allSettled(tasks);
@@ -537,15 +582,3 @@ tasks.push(this.withTimeout(loadAtlas(
   });
 
 })();
-// -------------------------------------------------------------
-// Watchdog: einzelne Assets dürfen den kompletten Boot nicht „2 Minuten“
-// blockieren. Wir loggen slow Assets und brechen notfalls ab.
-// -------------------------------------------------------------
-function withTimeout(promise, ms, label){
-  let to;
-  const timeout = new Promise((_, rej)=>{
-    to = setTimeout(()=>rej(new Error(`TIMEOUT ${ms}ms: ${label}`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(()=>clearTimeout(to));
-}
-
