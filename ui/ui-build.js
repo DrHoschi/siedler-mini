@@ -232,20 +232,6 @@
       WRN('#btn-build nicht gefunden – Baumenü nur programmatisch steuerbar.');
     }
 
-    // --------------------------------------------------------------
-    // Event-Steuerung (nur Doppelpunkt-Events)
-    // - Einige Stände (z.B. index.html) feuern beim Klick nur cb:build:open,
-    //   ohne direkt das Dock zu öffnen. Damit das Dock IMMER reagiert,
-    //   hören wir hier aktiv auf diese UI-Events.
-    // --------------------------------------------------------------
-    window.addEventListener('cb:build:open',   openDock);
-    window.addEventListener('cb:build:close',  closeDock);
-    window.addEventListener('cb:build:toggle', toggleDock);
-
-    // Initialzustand: Dock standardmäßig zu (falls HTML es ohne [hidden] liefert).
-    // Dadurch ist das Verhalten deterministisch: es öffnet sich erst per Event/Klick.
-    $dock.hidden = true;
-    IS_OPEN = false;
     INIT_DONE = true;
   }
 
@@ -390,6 +376,15 @@
   function toggleDock(){
     IS_OPEN ? closeDock() : openDock();
   }
+
+
+/* ------------------- External Events (Index/Hotkeys) ------------------- */
+// Die index.html feuert aktuell cb:build:open beim Klick auf den Build-FAB.
+// Ältere/andere Stände können auch cb:build:toggle/close verwenden.
+// Wichtig: openDock() hat einen Guard (IS_OPEN), daher ist das re-emit unkritisch.
+window.addEventListener('cb:build:open',   ()=>{ try{ openDock(); }catch(e){ ERR('cb:build:open Fehler:', e);} });
+window.addEventListener('cb:build:close',  ()=>{ try{ closeDock(); }catch(e){ ERR('cb:build:close Fehler:', e);} });
+window.addEventListener('cb:build:toggle', ()=>{ try{ toggleDock(); }catch(e){ ERR('cb:build:toggle Fehler:', e);} });
 
   /* ------------------------- Init aus Registry ---------------------------- */
   function readBuildingsFromRegistry(){
