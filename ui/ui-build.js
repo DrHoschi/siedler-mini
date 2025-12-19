@@ -170,7 +170,7 @@
   /** buildings.json direkt laden (Fallback, wenn Registry nichts liefert) */
   function loadFromJson(tag){
     INF('loadFromJson gestartet:', tag);
-    fetch(new URL('data/buildings.json', window.location.href).toString(), { cache: 'no-store' })
+    fetch('data/buildings.json')
       .then(res => {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -359,25 +359,79 @@
   }
 
   /* -------------------------- Open / Close -------------------------------- */
-  function openDock(){
+  function openDock(src){
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.hidden = false;
-    emit('cb:build:open', { open: true });
+    // Failsafe gegen CSS/hidden-Probleme (iOS/Safari)
+    try{ $dock.style.display = 'block'; $dock.style.pointerEvents='auto'; }catch(e){}
+    emit(''cb:build:open', { open: true });
   }
 
-  function closeDock(){
+  function closeDock(src){
     if (!IS_OPEN) return;
     IS_OPEN = false;
     $dock.hidden = true;
-    emit('cb:build:close', { open: false });
+    try{ $dock.style.display = ''; }catch(e){}
+    emit(''cb:build:close', { open: false });
   }
 
   function toggleDock(){
     IS_OPEN ? closeDock() : openDock();
   }
 
-  /* ------------------------- Init aus Registry ---------------------------- */
+  
+  /* --------------------- Externe Open/Close Events ----------------------- */
+  function isExternal(ev){
+    const d = (ev && ev.detail) || {};
+    return d.__src !== 'ui-build';
+  }
+
+  function onExtOpen(ev){
+    if (!isExternal(ev)) return;
+    INF('cb:build:open empfangen → openDock()');
+    openDock('event');
+  }
+  function onExtClose(ev){
+    if (!isExternal(ev)) return;
+    INF('cb:build:close empfangen → closeDock()');
+    closeDock('event');
+  }
+  function onExtToggle(ev){
+    if (!isExternal(ev)) return;
+    INF('cb:build:toggle empfangen → toggleDock()');
+    toggleDock('event');
+  }
+
+  // Lausche auf window UND document (Inline-Scripts dispatchen manchmal auf document)
+  ['cb:build:open','cb:build:close','cb:build:toggle'].forEach((name)=>{
+    window.addEventListener(name, name.endsWith('open')?onExtOpen:(name.endsWith('close')?onExtClose:onExtToggle));
+    document.addEventListener(name, name.endsWith('open')?onExtOpen:(name.endsWith('close')?onExtClose:onExtToggle));
+  });
+
+  // Button robust binden (iOS: pointerdown/click/touchend)
+  function bindBuildButton(){
+    const btn = document.getElementById('btn-build');
+    if (!btn) return;
+    if (btn.__uiBuildBound) return;
+    btn.__uiBuildBound = true;
+    const handler = (ev)=>{
+      INF('btn-build input → toggleDock()');
+      try{ ev.preventDefault(); }catch(e){}
+      toggleDock('btn');
+    };
+    btn.addEventListener('pointerdown', handler, { passive:false });
+    btn.addEventListener('click', handler, { passive:false });
+    btn.addEventListener('touchend', handler, { passive:false });
+    INF('#btn-build gebunden (pointerdown+click+touchend).');
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', bindBuildButton, { once:true });
+  } else {
+    bindBuildButton();
+  }
+
+/* ------------------------- Init aus Registry ---------------------------- */
   function readBuildingsFromRegistry(){
     if (window.Registry && typeof window.Registry.list === 'function'){
       try{
@@ -423,31 +477,29 @@
   }
 
   /* --------------------------- Event-Wiring ------------------------------- */
-  
-  // ------------------ Compat: alte / alternative Registry-Events ------------
-  // Einige Stände nutzen andere Namen. Wir akzeptieren sie hier tolerant,
-  // damit das Baumenü IMMER Gebäude bekommt, selbst wenn cb:registry:ready
-  // bereits vor dem Laden dieser Datei gefeuert wurde.
-  ['cb:registry-ready','cb:registry.ready'].forEach((evtName)=>{
-    window.addEventListener(evtName, (ev)=>{
-      try{
-        const d = (ev && ev.detail) || {};
-        if (Array.isArray(d.buildings) && d.buildings.length){
-          BUILDINGS = d.buildings.slice();
-          INF(`${evtName}: ${BUILDINGS.length} Gebäude aus Detail.`);
-          buildDockDom();
-          if (!CATEGORIES.length) CATEGORIES = deriveCategories(BUILDINGS);
-          renderCategories(); renderGrid();
-        } else {
-          initFromRegistry(evtName);
-        }
-      } catch(e){
-        ERR(`${evtName} Fehler:`, e);
-        initFromRegistry(evtName + ':error');
+  // Spätestens beim Game-Start initialisieren (falls cb:registry:ready schon vor Script-Load feuert)
+  window.addEventListener('cb:game:start', ()=>{
+    if (!BUILDINGS.length){
+      INF('cb:game:start → initFromRegistry(game-start)');
+      initFromRegistry('cb:game:start');
+    } else {
+      // Falls Liste da ist, aber DOM noch nicht gerendert
+      if (!$dock.querySelector('.build-cats') && !$dock.querySelector('.build-grid')){
+        INF('cb:game:start → Dock-DOM nachziehen');
+        buildDockDom();
+        if (!CATEGORIES.length) CATEGORIES = deriveCategories(BUILDINGS);
+        renderCategories();
+        renderGrid();
       }
-    }, { once:true });
+    }
+  }, { once:true });
+
+  // Kompatibilität: alternative Registry-Eventnamen
+  ['cb:registry-ready','cb:registry.ready'].forEach((evtName)=>{
+    window.addEventListener(evtName, ()=>initFromRegistry(evtName), { once:true });
   });
-window.addEventListener('cb:registry:ready', (ev) => {
+
+  window.addEventListener('cb:registry:ready', (ev) => {
     const detail = ev.detail || {};
     if (Array.isArray(detail.buildings) && detail.buildings.length){
       BUILDINGS = detail.buildings.slice();
@@ -463,24 +515,7 @@ window.addEventListener('cb:registry:ready', (ev) => {
     }
   }, { once:true });
 
-  
-  // ------------------------- Start-Hook (robust) ----------------------------
-  // Wichtig: Auf iOS/Safari kann es passieren, dass cb:registry:ready bereits
-  // sehr früh gefeuert wurde (vor dem Laden von ui-build.js). Deshalb
-  // initialisieren wir spätestens beim Spielstart nochmals aus der Registry
-  // oder per Fallback aus buildings.json.
-  window.addEventListener('cb:game:start', () => {
-    try{
-      buildDockDom();
-      if (!BUILDINGS.length){
-        initFromRegistry('cb:game:start');
-      }
-    } catch(e){
-      ERR('cb:game:start init Fehler:', e);
-      loadFromJson('cb:game:start:error');
-    }
-  }, { once:true });
-setTimeout(() => {
+  setTimeout(() => {
     if (!BUILDINGS.length){
       if (window.Registry){
         initFromRegistry('timeout-fallback');
