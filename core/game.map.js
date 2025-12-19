@@ -233,6 +233,7 @@
     Mod.tilesetUrl = tilesetUrl;
 
     const img = new Image();
+    Mod._tilesetImg = img; // iOS/Safari: Referenz halten, damit onload sicher feuert
     img.onload = ()=>{
       Mod.tileset = img;
       Mod.tilesetCols = Math.max(1, Math.floor(img.width / Mod.tileSize) || 1);
