@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.12.19-build-open-fix3
+ * Version  : v25.11.16-final+costs-json2+hook
  * Modul    : Baumenü – Kategorien + Gebäude-Karten + Kostenanzeige
  * Hinweis  : KEIN HUD IN DIESER DATEI!
  *
@@ -47,6 +47,26 @@
   }
   const getBtnBuild = () => document.getElementById('btn-build');
 
+  /* -----------------------------------------------------------------------
+   * HOTFIX v25.12.19-build-open-visible
+   *
+   * Problem (dein aktueller Stand):
+   * - #btn-build ist sichtbar und die Click/Touch-Events kommen an
+   * - aber das Dock bleibt „unsichtbar“, weil die UI-Initialisierung
+   *   (buildDockDom/renderGrid) nie läuft oder zu spät läuft.
+   *
+   * Ursache:
+   * - In einigen Ständen kommt cb:registry:ready später / anders benannt
+   *   (z.B. cb:registry-ready) oder buildings.json fehlt/404.
+   * - Dann wird buildDockDom() nie ausgeführt → Dock bleibt leer/hidden.
+   *
+   * Lösung:
+   * - Dock-Template SOFORT bauen (leer, mit Hinweistext).
+   * - #btn-build verdrahten, egal ob Registry/JSON schon da ist.
+   * - openDock() sorgt dafür, dass das Template existiert.
+   * - Zusätzlich auf mehrere Registry-Event-Namen hören.
+   * --------------------------------------------------------------------- */
+
   /* ------------------------------ State ----------------------------------- */
   let BUILDINGS   = [];
   let CATEGORIES  = [];
@@ -64,13 +84,30 @@
   /* ------------------------------ Helper ---------------------------------- */
   const iconRes = id => `assets/icons/resources/${id}.png`;
   const iconBld = id => (ICONS_BASE_BUILDINGS || 'assets/icons/buildings/') + (id || 'unknown') + '.png';
-  const emit    = (name, detail={}) => {
-    // Markiere Quelle, um Event-Schleifen zu vermeiden
-    if (detail && typeof detail === 'object' && !detail.__src) detail.__src = 'ui-build';
+  const emit    = (name, detail={}) =>
     window.dispatchEvent(new CustomEvent(name, { detail }));
-    // Manche Legacy-Teile dispatchen auf document – deshalb spiegeln wir optional
-    try { document.dispatchEvent(new CustomEvent(name, { detail })); } catch(e) {}
-  };
+
+  /**
+   * Verdrahtet #btn-build robust (iOS/Safari): click + pointerup + touchend.
+   * - Wird mehrfach aufgerufen? Kein Problem – wir schützen per Flag.
+   */
+  let _BTN_WIRED = false;
+  function wireBuildButton(){
+    if (_BTN_WIRED) return;
+    const btn = getBtnBuild();
+    if (!btn) return;
+
+    const onToggle = (ev)=>{
+      try{ ev?.preventDefault?.(); }catch(_){ }
+      toggleDock();
+    };
+
+    btn.addEventListener('click',    onToggle, { passive:false });
+    btn.addEventListener('pointerup',onToggle, { passive:false });
+    btn.addEventListener('touchend', onToggle, { passive:false });
+    _BTN_WIRED = true;
+    INF('#btn-build wired (click/pointerup/touchend).');
+  }
 
   /** Kategorie-Filter: nutzt b.categories / b.category / b.cat */
   function filterByCategory(list, catId){
@@ -230,15 +267,13 @@
       $btnClose.addEventListener('click', closeDock);
     }
 
-    const btnBuild = getBtnBuild();
-    if (btnBuild){
-      btnBuild.addEventListener('click', toggleDock);
-    } else {
-      WRN('#btn-build nicht gefunden – Baumenü nur programmatisch steuerbar.');
-    }
+    // #btn-build wird zusätzlich unten global verdrahtet.
+    // Hier lassen wir es bewusst weg, um doppelte Handler zu vermeiden.
 
     INIT_DONE = true;
   }
+
+  // (bindBuildButton) wurde durch wireBuildButton() ersetzt.
 
   /* ------------------------- Render Kategorien ---------------------------- */
   function renderCategories(){
@@ -365,6 +400,8 @@
 
   /* -------------------------- Open / Close -------------------------------- */
   function openDock(){
+    // Template sicherstellen, damit das Dock überhaupt sichtbar sein kann.
+    if (!INIT_DONE) buildDockDom();
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.hidden = false;
@@ -372,6 +409,7 @@
   }
 
   function closeDock(){
+    if (!INIT_DONE) buildDockDom();
     if (!IS_OPEN) return;
     IS_OPEN = false;
     $dock.hidden = true;
@@ -444,6 +482,14 @@
     }
   }, { once:true });
 
+  // Kompatibilität: ältere Stände mit Bindestrich oder Punkt.
+  window.addEventListener('cb:registry-ready',  (ev)=> window.dispatchEvent(new CustomEvent('cb:registry:ready', { detail: ev?.detail||{} })), { once:true });
+  window.addEventListener('cb:registry.ready',  (ev)=> window.dispatchEvent(new CustomEvent('cb:registry:ready', { detail: ev?.detail||{} })), { once:true });
+
+  // Failsafe: Template + Button sofort bereitstellen (auch ohne Registry/JSON).
+  buildDockDom();
+  wireBuildButton();
+
   setTimeout(() => {
     if (!BUILDINGS.length){
       if (window.Registry){
@@ -454,70 +500,5 @@
     }
   }, 200);
 
-
-/* --------------------- External Open/Close/Toggles ---------------------- */
-function wireExternalControls(){
-  const on = (target, evt, fn) => {
-    try { target.addEventListener(evt, fn); } catch(e) {}
-  };
-
-  // Reagiere auf UI-/Inline-Events aus index.html oder anderen Modulen
-  const onOpen = (ev) => {
-    const d = ev?.detail || {};
-    if (d.__src === 'ui-build') return; // Schleife vermeiden
-    INF('Event empfangen:', 'cb:build:open', d);
-    openDock();
-  };
-  const onClose = (ev) => {
-    const d = ev?.detail || {};
-    if (d.__src === 'ui-build') return;
-    INF('Event empfangen:', 'cb:build:close', d);
-    closeDock();
-  };
-  const onToggle = (ev) => {
-    const d = ev?.detail || {};
-    if (d.__src === 'ui-build') return;
-    INF('Event empfangen:', 'cb:build:toggle', d);
-    toggleDock();
-  };
-
-  // Wichtig: manche Stände dispatchen CustomEvents auf document statt window
-  ['cb:build:open','cb:build:close','cb:build:toggle'].forEach((evt)=>{
-    on(window, evt, evt==='cb:build:open'?onOpen:evt==='cb:build:close'?onClose:onToggle);
-    on(document, evt, evt==='cb:build:open'?onOpen:evt==='cb:build:close'?onClose:onToggle);
-  });
-
-  // Zusätzlicher robust binding: pointerdown + click auf #btn-build
-  const bindBtn = () => {
-    const btn = getBtnBuild();
-    if (!btn) return;
-    // Mehrfach-Bindung verhindern
-    if (btn.__cbBuildBound) return;
-    btn.__cbBuildBound = true;
-
-    const handler = (e) => {
-      try{
-        INF('btn-build input → toggleDock()', { type: e.type });
-        toggleDock();
-      } catch(err){
-        ERR('btn-build handler Fehler:', err);
-      }
-    };
-
-    btn.addEventListener('pointerdown', handler, { passive:true });
-    btn.addEventListener('click', handler, { passive:true });
-    INF('#btn-build gebunden (pointerdown+click).');
-  };
-
-  // Beim Laden + nach game:start nochmal versuchen
-  document.addEventListener('DOMContentLoaded', bindBtn, { once:true });
-  window.addEventListener('cb:game:start', bindBtn);
-  // Sofort versuchen (falls Script spät geladen wurde)
-  setTimeout(bindBtn, 0);
-  setTimeout(bindBtn, 250);
-}
-
-wireExternalControls();
-
-  LOG('ui-build geladen (v25.12.19-build-open-fix3).');
+  LOG('ui-build geladen (v25.11.16-final+costs-json2+hook).');
 })();
