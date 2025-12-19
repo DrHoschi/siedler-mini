@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/asset.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-assets-status+inspector
+ * Version : v25.12.19-tileset-preload-pipeline
  *
  * Zweck   :
  *   Zentrale Asset-Schicht:
@@ -464,6 +464,14 @@
       // WICHTIG: fish-json liegt bei dir im Repo als .json (bei Upload hier .txt),
       // wir laden im Spiel natürlich den .json Pfad.
       const tasks = [];
+
+      // --------------------------------------------------------------------
+      // TERRAIN TILESET (Pflicht-Asset)
+      //  - Wird von core/game.map.js benötigt.
+      //  - Muss VOR cb:assets-ready geladen sein (iOS/Safari: verhindert Black-Screen).
+      // --------------------------------------------------------------------
+      tasks.push(this.loadImage('tileset.terrain', 'assets/tiles/tileset.terrain.png'));
+
 
       // Trees: wir setzen imageUrl OVERRIDE passend zum gleichen Ordner,
       // falls meta.image mal abweicht.
