@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/asset.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.19-tileset-preload-pipeline
+ * Version : v25.12.14-assets-status+inspector
  *
  * Zweck   :
  *   Zentrale Asset-Schicht:
@@ -463,14 +463,24 @@
       //
       // WICHTIG: fish-json liegt bei dir im Repo als .json (bei Upload hier .txt),
       // wir laden im Spiel natürlich den .json Pfad.
-      const tasks = [];
+const tasks = [];
 
-      // --------------------------------------------------------------------
-      // TERRAIN TILESET (Pflicht-Asset)
-      //  - Wird von core/game.map.js benötigt.
-      //  - Muss VOR cb:assets-ready geladen sein (iOS/Safari: verhindert Black-Screen).
-      // --------------------------------------------------------------------
-      tasks.push(this.loadImage('tileset.terrain', 'assets/tiles/tileset.terrain.png'));
+// --------------------------------------------------------------------
+// MAP TILESET (wichtig, damit die Karte nicht „schwarz“ bleibt)
+//  - game.map.js bindet das Tileset über Assets.getImage('tileset.terrain')
+//  - Wir nehmen bevorzugt das data-tileset am Canvas (Repo-/Branch-sicher)
+//  - Zusätzlich: Safari/iOS ist empfindlich bei „assets/xyz.“ (Trailing-Dot)
+// --------------------------------------------------------------------
+try{
+  const cvs = document.getElementById('game');
+  let url = (cvs && (cvs.getAttribute('data-tileset') || cvs.dataset?.tileset)) || 'assets/tiles/tileset.terrain.png';
+  url = String(url || '').trim();
+  // Trailing '.' killt Requests (wir hatten das schon mal in Logs gesehen)
+  while (url.endsWith('.')) url = url.slice(0, -1);
+  if (url) tasks.push(this.loadImage('tileset.terrain', url));
+}catch(e){
+  WARN('Tileset-Preload skipped:', e?.message || e);
+}
 
 
       // Trees: wir setzen imageUrl OVERRIDE passend zum gleichen Ordner,
