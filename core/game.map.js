@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.19-tileset-preload-pipeline
+ * Version : v25.12.13-units-sprites
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -30,58 +30,6 @@
     ready      : false,
     sized      : false
   };
-
-
-  // -------------------------------------------------------------------------
-  // TILESET AUS ASSET-PIPELINE (Option B – iOS/Safari stabil)
-  // -------------------------------------------------------------------------
-  function _isDrawableImage(img){
-    return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-  }
-
-  function bindTilesetFromAssets(srcLabel='unknown'){
-    try{
-      const A = window.Assets;
-      const img = (A && typeof A.getImage === 'function') ? A.getImage('tileset.terrain') : null;
-
-      if (_isDrawableImage(img)){
-        // Referenz setzen (kein eigenes Laden mehr in game.map.js!)
-        Mod.tileset = img;
-        Mod.tilesetCols = Math.max(1, Math.floor(img.width / Mod.tileSize) || 1);
-
-        if (Mod.grid){
-          Mod.ready = true;
-          LOG('Tileset gebunden aus Assets → renderfähig', { via: srcLabel, cols: Mod.tilesetCols });
-        } else {
-          LOG('Tileset gebunden aus Assets – warte auf Map-Grid …', { via: srcLabel, cols: Mod.tilesetCols });
-        }
-        return true;
-      }
-    }catch(e){
-      WARN('bindTilesetFromAssets Fehler:', e?.message || e);
-    }
-    return false;
-  }
-
-  function tryFinalizeReady(srcLabel='unknown'){
-    // Wenn Map-Grid da ist, aber Tileset erst später kommt → hier finalisieren.
-    if (Mod.ready) return true;
-    if (Mod.grid && _isDrawableImage(Mod.tileset)){
-      Mod.tilesetCols = Math.max(1, Math.floor(Mod.tileset.width / Mod.tileSize) || 1);
-      Mod.ready = true;
-      LOG('Map + Tileset bereit → renderfähig', { via: srcLabel, cols: Mod.tilesetCols });
-      return true;
-    }
-    return false;
-  }
-
-  // Assets-Ready Event (kompatibel zu unseren cb:* Konventionen)
-  // -> Sobald Assets fertig sind, binden wir das Tileset.
-  window.addEventListener('cb:assets-ready', ()=>{
-    bindTilesetFromAssets('cb:assets-ready');
-    tryFinalizeReady('cb:assets-ready');
-  });
-
 
   // -------------------------------------------------------------------------
   // Sprites: Baustellen + fertige Gebäude
@@ -239,8 +187,10 @@
       const row = Array.isArray(tiles[y]) ? tiles[y] : [];
       grid[y] = new Array(cols);
       for (let x = 0; x < cols; x++){
-        grid[x] = grid[x] || 0;
-        grid[y][x] = row[x] | 0;
+        // Wichtig: Wir schreiben in die aktuelle Zeile (grid[y]) – NICHT grid[x]!
+        // Der alte Code hat versehentlich grid[x] (Spalten-Index) beschrieben und damit
+        // das 2D-Array zerstört → Ergebnis: Map bleibt schwarz/leer.
+        grid[y][x] = (row[x] | 0);
       }
     }
     Mod.grid = grid;
@@ -265,30 +215,119 @@
       }));
     } catch(e){ /* silent */ }
 
-    // Map-Grid ist da – Tileset kommt aus der Asset-Pipeline (kann später kommen)
-    if (!tryFinalizeReady('applyMapJson')){
-      LOG('Map übernommen – warte noch auf Tileset aus Assets …');
+
+    if (Mod.tileset){
+      Mod.ready = true;
+      LOG('Map übernommen:', json, '→ renderfähig');
+    } else {
+      LOG('Map übernommen – warte noch auf Tileset …');
     }
   }
 
   // -------------------------------------------------------------------------
   // Tileset laden
   // -------------------------------------------------------------------------
-
-  // -------------------------------------------------------------------------
-  // Tileset laden (DEAKTIVIERT):
-  //   Das Tileset wird jetzt VOR Spielstart über core/asset.js geladen.
-  //   game.map.js bindet nur noch das bereits geladene Image (iOS/Safari stabil).
-  // -------------------------------------------------------------------------
   function loadTileset(Game){
-    bindTilesetFromAssets('loadTileset(noop)');
-    tryFinalizeReady('loadTileset(noop)');
+    // Robust gegen iOS/Safari: Image-Referenz halten + Watchdog + Fetch-Blob-Retry
+    const canvasEl   = Game?.ctx?.canvas || document.getElementById('game');
+    const tilesetUrl = canvasEl?.getAttribute?.('data-tileset')
+                    || 'assets/tiles/tileset.terrain.png';
+
+    Mod.tilesetUrl = tilesetUrl;
+
+    // Schon fertig?
+    if (Mod.tileset && Mod.tileset.complete && Mod.tileset.naturalWidth > 0) return Mod;
+
+    // Wenn ein Load bereits läuft, nicht erneut starten (sonst iOS-Deadlocks möglich)
+    if (Mod._tilesetLoading) return Mod;
+    Mod._tilesetLoading = true;
+
+    const clearWatchdog = ()=>{
+      try{
+        if (Mod._tilesetWatchdog) clearTimeout(Mod._tilesetWatchdog);
+      }catch(e){}
+      Mod._tilesetWatchdog = null;
+    };
+
+    const finishOk = (img, srcLabel)=>{
+      clearWatchdog();
+      Mod._tilesetLoading = false;
+
+      Mod.tileset = img;
+      Mod.tilesetCols = Math.max(1, Math.floor(img.width / Mod.tileSize) || 1);
+
+      LOG('Tileset geladen:', tilesetUrl, 'Cols=', Mod.tilesetCols, 'via=', srcLabel);
+      if (Mod.grid){
+        Mod.ready = true;
+        LOG('Map + Tileset bereit → renderfähig');
+      }
+    };
+
+    const finishFail = (srcLabel, err)=>{
+      clearWatchdog();
+      Mod._tilesetLoading = false;
+      WARN('Fehler beim Laden des Tilesets:', tilesetUrl, 'via=', srcLabel, err);
+    };
+
+    const fetchBlobRetryOnce = ()=>{
+      if (Mod._tilesetRetryDone) return;
+      Mod._tilesetRetryDone = true;
+
+      LOG('Tileset Retry via fetch(blob) …', tilesetUrl);
+
+      const ac = new AbortController();
+      const t  = setTimeout(()=>{ try{ ac.abort(); }catch(e){} }, 9000);
+
+      fetch(tilesetUrl, { cache:'no-store', signal: ac.signal })
+        .then(r=>{
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.blob();
+        })
+        .then(blob=>{
+          const objUrl = URL.createObjectURL(blob);
+          const img2 = new Image();
+          Mod._tilesetImg = img2; // Referenz halten!
+          img2.onload = ()=>{
+            try{ setTimeout(()=>URL.revokeObjectURL(objUrl), 1000); }catch(e){}
+            finishOk(img2, 'fetch-blob');
+          };
+          img2.onerror = (e)=>{
+            try{ URL.revokeObjectURL(objUrl); }catch(_e){}
+            finishFail('fetch-blob', e);
+          };
+          img2.src = objUrl;
+        })
+        .catch(err=>{
+          finishFail('fetch-blob', err);
+        })
+        .finally(()=>{ try{ clearTimeout(t); }catch(e){} });
+    };
+
+    // Normaler Image-Load
+    const img = new Image();
+    Mod._tilesetImg = img; // iOS/Safari: Referenz halten, damit onload sicher feuert
+
+    img.onload = ()=> finishOk(img, 'img');
+    img.onerror = (e)=>{
+      // Erst loggen, dann einmal Retry mit fetch(blob)
+      WARN('Tileset img.onerror – versuche fetch-blob Retry …', tilesetUrl, e);
+      fetchBlobRetryOnce();
+    };
+
+    // Cache-Buster kann optional via data-tileset gesetzt werden.
+    img.src = tilesetUrl;
+
+    // Watchdog: falls onload/onerror nie feuert (iOS Edge-Cases) → Retry
+    Mod._tilesetWatchdog = setTimeout(()=>{
+      WARN('Tileset Watchdog: kein onload/onerror – starte Retry', tilesetUrl);
+      try{ fetchBlobRetryOnce(); }catch(e){}
+    }, 7000);
+
     return Mod;
   }
 
   // -------------------------------------------------------------------------
-  // Units ermitteln
- (für Fallback-Punkte)
+  // Units ermitteln (für Fallback-Punkte)
   // -------------------------------------------------------------------------
   function getUnitsForDraw(){
     if (Array.isArray(window.Game?.units)) return window.Game.units;
@@ -384,9 +423,10 @@
       })
       .then(json => {
         applyMapJson(json);
-        // Tileset kommt aus Assets – kann bereits da sein oder kurz danach (cb:assets-ready)
-        bindTilesetFromAssets('init(mapLoaded)');
-        tryFinalizeReady('init(mapLoaded)');
+        if (Mod.tileset) {
+          Mod.ready = true;
+          LOG('Map + Tileset bereit → renderfähig');
+        }
       })
       .catch(err => {
         WARN('Fehler beim Laden der Map:', mapUrl, err);
