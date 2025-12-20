@@ -782,236 +782,231 @@ const centerX = building.x + bw / 2;
 
 
 
-/* ===============================================================
- * v25.12.20-buildmenu-final
- * FINAL: Baumenü-Dock (Toggle) – robust & unabhängig
- * ---------------------------------------------------------------
- * Ziel:
- *  - Der sichtbare Button "#btn-build" muss IMMER ein Menü öffnen.
- *  - Kein Abhängen von Registry-Events / MapReady / Timing.
- *  - Falls Registry vorhanden: nutze Registry.
- *  - Sonst: lade data/buildings.json (Fallback).
- *  - Klick auf Gebäude: emittiere kompatible Events:
- *      - cb:build:place  (detail:{ id, buildingId })
- *      - req:place:begin (detail:{ id, buildingId })
+/* ========================================================================
+ * BUILD MENU FINAL (TOUCH FIX V3) – v25.12.20c
+ * ------------------------------------------------------------------------
+ * Problem: Auf iOS/Safari feuert nach pointerdown/pointerup zusätzlich ein click.
+ * Wenn das Menü auf pointerdown UND click toggelt, öffnet es beim Halten und
+ * schließt beim Loslassen sofort wieder (genau dein Symptom).
  *
- * Hinweis:
- *  - Dieses Stück ist absichtlich "self contained", um Mischstände
- *    zu überleben.
- * ===============================================================*/
-(function buildMenuFinal(){
-  'use strict';
+ * Fix:
+ *  - Wir intercepten #btn-build im CAPTURE-Phase:
+ *      * pointerdown: stopImmediatePropagation (damit alte Handler NICHT laufen)
+ *      * pointerup: toggle (einmalig)
+ *      * click: wird unterdrückt, wenn kurz nach pointerup/pointerdown
+ *  - Dadurch bleibt das Menü nach Tap offen und schließt erst beim nächsten Tap.
+ *
+ * Zusätzlich:
+ *  - Dock klickt nicht durch (stopPropagation), damit nichts "auto-close" triggert.
+ * ======================================================================== */
 
-  const LOGP = '[buildmenu-final]';
 
-  function log(...a){ try{ console.log(LOGP, ...a); }catch{} }
-  function warn(...a){ try{ console.warn(LOGP, ...a); }catch{} }
+(function buildMenuFinalTouchFixV3(){
+  // Guard: nie doppelt
+  if (window.__buildMenuFinalTouchFixV3) return;
+  window.__buildMenuFinalTouchFixV3 = true;
 
-  function emit(name, detail){
-    try{ window.dispatchEvent(new CustomEvent(name, { detail: detail||{} })); }catch{}
-    try{ document.dispatchEvent(new CustomEvent(name, { detail: detail||{} })); }catch{}
-  }
+  const LOG = (...a)=>console.log('[buildmenu-final]', ...a);
 
-  function qs(sel){ return document.querySelector(sel); }
+  // Find button (bestehender Button aus Layout)
+  const btn = document.getElementById('btn-build') || document.querySelector('[data-role="btn-build"]') || document.querySelector('#btnBuild') || null;
+  if (!btn) { LOG('WARN: #btn-build nicht gefunden – BuildMenuFix aktiv, aber ohne Button.'); return; }
 
-  function ensureDock(){
-    let dock = qs('#build-dock');
-    if (!dock){
-      dock = document.createElement('div');
-      dock.id = 'build-dock';
-      document.body.appendChild(dock);
-    }
-
-    // Failsafe-Styles (nur minimal, damit es sichtbar ist)
+  // Ensure dock exists (fallback)
+  let dock = document.getElementById('build-dock');
+  if (!dock) {
+    dock = document.createElement('div');
+    dock.id = 'build-dock';
     dock.style.position = 'fixed';
     dock.style.left = '0';
-    dock.style.right = '0';
     dock.style.bottom = '0';
+    dock.style.width = '70%';
+    dock.style.maxWidth = '420px';
+    dock.style.height = '45%';
+    dock.style.minHeight = '220px';
+    dock.style.background = 'rgba(240,240,240,0.95)';
+    dock.style.borderTopRightRadius = '14px';
+    dock.style.boxShadow = '0 0 16px rgba(0,0,0,0.35)';
     dock.style.zIndex = '9999';
-    dock.style.padding = '10px 12px';
-    dock.style.boxSizing = 'border-box';
-    dock.style.display = dock.style.display || 'none';
+    dock.style.transform = 'translateX(-110%)';
+    dock.style.transition = 'transform 160ms ease-out';
+    dock.style.overflow = 'auto';
+    dock.style.padding = '12px';
 
-    // Hintergrund: wenn dein CSS es schon macht, überschreibt es das ggf.
-    dock.style.background = dock.style.background || 'rgba(210, 190, 155, 0.92)';
-    dock.style.borderTop = dock.style.borderTop || '2px solid rgba(60,40,20,0.35)';
-    dock.style.backdropFilter = dock.style.backdropFilter || 'blur(6px)';
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.justifyContent = 'space-between';
+    header.style.gap = '10px';
 
-    // Inhalt container
-    let header = dock.querySelector('.bm-header');
-    if (!header){
-      dock.innerHTML = `
-        <div class="bm-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-          <div class="bm-title" style="font-weight:700; font-size:16px;">Bauen</div>
-          <button class="bm-close" type="button"
-            style="width:36px;height:36px;border-radius:18px;border:0;background:rgba(0,0,0,0.25);color:#fff;font-size:18px;line-height:36px;">
-            ✕
-          </button>
-        </div>
-        <div class="bm-body" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;"></div>
-        <div class="bm-hint" style="margin-top:8px; font-size:12px; opacity:0.85;"></div>
-      `;
-      dock.querySelector('.bm-close')?.addEventListener('click', ()=> setOpen(false));
+    const title = document.createElement('div');
+    title.textContent = 'Bauen';
+    title.style.fontWeight = '700';
+    title.style.fontSize = '18px';
+
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    close.style.border = '0';
+    close.style.background = 'rgba(0,0,0,0.08)';
+    close.style.borderRadius = '999px';
+    close.style.width = '42px';
+    close.style.height = '42px';
+    close.style.fontSize = '18px';
+
+    close.addEventListener('click', (ev)=>{ ev.preventDefault(); ev.stopPropagation(); hideDock(); });
+
+    header.appendChild(title);
+    header.appendChild(close);
+
+    const body = document.createElement('div');
+    body.id = 'build-dock-body';
+    body.style.display = 'flex';
+    body.style.flexWrap = 'wrap';
+    body.style.gap = '10px';
+    body.style.marginTop = '12px';
+
+    dock.appendChild(header);
+    dock.appendChild(body);
+    document.body.appendChild(dock);
+
+    // Stop clicks inside the dock from bubbling to document
+    dock.addEventListener('pointerdown', (ev)=>ev.stopPropagation(), {capture:true});
+    dock.addEventListener('click', (ev)=>ev.stopPropagation(), {capture:true});
+  }
+
+  const body = document.getElementById('build-dock-body') || dock;
+
+  let isOpen = false;
+  function showDock(){
+    isOpen = true;
+    dock.style.transform = 'translateX(0)';
+  }
+  function hideDock(){
+    isOpen = false;
+    dock.style.transform = 'translateX(-110%)';
+  }
+  function toggleDock(){
+    if (isOpen) hideDock(); else showDock();
+  }
+
+  // Build list loader (Registry → fallback buildings.json)
+  async function loadBuildings(){
+    // already filled?
+    if (body.__filled) return;
+    body.__filled = true;
+
+    let buildings = null;
+
+    // Try Registry (verschiedene mögliche APIs)
+    try {
+      const R = window.Registry || window.registry || null;
+      if (R && typeof R.getAllBuildings === 'function') buildings = R.getAllBuildings();
+      else if (R && typeof R.get === 'function') buildings = R.get('buildings');
+      else if (R && R.data && R.data.buildings) buildings = R.data.buildings;
+    } catch (e) {}
+
+    if (!buildings) {
+      // fallback JSON
+      try {
+        const res = await fetch('data/buildings.json', {cache:'no-store'});
+        if (res.ok) buildings = (await res.json());
+      } catch (e) {}
     }
-    return dock;
-  }
 
-  function setOpen(open){
-    const dock = ensureDock();
-    dock.style.display = open ? 'block' : 'none';
-    emit(open ? 'cb:build:open' : 'cb:build:close', { src:'buildmenu-final' });
-    if (open) ensureFilled();
-  }
-
-  function toggle(){
-    const dock = ensureDock();
-    const isOpen = dock.style.display !== 'none';
-    setOpen(!isOpen);
-  }
-
-  function normalizeBuildings(raw){
-    // Erwartet: array mit {id,name,category,cost,...} oder object map
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    if (raw.buildings && Array.isArray(raw.buildings)) return raw.buildings;
-    if (raw.items && Array.isArray(raw.items)) return raw.items;
-    if (typeof raw === 'object'){
-      // object-map → array
-      return Object.keys(raw).map(k => ({ id:k, ...(raw[k]||{}) }));
-    }
-    return [];
-  }
-
-  async function loadBuildingsFallback(){
-    // Fallback: data/buildings.json
-    const url = 'data/buildings.json';
-    const res = await fetch(url, { cache:'no-store' });
-    if (!res.ok) throw new Error('HTTP '+res.status+' '+url);
-    return await res.json();
-  }
-
-  function readRegistryBuildings(){
-    const R = window.Registry || window.registry;
-    if (!R) return null;
-
-    // häufige Varianten:
-    try{
-      if (typeof R.list === 'function'){
-        const arr = R.list('buildings');
-        if (arr && arr.length) return arr;
-      }
-    }catch{}
-
-    try{
-      if (R.buildings){
-        return R.buildings;
-      }
-    }catch{}
-
-    return null;
-  }
-
-  let _fillPromise = null;
-  function ensureFilled(){
-    const dock = ensureDock();
-    const body = dock.querySelector('.bm-body');
-    const hint = dock.querySelector('.bm-hint');
-    if (!body || !hint) return;
-
-    // nur einmal parallel füllen
-    if (_fillPromise) return;
-
-    _fillPromise = (async ()=>{
-      hint.textContent = 'Lade Gebäude…';
-      body.innerHTML = '';
-
-      let data = null;
-
-      // 1) Registry
-      try{
-        const reg = readRegistryBuildings();
-        if (reg){
-          data = reg;
-          log('Gebäude aus Registry geladen.');
-        }
-      }catch(e){ warn('Registry read failed', e); }
-
-      // 2) JSON-Fallback
-      if (!data){
-        try{
-          data = await loadBuildingsFallback();
-          log('Gebäude aus data/buildings.json geladen.');
-        }catch(e){
-          warn('buildings.json konnte nicht geladen werden:', e);
-        }
-      }
-
-      const buildings = normalizeBuildings(data);
-      if (!buildings.length){
-        hint.textContent = 'Keine Gebäude gefunden (Registry/JSON leer).';
-        return;
-      }
-
-      hint.textContent = `${buildings.length} Gebäude verfügbar.`;
-
-      // Simple: eine Button-Liste
-      for (const b of buildings){
-        const id = b.id || b.buildingId || b.key;
-        const label = b.name || b.title || id || 'building';
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = label;
-        btn.style.padding = '8px 10px';
-        btn.style.borderRadius = '10px';
-        btn.style.border = '1px solid rgba(0,0,0,0.25)';
-        btn.style.background = 'rgba(255,255,255,0.75)';
-        btn.style.cursor = 'pointer';
-
-        btn.addEventListener('click', ()=>{
-          const buildingId = id;
-          if (!buildingId) return;
-          emit('cb:build:place', { id: buildingId, buildingId });
-          emit('req:place:begin', { id: buildingId, buildingId });
-          log('place event', buildingId);
-        });
-
-        body.appendChild(btn);
-      }
-    })().finally(()=>{ _fillPromise = null; });
-  }
-
-  function bindButton(){
-    const btn = qs('#btn-build');
-    if (!btn){
-      warn('Button #btn-build nicht gefunden.');
+    if (!buildings) {
+      const msg = document.createElement('div');
+      msg.textContent = 'Keine Gebäude-Daten gefunden (Registry/buildings.json).';
+      msg.style.opacity = '0.8';
+      body.appendChild(msg);
+      LOG('WARN: keine Gebäude-Daten gefunden.');
       return;
     }
 
-    const handler = (ev)=>{
-      ev && ev.preventDefault && ev.preventDefault();
-      ev && ev.stopPropagation && ev.stopPropagation();
-      toggle();
-    };
+    // Normalize to array
+    let arr = [];
+    if (Array.isArray(buildings)) arr = buildings;
+    else if (buildings && typeof buildings === 'object') {
+      // object map -> values
+      arr = Object.values(buildings);
+    }
 
-    // robust: pointerdown + click + touchend
-    btn.addEventListener('pointerdown', handler, { passive:false });
-    btn.addEventListener('click', handler, { passive:false });
-    btn.addEventListener('touchend', handler, { passive:false });
+    // Render buttons
+    arr.forEach((b)=>{
+      const id = b.id || b.key || b.code || b.name;
+      const label = b.title || b.label || b.name || id || 'Gebäude';
+      const btnB = document.createElement('button');
+      btnB.textContent = label;
+      btnB.style.border = '0';
+      btnB.style.padding = '10px 12px';
+      btnB.style.borderRadius = '10px';
+      btnB.style.background = 'rgba(255,255,255,0.85)';
+      btnB.style.boxShadow = '0 1px 4px rgba(0,0,0,0.15)';
+      btnB.style.fontSize = '16px';
 
-    log('#btn-build gebunden (pointerdown/click/touchend).');
+      btnB.addEventListener('click', (ev)=>{
+        ev.preventDefault();
+        ev.stopPropagation();
+        // Emit to game (bestehendes Pattern)
+        try {
+          document.dispatchEvent(new CustomEvent('cb:build:place', {detail:{ id, building:b }}));
+        } catch {}
+        LOG('emit cb:build:place', id);
+        hideDock();
+      });
+
+      body.appendChild(btnB);
+    });
+
+    LOG('Gebäude geladen:', arr.length);
   }
 
-  // Bind sofort + nach DOM
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', bindButton, { once:true });
-  } else {
-    bindButton();
+  // --- Touch / Click Intercept ---
+  let lastToggle = 0;
+  let pressedAt = 0;
+
+  function shouldIgnore(now){
+    // Ignore events too close together (double-fire)
+    return (now - lastToggle) < 450;
   }
 
-  // Auch per Event bedienbar
-  window.addEventListener('cb:buildmenu:open', ()=>setOpen(true));
-  window.addEventListener('cb:buildmenu:close', ()=>setOpen(false));
-  window.addEventListener('cb:buildmenu:toggle', ()=>toggle());
+  function onPointerDownCapture(ev){
+    // IMPORTANT: prevent old handlers (die vermutlich toggeln)
+    pressedAt = performance.now();
+    ev.stopImmediatePropagation();
+    // no toggle on down
+  }
+
+  function onPointerUpCapture(ev){
+    const now = performance.now();
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    if (shouldIgnore(now)) return;
+    lastToggle = now;
+    toggleDock();
+    loadBuildings();
+  }
+
+  function onClickCapture(ev){
+    const now = performance.now();
+    // click kommt nach pointerup → unterdrücken
+    if (shouldIgnore(now) || (now - pressedAt) < 700) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    lastToggle = now;
+    toggleDock();
+    loadBuildings();
+  }
+
+  // Capture listeners to override previous ones
+  btn.addEventListener('pointerdown', onPointerDownCapture, {capture:true});
+  btn.addEventListener('pointerup', onPointerUpCapture, {capture:true});
+  btn.addEventListener('click', onClickCapture, {capture:true});
+
+  LOG('#btn-build TouchFixV3 aktiv (capture: pointerup toggles, click suppressed).');
 
 })();
+
