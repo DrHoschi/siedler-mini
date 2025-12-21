@@ -39,60 +39,7 @@
   const WRN = (...m)=> (window.CBLog?.warn  || console.warn)('[build]', ...m);
   const ERR = (...m)=> (window.CBLog?.error || console.error)('[build]', ...m);
 
-  
-/* ----------------------- Legacy-/Fallback-Killer -------------------------
- * In einigen Projektständen existieren ältere Baumenü-Implementierungen,
- * die parallel zum v14-Dock geladen wurden (z.B. "simple list" Menü).
- * Ergebnis: Beim Öffnen erscheinen ZWEI Menüs (eins korrekt, eins Fallback).
- *
- * Wir entfernen / deaktivieren solche Legacy-Menüs defensiv zur Laufzeit.
- * Das ist absichtlich "robust" (Heuristik), weil die IDs je Stand variieren.
- * ---------------------------------------------------------------------- */
-function killLegacyBuildMenus(tag){
-  try{
-    const root = document.getElementById('build-dock');
-
-    // Kandidaten: alles was nach "build" aussieht, aber NICHT unser #build-dock ist
-    const candidates = Array.from(document.querySelectorAll(
-      [
-        '#build-menu', '#buildMenu', '#build_panel', '#build-panel',
-        '#ui-build', '#ui-build-menu', '#ui-build-dock',
-        '[data-ui="buildmenu"]', '[data-ui="build-menu"]', '[data-ui="build"]',
-        '.build-menu', '.buildMenu', '.ui-build-menu', '.buildpanel', '.build-panel'
-      ].join(',')
-    )).filter(el => el && el !== root);
-
-    // Zusätzlich: Panels, die "Bauen" im Header tragen und Buttons enthalten,
-    // aber keine unserer v14-Strukturen (.build-dock__head / .build-card).
-    const maybeSimple = Array.from(document.querySelectorAll('div,section,aside'))
-      .filter(el => {
-        if (!el || el === root) return false;
-        // zu groß -> nicht alles scannen
-        if (el.querySelector('.build-dock__head') || el.querySelector('.build-card')) return false;
-        const hasClose = !!el.querySelector('button[aria-label="close"], button.close, .close, .x, #close');
-        const hasManyButtons = el.querySelectorAll('button').length >= 3;
-        const txt = (el.textContent || '').trim();
-        const looksLikeBauen = /^Bauen\b/i.test(txt) || /\bBauen\b/i.test(txt);
-        return looksLikeBauen && hasManyButtons && (hasClose || el.id.toLowerCase().includes('build'));
-      });
-
-    const all = [...new Set([...candidates, ...maybeSimple])];
-
-    all.forEach(el => {
-      // Nicht aus Versehen wichtige UI zerstören: nur entfernen, wenn es ein eigenes Panel ist.
-      // Wir "verstecken" statt remove(), damit Debug/Audit später nachvollziehen kann.
-      el.setAttribute('data-legacy-disabled', tag || 'auto');
-      el.style.display = 'none';
-      el.style.pointerEvents = 'none';
-    });
-
-    if (all.length) INF('Legacy/Fallback-Baumenü deaktiviert:', all.map(e=>e.id||e.className||e.tagName), 'tag=', tag);
-  }catch(e){
-    WRN('killLegacyBuildMenus Fehler:', e);
-  }
-}
-
-/* ------------------------------- DOM-Refs ------------------------------- */
+  /* ------------------------------- DOM-Refs ------------------------------- */
   const $dock = document.getElementById('build-dock');
   if (!$dock){
     ERR('DOM: #build-dock fehlt – Abbruch.');
@@ -240,7 +187,67 @@ function killLegacyBuildMenus(tag){
       });
   }
 
-  /* --------------------------- DOM / Template ----------------------------- */
+  
+  /* ------------------- Fallback-Killer (Legacy / Debug Menü) -------------------
+   * In einigen Ständen existiert zusätzlich zum eigentlichen Baumenü (Titel: "Baumenü")
+   * noch ein altes/fallback UI (Titel: "Bauen") aus früheren Patches.
+   * Das führt zu "2 Menüs gleichzeitig" oder überlagert das echte Menü.
+   *
+   * Regel: Wir lassen ALLES in #build-dock (unser echtes UI) in Ruhe und blenden
+   *        nur fremde Panels aus, die NICHT unsere DOM-Struktur besitzen.
+   * -------------------------------------------------------------------------- */
+  let _fallbackKillLogged = false;
+
+  function killLegacyFallbackBuildMenus(tag){
+    try{
+      const dock = document.getElementById('build-dock');
+
+      // 1) Harte Kandidaten (falls vorhanden)
+      const hard = Array.from(document.querySelectorAll(
+        '#build-dock-final, #build-dock-fallback, #buildmenu-final, .build-dock-final, .buildmenu-final, .bm-fallback'
+      ));
+
+      // 2) Weiche Kandidaten: "Bauen"-Panels irgendwo im DOM (aber NICHT unser "Baumenü"-Panel)
+      const soft = Array.from(document.querySelectorAll('[id*="build"][id*="dock"], [class*="build"][class*="dock"]'))
+        .filter(el => el && el !== dock);
+
+      const candidates = [...new Set([...hard, ...soft])];
+
+      let killed = 0;
+
+      candidates.forEach(el => {
+        if (!el || el === dock) return;
+
+        // Unser echtes UI erkennt man an .build-dock__head / .build-panel und Titel "Baumenü".
+        const isOur = !!el.querySelector?.('.build-dock__head, .build-panel') || /Baumenü/i.test(el.textContent || '');
+        if (isOur) return;
+
+        const txt = (el.textContent || '').trim();
+
+        // Legacy-Fallback hat typischerweise Titel "Bauen" und enthält Gebäudenamen als Buttons.
+        const looksLikeFallback =
+          /(^|\s)Bauen(\s|$)/i.test(txt) &&
+          /(Rathaus|Holzfäller|Steinbruch|Fischer|Wohnhaus)/i.test(txt);
+
+        if (!looksLikeFallback) return;
+
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+        el.setAttribute('data-disabled-by', 'ui-build');
+        killed++;
+      });
+
+      if (killed && !_fallbackKillLogged){
+        LOG(`Legacy/Fallback-Baumenü ausgeblendet (${killed}) [${tag}]`);
+        _fallbackKillLogged = true;
+      }
+    }catch(e){
+      // nie hart crashen – UI muss weiterlaufen
+      WRN('killLegacyFallbackBuildMenus failed', e?.message || e);
+    }
+  }
+
+/* --------------------------- DOM / Template ----------------------------- */
   function buildDockDom(){
     if (INIT_DONE) return;
 
@@ -265,6 +272,10 @@ function killLegacyBuildMenus(tag){
 
     $dock.innerHTML = html;
 
+    // Fremdes Fallback-Menü aus alten Patches ausblenden (falls vorhanden)
+    killLegacyFallbackBuildMenus('buildDockDom');
+
+
     $head       = $dock.querySelector('.build-dock__head');
     $titleBox   = $dock.querySelector('.build-dock__title');
     $countLabel = $dock.querySelector('#build-count');
@@ -280,19 +291,10 @@ function killLegacyBuildMenus(tag){
 
     const btnBuild = getBtnBuild();
     if (btnBuild){
-      // Wir blockieren alte Pointer-/Touch-Handler aus Legacy-Ständen,
-      // die das Menü nur während "gedrückt halten" offen halten.
-      const stop = (ev)=>{ try{ ev.stopImmediatePropagation(); ev.stopPropagation(); }catch(e){} };
-      ['pointerdown','pointerup','touchstart','touchend','mousedown','mouseup'].forEach(t=>{
-        btnBuild.addEventListener(t, stop, true); // CAPTURE: vor alten Handlern
-      });
-      // Unser Toggle läuft bewusst auf click (sauberer auf iOS).
-      btnBuild.addEventListener('click', (ev)=>{ try{ ev.preventDefault(); }catch(e){}; toggleDock(); });
+      btnBuild.addEventListener('click', toggleDock);
     } else {
       WRN('#btn-build nicht gefunden – Baumenü nur programmatisch steuerbar.');
     }
-
-    killLegacyBuildMenus('init');
 
     INIT_DONE = true;
   }
@@ -422,14 +424,14 @@ function killLegacyBuildMenus(tag){
 
   /* -------------------------- Open / Close -------------------------------- */
   function openDock(src){
-    // Defensive: falls ein alter Build-UI Stand parallel existiert → ausblenden
-    killLegacyBuildMenus('open:'+ (src||'unknown'));
+    // Vor dem Öffnen: evtl. altes Fallback-Menü entfernen, damit nichts überlagert
+    killLegacyFallbackBuildMenus('openDock');
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.hidden = false;
     // Failsafe gegen CSS/hidden-Probleme (iOS/Safari)
     try{ $dock.style.display = 'block'; $dock.style.pointerEvents='auto'; }catch(e){}
-    emit(''cb:build:open', { open: true });
+    emit('cb:build:open', { open: true });
   }
 
   function closeDock(src){
@@ -437,7 +439,7 @@ function killLegacyBuildMenus(tag){
     IS_OPEN = false;
     $dock.hidden = true;
     try{ $dock.style.display = ''; }catch(e){}
-    emit(''cb:build:close', { open: false });
+    emit('cb:build:close', { open: false });
   }
 
   function toggleDock(){
