@@ -97,6 +97,19 @@
   opacity: .9;
 }
 
+/* ---------------------------------------------------------------------------
+ * Fallback-Baumenü ausblenden
+ *
+ * Der alte Fallback-Dock (#build-dock > .wrap) wird in älteren
+ * Projekten/Pages zusammen mit dem neuen Build-Menü ausgeliefert
+ * und verdeckt das echte Menü. Da das neue Baumenü (#build-dock
+ * > .build-panel) voll funktionsfähig ist, blenden wir das alte
+ * .wrap-Element komplett aus.
+ * --------------------------------------------------------------------------- */
+#build-dock > .wrap{
+  display: none !important;
+}
+
 /* Kopf-Container (Titel + Close) */
 .build-dock__head{
   display:flex;
