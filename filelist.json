@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-18T19:40:28.875Z",
+  "createdAt": "2025-12-21T21:58:50.648Z",
   "root": ".",
-  "count": 534,
+  "count": 535,
   "entries": [
     {
       "type": "dir",
@@ -1392,12 +1392,12 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 19310
+      "size": 22131
     },
     {
       "type": "file",
       "path": "core/boot-v1.js",
-      "size": 1979
+      "size": 3117
     },
     {
       "type": "file",
@@ -1461,6 +1461,11 @@
     },
     {
       "type": "file",
+      "path": "core/event.compat.js",
+      "size": 419
+    },
+    {
+      "type": "file",
       "path": "core/eventbus.js",
       "size": 1291
     },
@@ -1487,12 +1492,12 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 27193
+      "size": 33908
     },
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 42027
+      "size": 44773
     },
     {
       "type": "file",
@@ -2511,7 +2516,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 14379
+      "size": 18406
     },
     {
       "type": "file",
@@ -2566,7 +2571,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 6713
+      "size": 7152
     },
     {
       "type": "file",
@@ -2591,7 +2596,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 17567
+      "size": 17706
     },
     {
       "type": "file",
