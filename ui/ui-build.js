@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.11.16-final+costs-json2+hook
+ * Version  : v25.12.20-final-touchfix
  * Modul    : Baumenü – Kategorien + Gebäude-Karten + Kostenanzeige
  * Hinweis  : KEIN HUD IN DIESER DATEI!
  *
@@ -32,37 +32,6 @@
 
 (function(){
   'use strict';
-  /* =======================================================================
-   * WICHTIG (v25.12.21c):
-   * Dieses File ist das *Legacy/Fallback*-Baumenü. Wenn das "neue"/finale
-   * Baumenü (ui-build-v14 + ui-build-final) im Projekt aktiv ist, darf
-   * dieses Dock NIEMALS aufgehen – sonst bekommst du genau das Verhalten
-   * "nur beim gedrückt halten" bzw. Doppel-Toggles.
-   *
-   * Lösung: Wir erkennen das finale Menü (Marker/Globals/DOM) und schalten
-   * dieses Legacy-Dock automatisch komplett ab.
-   * ======================================================================= */
-  const __LEGACY_HAS_FINAL_MENU__ = ()=>{
-    try{
-      if (window.__BUILD_MENU_FINAL_ACTIVE__ || window.BuildMenuFinal || window.UIBuildMenuFinal) return true;
-      // DOM-Marker, die wir in den Final-Styles/Final-JS typischerweise haben
-      if (document.querySelector('#buildmenu-final, #ui-buildmenu-final, .buildmenu-final, [data-buildmenu="final"]')) return true;
-      // Wenn die v14 CSS-Klassen/Strukturen vorhanden sind (Panel mit Tabs/Karten)
-      if (document.querySelector('.ui-build-v14, .buildmenu-v14, .buildmenu-tabs, .buildmenu-grid')) return true;
-    }catch(e){}
-    return false;
-  };
-
-  // Wenn final aktiv: Legacy sofort deaktivieren (Dock verstecken, keine Listener)
-  if (__LEGACY_HAS_FINAL_MENU__()){
-    try{
-      const dock = document.getElementById('build-dock');
-      if (dock){ dock.hidden = true; dock.style.display='none'; dock.style.pointerEvents='none'; }
-    }catch(e){}
-    (window.CBLog?.warn || console.warn)('[build] Legacy ui-build.js deaktiviert (Final-Baumenü erkannt).');
-    return;
-  }
-
 
   /* ------------------------------- Logger --------------------------------- */
   const LOG = (...m)=> (window.CBLog?.log   || console.log )('[build]', ...m);
@@ -95,8 +64,17 @@
   /* ------------------------------ Helper ---------------------------------- */
   const iconRes = id => `assets/icons/resources/${id}.png`;
   const iconBld = id => (ICONS_BASE_BUILDINGS || 'assets/icons/buildings/') + (id || 'unknown') + '.png';
-  const emit    = (name, detail={}) =>
-    window.dispatchEvent(new CustomEvent(name, { detail }));
+  /**
+   * Event-Emitter
+   * - Wir markieren jedes Event mit __src:'ui-build', damit wir in den
+   *   Listenern externe Dispatches von alten Inline-Scripts/Bridges
+   *   erkennen und NICHT doppelt reagieren.
+   */
+  const emit = (name, detail = {}) => {
+    const d = (detail && typeof detail === 'object') ? detail : { value: detail };
+    if (!d.__src) d.__src = 'ui-build';
+    window.dispatchEvent(new CustomEvent(name, { detail: d }));
+  };
 
   /** Kategorie-Filter: nutzt b.categories / b.category / b.cat */
   function filterByCategory(list, catId){
@@ -256,10 +234,12 @@
       $btnClose.addEventListener('click', closeDock);
     }
 
+    // IMPORTANT:
+    // Der Build-Button wird *zentral* in bindBuildButton() verdrahtet.
+    // (Sonst kommt es auf iOS schnell zu Doppel-Events: touch -> click,
+    // plus evtl. Inline-Scripts -> "kurz offen, sofort wieder zu".)
     const btnBuild = getBtnBuild();
-    if (btnBuild){
-      btnBuild.addEventListener('click', toggleDock);
-    } else {
+    if (!btnBuild){
       WRN('#btn-build nicht gefunden – Baumenü nur programmatisch steuerbar.');
     }
 
@@ -396,7 +376,7 @@
     $dock.hidden = false;
     // Failsafe gegen CSS/hidden-Probleme (iOS/Safari)
     try{ $dock.style.display = 'block'; $dock.style.pointerEvents='auto'; }catch(e){}
-    emit(''cb:build:open', { open: true });
+    emit('cb:build:open', { open: true, from: src || 'ui' });
   }
 
   function closeDock(src){
@@ -404,11 +384,11 @@
     IS_OPEN = false;
     $dock.hidden = true;
     try{ $dock.style.display = ''; }catch(e){}
-    emit(''cb:build:close', { open: false });
+    emit('cb:build:close', { open: false, from: src || 'ui' });
   }
 
-  function toggleDock(){
-    IS_OPEN ? closeDock() : openDock();
+  function toggleDock(src){
+    IS_OPEN ? closeDock(src) : openDock(src);
   }
 
   
@@ -440,21 +420,39 @@
     document.addEventListener(name, name.endsWith('open')?onExtOpen:(name.endsWith('close')?onExtClose:onExtToggle));
   });
 
-  // Button robust binden (iOS: pointerdown/click/touchend)
+  // Button robust binden (iOS/Safari: touch -> synthetic click vermeiden)
   function bindBuildButton(){
     const btn = document.getElementById('btn-build');
     if (!btn) return;
     if (btn.__uiBuildBound) return;
     btn.__uiBuildBound = true;
-    const handler = (ev)=>{
-      INF('btn-build input → toggleDock()');
+    // Wir toggeln NUR auf pointerup (und fallback click),
+    // und blocken den direkt danach folgenden synthetic click.
+    let lastToggleAt = 0;
+    const CLICK_SUPPRESS_MS = 420;
+
+    const doToggle = (ev, reason)=>{
+      lastToggleAt = Date.now();
+      INF(`btn-build ${reason} → toggleDock()`);
       try{ ev.preventDefault(); }catch(e){}
-      toggleDock('btn');
+      try{ ev.stopPropagation(); }catch(e){}
+      toggleDock('btn:' + reason);
     };
-    btn.addEventListener('pointerdown', handler, { passive:false });
-    btn.addEventListener('click', handler, { passive:false });
-    btn.addEventListener('touchend', handler, { passive:false });
-    INF('#btn-build gebunden (pointerdown+click+touchend).');
+
+    btn.addEventListener('pointerup', (ev)=> doToggle(ev, 'pointerup'), { passive:false });
+
+    btn.addEventListener('click', (ev)=>{
+      const dt = Date.now() - lastToggleAt;
+      if (dt >= 0 && dt < CLICK_SUPPRESS_MS){
+        // synthetic click nach touch/pointerup → ignorieren
+        try{ ev.preventDefault(); }catch(e){}
+        try{ ev.stopPropagation(); }catch(e){}
+        return;
+      }
+      doToggle(ev, 'click');
+    }, { passive:false });
+
+    INF('#btn-build gebunden (pointerup + click-fallback).');
   }
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', bindBuildButton, { once:true });
