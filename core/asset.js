@@ -523,9 +523,7 @@ try{
       tasks.push(this.loadAtlas(
         'deco_plants_mega_atlas',
         [
-          'assets/tex/deco/deco_plants_mega_atlas.json',
-          'assets/tex/deco/deco_plants_iso_settlersstyle_v3_atlas_compact.json',
-          'assets/tex/deco/deco_plants_iso_settlersstyle_v4_atlas_compact.json'
+          'assets/tex/deco/deco_plants_mega_atlas.json'
         ],
         // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer)
         'assets/tex/deco/deco_plants_mega_atlas.png'
