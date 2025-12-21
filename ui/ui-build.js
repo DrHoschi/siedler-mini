@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.12.20-final-touchfix
+ * Version  : v25.11.16-final+costs-json2+hook
  * Modul    : Baumenü – Kategorien + Gebäude-Karten + Kostenanzeige
  * Hinweis  : KEIN HUD IN DIESER DATEI!
  *
@@ -39,7 +39,60 @@
   const WRN = (...m)=> (window.CBLog?.warn  || console.warn)('[build]', ...m);
   const ERR = (...m)=> (window.CBLog?.error || console.error)('[build]', ...m);
 
-  /* ------------------------------- DOM-Refs ------------------------------- */
+  
+/* ----------------------- Legacy-/Fallback-Killer -------------------------
+ * In einigen Projektständen existieren ältere Baumenü-Implementierungen,
+ * die parallel zum v14-Dock geladen wurden (z.B. "simple list" Menü).
+ * Ergebnis: Beim Öffnen erscheinen ZWEI Menüs (eins korrekt, eins Fallback).
+ *
+ * Wir entfernen / deaktivieren solche Legacy-Menüs defensiv zur Laufzeit.
+ * Das ist absichtlich "robust" (Heuristik), weil die IDs je Stand variieren.
+ * ---------------------------------------------------------------------- */
+function killLegacyBuildMenus(tag){
+  try{
+    const root = document.getElementById('build-dock');
+
+    // Kandidaten: alles was nach "build" aussieht, aber NICHT unser #build-dock ist
+    const candidates = Array.from(document.querySelectorAll(
+      [
+        '#build-menu', '#buildMenu', '#build_panel', '#build-panel',
+        '#ui-build', '#ui-build-menu', '#ui-build-dock',
+        '[data-ui="buildmenu"]', '[data-ui="build-menu"]', '[data-ui="build"]',
+        '.build-menu', '.buildMenu', '.ui-build-menu', '.buildpanel', '.build-panel'
+      ].join(',')
+    )).filter(el => el && el !== root);
+
+    // Zusätzlich: Panels, die "Bauen" im Header tragen und Buttons enthalten,
+    // aber keine unserer v14-Strukturen (.build-dock__head / .build-card).
+    const maybeSimple = Array.from(document.querySelectorAll('div,section,aside'))
+      .filter(el => {
+        if (!el || el === root) return false;
+        // zu groß -> nicht alles scannen
+        if (el.querySelector('.build-dock__head') || el.querySelector('.build-card')) return false;
+        const hasClose = !!el.querySelector('button[aria-label="close"], button.close, .close, .x, #close');
+        const hasManyButtons = el.querySelectorAll('button').length >= 3;
+        const txt = (el.textContent || '').trim();
+        const looksLikeBauen = /^Bauen\b/i.test(txt) || /\bBauen\b/i.test(txt);
+        return looksLikeBauen && hasManyButtons && (hasClose || el.id.toLowerCase().includes('build'));
+      });
+
+    const all = [...new Set([...candidates, ...maybeSimple])];
+
+    all.forEach(el => {
+      // Nicht aus Versehen wichtige UI zerstören: nur entfernen, wenn es ein eigenes Panel ist.
+      // Wir "verstecken" statt remove(), damit Debug/Audit später nachvollziehen kann.
+      el.setAttribute('data-legacy-disabled', tag || 'auto');
+      el.style.display = 'none';
+      el.style.pointerEvents = 'none';
+    });
+
+    if (all.length) INF('Legacy/Fallback-Baumenü deaktiviert:', all.map(e=>e.id||e.className||e.tagName), 'tag=', tag);
+  }catch(e){
+    WRN('killLegacyBuildMenus Fehler:', e);
+  }
+}
+
+/* ------------------------------- DOM-Refs ------------------------------- */
   const $dock = document.getElementById('build-dock');
   if (!$dock){
     ERR('DOM: #build-dock fehlt – Abbruch.');
@@ -64,17 +117,8 @@
   /* ------------------------------ Helper ---------------------------------- */
   const iconRes = id => `assets/icons/resources/${id}.png`;
   const iconBld = id => (ICONS_BASE_BUILDINGS || 'assets/icons/buildings/') + (id || 'unknown') + '.png';
-  /**
-   * Event-Emitter
-   * - Wir markieren jedes Event mit __src:'ui-build', damit wir in den
-   *   Listenern externe Dispatches von alten Inline-Scripts/Bridges
-   *   erkennen und NICHT doppelt reagieren.
-   */
-  const emit = (name, detail = {}) => {
-    const d = (detail && typeof detail === 'object') ? detail : { value: detail };
-    if (!d.__src) d.__src = 'ui-build';
-    window.dispatchEvent(new CustomEvent(name, { detail: d }));
-  };
+  const emit    = (name, detail={}) =>
+    window.dispatchEvent(new CustomEvent(name, { detail }));
 
   /** Kategorie-Filter: nutzt b.categories / b.category / b.cat */
   function filterByCategory(list, catId){
@@ -234,14 +278,21 @@
       $btnClose.addEventListener('click', closeDock);
     }
 
-    // IMPORTANT:
-    // Der Build-Button wird *zentral* in bindBuildButton() verdrahtet.
-    // (Sonst kommt es auf iOS schnell zu Doppel-Events: touch -> click,
-    // plus evtl. Inline-Scripts -> "kurz offen, sofort wieder zu".)
     const btnBuild = getBtnBuild();
-    if (!btnBuild){
+    if (btnBuild){
+      // Wir blockieren alte Pointer-/Touch-Handler aus Legacy-Ständen,
+      // die das Menü nur während "gedrückt halten" offen halten.
+      const stop = (ev)=>{ try{ ev.stopImmediatePropagation(); ev.stopPropagation(); }catch(e){} };
+      ['pointerdown','pointerup','touchstart','touchend','mousedown','mouseup'].forEach(t=>{
+        btnBuild.addEventListener(t, stop, true); // CAPTURE: vor alten Handlern
+      });
+      // Unser Toggle läuft bewusst auf click (sauberer auf iOS).
+      btnBuild.addEventListener('click', (ev)=>{ try{ ev.preventDefault(); }catch(e){}; toggleDock(); });
+    } else {
       WRN('#btn-build nicht gefunden – Baumenü nur programmatisch steuerbar.');
     }
+
+    killLegacyBuildMenus('init');
 
     INIT_DONE = true;
   }
@@ -371,12 +422,14 @@
 
   /* -------------------------- Open / Close -------------------------------- */
   function openDock(src){
+    // Defensive: falls ein alter Build-UI Stand parallel existiert → ausblenden
+    killLegacyBuildMenus('open:'+ (src||'unknown'));
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.hidden = false;
     // Failsafe gegen CSS/hidden-Probleme (iOS/Safari)
     try{ $dock.style.display = 'block'; $dock.style.pointerEvents='auto'; }catch(e){}
-    emit('cb:build:open', { open: true, from: src || 'ui' });
+    emit(''cb:build:open', { open: true });
   }
 
   function closeDock(src){
@@ -384,11 +437,11 @@
     IS_OPEN = false;
     $dock.hidden = true;
     try{ $dock.style.display = ''; }catch(e){}
-    emit('cb:build:close', { open: false, from: src || 'ui' });
+    emit(''cb:build:close', { open: false });
   }
 
-  function toggleDock(src){
-    IS_OPEN ? closeDock(src) : openDock(src);
+  function toggleDock(){
+    IS_OPEN ? closeDock() : openDock();
   }
 
   
@@ -420,39 +473,21 @@
     document.addEventListener(name, name.endsWith('open')?onExtOpen:(name.endsWith('close')?onExtClose:onExtToggle));
   });
 
-  // Button robust binden (iOS/Safari: touch -> synthetic click vermeiden)
+  // Button robust binden (iOS: pointerdown/click/touchend)
   function bindBuildButton(){
     const btn = document.getElementById('btn-build');
     if (!btn) return;
     if (btn.__uiBuildBound) return;
     btn.__uiBuildBound = true;
-    // Wir toggeln NUR auf pointerup (und fallback click),
-    // und blocken den direkt danach folgenden synthetic click.
-    let lastToggleAt = 0;
-    const CLICK_SUPPRESS_MS = 420;
-
-    const doToggle = (ev, reason)=>{
-      lastToggleAt = Date.now();
-      INF(`btn-build ${reason} → toggleDock()`);
+    const handler = (ev)=>{
+      INF('btn-build input → toggleDock()');
       try{ ev.preventDefault(); }catch(e){}
-      try{ ev.stopPropagation(); }catch(e){}
-      toggleDock('btn:' + reason);
+      toggleDock('btn');
     };
-
-    btn.addEventListener('pointerup', (ev)=> doToggle(ev, 'pointerup'), { passive:false });
-
-    btn.addEventListener('click', (ev)=>{
-      const dt = Date.now() - lastToggleAt;
-      if (dt >= 0 && dt < CLICK_SUPPRESS_MS){
-        // synthetic click nach touch/pointerup → ignorieren
-        try{ ev.preventDefault(); }catch(e){}
-        try{ ev.stopPropagation(); }catch(e){}
-        return;
-      }
-      doToggle(ev, 'click');
-    }, { passive:false });
-
-    INF('#btn-build gebunden (pointerup + click-fallback).');
+    btn.addEventListener('pointerdown', handler, { passive:false });
+    btn.addEventListener('click', handler, { passive:false });
+    btn.addEventListener('touchend', handler, { passive:false });
+    INF('#btn-build gebunden (pointerdown+click+touchend).');
   }
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', bindBuildButton, { once:true });
