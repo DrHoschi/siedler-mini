@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-21T21:58:50.648Z",
+  "createdAt": "2025-12-22T23:13:11.365Z",
   "root": ".",
   "count": 535,
   "entries": [
@@ -1392,7 +1392,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 22131
+      "size": 21970
     },
     {
       "type": "file",
@@ -1492,7 +1492,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 33908
+      "size": 34886
     },
     {
       "type": "file",
@@ -2421,7 +2421,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build-v14.css",
-      "size": 8709
+      "size": 9253
     },
     {
       "type": "file",
@@ -2461,7 +2461,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-layout-v0.css",
-      "size": 3467
+      "size": 3542
     },
     {
       "type": "file",
@@ -2487,11 +2487,6 @@
       "type": "file",
       "path": "ui/css/ui.css",
       "size": 12371
-    },
-    {
-      "type": "file",
-      "path": "ui/build-menu.js",
-      "size": 3828
     },
     {
       "type": "file",
@@ -2546,7 +2541,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 6376
+      "size": 7272
     },
     {
       "type": "file",
@@ -2575,6 +2570,11 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-state.js",
+      "size": 4551
+    },
+    {
+      "type": "file",
       "path": "ui/ui-tooltip.js",
       "size": 1348
     },
@@ -2586,17 +2586,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53419
+      "size": 53510
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20876
+      "size": 20905
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 17706
+      "size": 17756
     },
     {
       "type": "file",
