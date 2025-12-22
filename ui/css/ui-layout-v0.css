@@ -69,7 +69,7 @@ body.is-playing #start-splash { display: none; }
 body:not(.is-playing) #game,
 body:not(.is-playing) #hud-root,
 body:not(.is-playing) #build-dock {
-  display: none !important;
+  display: flex !important;
 }
 
 /* ------------------- Spiel-State aktiv ----------------------------------- */
