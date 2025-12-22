@@ -35,7 +35,7 @@
  * ------------------------------------------------------------------------ */
 const TAG  = "[hud]";
 const log  = (m)=> (window.CBLog?.info  || console.info)(`${TAG} ${m}`);
-const ok   = (m)=> (window.CBLog?.ok    || console.log )(`${TAG} ${m}`);
+const ok   = (m)=> (window.CBLog?.ok    || console.log )( `${TAG} ${m}` );
 const warn = (m)=> (window.CBLog?.warn  || console.warn)(`${TAG} ${m}`);
 
 /* ---------------------------------------------------------------------------
@@ -189,3 +189,17 @@ window.addEventListener("cb:registry:ready",()=> window.UIHUD?.init(), {passive:
 // wodurch das HUD nie aufgebaut wird. Durch diese Ergänzung wird das HUD
 // beim UI-Aufbau einmal initialisiert.
 window.addEventListener("cb:ui-ready",    ()=> window.UIHUD?.init(), {passive:true});
+
+// Prüft beim Laden, ob das UI oder die Registry bereits bereit sind und
+// initialisiert das HUD sofort. Dies verhindert, dass die HUD-Leiste
+// unsichtbar bleibt, wenn die entsprechenden Events bereits vor dem Laden
+// dieses Skripts ausgelöst wurden.
+try {
+  const uiReady  = !!window.__UI_READY_EMITTED__;
+  const regReady = (window.Registry?.isReady?.() || window.Registry?.__ready);
+  if (uiReady || regReady) {
+    window.UIHUD?.init();
+  }
+} catch (ex) {
+  console.warn('[hud] direkte Initialisierung fehlgeschlagen', ex);
+}
