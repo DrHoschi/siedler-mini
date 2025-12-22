@@ -184,3 +184,8 @@ return { init };
  * ------------------------------------------------------------------------ */
 window.addEventListener("cb:game:start",    ()=> window.UIHUD?.init(), {passive:true});
 window.addEventListener("cb:registry:ready",()=> window.UIHUD?.init(), {passive:true});
+// Zusätzlich früh starten, sobald das UI bereit ist. In einigen Fällen kann
+// cb:game:start ausbleiben (z. B. bei Pause oder fehlenden Ready-Events),
+// wodurch das HUD nie aufgebaut wird. Durch diese Ergänzung wird das HUD
+// beim UI-Aufbau einmal initialisiert.
+window.addEventListener("cb:ui-ready",    ()=> window.UIHUD?.init(), {passive:true});
