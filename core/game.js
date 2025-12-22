@@ -791,6 +791,23 @@ const centerX = building.x + bw / 2;
 (() => {
   'use strict';
 
+  // ---------------------------------------------------------------------------
+  //  Fallback-Baumenü nur nutzen, wenn KEIN neues Baumenü existiert
+  //
+  //  Das folgende Modul (`build-dock-final`) ist als Notlösung gedacht,
+  //  um das Baumenü auf iOS-Geräten stabil anzuzeigen. In der aktuellen
+  //  Architektur existiert jedoch ein vollständiges Baumenü (#build-dock)
+  //  mit eigener Logik und Events. Wenn dieses bereits im DOM vorhanden
+  //  ist, soll der Fallback nicht initialisiert werden, damit kein
+  //  zweites Menü über dem eigentlichen Menü erscheint (siehe Bug-Report).
+  //
+  //  Prüfe daher zu Beginn auf #build-dock und verlasse die IIFE sofort.
+  // ---------------------------------------------------------------------------
+  if (typeof document !== 'undefined' && document.getElementById('build-dock')) {
+    (window.CBLog?.info || console.info)('[buildmenu-final]', 'Neues Baumenü erkannt – Fallback nicht aktiv.');
+    return;
+  }
+
   // ---------- Helpers ----------
   const LOG = (...a) => console.log('[buildmenu-final]', ...a);
   const WARN = (...a) => console.warn('[buildmenu-final]', ...a);
