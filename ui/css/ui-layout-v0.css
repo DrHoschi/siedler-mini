@@ -97,3 +97,8 @@ html, body {
   height:100%;
   margin:0;
 }
+
+/* HUD-Leiste immer sichtbar */
+#hud-root {
+  display: flex !important;
+}
