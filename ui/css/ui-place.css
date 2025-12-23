@@ -75,3 +75,26 @@
   background: var(--error);
   border-color:#5f0e17;
 }
+
+/* ==========================================================================
+ * Placement-Toast (Reason-Codes / Spieler-Feedback)
+ * ======================================================================= */
+.place-toast{
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); /* über HUD/Buttons */
+  z-index: 3100; /* über place-overlay */
+
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 800;
+  text-align: center;
+
+  background: rgba(20, 14, 8, 0.86);
+  color: #fff;
+  border: 2px solid rgba(255,255,255,0.22);
+  backdrop-filter: blur(3px);
+  box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  pointer-events: none;
+}
