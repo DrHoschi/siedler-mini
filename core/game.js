@@ -662,14 +662,28 @@ const centerX = building.x + bw / 2;
 
         // Reservieren (= vom Bestand abziehen). Lieferungen erhöhen den Bestand NICHT,
         // da wir aktuell kein zweites Lager-System wollen.
-        Object.keys(needs).forEach((k)=>{
-          const need = (needs[k] | 0);
-          if (need > 0) Prod.addResource(k, -need, 'build:reserve', id);
-        });
+        //
+        // Wichtig: atomar abziehen, um Doppel-Abzüge / Minus-Werte zu vermeiden.
+        if (typeof Prod.consume === 'function'){
+          const did = Prod.consume(needs, 'build:reserve', id);
+          if (!did){
+            const detail = { buildingId:id, x, y, needs, reason:'notenough' };
+            try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){ }
+            try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){ }
+            WARN('Nicht genug Ressourcen (consume) für Bau', detail);
+            return;
+          }
+        } else {
+          Object.keys(needs).forEach((k)=>{
+            const need = (needs[k] | 0);
+            if (need > 0) Prod.addResource(k, -need, 'build:reserve', id);
+          });
+        }
       }
     }catch(e){
       WARN('Ressourcen-Reserve fehlgeschlagen', e);
     }
+
 
     // -----------------------------------------------------------------------
     // Placement-Clear (v4.3 Wunsch):
