@@ -71,17 +71,34 @@
   // HILFSFUNKTIONEN – RESSOURCEN
   // ==========================================================================
 
+  function _normResId(v){
+    const s = String(v || '').trim();
+    // toleriert alte Prefixe (res.wood)
+    return s.replace(/^res\./,'');
+  }
+
   function addResource(resId, delta, reason, src) {
     if (!resId) return;
-    if (!delta || !Number.isFinite(delta)) return;
+    if (!Number.isFinite(delta) || delta === 0) return;
 
-    const key = String(resId);  // bewusst KEIN 'res.*' Prefix
+    const key = _normResId(resId); // bewusst KEIN 'res.*' Prefix im Store
     const old = Number(RES_STORE[key] || 0);
-    const value = old + delta;
+
+    // -------------------------------------------------------------------
+    // Schutz: Ressourcen sollen NIEMALS negativ werden.
+    // Wenn irgendwo doppelt abgezogen wird oder ein UI-Fehler passiert,
+    // clampen wir auf 0 – und schicken nur den tatsächlich angewandten Delta.
+    // -------------------------------------------------------------------
+    let value = old + delta;
+    if (value < 0) value = 0;
+
+    const appliedDelta = value - old;
+    // Wenn sich faktisch nichts ändert, sparen wir uns Events (verhindert Spam)
+    if (appliedDelta === 0) return;
 
     RES_STORE[key] = value;
 
-    LOG('Ressource geändert:', { res: key, old, delta, value, reason, src });
+    LOG('Ressource geändert:', { res: key, old, delta: appliedDelta, value, reason, src });
 
     try {
       window.dispatchEvent(new CustomEvent('cb:res:change', {
@@ -89,7 +106,7 @@
           res   : key,
           old,
           value,
-          delta,
+          delta : appliedDelta,
           reason: reason || 'prod',
           src   : src    || TAG
         }
@@ -97,6 +114,37 @@
     } catch (e) {
       WARN('cb:res:change dispatch fehlgeschlagen', e);
     }
+  }
+
+  // Prüft, ob ein Bedarf (needs) bezahlbar ist.
+  // needs-Format: {wood:2, stone:1, ...}
+  function canAfford(needs){
+    const missing = {};
+    let ok = true;
+    const n = needs || {};
+    for (const k of Object.keys(n)){
+      const need = Number(n[k] || 0);
+      if (!Number.isFinite(need) || need <= 0) continue;
+      const have = getResourceValue(k);
+      if (have < need){
+        ok = false;
+        missing[_normResId(k)] = { need, have, missing: need - have };
+      }
+    }
+    return { ok, missing };
+  }
+
+  // Atomar: erst prüfen, dann abziehen (nur wenn vollständig bezahlbar).
+  function consume(needs, reason, src){
+    const check = canAfford(needs);
+    if (!check.ok) return { ok:false, missing: check.missing };
+    const n = needs || {};
+    for (const k of Object.keys(n)){
+      const need = Number(n[k] || 0);
+      if (!Number.isFinite(need) || need <= 0) continue;
+      addResource(k, -need, reason || 'consume', src || TAG);
+    }
+    return { ok:true, missing:{} };
   }
 
   function getResourceValue(resId) {
@@ -558,10 +606,9 @@
   // EXPORT
   // ==========================================================================
 
-  const ProductionAPI = {
-    registerModule,
-    addResource,
-    getResourceValue,
+  \1
+    canAfford,
+    consume,
     getStore,
     tick,
     enqueueCarryJobFromBuilding,
