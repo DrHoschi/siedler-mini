@@ -61,6 +61,9 @@
   let $head, $titleBox, $countLabel, $btnClose;
   let $body, $cats, $grid, $empty;
 
+  // Toast (Build-Deny Hinweis) – wird im buildDockDom() erzeugt
+  let $toast;
+
   /* ------------------------------ Helper ---------------------------------- */
   const iconRes = id => `assets/icons/resources/${id}.png`;
   const iconBld = id => (ICONS_BASE_BUILDINGS || 'assets/icons/buildings/') + (id || 'unknown') + '.png';
@@ -209,6 +212,8 @@
           </div>
           <button type="button" class="build-dock__close" id="build-close">×</button>
         </div>
+        <!-- Toast: Kurzer Hinweis für Spieler ohne Inspector (z.B. nicht genug Holz) -->
+        <div id="build-toast" class="build-toast" style="display:none" aria-live="polite"></div>
         <div class="build-dock__body">
           <div class="build-cats"  id="build-cats"></div>
           <div class="build-grid"  id="build-grid"></div>
@@ -229,6 +234,22 @@
     $cats       = $dock.querySelector('#build-cats');
     $grid       = $dock.querySelector('#build-grid');
     $empty      = $dock.querySelector('#build-empty');
+    $toast      = $dock.querySelector('#build-toast');
+    $toast      = $dock.querySelector('#build-toast');
+
+    // ------------------------ Build-Deny Toast -------------------------
+    // Hinweis für Spieler OHNE Inspector: „Nicht genug Ressourcen“ usw.
+    // Wird nur vorbereitet; Anzeige erfolgt im globalen Event-Listener.
+    $toast = document.createElement('div');
+    $toast.id = 'build-toast';
+    $toast.className = 'build-toast';
+    $toast.style.display = 'none';
+    // Toast direkt unter dem Kopf platzieren (innerhalb des Holzrahmens)
+    if ($head && $head.parentNode){
+      $head.parentNode.insertBefore($toast, $head.nextSibling);
+    } else {
+      $dock.appendChild($toast);
+    }
 
     if ($btnClose){
       $btnClose.addEventListener('click', closeDock);
@@ -391,6 +412,77 @@
     IS_OPEN ? closeDock(src) : openDock(src);
   }
 
+  /* -------------------- Build-Deny → UI Toast --------------------------- */
+  // Kommt aus core/game.js: window.dispatchEvent(new CustomEvent('cb:build:deny', {detail:{...}}))
+  // Wir zeigen daraus einen kurzen Hinweis an. Keine harte Abhängigkeit vom Inspector.
+  (function attachBuildDenyToast(){
+    if (window.__BUILD_DENY_TOAST_ATTACHED__) return;
+    window.__BUILD_DENY_TOAST_ATTACHED__ = true;
+
+    let hideTimer = 0;
+
+    function resName(id){
+      switch(String(id||'')){
+        case 'wood':  return 'Holz';
+        case 'stone': return 'Stein';
+        case 'food':  return 'Nahrung';
+        case 'gold':  return 'Gold';
+        default:      return String(id||'');
+      }
+    }
+
+    function formatMissing(detail){
+      const missing = detail?.missing || {};
+      const parts = [];
+      for (const [res, m] of Object.entries(missing)){
+        const need = Number(m?.need ?? 0);
+        const have = Number(m?.have ?? 0);
+        const miss = Number(m?.missing ?? Math.max(0, need - have));
+        if (miss > 0) parts.push(`${resName(res)} (fehlt ${miss})`);
+      }
+      return parts.length ? parts.join(', ') : 'Ressourcen fehlen';
+    }
+
+    function ensureToastEl(){
+      // Falls buildDockDom() noch nicht lief, existiert $toast noch nicht.
+      if ($toast && $toast.isConnected) return $toast;
+      const el = document.getElementById('build-toast');
+      if (el) { $toast = el; return el; }
+      return null;
+    }
+
+    function showToast(msg){
+      const el = ensureToastEl();
+      if (!el) return;
+
+      el.textContent = msg;
+      el.style.display = 'block';
+
+      // wenn Dock geschlossen ist: trotzdem kurz anzeigen (läuft im Dock mit)
+      // optional: könnte auch openDock() triggern – machen wir NICHT.
+
+      if (hideTimer) window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(()=>{
+        try{ el.style.display = 'none'; }catch(e){}
+      }, 1800);
+    }
+
+    window.addEventListener('cb:build:deny', (ev)=>{
+      const d = ev?.detail || {};
+
+      // Nur „nicht genug Ressourcen“ aktuell relevant
+      if (d.reason === 'notenough'){
+        showToast(`Nicht genug: ${formatMissing(d)}`);
+        return;
+      }
+
+      // Optionale generische Gründe (kann später erweitert werden)
+      if (d.reason){
+        showToast('Bauen nicht möglich');
+      }
+    }, { passive:true });
+  })();
+
   
   /* --------------------- Externe Open/Close Events ----------------------- */
   function isExternal(ev){
@@ -459,6 +551,81 @@
   } else {
     bindBuildButton();
   }
+
+  /* =======================================================================
+   * Build-Deny → UI-Toast (Spieler ohne Inspector)
+   *
+   * Erwartetes Event (kommt aus core/game.js):
+   *   cb:build:deny { reason:'notenough', missing:{wood:{need,have,missing},...} }
+   *
+   * Ziel:
+   *   Kurzer Hinweis im Baumenü (z.B. "Nicht genug: Holz (fehlt 2)")
+   * ===================================================================== */
+  (function attachBuildDenyToast(){
+    if (window.__BUILD_DENY_TOAST_ATTACHED__) return;
+    window.__BUILD_DENY_TOAST_ATTACHED__ = true;
+
+    let hideTimer = 0;
+
+    function ensureToastEl(){
+      // DOM kann später kommen (Registry/Timeout). Deshalb: immer tolerant.
+      if ($toast && $toast.isConnected) return $toast;
+      $toast = document.getElementById('build-toast');
+      return ($toast && $toast.isConnected) ? $toast : null;
+    }
+
+    function niceResName(resId){
+      switch(String(resId||'').toLowerCase()){
+        case 'wood':  return 'Holz';
+        case 'stone': return 'Stein';
+        case 'food':  return 'Nahrung';
+        case 'gold':  return 'Gold';
+        default:      return String(resId||'Ressource');
+      }
+    }
+
+    function formatMissing(detail){
+      const missing = detail?.missing || {};
+      const parts = [];
+      for (const [res, info] of Object.entries(missing)){
+        const need = Number(info?.need ?? 0);
+        const have = Number(info?.have ?? 0);
+        const miss = Number(info?.missing ?? Math.max(0, need - have));
+        if (miss > 0){
+          parts.push(`${niceResName(res)} (fehlt ${miss})`);
+        }
+      }
+      return parts.length ? parts.join(', ') : 'Ressourcen fehlen';
+    }
+
+    function showToast(msg){
+      const el = ensureToastEl();
+      if (!el) return;
+
+      el.textContent = msg;
+      el.style.display = 'block';
+
+      if (hideTimer) window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(()=>{
+        const el2 = ensureToastEl();
+        if (el2) el2.style.display = 'none';
+      }, 1800);
+    }
+
+    window.addEventListener('cb:build:deny', (ev)=>{
+      const d = (ev && ev.detail) || {};
+      // Nur anzeigen, wenn das Dock existiert und/oder geöffnet ist.
+      // (Wenn es geschlossen ist, stört es nicht – aber wir spammen auch nicht.)
+      if (!$dock) return;
+
+      if (d.reason === 'notenough'){
+        showToast(`Nicht genug: ${formatMissing(d)}`);
+      } else {
+        // Optional: andere Gründe später (blockedTerrain, tooClose, ...)
+        showToast('Bauen hier nicht möglich');
+      }
+    }, { passive:true });
+  })();
 
 /* ------------------------- Init aus Registry ---------------------------- */
   function readBuildingsFromRegistry(){
