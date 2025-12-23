@@ -21,7 +21,7 @@
 :root{
   /* Rahmen (9-Slice) – Holzpanel aus deiner ui.css-Theme-Welt */
   --hud-frame-src: url("../../assets/ui/panel.svg");
-  --hud-border-slice: 5;           /* passend zu panel.svg */
+  --hud-border-slice: 15;           /* passend zu panel.svg */
 
   /* Zellkante (Portrait / Landscape identisch) */
   --hud-cell-size: 72px;
