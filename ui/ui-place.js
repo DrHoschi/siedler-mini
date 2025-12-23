@@ -27,50 +27,70 @@
 (function(){
   'use strict';
 
-  /* -----------------------------------------------------------------------
-   * Placement-Reason-Feedback (Patch v4.3)
+  /* -------------------------------------------------------------------------
+   * Placement-Reason UX (Toast)
    *
-   * Problem:
-   *   Der Platzier-Ghost sendet req:place:cursor / req:place:confirm.
-   *   Im v4.3 Stand wird aber oft kein valides Preview aus dem Core zurück
-   *   gesendet (cb:place:preview kommt z.B. aus Bridge/Legacy immer valid:true).
+   * Problem: Der Core liefert (je nach Bridge/Timing) oft nur valid=true/false.
+   *          Spieler ohne Inspector sehen nicht, WARUM eine Platzierung nicht geht.
    *
-   * Lösung (UI-seitig, risikoarm):
-   *   - Beim Cursor-Move selbst validieren über GameRules.canPlaceBuildingAt()
-   *   - cb:place:preview anreichern: { valid, reason, details }
-   *   - Bei Confirm: wenn invalid → blockieren + Toast-Hinweis
+   * Lösung: UI nutzt das zentrale Regelwerk `GameRules.canPlaceBuildingAt()`
+   *          um Reason-Codes + Details zu erhalten und zeigt diese als Toast.
    *
-   * Vorteil:
-   *   - Keine Änderungen im Boot-/Core-Flow nötig
-   *   - Einheitliches Feedback für Spieler ohne Inspector
-   * --------------------------------------------------------------------- */
+   * WICHTIG: Wir fassen Core/Boot nicht an – nur UI.
+   * ---------------------------------------------------------------------- */
+  const PLACE_TOAST_MS = 1700;
+  let toastEl = null;
+  let toastTimer = null;
+
+  function ensureToast(){
+    if (toastEl && toastEl.isConnected) return toastEl;
+    toastEl = document.createElement('div');
+    toastEl.className = 'place-toast';
+    toastEl.style.display = 'none';
+    document.body.appendChild(toastEl);
+    return toastEl;
+  }
+
+  function showToast(msg){
+    const el = ensureToast();
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{
+      if (!el) return;
+      el.style.display = 'none';
+    }, PLACE_TOAST_MS);
+  }
+
+  function reasonText(r){
+    const reason = String(r?.reason||'').trim();
+    switch(reason){
+      case 'out_of_bounds':       return 'Außerhalb der Karte.';
+      case 'too_close_to_edge':   return 'Zu nah am Kartenrand.';
+      case 'occupied':            return 'Hier steht bereits ein Gebäude.';
+      case 'blocked_terrain':     return 'Auf diesem Gelände kannst du nicht bauen.';
+      case 'too_close_to_water':  return 'Zu nah am Wasser.';
+      case 'blocked_resource':    return 'Hier ist eine Ressource im Weg.';
+      case 'no_map_or_args':      return 'Karte/Platzierung nicht bereit.';
+      default:                    return 'Hier kannst du nicht bauen.';
+    }
+  }
+
+  function validateAt(buildingId, tx, ty, w, h){
+    try{
+      const fn = window.GameRules?.canPlaceBuildingAt || window.Game?.canPlaceBuildingAt;
+      if (typeof fn !== 'function') return { ok:true, reason:'no_rules', details:null };
+      return fn(buildingId, tx, ty, w, h, {});
+    } catch {
+      return { ok:true, reason:'rules_error', details:null };
+    }
+  }
 
   /* ------------------------------ DOM-Grundgerüst ------------------------- */
   const overlay = document.createElement('div');
   overlay.className = 'place-overlay';
   document.body.appendChild(overlay);
-
-  // Mini-Toast (wird in Overlay gerendert, kein externes CSS nötig)
-  const toast = document.createElement('div');
-  toast.className = 'place-toast';
-  toast.style.cssText = [
-    'position:fixed',
-    'left:12px',
-    'right:12px',
-    'bottom:12px',
-    'z-index:999999',
-    'padding:10px 12px',
-    'border-radius:12px',
-    'font-weight:700',
-    'text-align:center',
-    'background:rgba(30,20,10,0.85)',
-    'color:#fff',
-    'border:2px solid rgba(255,255,255,0.25)',
-    'backdrop-filter:blur(3px)',
-    'display:none',
-    'pointer-events:none'
-  ].join(';');
-  document.body.appendChild(toast);
 
   overlay.innerHTML = `
     <div class="place-ghost" id="place-ghost" hidden>
@@ -145,78 +165,7 @@
 
   /* --------------------------------- State -------------------------------- */
   let active = null; // { id, w, h, file }
-  let last   = { tx:0, ty:0, valid:true, reason:'ok', details:null };
-
-  // Toast helper (throttled)
-  let toastTimer = null;
-  let toastCooldown = 0;
-  function showToast(msg){
-    const now = Date.now();
-    if (now < toastCooldown) return;
-    toastCooldown = now + 450; // Anti-Spam beim Draggen
-    toast.textContent = msg;
-    toast.style.display = 'block';
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>{ toast.style.display = 'none'; }, 1400);
-  }
-
-  // Reason → Text
-  function reasonText(reason, details){
-    switch(String(reason||'')){
-      case 'ok': return '';
-      case 'out_of_bounds':
-      case 'too_close_to_edge':
-        return 'Zu nah am Rand – hier kannst du nicht bauen.';
-      case 'occupied':
-        return 'Hier steht bereits ein Gebäude.';
-      case 'blocked_terrain': {
-        const name = details?.tileName ? String(details.tileName) : 'Terrain';
-        // häufigster Fall: Wasser
-        if (String(name).toLowerCase().includes('water') || String(name).toLowerCase().includes('wasser')){
-          return 'Auf Wasser kannst du nicht bauen.';
-        }
-        return `Blockiert durch ${name}.`;
-      }
-      case 'blocked_resource':
-        return 'Hier ist eine Ressource im Weg.';
-      case 'too_close_to_water':
-        return 'Zu nah am Wasser.';
-      case 'entrance_on_water':
-        return 'Eingang liegt auf Wasser.';
-      case 'entrance_out_of_bounds':
-        return 'Eingang liegt außerhalb der Karte.';
-      case 'grid_invalid':
-        return 'Karte nicht bereit – bitte kurz warten.';
-      default:
-        return 'Hier kannst du nicht bauen.';
-    }
-  }
-
-  // Validierung über GameRules (UI-seitig)
-  function validateAt(tx, ty){
-    try{
-      const GR = window.GameRules;
-      if (!active || !GR || typeof GR.canPlaceBuildingAt !== 'function'){
-        return { ok:true, reason:'ok', details:null };
-      }
-      const res = GR.canPlaceBuildingAt(active.id, tx, ty, active.w, active.h, { ui:true });
-      if (res && typeof res.ok === 'boolean') return res;
-    }catch(_){ /* ignore */ }
-    return { ok:true, reason:'ok', details:null };
-  }
-
-  // Preview Event anreichern + Tint setzen
-  function emitPreview(tx, ty){
-    const v = validateAt(tx, ty);
-    const valid = (v?.ok !== false);
-    const reason = v?.reason || (valid ? 'ok' : 'unknown');
-    const details = v?.details || null;
-    last.valid = valid;
-    last.reason = reason;
-    last.details = details;
-    setTint(valid);
-    emit('cb:place:preview', { tx, ty, w: active?.w, h: active?.h, id: active?.id, valid, reason, details });
-  }
+  let last   = { tx:0, ty:0, valid:true };
 
   /* ------------------------------ Lifecycle -------------------------------- */
   window.addEventListener('req:place:start', (ev)=>{
@@ -231,13 +180,10 @@
     const file = (b.icon && typeof b.icon==='string') ? b.icon : `${b.id}.png`;
 
     active = { id, w, h, file };
-    last   = { tx:0, ty:0, valid:true, reason:'ok', details:null };
+    last   = { tx:0, ty:0, valid:true };
 
     resizeSprite();
     centerGhostOnScreen();
-
-    // Sofort ein erstes Preview/Valid prüfen
-    emitPreview(last.tx, last.ty);
 
     $ghost.hidden = false;
     window.addEventListener('mousemove', onMouseMove, { passive:true });
@@ -253,7 +199,6 @@
     window.removeEventListener('touchmove', onTouchMove);
     window.removeEventListener('keydown',   onKeyDown);
     active = null;
-    toast.style.display = 'none';
   }
 
   /* ------------------------------ Darstellung ----------------------------- */
@@ -306,25 +251,40 @@
   }
 
   /* ------------------------------- Input ---------------------------------- */
+  function updateCursor(tx, ty, sx, sy){
+    // Ghost positionieren
+    $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
+    positionButtons();
+
+    // Regeln prüfen (Reason-Codes)
+    const r = validateAt(active.id, tx, ty, active.w, active.h);
+    last = { tx, ty, valid: !!r.ok, reason: r.reason, details: r.details };
+    setTint(!!r.ok);
+
+    // Core weiter informieren (damit Ghost/Confirm im Game weiterläuft)
+    emit('req:place:cursor', { tx, ty, w: active.w, h: active.h, id: active.id });
+
+    // Preview an Inspector/andere UI – inkl. reason (rein informativ)
+    emit('cb:place:preview', {
+      tx, ty, w: active.w, h: active.h,
+      valid: !!r.ok,
+      reason: r.reason,
+      details: r.details,
+      __ui: true
+    });
+  }
+
   function onMouseMove(e){
     if (!active) return;
     const { tx, ty, sx, sy } = screenToTile(e.clientX, e.clientY);
-    $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
-    positionButtons();
-    last.tx = tx; last.ty = ty;
-    emit('req:place:cursor', { tx, ty, w: active.w, h: active.h, id: active.id });
-    emitPreview(tx, ty);
+    updateCursor(tx, ty, sx, sy);
   }
 
   function onTouchMove(e){
     if (!active) return;
     const t = e.touches && e.touches[0]; if (!t) return;
     const { tx, ty, sx, sy } = screenToTile(t.clientX, t.clientY);
-    $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
-    positionButtons();
-    last.tx = tx; last.ty = ty;
-    emit('req:place:cursor', { tx, ty, w: active.w, h: active.h, id: active.id });
-    emitPreview(tx, ty);
+    updateCursor(tx, ty, sx, sy);
   }
 
   function onKeyDown(e){
@@ -341,16 +301,17 @@
 
   function confirmPlace(){
     if (!active) return;
-    // Vor Confirm: Validität prüfen. Bei ungültig blockieren + Hinweis.
-    const v = validateAt(last.tx, last.ty);
-    const valid = (v?.ok !== false);
-    if (!valid){
-      const msg = reasonText(v?.reason, v?.details);
-      if (msg) showToast(msg);
-      // Ghost offen lassen
+
+    // Sicherheit: beim Confirm nochmal prüfen (falls Core-Preview Events fehlen)
+    const r = validateAt(active.id, last.tx, last.ty, active.w, active.h);
+    last.valid = !!r.ok;
+    last.reason = r.reason;
+    last.details = r.details;
+
+    if (!r.ok){
       setTint(false);
-      // anreichern für Inspector/UI
-      emit('cb:place:preview', { tx:last.tx, ty:last.ty, w:active.w, h:active.h, id:active.id, valid:false, reason:v?.reason||'unknown', details:v?.details||null });
+      showToast(reasonText(r));
+      // Core NICHT triggern
       return;
     }
 
@@ -366,16 +327,21 @@
   window.addEventListener('cb:place:preview', (ev)=>{
     const d = ev?.detail||{};
     if (!active) return;
+
+    // Preview aus dieser UI selbst ignorieren (haben wir bereits angewendet)
+    if (d.__ui) return;
+
     if (typeof d.tx === 'number' && typeof d.ty === 'number'){
       last.tx = d.tx; last.ty = d.ty;
       updateSpritePositionFromTile(last.tx, last.ty);
     }
-    // Falls ein Core/Bridge Preview kommt, übernehmen wir valid/reason,
-    // aber die UI-validierung bleibt der Default über emitPreview().
-    if (typeof d.valid === 'boolean') last.valid = d.valid;
-    if (d.reason) last.reason = d.reason;
-    if (d.details) last.details = d.details;
-    setTint(d.valid !== false);
+
+    // Falls Core reason liefert: merken
+    if (typeof d.valid !== 'undefined') last.valid = (d.valid !== false);
+    if (typeof d.reason === 'string') last.reason = d.reason;
+    if (typeof d.details !== 'undefined') last.details = d.details;
+
+    setTint(last.valid !== false);
   });
 
   function setTint(valid){
