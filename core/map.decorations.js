@@ -933,9 +933,58 @@ function collectDrawables(out, cam, tileSize){
     snapshot,
     exportJSON,
     importJSON,
-    setEcoEnabled
+    setEcoEnabled,
+
+    // --- v4.3 Placement-Clear Support -------------------------------------
+    // Entfernt "kleine" Deco im Footprint einer Baustelle.
+    // opts.kinds: Array<string> → nur diese kinds entfernen (optional)
+    removeInRect,
+    removeAt
   };
 
   LOG('bereit', window.MapDecorations.version);
+
+  // =========================================================================
+  //  CLEAR HELPERS (für Placement: "Bauarbeiter räumen Kleinkram weg")
+  // =========================================================================
+  function removeAt(tx, ty, opts){
+    return removeInRect(tx|0, ty|0, 1, 1, opts);
+  }
+
+  function removeInRect(x, y, w, h, opts){
+    if (!Array.isArray(State.nodes) || !State.nodes.length) return { removed:0 };
+
+    // Standard: nur "soft" entfernen (kleine Pflanzen + kleine Steine + Holzstämme)
+    const softDefault = new Set([
+      'grassclumps','flowers','mushrooms','shrubs','logs',
+      'rockssmall',
+      'cattails','waterlily'
+    ]);
+
+    const kinds = Array.isArray(opts?.kinds)
+      ? new Set(opts.kinds.map(k=>String(k).toLowerCase()))
+      : softDefault;
+
+    const x0 = x|0, y0 = y|0;
+    const x1 = (x0 + Math.max(1, w|0)) - 1;
+    const y1 = (y0 + Math.max(1, h|0)) - 1;
+
+    let removed = 0;
+    for (let i = State.nodes.length - 1; i >= 0; i--){
+      const n = State.nodes[i];
+      if (!n) continue;
+      const nx = n.x|0, ny = n.y|0;
+      if (nx < x0 || nx > x1 || ny < y0 || ny > y1) continue;
+      const k = String(n.kind || '').toLowerCase();
+      if (!kinds.has(k)) continue;
+      State.nodes.splice(i, 1);
+      removed++;
+    }
+
+    if (removed){
+      try{ window.dispatchEvent(new CustomEvent('cb:mapdeco:changed', { detail: snapshot({limit:200}) })); }catch(_){ }
+    }
+    return { removed };
+  }
 
 })();

@@ -662,26 +662,49 @@ const centerX = building.x + bw / 2;
 
         // Reservieren (= vom Bestand abziehen). Lieferungen erhöhen den Bestand NICHT,
         // da wir aktuell kein zweites Lager-System wollen.
-        //
-        // Wichtig: atomar abziehen, um Doppel-Abzüge / Minus-Werte zu vermeiden.
-        if (typeof Prod.consume === 'function'){
-          const did = Prod.consume(needs, 'build:reserve', id);
-          if (!did){
-            const detail = { buildingId:id, x, y, needs, reason:'notenough' };
-            try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){ }
-            try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){ }
-            WARN('Nicht genug Ressourcen (consume) für Bau', detail);
-            return;
-          }
-        } else {
-          Object.keys(needs).forEach((k)=>{
-            const need = (needs[k] | 0);
-            if (need > 0) Prod.addResource(k, -need, 'build:reserve', id);
-          });
-        }
+        Object.keys(needs).forEach((k)=>{
+          const need = (needs[k] | 0);
+          if (need > 0) Prod.addResource(k, -need, 'build:reserve', id);
+        });
       }
     }catch(e){
       WARN('Ressourcen-Reserve fehlgeschlagen', e);
+    }
+
+    // -----------------------------------------------------------------------
+    // Placement-Clear (v4.3 Wunsch):
+    //  - Kleine Deco/kleine Steine im Footprint dürfen "überbaut" werden.
+    //  - Große Bäume dürfen überbaut werden, sobald ein Holzfäller existiert
+    //    (oder wenn wir gerade den Holzfäller platzieren).
+    //  -> Wir entfernen diese Nodes sofort beim Start der Baustelle.
+    // -----------------------------------------------------------------------
+    try{
+      const hasDoneLumberjack = (()=>{
+        if (!Array.isArray(Game.buildings)) return false;
+        for (const b of Game.buildings){
+          if (!b) continue;
+          if (b.id !== 'b.lumberjack') continue;
+          const stage = (typeof b.buildStage === 'number') ? b.buildStage : -1;
+          if (stage >= 3 || b.status === 'done') return true;
+        }
+        return false;
+      })();
+
+      const allowTrees = (id === 'b.lumberjack') || hasDoneLumberjack;
+
+      // 1) Welt-Ressourcen (Trees/Stones/Fish)
+      if (window.MapResources && typeof window.MapResources.removeInRect === 'function'){
+        const kinds = ['stone'];
+        if (allowTrees) kinds.push('tree');
+        window.MapResources.removeInRect(x, y, w, h, { kinds });
+      }
+
+      // 2) Deco-Layer (kleine Pflanzen, kleine Steine, Stämme)
+      if (window.MapDecorations && typeof window.MapDecorations.removeInRect === 'function'){
+        window.MapDecorations.removeInRect(x, y, w, h);
+      }
+    }catch(e){
+      WARN('Placement-Clear fehlgeschlagen', e);
     }
 
     // Einfaches Building-Objekt – GameConstruction arbeitet direkt mit Game.buildings

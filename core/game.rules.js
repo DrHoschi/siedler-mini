@@ -186,6 +186,31 @@
     return s;
   }
 
+  // Liefert Map: "x,y" -> node (für differenzierte Regeln: tree vs stone vs fish)
+  function _getNodeMap(){
+    const nodes = window.MapResources?.state?.nodes || null;
+    if (!Array.isArray(nodes) || !nodes.length) return null;
+    const m = new Map();
+    for (const n of nodes){
+      if (!n) continue;
+      const x = toInt(n.x, NaN);
+      const y = toInt(n.y, NaN);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      m.set(`${x},${y}`, n);
+    }
+    return m;
+  }
+
+  function _hasDoneLumberjack(){
+    const buildings = (window.Game?.getBuildings?.() || window.Game?.buildings || window.Buildings?.list || []);
+    if (!Array.isArray(buildings) || !buildings.length) return false;
+    for (const b of buildings){
+      if (!b) continue;
+      if (b.id === 'b.lumberjack' && _isBuildingDone(b)) return true;
+    }
+    return false;
+  }
+
   function _isBuildingDone(b){
     const stage = (typeof b?.buildStage === 'number') ? b.buildStage : -1;
     return (stage >= 3) || (b?.status === 'done') || (b?.buildPhase === 'complete') || (b?.buildPhase === 3);
@@ -383,8 +408,37 @@
           return result;
         }
         if (nodeSet && nodeSet.has(`${x},${y}`)){
+          // Ressourcen sind nicht immer "hart" blockierend.
+          // Wunsch (v4.3):
+          //  - Kleinkram (kleine Steine/kleine Deco) soll beim Bauen weggeräumt werden.
+          //  - Auf große Bäume darf man platzieren, sobald mindestens ein Holzfäller
+          //    fertig gebaut ist (oder wenn man gerade den Holzfäller platziert).
+          //
+          // MapResources liefert pro Node: { kind:'tree'|'stone'|'fish', x,y, ... }
+          const nodeMap = _getNodeMap();
+          const n = nodeMap ? nodeMap.get(`${x},${y}`) : null;
+          const kind = String(n?.kind || '').toLowerCase();
+
+          // 1) "Soft"-Ressourcen: Steine können beim Bau geräumt werden.
+          if (kind === 'stone'){
+            // erlaubt → Game wird beim Bauen (core/game.js) die Steine entfernen
+            continue;
+          }
+
+          // 2) Bäume: nur erlauben, wenn Holzfäller existiert ODER wir gerade einen Holzfäller setzen
+          if (kind === 'tree'){
+            const allowTrees = (id === 'b.lumberjack') || _hasDoneLumberjack();
+            if (allowTrees) {
+              continue;
+            }
+            result.reason = 'blocked_resource_tree';
+            result.details = { x, y, kind:'tree' };
+            return result;
+          }
+
+          // 3) Fisch / unbekannt: blockiert
           result.reason = 'blocked_resource';
-          result.details = { x, y };
+          result.details = { x, y, kind: kind || null };
           return result;
         }
       }

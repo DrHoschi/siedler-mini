@@ -33,8 +33,8 @@
 
   // Basismengen (Start-Sandbox)
   const CFG = {
-    trees: { count: 140, clusterChance: 0.45 },
-    stones:{ count: 68, clusterChance: 0.35 },
+    trees: { count: 240, clusterChance: 0.45 },
+    stones:{ count: 118, clusterChance: 0.35 },
     fish:  { count: 22, clusterChance: 0.55 },
 
     // Zeichnungs-Skalierung relativ zu tileSize:
@@ -494,9 +494,57 @@ window.addEventListener('req:mapres:clear', ()=>{
     // Step 1
     regen,
     clear,
-    snapshot
+    snapshot,
+
+    // --- v4.3 Placement-Clear Support -------------------------------------
+    // Entfernt Nodes im Rechteck (Footprint) – z.B. wenn eine Baustelle startet.
+    // opts.kinds: Array<string> → nur diese kinds entfernen (z.B. ['stone','tree'])
+    removeInRect,
+    removeAt
   };
 
   LOG('bereit', window.MapResources.version);
+
+  // =========================================================================
+  //  CLEAR HELPERS (für Placement: "Bauarbeiter räumen Kleinkram weg")
+  // =========================================================================
+  function removeAt(tx, ty, opts){
+    return removeInRect(tx|0, ty|0, 1, 1, opts);
+  }
+
+  function removeInRect(x, y, w, h, opts){
+    const kinds = Array.isArray(opts?.kinds) ? new Set(opts.kinds.map(k=>String(k).toLowerCase())) : null;
+    if (!Array.isArray(State.nodes) || !State.nodes.length) return { removed:0 };
+
+    const x0 = x|0, y0 = y|0;
+    const x1 = (x0 + Math.max(1, w|0)) - 1;
+    const y1 = (y0 + Math.max(1, h|0)) - 1;
+
+    let removed = 0;
+
+    for (let i = State.nodes.length - 1; i >= 0; i--){
+      const n = State.nodes[i];
+      if (!n) continue;
+      const nx = n.x|0, ny = n.y|0;
+      if (nx < x0 || nx > x1 || ny < y0 || ny > y1) continue;
+
+      const k = String(n.kind || '').toLowerCase();
+      if (kinds && !kinds.has(k)) continue;
+
+      State.nodes.splice(i, 1);
+      removed++;
+    }
+
+    if (removed){
+      // Rebuild schnelle Listen (simpel, aber robust)
+      State.trees  = State.nodes.filter(n => n && n.kind === 'tree');
+      State.stones = State.nodes.filter(n => n && n.kind === 'stone');
+      State.fish   = State.nodes.filter(n => n && n.kind === 'fish');
+
+      try{ window.dispatchEvent(new CustomEvent('cb:mapres:changed', { detail: snapshot() })); }catch(_){ }
+    }
+
+    return { removed };
+  }
 
 })();
