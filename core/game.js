@@ -638,58 +638,47 @@ const centerX = building.x + bw / 2;
     // -----------------------------------------------------------------------
     try{
       const Prod = window.Production;
-      if (Prod){
-        // -------------------------------------------------------------------
-        // Baukosten: atomar prüfen + reservieren (vom Bestand abziehen)
-        // -------------------------------------------------------------------
-        // WICHTIG:
-        // - Wir erlauben KEIN "ins Minus bauen".
-        // - Falls Production.consume() existiert, nutzen wir das (zentraler Guard).
-        // - Sonst: Fallback auf alte Logik (check + addResource), aber robust.
-        // -------------------------------------------------------------------
-        try{
-          if (typeof Prod.consume === 'function'){
-            const r = Prod.consume(needs, 'build:reserve', id);
-            if (!r?.ok){
-              const detail = { buildingId:id, x, y, needs, missing:(r?.missing||{}), reason:'notenough' };
-              try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
-              try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
-              WARN('Nicht genug Ressourcen für Bau', detail);
-              return;
-            }
-          } else if (typeof Prod.getResourceValue === 'function' && typeof Prod.addResource === 'function'){
-            const missing = {};
-            let ok = true;
-
-            Object.keys(needs).forEach((k)=>{
-              const need = Number(needs[k] || 0);
-              if (!Number.isFinite(need) || need <= 0) return;
-              const have = Number(Prod.getResourceValue(k) || 0);
-              if (have < need){
-                ok = false;
-                missing[String(k).replace(/^res\./,'')] = { need, have, missing: (need - have) };
-              }
-            });
-
-            if (!ok){
-              const detail = { buildingId:id, x, y, needs, missing, reason:'notenough' };
-              try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
-              try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
-              WARN('Nicht genug Ressourcen für Bau', detail);
-              return;
-            }
-
-            // Reservieren (= vom Bestand abziehen).
-            Object.keys(needs).forEach((k)=>{
-              const need = Number(needs[k] || 0);
-              if (!Number.isFinite(need) || need <= 0) return;
-              Prod.addResource(k, -need, 'build:reserve', id);
-            });
+      if (Prod && typeof Prod.getResourceValue === 'function' && typeof Prod.addResource === 'function'){
+        const missing = {};
+        let ok = true;
+        Object.keys(needs).forEach((k)=>{
+          const need = (needs[k] | 0);
+          if (need <= 0) return;
+          const have = Number(Prod.getResourceValue(k) || 0);
+          if (have < need){
+            ok = false;
+            missing[k] = { need, have, missing: (need - have) };
           }
-        }catch(e){
-          WARN('Ressourcen-Reserve fehlgeschlagen', e);
+        });
+
+        if (!ok){
+          // Deny-Event (UI/Inspector kann das später hübsch anzeigen)
+          const detail = { buildingId:id, x, y, needs, missing, reason:'notenough' };
+          try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
+          try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){}
+          WARN('Nicht genug Ressourcen für Bau', detail);
+          return;
         }
-      }});
+
+        // Reservieren (= vom Bestand abziehen). Lieferungen erhöhen den Bestand NICHT,
+        // da wir aktuell kein zweites Lager-System wollen.
+        //
+        // Wichtig: atomar abziehen, um Doppel-Abzüge / Minus-Werte zu vermeiden.
+        if (typeof Prod.consume === 'function'){
+          const did = Prod.consume(needs, 'build:reserve', id);
+          if (!did){
+            const detail = { buildingId:id, x, y, needs, reason:'notenough' };
+            try{ window.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){ }
+            try{ document.dispatchEvent(new CustomEvent('cb:build:deny', { detail })); }catch(_){ }
+            WARN('Nicht genug Ressourcen (consume) für Bau', detail);
+            return;
+          }
+        } else {
+          Object.keys(needs).forEach((k)=>{
+            const need = (needs[k] | 0);
+            if (need > 0) Prod.addResource(k, -need, 'build:reserve', id);
+          });
+        }
       }
     }catch(e){
       WARN('Ressourcen-Reserve fehlgeschlagen', e);

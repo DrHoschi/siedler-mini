@@ -71,34 +71,29 @@
   // HILFSFUNKTIONEN – RESSOURCEN
   // ==========================================================================
 
-  function _normResId(v){
-    const s = String(v || '').trim();
-    // toleriert alte Prefixe (res.wood)
-    return s.replace(/^res\./,'');
-  }
-
   function addResource(resId, delta, reason, src) {
     if (!resId) return;
-    if (!Number.isFinite(delta) || delta === 0) return;
+    if (!delta || !Number.isFinite(delta)) return;
 
-    const key = _normResId(resId); // bewusst KEIN 'res.*' Prefix im Store
+    const key = String(resId);  // bewusst KEIN 'res.*' Prefix
     const old = Number(RES_STORE[key] || 0);
-
-    // -------------------------------------------------------------------
-    // Schutz: Ressourcen sollen NIEMALS negativ werden.
-    // Wenn irgendwo doppelt abgezogen wird oder ein UI-Fehler passiert,
-    // clampen wir auf 0 – und schicken nur den tatsächlich angewandten Delta.
-    // -------------------------------------------------------------------
     let value = old + delta;
-    if (value < 0) value = 0;
 
-    const appliedDelta = value - old;
-    // Wenn sich faktisch nichts ändert, sparen wir uns Events (verhindert Spam)
-    if (appliedDelta === 0) return;
+    // ----------------------------------------------------------------------
+    // Guard: Ressourcen dürfen NICHT negativ werden.
+    //
+    // Hintergrund: Beim Bauen wird "reserviert" (= abgezogen). Wenn an
+    // irgendeiner Stelle doppelt abgezogen wird (oder Events verpasst werden),
+    // konnte der Store bisher ins Minus rutschen. Das führt zu wilden Effekten
+    // (z. B. HUD zeigt negative Werte oder Build-Checks werden inkonsistent).
+    //
+    // Für Epoche 1 halten wir es simpel: Minimum ist 0.
+    // ----------------------------------------------------------------------
+    if (value < 0) value = 0;
 
     RES_STORE[key] = value;
 
-    LOG('Ressource geändert:', { res: key, old, delta: appliedDelta, value, reason, src });
+    LOG('Ressource geändert:', { res: key, old, delta, value, reason, src });
 
     try {
       window.dispatchEvent(new CustomEvent('cb:res:change', {
@@ -106,7 +101,7 @@
           res   : key,
           old,
           value,
-          delta : appliedDelta,
+          delta,
           reason: reason || 'prod',
           src   : src    || TAG
         }
@@ -116,37 +111,6 @@
     }
   }
 
-  // Prüft, ob ein Bedarf (needs) bezahlbar ist.
-  // needs-Format: {wood:2, stone:1, ...}
-  function canAfford(needs){
-    const missing = {};
-    let ok = true;
-    const n = needs || {};
-    for (const k of Object.keys(n)){
-      const need = Number(n[k] || 0);
-      if (!Number.isFinite(need) || need <= 0) continue;
-      const have = getResourceValue(k);
-      if (have < need){
-        ok = false;
-        missing[_normResId(k)] = { need, have, missing: need - have };
-      }
-    }
-    return { ok, missing };
-  }
-
-  // Atomar: erst prüfen, dann abziehen (nur wenn vollständig bezahlbar).
-  function consume(needs, reason, src){
-    const check = canAfford(needs);
-    if (!check.ok) return { ok:false, missing: check.missing };
-    const n = needs || {};
-    for (const k of Object.keys(n)){
-      const need = Number(n[k] || 0);
-      if (!Number.isFinite(need) || need <= 0) continue;
-      addResource(k, -need, reason || 'consume', src || TAG);
-    }
-    return { ok:true, missing:{} };
-  }
-
   function getResourceValue(resId) {
     if (!resId) return 0;
     return Number(RES_STORE[String(resId)] || 0);
@@ -154,6 +118,44 @@
 
   function getStore(){
     return RES_STORE;
+  }
+
+  // ------------------------------------------------------------------------
+  // Baukosten-Helfer (atomar): canAfford + consume
+  // ------------------------------------------------------------------------
+  // Motivation:
+  // - Beim Bauen wollen wir "prüfen -> abziehen" an EINER Stelle bündeln,
+  //   damit es keine Doppel-Abzüge oder Race-Conditions gibt.
+  // - consume() ist bewusst konservativ: wenn etwas fehlt, wird GAR NICHTS
+  //   abgezogen (atomar) und es kommt false zurück.
+  function canAfford(needs){
+    try{
+      if (!needs || typeof needs !== 'object') return true;
+      for (const k of Object.keys(needs)){
+        const need = (Number(needs[k] || 0) | 0);
+        if (need <= 0) continue;
+        const have = Number(getResourceValue(k) || 0);
+        if (have < need) return false;
+      }
+      return true;
+    }catch(_){
+      return false;
+    }
+  }
+
+  function consume(needs, reason, src){
+    if (!canAfford(needs)) return false;
+    try{
+      for (const k of Object.keys(needs||{})){
+        const need = (Number(needs[k] || 0) | 0);
+        if (need <= 0) continue;
+        addResource(k, -need, reason || 'consume', src);
+      }
+      return true;
+    }catch(e){
+      WARN('consume() fehlgeschlagen', e);
+      return false;
+    }
   }
 
   // ==========================================================================
@@ -606,9 +608,12 @@
   // EXPORT
   // ==========================================================================
 
-  \1
+  const ProductionAPI = {
+    registerModule,
+    addResource,
     canAfford,
     consume,
+    getResourceValue,
     getStore,
     tick,
     enqueueCarryJobFromBuilding,
