@@ -1,20 +1,21 @@
 /* =============================================================================
  * Datei   : ui/ui-place-toast.js
  * Projekt : Neue Siedler (Siedler‑Mini) – v4.3
- * Zweck   : Toast-Meldungen bei Platzierung/Bauen (Deny/Reason-Codes) anzeigen,
- *           OHNE das Ghost-/Placement-System anzufassen.
+ * Zweck   : Toast sichtbar machen (Placement/Build deny), ohne Placement zu ändern
  *
- * v2 Fix:
- *   - Lauscht auf window UND document (manche Module dispatchen auf document).
- *   - Debug-Log: [place-toast] ready (in Konsole/CBLog).
- *   - Exponiert window.__placeToastShow('Test') für Smoke-Test.
+ * v3 Fix:
+ *   - Toast bekommt ALLE Styles inline (funktioniert auch ohne CSS-Load).
+ *   - Sehr hoher z-index + fixed → sichtbar über Canvas/UI.
+ *   - Bottom wird über #build-dock berechnet und auf Viewport geklemmt.
+ *   - Lauscht auf window+document.
+ *   - Smoke-Test: window.__placeToastShow('Test ✅')
  * =============================================================================
  */
 (() => {
   'use strict';
 
-  if (window.__NS_PLACE_TOAST_SEPARATE_V2__) return;
-  window.__NS_PLACE_TOAST_SEPARATE_V2__ = true;
+  if (window.__NS_PLACE_TOAST_SEPARATE_V3__) return;
+  window.__NS_PLACE_TOAST_SEPARATE_V3__ = true;
 
   const TOAST_ID = 'place-toast';
   let hideHandle = null;
@@ -22,30 +23,58 @@
 
   const log = (m) => (window.CBLog?.info || console.log)(`[place-toast] ${m}`);
 
+  function pickHost() {
+    return document.querySelector('#ui-root') ||
+           document.querySelector('#ui-layer') ||
+           document.body;
+  }
+
   function ensureToast() {
     let el = document.getElementById(TOAST_ID);
     if (el && el.isConnected) return el;
 
     el = document.createElement('div');
     el.id = TOAST_ID;
-    el.className = 'place-toast';
+
+    // INLINE Styles
+    el.style.position = 'fixed';
+    el.style.left = '12px';
+    el.style.right = '12px';
+    el.style.bottom = '14px';
+    el.style.zIndex = '2147483647';
+    el.style.padding = '10px 12px';
+    el.style.borderRadius = '12px';
+    el.style.fontWeight = '800';
+    el.style.textAlign = 'center';
+    el.style.background = 'rgba(20, 14, 10, 0.90)';
+    el.style.color = '#fff';
+    el.style.border = '2px solid rgba(255,255,255,0.25)';
+    el.style.backdropFilter = 'blur(3px)';
+    el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
+    el.style.pointerEvents = 'none';
     el.style.display = 'none';
-    document.body.appendChild(el);
+
+    pickHost().appendChild(el);
     return el;
   }
 
   function computeBottomOffsetPx() {
     let bottom = 14;
+
     const dock = document.querySelector('#build-dock');
-    if (!dock) return bottom;
-
-    const cs = window.getComputedStyle(dock);
-    const isHidden = (cs.display === 'none' || cs.visibility === 'hidden' || dock.offsetParent === null);
-
-    if (!isHidden) {
-      const rect = dock.getBoundingClientRect();
-      bottom = Math.round(rect.height + 10);
+    if (dock) {
+      const cs = window.getComputedStyle(dock);
+      const isHidden = (cs.display === 'none' || cs.visibility === 'hidden' || dock.offsetParent === null);
+      if (!isHidden) {
+        const rect = dock.getBoundingClientRect();
+        const h = Math.max(0, Math.round(rect.height || 0));
+        bottom = Math.max(14, h + 10);
+      }
     }
+
+    const maxBottom = Math.max(14, Math.round(window.innerHeight - 60));
+    if (bottom > maxBottom) bottom = maxBottom;
+
     return bottom;
   }
 
@@ -111,15 +140,13 @@
     showToast(reasonToText(merged));
   }
 
-  // Lauschen auf window+document (je nach Dispatch)
   window.addEventListener('cb:place:preview', onPreview, { passive: true });
   document.addEventListener('cb:place:preview', onPreview, { passive: true });
 
   window.addEventListener('cb:build:deny', onDeny, { passive: true });
   document.addEventListener('cb:build:deny', onDeny, { passive: true });
 
-  // Smoke-Test: in Konsole: window.__placeToastShow('Test')
   window.__placeToastShow = (m='Toast Test ✅') => showToast(m, 2500);
 
-  log('ready (listening on window+document)');
+  log('ready (v3 inline-styled)');
 })();
