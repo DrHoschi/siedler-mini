@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-22T23:13:11.365Z",
+  "createdAt": "2025-12-24T22:28:12.591Z",
   "root": ".",
-  "count": 535,
+  "count": 534,
   "entries": [
     {
       "type": "dir",
@@ -1492,7 +1492,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 34886
+      "size": 37083
     },
     {
       "type": "file",
@@ -1517,7 +1517,7 @@
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 19322
+      "size": 21254
     },
     {
       "type": "file",
@@ -1537,7 +1537,7 @@
     {
       "type": "file",
       "path": "core/game.rules.js",
-      "size": 18209
+      "size": 20412
     },
     {
       "type": "file",
@@ -1592,27 +1592,12 @@
     {
       "type": "file",
       "path": "core/map.decorations.js",
-      "size": 33850
-    },
-    {
-      "type": "file",
-      "path": "core/map.decorations.v2.js",
-      "size": 13389
-    },
-    {
-      "type": "file",
-      "path": "core/map.decorations.v3.js",
-      "size": 21856
-    },
-    {
-      "type": "file",
-      "path": "core/map.decorations.v4.js",
-      "size": 30853
+      "size": 35571
     },
     {
       "type": "file",
       "path": "core/map.resources.js",
-      "size": 15949
+      "size": 17718
     },
     {
       "type": "file",
@@ -2421,7 +2406,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build-v14.css",
-      "size": 9253
+      "size": 10082
     },
     {
       "type": "file",
@@ -2436,7 +2421,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-hud-v5.css",
-      "size": 8098
+      "size": 8096
     },
     {
       "type": "file",
@@ -2467,6 +2452,11 @@
       "type": "file",
       "path": "ui/css/ui-notify.css",
       "size": 92
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-place-toast.css",
+      "size": 35
     },
     {
       "type": "file",
@@ -2511,7 +2501,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 18406
+      "size": 24350
     },
     {
       "type": "file",
@@ -2560,8 +2550,13 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-place-toast.js",
+      "size": 5268
+    },
+    {
+      "type": "file",
       "path": "ui/ui-place.js",
-      "size": 9527
+      "size": 5194
     },
     {
       "type": "file",
@@ -2586,17 +2581,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53510
+      "size": 53508
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20905
+      "size": 20903
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 17756
+      "size": 17908
     },
     {
       "type": "file",
