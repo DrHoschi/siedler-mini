@@ -1,14 +1,12 @@
 /* =============================================================================
  * Datei   : ui/css/ui-place-toast.css
- * Zweck   : Styling für Placement/Build-Deny Toast (separates Modul)
- * Hinweis : bottom wird dynamisch per JS gesetzt (über #build-dock)
  * =============================================================================
  */
 #place-toast.place-toast{
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: 14px; /* wird von JS überschrieben */
+  bottom: 14px; /* wird von JS dynamisch überschrieben */
   z-index: 999999;
   padding: 10px 12px;
   border-radius: 12px;
