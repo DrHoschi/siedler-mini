@@ -205,7 +205,7 @@
 <!--  <script src="core/core.pfglue.js"></script>  --> <!-- Polyfills/Glue: früh -->
   <script src="core/core.input.js"></script> <!-- Input-Hooks (Keys/Pointer) -->
   <script src="core/game.place.js"></script>
-<script src="ui/ui-place-toast-v4.js"></script>
+<script src="ui/ui-place-toast.js"></script>
      
   <!-- *** WICHTIG: genau EINE Kamera laden → hier die stabile core/camera.js *** -->
   <script src="core/camera.js"></script>
@@ -217,9 +217,10 @@
   <!-- GAME BOOTSTRAP + GAME LOOP -->
   <script src="core/game.buildings.js"></script>
   <script src="core/game.renderer.js"></script>
- <!-- <script src="core/game.build.js?v=25.12.21a"></script> -->
+  <script src="core/game.build.js?v=25.12.21a"></script>
      <script src="core/map.decorations.js?v=25.12.17"></script>
      <script src="core/map.resources.js?v=25.12.17"></script>
+  <script src="core/map.animals.js?v=25.12.28"></script>
   <script src="core/game.map.js?v=25.12.21a"></script>
      <script>
   console.info('[boot] MapResources loaded?', !!window.MapResources, window.MapResources);
@@ -240,6 +241,7 @@
   <script src="core/game.production.wood.js"></script>
   <script src="core/game.production.stone.js"></script>
   <script src="core/game.production.fish.js"></script>
+  <script src="core/game.production.hunt.js?v=25.12.28"></script>
      
   <script src="core/game.workarea.js"></script>
 
