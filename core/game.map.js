@@ -917,6 +917,22 @@ if (window.MapResources) {
 }
 
     // ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
+// Animals-Layer (Rehe/Füchse – dynamische Ressourcen)
+//  - benötigt core/map.animals.js
+//  - nutzt MapAnimals.drawOnMainCanvas(ctx, cam, tileSize)
+// ---------------------------------------------------------------------
+if (window.MapAnimals) {
+  try {
+    if (typeof window.MapAnimals.drawOnMainCanvas === 'function') {
+      window.MapAnimals.drawOnMainCanvas(ctx, cam, ts);
+    }
+  } catch (e) {
+    WARN('MapAnimals draw Fehler:', e);
+  }
+}
+
 // Deko-Layer (Pflanzen/Props, KEINE Ressourcen)
 //  - benötigt core/map.decorations.js
 //  - nutzt MapDecorations.drawOnMainCanvas(ctx, cam, tileSize)
