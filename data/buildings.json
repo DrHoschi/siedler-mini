@@ -211,6 +211,16 @@
     {
       "id": "b.hunter",
       "name": "Jägerhütte",
+      "sprite": {
+    "type": "atlas",
+    "atlas": "hunter_building_atlas",
+    "frames": {
+      "place":   "frame_0_0",
+      "live":    "frame_0_1",
+      "reserve": "frame_0_2"
+    }
+  }
+
       "epoche": 1,
       "category": "resource",
       "size": {
@@ -244,10 +254,10 @@
         }
       ],
       "cycle": 4500,
-      "enabled": false,
+      "enabled": true,
       "workArea": {
         "shape": "circle",
-        "radiusTiles": 5.0,
+        "radiusTiles": 8.0,
         "selectable": true
       }
     }
