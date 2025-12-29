@@ -534,24 +534,43 @@
                 useFallback = true;
               }
             } else {
-              // Fertiges Gebäude
-              const imgB = getBuildingSprite(b.id);
-              if (isDrawableImage(imgB)){
-                try{
-                  ctx.drawImage(imgB, bx, by, bw, bh);
-                }catch(e){
-                  WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
-                  useFallback = true;
-                }
-              } else {
-                // Sprite noch nicht da oder kaputt → Fallback-Rechteck
-                useFallback = true;
-              }
-            }
+          // -------------------------------------------------
+// Fertiges Gebäude
+// -------------------------------------------------
+if (b.__sprite && b.__sprite.atlas && window.Assets) {
+  const spr = b.__sprite;
+  const atlas = Assets.getAtlas(spr.atlas);
 
-            if (useFallback){
-              ctx.fillStyle = col;
-              ctx.fillRect(bx, by, bw, bh);
+  if (atlas?.ok && spr.frame) {
+    let revealP = 1;
+
+    if (spr.reveal) {
+      const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
+      revealP = Math.max(0, Math.min(1, t));
+      if (revealP >= 1) spr.reveal = null;
+    }
+
+    ctx.save();
+
+    // Bottom → Top Reveal
+    const clipH = bh * revealP;
+    ctx.beginPath();
+    ctx.rect(bx, by + (bh - clipH), bw, clipH);
+    ctx.clip();
+
+    Assets.drawAtlasFrame(
+      ctx,
+      spr.atlas,
+      spr.frame,
+      bx + bw / 2,
+      by + bh,
+      { align:'pivot', scale: bw / 256 }
+    );
+
+    ctx.restore();
+    return;
+  }
+}
             }
       
   }
