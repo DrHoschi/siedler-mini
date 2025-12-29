@@ -451,7 +451,44 @@
     CARRY_META_BY_JOBID.delete(jobId);
 
     try{
+      // Primärressource verbuchen (z.B. wood/stone/fish/meat/pelt)
       addResource(meta.res, meta.qty || 1, meta.reason || 'carry:deliver', meta.src || TAG);
+
+      // --------------------------------------------------------------------
+      // Nahrung-Aggregat beim Liefern:
+      //   Wunsch: "A: Wenn der Träger es am Lager/HQ abgeliefert hat,
+      //   wird es der Nahrung hinzugefügt – Fleisch intern behalten."
+      //
+      //   Umsetzung:
+      //     - meat bleibt als eigene Ressource bestehen
+      //     - zusätzlich wird Nahrung erhöht:
+      //         * falls Ressource 'food' existiert → +food
+      //         * sonst (v4.3a Standard) → +fish (Fish zählt als Nahrung)
+      // --------------------------------------------------------------------
+      if (String(meta.res) === 'meat'){
+        const qty = Number(meta.qty || 1) || 1;
+
+        // Prefer 'food' if defined in Registry, else fallback to 'fish'
+        let foodKey = null;
+        try{
+          const R = window.Registry;
+          if (R && typeof R.getResource === 'function' && R.getResource('food')) {
+            foodKey = 'food';
+          } else if (R && typeof R.getResource === 'function' && R.getResource('fish')) {
+            foodKey = 'fish';
+          }
+        }catch(_e){ /* ignore */ }
+
+        // Ultimate fallback: if registry not ready yet, still try common keys
+        if (!foodKey){
+          if (Object.prototype.hasOwnProperty.call(RES_STORE, 'food')) foodKey = 'food';
+          else if (Object.prototype.hasOwnProperty.call(RES_STORE, 'fish')) foodKey = 'fish';
+        }
+
+        if (foodKey){
+          addResource(foodKey, qty, 'auto:meat->food', meta.src || TAG);
+        }
+      }
     }catch(e){
       WARN('Delivery-Accounting addResource fehlgeschlagen', e);
     }
