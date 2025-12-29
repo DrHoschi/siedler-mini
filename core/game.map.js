@@ -412,8 +412,6 @@
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
   function init(Game){
-    // Robust: falls init() ohne Argument aufgerufen wird (Safari / Module-Reihenfolge)
-    Game = Game || window.Game || {};
     const canvas = document.getElementById('game');
     const mapUrl = canvas?.getAttribute('data-map')
                  || 'data/maps/map-epoch1.json';
@@ -536,46 +534,75 @@
                 useFallback = true;
               }
             } else {
-          // -------------------------------------------------
-// Fertiges Gebäude
-// -------------------------------------------------
-if (b.__sprite && b.__sprite.atlas && window.Assets) {
-  const spr = b.__sprite;
-  const atlas = Assets.getAtlas(spr.atlas);
+              // -------------------------------------------------
+              // Fertiges Gebäude
+              // -------------------------------------------------
+              const Assets = window.Assets;
 
-  if (atlas?.ok && spr.frame) {
-    let revealP = 1;
+              // 1) Atlas-Rendering (z.B. Hunter) – nur wenn __sprite vorhanden
+              if (b.__sprite && b.__sprite.atlas && Assets) {
+                const spr = b.__sprite;
+                const atlas = Assets.getAtlas?.(spr.atlas);
 
-    if (spr.reveal) {
-      const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
-      revealP = Math.max(0, Math.min(1, t));
-      if (revealP >= 1) spr.reveal = null;
-    }
+                if (atlas?.ok && spr.frame) {
+                  let revealP = 1;
 
-    ctx.save();
+                  if (spr.reveal) {
+                    const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
+                    revealP = Math.max(0, Math.min(1, t));
+                    if (revealP >= 1) spr.reveal = null;
+                  }
 
-    // Bottom → Top Reveal
-    const clipH = bh * revealP;
-    ctx.beginPath();
-    ctx.rect(bx, by + (bh - clipH), bw, clipH);
-    ctx.clip();
+                  try {
+                    ctx.save();
 
-    Assets.drawAtlasFrame(
-      ctx,
-      spr.atlas,
-      spr.frame,
-      bx + bw / 2,
-      by + bh,
-      { align:'pivot', scale: bw / 256 }
-    );
+                    // Bottom → Top Reveal
+                    const clipH = bh * revealP;
+                    ctx.beginPath();
+                    ctx.rect(bx, by + (bh - clipH), bw, clipH);
+                    ctx.clip();
 
-    ctx.restore();
-    return;
-  }
-}
+                    // Hinweis: scale basiert aktuell auf 256px-Frames (dein Hunter-Atlas)
+                    Assets.drawAtlasFrame(
+                      ctx,
+                      spr.atlas,
+                      spr.frame,
+                      bx + bw / 2,
+                      by + bh,
+                      { align:'pivot', scale: bw / 256 }
+                    );
+
+                    ctx.restore();
+                    return; // Atlas erfolgreich gezeichnet
+                  } catch (e) {
+                    WARN('drawAtlasFrame Fehler – Fallback auf PNG/Icon:', e?.message || e);
+                  }
+                }
+              }
+
+              // 2) PNG/Icon-Fallback (HQ, Lumberjack, Quarry, …)
+              const imgB = getBuildingSprite(b.id);
+              if (isDrawableImage(imgB)) {
+                try {
+                  ctx.drawImage(imgB, bx, by, bw, bh);
+                  return;
+                } catch (e) {
+                  WARN('drawImage Gebäude-Fallback-Fehler:', e?.message || e);
+                }
+              }
+
+              // 3) Letzter Fallback: farbiges Rechteck (damit NIEMALS unsichtbar)
+              useFallback = true;
             }
-      
-  }
+
+            if (useFallback) {
+              ctx.fillStyle = col;
+              ctx.fillRect(bx, by, bw, bh);
+              ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+              ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+            }
+
+          }
 
 
   function _makeUnitDrawShared(){
@@ -801,8 +828,6 @@ if (b.__sprite && b.__sprite.atlas && window.Assets) {
   }
 
   function render(Game){
-    // Robust: render() wird teils ohne Argument aufgerufen → dann auf window.Game zurückfallen
-    Game = Game || window.Game || {};
     const ctx = Game?.ctx;
     if (!ctx) return;
 
