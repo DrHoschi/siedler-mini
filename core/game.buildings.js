@@ -49,6 +49,17 @@
         productionRule: def.productionRule || null
       };
 
+      // ------------------------------------------------------------
+// Atlas-Sprite-Init (optional, z.B. Hunter)
+// ------------------------------------------------------------
+if (def.sprite?.type === 'atlas') {
+  b.__sprite = {
+    atlas : def.sprite.atlas,
+    frame : def.sprite.frames?.place || null,
+    reveal: null
+  };
+}
+      
       this.list.push(b);
       LOG('Gebäude erzeugt:', b.id, 'an', b.x, b.y);
       return b;
@@ -67,7 +78,22 @@
       ) || null;
     }
   };
+  
+// Helper
+  Buildings.setSpriteFrame = function (b, frameName, reveal=false, durationMs=800){
+  if (!b || !b.__sprite) return;
+  b.__sprite.frame = frameName;
 
+  if (reveal){
+    b.__sprite.reveal = {
+      start: performance.now(),
+      dur  : durationMs
+    };
+  } else {
+    b.__sprite.reveal = null;
+  }
+};
+  
   // global machen
   window.Buildings = Buildings;
 
