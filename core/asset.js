@@ -610,4 +610,11 @@ tasks.push(this.loadAtlas(
     ERR('preload crash:', e?.message || e);
   });
 
+  // Buildings: Hunter
+tasks.push(this.loadAtlas(
+  'hunter_building_atlas',
+  'data/atlases/hunter-sprite_atlas.json',
+  'assets/buildings/hunter/hunter-sprite.png'
+));
+  
 })();
