@@ -109,6 +109,23 @@
       if (this._initialized) return;
       this._initialized = true;
 
+      // ------------------------------------------------------------
+      // STARTRESSOURCEN (Initialzustand, kein Gameplay)
+      // ------------------------------------------------------------
+      if (window.Game?.resources?.reset) {
+        Game.resources.reset({
+          wood: 20,
+          stone: 20,
+          fish: 20
+          // food bewusst NICHT: Nahrung läuft aktuell über fish
+        });
+
+        // HUD & Inspector sofort synchronisieren
+        window.dispatchEvent(new CustomEvent('cb:res:snapshot', {
+          detail: { reason: 'game-bootstrap' }
+        }));
+      }
+      
       // Optionale Initializer (bestandsfreundlich)
       try { window.MapRuntime?.init?.(this.canvas); } catch(e){ WARN('MapRuntime.init:', e?.message||e); }
       try { window.Render?.init?.(); }               catch(e){ WARN('Render.init:', e?.message||e); }
