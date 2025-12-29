@@ -520,20 +520,6 @@ try{
 
 
 
-// --------------------------------------------------------------------
-// Buildings: Hunter (Jägerhütte) – Atlas
-//  - WICHTIG: Muss INNERHALB von preload() geladen werden, damit:
-//      * Assets.getAtlas('hunter_building_atlas') danach verfügbar ist
-//      * das Building-Rendering den Atlas-Frame findet (kein Fallback)
-//  - Dateipfade (wie von dir vorbereitet):
-//      assets/buildings/hunter/hunter-sprite.png
-//      data/atlases/hunter-sprite_atlas.json
-tasks.push(this.loadAtlas(
-  'hunter_building_atlas',
-  'data/atlases/hunter-sprite_atlas.json',
-  'assets/buildings/hunter/hunter-sprite.png'
-));
-
       // --------------------------------------------------------------------
       // Deco / Pflanzen (rein dekorativ, KEINE Ressourcen)
       //  - Für core/map.decorations.js (MapDecorations)
@@ -592,6 +578,19 @@ tasks.push(this.loadAtlas(
   'assets/characters/stonecutter.png'
 ));
       
+
+
+      // --------------------------------------------------------------------
+      // Buildings: Hunter (Gebäude-Atlas)
+      //  - PNG:  assets/buildings/hunter/hunter-sprite.png
+      //  - JSON:  data/atlases/hunter-sprite_atlas.json
+      //  - Atlas-Key: 'hunter_building_atlas'
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'hunter_building_atlas',
+        'data/atlases/hunter-sprite_atlas.json',
+        'assets/buildings/hunter/hunter-sprite.png'
+      ));
 
       await Promise.allSettled(tasks);
 

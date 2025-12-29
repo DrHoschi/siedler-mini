@@ -80,69 +80,19 @@ if (def.sprite?.type === 'atlas') {
   };
   
 // Helper
-  // -----------------------------------------------------------------------
-//  Helper: Sprite-Frame für Atlas-Gebäude umschalten
-// -----------------------------------------------------------------------
-//  Wird benötigt für:
-//   - Reveal-Animation (Bottom→Top Wachstum)
-//   - Frame-Wechsel nach Bau / später Upgrade (place → live → reserve …)
-//
-//  Erwartet im Building-Def (data/buildings.json):
-//    sprite: {
-//      type: "atlas",
-//      atlas: "hunter_building_atlas",
-//      frames: { place:"frame_0_0", live:"frame_0_1", reserve:"frame_0_2" }
-//    }
-//
-//  Usage:
-//    Buildings.setSpriteFrame(b, 'live', true, 800);      // nimmt Mapping aus def.sprite.frames
-//    Buildings.setSpriteFrame(b, 'frame_0_1', true, 800); // oder direkt Frame-Name
-//
-Buildings.setSpriteFrame = function (b, which, reveal=false, durationMs=800){
-  if (!b) return null;
+  Buildings.setSpriteFrame = function (b, frameName, reveal=false, durationMs=800){
+  if (!b || !b.__sprite) return;
+  b.__sprite.frame = frameName;
 
-  const def = window.Registry?.get?.('buildings', b.type) || null;
-
-  // Wenn kein Atlas-Def vorliegt, versuchen wir zumindest das interne Feld zu setzen.
-  if (!def || def.sprite?.type !== 'atlas') {
-    if (b.__sprite && typeof which === 'string') {
-      b.__sprite.frame = which;
-      if (reveal){
-        b.__sprite.reveal = { start: performance.now(), dur: durationMs };
-      }
-      return which;
-    }
-    return null;
-  }
-
-  // __sprite sicherstellen (alte Saves / früh erzeugte Buildings)
-  if (!b.__sprite) {
-    b.__sprite = {
-      atlas : def.sprite.atlas,
-      frame : null,
-      reveal: null
+  if (reveal){
+    b.__sprite.reveal = {
+      start: performance.now(),
+      dur  : durationMs
     };
+  } else {
+    b.__sprite.reveal = null;
   }
-
-  // Mapping: "place/live/reserve" → tatsächlicher Frame-Name
-  const mapped = (def.sprite.frames && def.sprite.frames[which]) ? def.sprite.frames[which] : which;
-
-  if (typeof mapped === 'string' && mapped.length) {
-    b.__sprite.atlas = def.sprite.atlas;
-    b.__sprite.frame = mapped;
-
-    if (reveal){
-      b.__sprite.reveal = { start: performance.now(), dur: durationMs };
-    } else {
-      b.__sprite.reveal = null;
-    }
-
-    return mapped;
-  }
-
-  return null;
 };
-
   
   // global machen
   window.Buildings = Buildings;
