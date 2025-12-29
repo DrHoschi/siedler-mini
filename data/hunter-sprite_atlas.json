@@ -1,6 +1,7 @@
 {
   "meta": {
-    "image": "hunter-sprite.png",
+    "image": "./assets/buildings/hunter
+/hunter-sprite.png",
     "size": {
       "w": 1024,
       "h": 1024
