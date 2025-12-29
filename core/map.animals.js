@@ -59,6 +59,9 @@
   // ------------------------------------------------------------
   const State = {
     ok:false,
+    // HQ-Hint (Tile-Koordinaten), wird z.B. beim Auto-Start-HQ gesetzt
+    // damit wir initial Tiere sichtbar in HQ-Nähe spawnen können.
+    hqHint: null,
     animals: [],
     // deterministische IDs
     _id: 1,
@@ -79,17 +82,38 @@
   }
 
   function getHQ(){
-    // HQ ist bei dir typischerweise in Game.buildings / Warehouse etc.
-    // Wir probieren ein paar offensichtliche Kandidaten – wenn keiner da ist, spawn random.
-    const g = window.Game;
-    if (!g) return null;
+    // HQ-Position ermitteln (Tile-Koordinaten).
+    // Priorität:
+    // 1) State.hqHint (z.B. aus cb:build:place __autoStart)
+    // 2) bekannte Game-Container (Game.buildings / GameBuildings)
+    // Wenn nichts gefunden wird -> null (dann spawnen wir random).
+    if (State.hqHint && typeof State.hqHint.tx==='number' && typeof State.hqHint.ty==='number'){
+      return State.hqHint;
+    }
 
-    // 1) Falls es ein "hq" building gibt
+    const g = window.Game;
+
+    // 2a) Game.buildings / Game._buildings
     try{
-      const list = g.buildings || g._buildings || [];
+      const list = g?.buildings || g?._buildings || [];
       if (Array.isArray(list)){
-        const hq = list.find(b => b && (b.type==='hq' || b.bId==='hq' || b.kind==='hq'));
+        const hq = list.find(b => b && (
+          b.type==='hq' || b.bId==='hq' || b.kind==='hq' ||
+          b.buildingId==='b.hq' || b.id==='b.hq'
+        ));
         if (hq && typeof hq.tx==='number' && typeof hq.ty==='number') return hq;
+        // manche Datenmodelle benutzen x/y als tile coords
+        if (hq && typeof hq.x==='number' && typeof hq.y==='number') return { tx:hq.x, ty:hq.y };
+      }
+    }catch(_){}
+
+    // 2b) GameBuildings State
+    try{
+      const list = window.GameBuildings?.State?.list || window.GameBuildings?.state?.list || [];
+      if (Array.isArray(list)){
+        const hq = list.find(b => b && (b.buildingId==='b.hq' || b.id==='b.hq' || b.type==='hq'));
+        if (hq && typeof hq.tx==='number' && typeof hq.ty==='number') return hq;
+        if (hq && typeof hq.x==='number' && typeof hq.y==='number') return { tx:hq.x, ty:hq.y };
       }
     }catch(_){}
 
@@ -205,6 +229,14 @@
     State.mapW = ms?.w|0;
     State.mapH = ms?.h|0;
 
+    // Wenn Map-Dimensionen noch nicht bereit sind (0/0),
+    // verschieben wir den Spawn, damit Tiere nicht bei (0,0) "unsichtbar" sind.
+    if (State.mapW <= 0 || State.mapH <= 0){
+      WARN('Map noch nicht bereit (w/h=', State.mapW, State.mapH, ') → retry init');
+      setTimeout(()=>{ try{ init(); }catch(e){} }, 200);
+      return;
+    }
+
     State.animals.length = 0;
     State._id = 1;
 
@@ -298,18 +330,49 @@
   }
 
   // ------------------------------------------------------------
-  // Event-Hooks: Wir initialisieren beim Start eines neuen Spiels
-  // ------------------------------------------------------------
-  window.addEventListener('cb:game:start', () => {
-    try{ init(); }catch(e){ WARN('init failed:', e); }
-  });
+// Event-Hooks
+//
+// WICHTIG:
+// - cb:game:start kann kommen, bevor cb:map:ready das Grid gesetzt hat.
+// - Deshalb initialisieren wir auch (und bevorzugt) auf cb:map:ready.
+// ------------------------------------------------------------
 
-  // Optional: beim Continue ebenfalls (wenn Map geladen ist)
-  window.addEventListener('req:game:continue', () => {
-    // Boot löst später cb:game:start aus – init() hängt daran.
-  });
+let _didInit = false;
 
-  // Expose
+function safeInit(reason){
+  if (_didInit) return;
+  try{
+    init();
+    // init() kann selbst retry'n, falls Map-Dims noch 0 sind.
+    // Sobald init erfolgreich durchläuft, setzen wir ok=true.
+    if (State.mapW > 0 && State.mapH > 0) {
+      _didInit = true;
+      LOG('init ok via', reason, 'map=', State.mapW, State.mapH);
+    }
+  }catch(e){
+    WARN('init failed via', reason, e);
+  }
+}
+
+// Map bereit → jetzt können wir sicher w/h lesen & sinnvoll spawnen
+window.addEventListener('cb:map:ready', () => safeInit('cb:map:ready'));
+
+// Game start → Fallback, falls map:ready schon vorher war
+window.addEventListener('cb:game:start', () => safeInit('cb:game:start'));
+
+// Auto-Start-HQ Hint (damit Tiere in HQ-Nähe spawnen und sofort sichtbar sind)
+window.addEventListener('cb:build:place', (ev)=>{
+  const d = ev?.detail || {};
+  if (d.__autoStart && (d.buildingId==='b.hq' || d.id==='b.hq' || d.type==='hq')){
+    State.hqHint = { tx: d.x, ty: d.y };
+    LOG('hqHint set from cb:build:place', State.hqHint);
+  }
+});
+
+// Optional: Continue – Boot löst später cb:game:start aus
+window.addEventListener('req:game:continue', () => {});
+
+// Expose
   window.MapAnimals = {
     CFG,
     State,
