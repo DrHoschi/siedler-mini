@@ -395,7 +395,9 @@
     }catch(e){
       WARN('cb:build:complete dispatch fehlgeschlagen', e);
     }
-
+if (b.__sprite && window.Buildings?.setSpriteFrame) {
+  Buildings.setSpriteFrame(b, 'frame_0_1', true, 1200);
+}
     LOG('Gebäude fertig', {
       id       : b.id,
       needs    : b.needs,
