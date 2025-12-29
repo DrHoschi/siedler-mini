@@ -1,15 +1,42 @@
 {
   "iconsBase": "assets/icons/buildings/",
   "categories": [
-    { "id": "all",       "label": "Alles" },
-    { "id": "admin",     "label": "Verwaltung" },
-    { "id": "resource",  "label": "Rohstoffe" },
-    { "id": "food",      "label": "Nahrung" },
-    { "id": "housing",   "label": "Hütten" },
-    { "id": "logistics", "label": "Straßen/Lager" },
-    { "id": "military",  "label": "Verteidigung" },
-    { "id": "decor",     "label": "Decoration" },
-    { "id": "roads",     "label": "Wege/Pfade" }
+    {
+      "id": "all",
+      "label": "Alles"
+    },
+    {
+      "id": "admin",
+      "label": "Verwaltung"
+    },
+    {
+      "id": "resource",
+      "label": "Rohstoffe"
+    },
+    {
+      "id": "food",
+      "label": "Nahrung"
+    },
+    {
+      "id": "housing",
+      "label": "Hütten"
+    },
+    {
+      "id": "logistics",
+      "label": "Straßen/Lager"
+    },
+    {
+      "id": "military",
+      "label": "Verteidigung"
+    },
+    {
+      "id": "decor",
+      "label": "Decoration"
+    },
+    {
+      "id": "roads",
+      "label": "Wege/Pfade"
+    }
   ],
   "buildings": [
     {
@@ -17,11 +44,25 @@
       "name": "Rathaus",
       "epoche": 1,
       "category": "admin",
-      "size": { "w": 3, "h": 3 },
-      "entrances": [ { "dx": 1, "dy": 3 } ],
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "entrances": [
+        {
+          "dx": 1,
+          "dy": 3
+        }
+      ],
       "cost": [
-        { "id": "wood",  "qty": 4 },
-        { "id": "stone", "qty": 2 }
+        {
+          "id": "wood",
+          "qty": 4
+        },
+        {
+          "id": "stone",
+          "qty": 2
+        }
       ],
       "enabled": true
     },
@@ -30,13 +71,27 @@
       "name": "Holzfällerhütte",
       "epoche": 1,
       "category": "resource",
-      "size": { "w": 3, "h": 3 },
-      "entrances": [ { "dx": 1, "dy": 3 } ],
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "entrances": [
+        {
+          "dx": 1,
+          "dy": 3
+        }
+      ],
       "cost": [
-        { "id": "wood", "qty": 2 }
+        {
+          "id": "wood",
+          "qty": 2
+        }
       ],
       "produces": [
-        { "id": "wood", "qty": 1 }
+        {
+          "id": "wood",
+          "qty": 1
+        }
       ],
       "cycle": 3000,
       "enabled": true,
@@ -51,14 +106,31 @@
       "name": "Steinbruch",
       "epoche": 1,
       "category": "resource",
-      "size": { "w": 3, "h": 3 },
-      "entrances": [ { "dx": 1, "dy": 3 } ],
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "entrances": [
+        {
+          "dx": 1,
+          "dy": 3
+        }
+      ],
       "cost": [
-        { "id": "wood",  "qty": 1 },
-        { "id": "stone", "qty": 1 }
+        {
+          "id": "wood",
+          "qty": 1
+        },
+        {
+          "id": "stone",
+          "qty": 1
+        }
       ],
       "produces": [
-        { "id": "stone", "qty": 1 }
+        {
+          "id": "stone",
+          "qty": 1
+        }
       ],
       "cycle": 3200,
       "enabled": true,
@@ -73,13 +145,27 @@
       "name": "Fischerhütte",
       "epoche": 1,
       "category": "food",
-      "size": { "w": 3, "h": 3 },
-      "entrances": [ { "dx": 1, "dy": 3 } ],
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "entrances": [
+        {
+          "dx": 1,
+          "dy": 3
+        }
+      ],
       "cost": [
-        { "id": "wood", "qty": 2 }
+        {
+          "id": "wood",
+          "qty": 2
+        }
       ],
       "produces": [
-        { "id": "fish", "qty": 1 }
+        {
+          "id": "fish",
+          "qty": 1
+        }
       ],
       "cycle": 3100,
       "enabled": true,
@@ -94,16 +180,76 @@
       "name": "Kleines Wohnhaus",
       "epoche": 1,
       "category": "housing",
-      "size": { "w": 3, "h": 3 },
-      "entrances": [ { "dx": 1, "dy": 3 } ],
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "entrances": [
+        {
+          "dx": 1,
+          "dy": 3
+        }
+      ],
       "cost": [
-        { "id": "wood",  "qty": 3 },
-        { "id": "stone", "qty": 1 }
+        {
+          "id": "wood",
+          "qty": 3
+        },
+        {
+          "id": "stone",
+          "qty": 1
+        }
       ],
       "spawns": [
-        { "unit": "u.villager", "qty": 2 }
+        {
+          "unit": "u.villager",
+          "qty": 2
+        }
       ],
       "enabled": true
+    },
+    {
+      "id": "b.hunter",
+      "name": "Jägerhütte",
+      "epoche": 1,
+      "category": "resource",
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "entrances": [
+        {
+          "dx": 1,
+          "dy": 3
+        }
+      ],
+      "cost": [
+        {
+          "id": "wood",
+          "qty": 3
+        },
+        {
+          "id": "stone",
+          "qty": 1
+        }
+      ],
+      "produces": [
+        {
+          "id": "meat",
+          "qty": 1
+        },
+        {
+          "id": "pelt",
+          "qty": 1
+        }
+      ],
+      "cycle": 4500,
+      "enabled": false,
+      "workArea": {
+        "shape": "circle",
+        "radiusTiles": 5.0,
+        "selectable": true
+      }
     }
   ]
 }

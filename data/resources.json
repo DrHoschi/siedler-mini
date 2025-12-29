@@ -1,7 +1,44 @@
 {
-  "wood":        { "name": "Holz",        "icon": "assets/icons/resources/wood.png",        "epoche": 1, "order": 10 },
-  "stone":       { "name": "Stein",       "icon": "assets/icons/resources/stone.png",       "epoche": 1, "order": 20 },
-  "fish":        { "name": "Fisch",       "icon": "assets/icons/resources/fish.png",        "epoche": 1, "order": 30 },
-  "gold":        { "name": "Gold",        "icon": "assets/icons/resources/gold.png",        "epoche": 1, "order": 40 },
-  "population":  { "name": "Bevölkerung", "icon": "assets/icons/resources/pop.png",         "epoche": 1, "order": 50 }
+  "wood": {
+    "name": "Holz",
+    "icon": "assets/icons/resources/wood.png",
+    "epoche": 1,
+    "order": 10
+  },
+  "stone": {
+    "name": "Stein",
+    "icon": "assets/icons/resources/stone.png",
+    "epoche": 1,
+    "order": 20
+  },
+  "fish": {
+    "name": "Fisch",
+    "icon": "assets/icons/resources/fish.png",
+    "epoche": 1,
+    "order": 30
+  },
+  "gold": {
+    "name": "Gold",
+    "icon": "assets/icons/resources/gold.png",
+    "epoche": 1,
+    "order": 40
+  },
+  "population": {
+    "name": "Bevölkerung",
+    "icon": "assets/icons/resources/pop.png",
+    "epoche": 1,
+    "order": 50
+  },
+  "meat": {
+    "name": "Fleisch",
+    "icon": "assets/icons/resources/meat.png",
+    "epoche": 1,
+    "order": 35
+  },
+  "pelt": {
+    "name": "Fell",
+    "icon": "assets/icons/resources/pelt.png",
+    "epoche": 1,
+    "order": 36
+  }
 }
