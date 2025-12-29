@@ -36,14 +36,13 @@ function runTick(){
       GameUnits.tick(dt);
     }
 
-    
 
-    // 3b) Tiere (Rehe/Füchse) – dynamische Ressourcen
+    // 3b) Tiere auf der Map (Reh/Fuchs) – dynamische Ressourcen / Jagd-Basis
     if (window.MapAnimals?.tick){
+      // MapAnimals erwartet Sekunden
       MapAnimals.tick(dt);
     }
-
-// 4) BAUSTELLEN / Bauphasen (Baustelle 0 → 1 → 2 → fertig)
+    // 4) BAUSTELLEN / Bauphasen (Baustelle 0 → 1 → 2 → fertig)
     //    DAS war jetzt "platt", weil es nach dem Entfernen aus game.js nirgendwo mehr tickte.
     if (window.GameConstruction?.tick){
       GameConstruction.tick(dt);

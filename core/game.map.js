@@ -452,10 +452,12 @@
     const z = [];
     const MR = window.MapResources;
     const MD = window.MapDecorations;
+    const MA = window.MapAnimals;
 
     // Ressourcen + Deko (pro-node drawables)
     if (MR?.collectDrawables) MR.collectDrawables(z, cam, ts);
     if (MD?.collectDrawables) MD.collectDrawables(z, cam, ts);
+    if (MA?.collectDrawables) MA.collectDrawables(z, cam, ts);
 
     // Gebäude
     if (Array.isArray(window.Game?.buildings)){
@@ -917,22 +919,6 @@ if (window.MapResources) {
 }
 
     // ---------------------------------------------------------------------
-
-// ---------------------------------------------------------------------
-// Animals-Layer (Rehe/Füchse – dynamische Ressourcen)
-//  - benötigt core/map.animals.js
-//  - nutzt MapAnimals.drawOnMainCanvas(ctx, cam, tileSize)
-// ---------------------------------------------------------------------
-if (window.MapAnimals) {
-  try {
-    if (typeof window.MapAnimals.drawOnMainCanvas === 'function') {
-      window.MapAnimals.drawOnMainCanvas(ctx, cam, ts);
-    }
-  } catch (e) {
-    WARN('MapAnimals draw Fehler:', e);
-  }
-}
-
 // Deko-Layer (Pflanzen/Props, KEINE Ressourcen)
 //  - benötigt core/map.decorations.js
 //  - nutzt MapDecorations.drawOnMainCanvas(ctx, cam, tileSize)

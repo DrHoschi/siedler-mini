@@ -505,6 +505,19 @@ try{
         'assets/resources/fish/fish_mega_atlas.png'
       ));
 
+      // Animals (Reh/Fuchs)
+      tasks.push(this.loadAtlas(
+        'deer_atlas',
+        'assets/animals/deer_atlas.json',
+        'assets/animals/deer.png'
+      ));
+      tasks.push(this.loadAtlas(
+        'fox_atlas',
+        'assets/animals/fox_atlas.json',
+        'assets/animals/fox.png'
+      ));
+
+
 
 
       // --------------------------------------------------------------------
@@ -564,22 +577,7 @@ tasks.push(this.loadAtlas(
   ['assets/characters/stonecutter_atlas.json','assets/characters/stonecutter.json'],
   'assets/characters/stonecutter.png'
 ));
-
-
-// Animals (dynamic map resources): Deer & Fox
-// Hinweis: Wir laden die Atlanten schon jetzt, damit wir im nächsten Schritt
-// map.animals.js sofort testen können (Render + simple Wander-Logik).
-tasks.push(this.loadAtlas(
-  'deer_atlas',
-  ['assets/animals/deer_atlas.json'],
-  'assets/animals/deer.png'
-));
-tasks.push(this.loadAtlas(
-  'fox_atlas',
-  ['assets/animals/fox_atlas.json'],
-  'assets/animals/fox.png'
-));
-
+      
 
       await Promise.allSettled(tasks);
 
