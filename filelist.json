@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-29T18:46:14.940Z",
+  "createdAt": "2025-12-29T22:00:50.392Z",
   "root": ".",
-  "count": 547,
+  "count": 548,
   "entries": [
     {
       "type": "dir",
@@ -120,11 +120,6 @@
     {
       "type": "dir",
       "path": "assets/buildings/hunter/"
-    },
-    {
-      "type": "file",
-      "path": "assets/buildings/hunter/hunter-sprite_atlas.json",
-      "size": 1585
     },
     {
       "type": "file",
@@ -1440,7 +1435,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 22280
+      "size": 22822
     },
     {
       "type": "file",
@@ -1520,7 +1515,7 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 5503
+      "size": 5474
     },
     {
       "type": "file",
@@ -1530,12 +1525,12 @@
     {
       "type": "file",
       "path": "core/game.buildings.js",
-      "size": 2528
+      "size": 3184
     },
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 20731
+      "size": 20842
     },
     {
       "type": "file",
@@ -1545,7 +1540,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 44870
+      "size": 45089
     },
     {
       "type": "file",
@@ -1753,6 +1748,15 @@
     },
     {
       "type": "dir",
+      "path": "data/atlases/"
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/hunter-sprite_atlas.json",
+      "size": 1610
+    },
+    {
+      "type": "dir",
       "path": "data/maps/"
     },
     {
@@ -1823,7 +1827,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 4182
+      "size": 4375
     },
     {
       "type": "file",
@@ -2644,12 +2648,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53399
+      "size": 54654
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20856
+      "size": 21329
     },
     {
       "type": "file",
