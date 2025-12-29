@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-24T22:28:12.591Z",
+  "createdAt": "2025-12-29T18:46:14.940Z",
   "root": ".",
-  "count": 534,
+  "count": 547,
   "entries": [
     {
       "type": "dir",
@@ -62,6 +62,35 @@
     },
     {
       "type": "dir",
+      "path": "assets/animals/"
+    },
+    {
+      "type": "file",
+      "path": "assets/animals/deer_atlas.json",
+      "size": 26207
+    },
+    {
+      "type": "file",
+      "path": "assets/animals/deer.png",
+      "size": 1696662
+    },
+    {
+      "type": "file",
+      "path": "assets/animals/fox_atlas.json",
+      "size": 26142
+    },
+    {
+      "type": "file",
+      "path": "assets/animals/fox.png",
+      "size": 1625267
+    },
+    {
+      "type": "file",
+      "path": "assets/animals/Read.md",
+      "size": 1
+    },
+    {
+      "type": "dir",
       "path": "assets/buildings/"
     },
     {
@@ -86,6 +115,25 @@
     {
       "type": "file",
       "path": "assets/buildings/building_place/Readme.md",
+      "size": 1
+    },
+    {
+      "type": "dir",
+      "path": "assets/buildings/hunter/"
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/hunter/hunter-sprite_atlas.json",
+      "size": 1585
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/hunter/hunter-sprite.png",
+      "size": 1149493
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/hunter/read.me",
       "size": 1
     },
     {
@@ -1392,7 +1440,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 21970
+      "size": 22280
     },
     {
       "type": "file",
@@ -1472,7 +1520,7 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 4901
+      "size": 5503
     },
     {
       "type": "file",
@@ -1497,7 +1545,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 44773
+      "size": 44870
     },
     {
       "type": "file",
@@ -1511,13 +1559,18 @@
     },
     {
       "type": "file",
+      "path": "core/game.production.hunt.js",
+      "size": 3886
+    },
+    {
+      "type": "file",
       "path": "core/game.production.jobs.js",
       "size": 8559
     },
     {
       "type": "file",
       "path": "core/game.production.js",
-      "size": 21254
+      "size": 22873
     },
     {
       "type": "file",
@@ -1542,7 +1595,7 @@
     {
       "type": "file",
       "path": "core/game.tick.js",
-      "size": 2359
+      "size": 2545
     },
     {
       "type": "file",
@@ -1591,6 +1644,11 @@
     },
     {
       "type": "file",
+      "path": "core/map.animals.js",
+      "size": 10088
+    },
+    {
+      "type": "file",
       "path": "core/map.decorations.js",
       "size": 35571
     },
@@ -1632,7 +1690,7 @@
     {
       "type": "file",
       "path": "core/production.res-validate.js",
-      "size": 8291
+      "size": 3705
     },
     {
       "type": "file",
@@ -1765,7 +1823,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 2690
+      "size": 4182
     },
     {
       "type": "file",
@@ -1785,7 +1843,7 @@
     {
       "type": "file",
       "path": "data/resources.json",
-      "size": 604
+      "size": 841
     },
     {
       "type": "file",
@@ -2456,7 +2514,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-place-toast.css",
-      "size": 35
+      "size": 36
     },
     {
       "type": "file",
@@ -2550,6 +2608,11 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-place-toast-v4.js",
+      "size": 5966
+    },
+    {
+      "type": "file",
       "path": "ui/ui-place-toast.js",
       "size": 5268
     },
@@ -2581,17 +2644,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 53508
+      "size": 53399
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20903
+      "size": 20856
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 17908
+      "size": 18039
     },
     {
       "type": "file",
