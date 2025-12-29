@@ -412,6 +412,8 @@
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
   function init(Game){
+    // Robust: falls init() ohne Argument aufgerufen wird (Safari / Module-Reihenfolge)
+    Game = Game || window.Game || {};
     const canvas = document.getElementById('game');
     const mapUrl = canvas?.getAttribute('data-map')
                  || 'data/maps/map-epoch1.json';
@@ -502,115 +504,80 @@
   }
 
   function _drawOneBuildingYS(ctx, cam, ts, b){
-  const bx = (b.x | 0) * ts;
-  const by = (b.y | 0) * ts;
-  const bw = (b.w || 1) * ts;
-  const bh = (b.h || 1) * ts;
+            const bx = (b.x | 0) * ts;
+            const by = (b.y | 0) * ts;
+            const bw = (b.w || 1) * ts;
+            const bh = (b.h || 1) * ts;
 
-  const stage = typeof b.buildStage === 'number' ? b.buildStage : 3;
+            const stage = typeof b.buildStage === 'number' ? b.buildStage : 3;
 
-  // Standard-Farben (Fallback-Rechteck)
-  let col = 'rgba(80,200,80,0.9)';   // fertig
-  if (stage === 0) col = 'rgba(200,150,50,0.6)';
-  if (stage === 1) col = 'rgba(220,180,80,0.7)';
-  if (stage === 2) col = 'rgba(140,200,120,0.8)';
+            // Standard-Farben
+            let col = 'rgba(80,200,80,0.9)';   // fertig
+            if (stage === 0) col = 'rgba(200,150,50,0.6)';
+            if (stage === 1) col = 'rgba(220,180,80,0.7)';
+            if (stage === 2) col = 'rgba(140,200,120,0.8)';
 
-  let useFallback = false;
+            let useFallback = false;
 
-  // ---------------------------------------------------------------------
-  // Baustelle 0/1/2: klassische BuildPlaceSprites (PNG)
-  // ---------------------------------------------------------------------
-  if (stage < 3){
-    const idx     = Math.max(0, Math.min(2, stage));
-    const imgSite = BuildPlaceSprites[idx];
+            if (stage < 3){
+              // Baustelle 0/1/2
+              const idx    = Math.max(0, Math.min(2, stage));
+              const imgSite = BuildPlaceSprites[idx];
 
-    if (isDrawableImage(imgSite)){
-      try{
-        ctx.drawImage(imgSite, bx, by, bw, bh);
-      }catch(e){
-        WARN('drawImage Baustelle-Fehler:', e?.message || e);
-        useFallback = true;
-      }
-    } else {
-      useFallback = true;
+              if (isDrawableImage(imgSite)){
+                try{
+                  ctx.drawImage(imgSite, bx, by, bw, bh);
+                }catch(e){
+                  WARN('drawImage Baustelle-Fehler:', e?.message || e);
+                  useFallback = true;
+                }
+              } else {
+                // Bild noch nicht fertig oder defekt → Fallback-Rechteck
+                useFallback = true;
+              }
+            } else {
+          // -------------------------------------------------
+// Fertiges Gebäude
+// -------------------------------------------------
+if (b.__sprite && b.__sprite.atlas && window.Assets) {
+  const spr = b.__sprite;
+  const atlas = Assets.getAtlas(spr.atlas);
+
+  if (atlas?.ok && spr.frame) {
+    let revealP = 1;
+
+    if (spr.reveal) {
+      const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
+      revealP = Math.max(0, Math.min(1, t));
+      if (revealP >= 1) spr.reveal = null;
     }
 
-    if (useFallback){
-      ctx.fillStyle = col;
-      ctx.fillRect(bx, by, bw, bh);
-    }
+    ctx.save();
+
+    // Bottom → Top Reveal
+    const clipH = bh * revealP;
+    ctx.beginPath();
+    ctx.rect(bx, by + (bh - clipH), bw, clipH);
+    ctx.clip();
+
+    Assets.drawAtlasFrame(
+      ctx,
+      spr.atlas,
+      spr.frame,
+      bx + bw / 2,
+      by + bh,
+      { align:'pivot', scale: bw / 256 }
+    );
+
+    ctx.restore();
     return;
   }
-
-  // ---------------------------------------------------------------------
-  // Fertiges Gebäude:
-  //   1) wenn __sprite (atlas) vorhanden → Atlas-Frame zeichnen (mit Reveal)
-  //   2) sonst: klassisches PNG-Sprite via getBuildingSprite(b.id)
-  //   3) sonst: Fallback-Rechteck
-  // ---------------------------------------------------------------------
-
-  // 1) Atlas-Render (neu) – NUR wenn wirklich korrekt vorhanden
-  try{
-    if (b.__sprite && b.__sprite.atlas && window.Assets){
-      const Assets = window.Assets; // <-- wichtig: sonst ReferenceError
-      const spr    = b.__sprite;
-      const atlas  = Assets.getAtlas(spr.atlas);
-
-      if (atlas?.ok && spr.frame){
-        let revealP = 1;
-
-        // Reveal optional (Bottom→Top)
-        if (spr.reveal){
-          const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
-          revealP = Math.max(0, Math.min(1, t));
-          if (revealP >= 1) spr.reveal = null;
-        }
-
-        ctx.save();
-
-        // Clip: bottom -> top
-        const clipH = bh * revealP;
-        ctx.beginPath();
-        ctx.rect(bx, by + (bh - clipH), bw, clipH);
-        ctx.clip();
-
-        const ok = Assets.drawAtlasFrame(
-          ctx,
-          spr.atlas,
-          spr.frame,
-          bx + bw / 2,
-          by + bh,
-          { align:'pivot', scale: bw / 256 }
-        );
-
-        ctx.restore();
-
-        if (ok) return; // <--- nur wenn wirklich gezeichnet
-      }
-    }
-  }catch(e){
-    WARN('Atlas-Gebäude-Draw Fehler id='+b.id+':', e?.message || e);
-    // wir fallen unten auf PNG/Fallback zurück
-  }
-
-  // 2) PNG-Fallback (alt) – alle Gebäude bleiben sichtbar, auch ohne __sprite
-  try{
-    const imgB = getBuildingSprite(b.id);
-    if (isDrawableImage(imgB)){
-      ctx.drawImage(imgB, bx, by, bw, bh);
-      return;
-    }
-  }catch(e){
-    WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
-  }
-
-  // 3) Finaler Fallback: Rechteck
-  ctx.fillStyle = col;
-  ctx.fillRect(bx, by, bw, bh);
 }
+            }
+      
+  }
 
 
-  function _makeUnitDrawShared
   function _makeUnitDrawShared(){
     const Assets = window.Assets;
     const hasAssets = !!(Assets && (Assets.getImage || Assets.getAtlas));
@@ -834,6 +801,8 @@
   }
 
   function render(Game){
+    // Robust: render() wird teils ohne Argument aufgerufen → dann auf window.Game zurückfallen
+    Game = Game || window.Game || {};
     const ctx = Game?.ctx;
     if (!ctx) return;
 
