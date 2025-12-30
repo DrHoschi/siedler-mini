@@ -592,6 +592,20 @@ tasks.push(this.loadAtlas(
         'assets/buildings/hunter/hunter-sprite.png'
       ));
 
+      // --------------------------------------------------------------------
+      // Buildings: HQ (Gebäude-Atlas)
+      //  - PNG:  assets/buildings/hq/hq-sprite.png
+      //  - JSON: data/atlases/hq-sprite_atlas.json
+      //  - Atlas-Key: 'hq_building_atlas'
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'hq_building_atlas',
+        'data/atlases/hq-sprite_atlas.json',
+        'assets/buildings/hq/hq-sprite.png'
+      ));
+
+
+
       await Promise.allSettled(tasks);
 
       this.state.ready = true;
