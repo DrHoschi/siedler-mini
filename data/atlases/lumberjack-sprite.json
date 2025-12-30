@@ -1,0 +1,95 @@
+{
+  "meta": {
+    "image": "assets/buildings/hunter/lumberjack-sprite.png",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    },
+    "tool": "sprite-atlas-tool",
+    "toolVersion": "v25.12.09",
+    "exportedAt": "2025-12-29T17:43:27.258Z"
+  },
+  "frames": {
+    "frame_0_0": {
+      "x": 0,
+      "y": 0,
+      "w": 341,
+      "h": 341,
+      "anchorX": 171,
+      "anchorY": 341,
+      "scale": 1
+    },
+    "frame_0_1": {
+      "x": 341,
+      "y": 0,
+      "w": 341,
+      "h": 341,
+      "anchorX": 512,
+      "anchorY": 341,
+      "scale": 1
+    },
+    "frame_0_2": {
+      "x": 682,
+      "y": 0,
+      "w": 341,
+      "h": 341,
+      "anchorX": 853,
+      "anchorY": 341,
+      "scale": 1
+    },
+    "frame_1_0": {
+      "x": 0,
+      "y": 341,
+      "w": 341,
+      "h": 341,
+      "anchorX": 171,
+      "anchorY": 682,
+      "scale": 1
+    },
+    "frame_1_1": {
+      "x": 341,
+      "y": 341,
+      "w": 341,
+      "h": 341,
+      "anchorX": 512,
+      "anchorY": 682,
+      "scale": 1
+    },
+    "frame_1_2": {
+      "x": 682,
+      "y": 341,
+      "w": 341,
+      "h": 341,
+      "anchorX": 853,
+      "anchorY": 682,
+      "scale": 1
+    },
+    "frame_2_0": {
+      "x": 0,
+      "y": 682,
+      "w": 341,
+      "h": 341,
+      "anchorX": 171,
+      "anchorY": 1023,
+      "scale": 1
+    },
+    "frame_2_1": {
+      "x": 341,
+      "y": 682,
+      "w": 341,
+      "h": 341,
+      "anchorX": 512,
+      "anchorY": 1023,
+      "scale": 1
+    },
+    "frame_2_2": {
+      "x": 682,
+      "y": 682,
+      "w": 341,
+      "h": 341,
+      "anchorX": 853,
+      "anchorY": 1023,
+      "scale": 1
+    }
+  }
+}
