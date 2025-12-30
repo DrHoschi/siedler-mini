@@ -64,39 +64,54 @@
    *
    * Wenn sich die Struktur ändert, bitte HIER anpassen.
    */
-  function resolveBuildingSpritePath(id){
+  function resolveBuildingSpritePath(id, kind='world'){
     const raw = String(id || '');
-    // Icons-Ordner benutzen:
-    return `assets/icons/buildings/${raw}.png`;
-    // Falls du später eigene Welt-Sprites hast, könntest du hier auch
-    // zwischen icons/ und buildings/ unterscheiden.
+    // Trennung: WORLD-Sprites (auf der Map) vs. UI-Icons (Baumenü)
+    // - WORLD:  assets/buildings/png/<id>.png   (Fallback solange noch keine Atlanten existieren)
+    // - ICON:   assets/icons/buildings/<id>.png
+    //
+    // Hinweis: <id> ist bei uns z.B. "b.hq" / "b.hunter" usw.
+    if (kind === 'icon'){
+      return `assets/icons/buildings/${raw}.png`;
+    }
+    return `assets/buildings/png/${raw}.png`;
   }
 
-  /**
-   * Image-Objekt für ein Gebäude holen (mit Cache).
-   */
+
   function getBuildingSprite(id){
     if (!id) return null;
     if (BuildingSpriteCache.has(id)) return BuildingSpriteCache.get(id);
 
-    const path = resolveBuildingSpritePath(id);
-    const img  = new Image();
+    // 1) Erst WORLD-PNG probieren (Map-Render)
+    const worldPath = resolveBuildingSpritePath(id, 'world');
+    // 2) Dann ICON-PNG als Fallback (damit nie wieder unsichtbar)
+    const iconPath  = resolveBuildingSpritePath(id, 'icon');
+
+    const img = new Image();
 
     img.onload = ()=>{
       if (!img.naturalWidth || !img.naturalHeight){
-        WARN('Gebäudesprite geladen, aber ohne Größe (evtl. defekt):', id, path);
+        WARN('Gebäudesprite geladen, aber ohne Größe (evtl. defekt):', id, img.src);
       } else {
-        LOG('Gebäudesprite geladen:', id, path);
+        LOG('Gebäudesprite geladen:', id, img.src);
       }
     };
-    img.onerror = (e)=>{
-      WARN('Gebäudesprite NICHT ladbar:', id, path, e);
+
+    img.onerror = ()=>{
+      // Wenn WORLD fehlt → einmalig auf ICON umschalten.
+      if (img.src && img.src.indexOf('/png/') !== -1){
+        WARN('WORLD-Gebäudesprite fehlt, nutze ICON-Fallback:', id, worldPath, '→', iconPath);
+        img.src = iconPath;
+        return;
+      }
+      WARN('Gebäudesprite NICHT ladbar (auch ICON fehlt):', id, img.src);
     };
 
-    img.src = path;
+    img.src = worldPath;
     BuildingSpriteCache.set(id, img);
     return img;
   }
+
 
   /**
    * Prüfen, ob ein Image wirklich zeichnbar ist
@@ -534,75 +549,47 @@
                 useFallback = true;
               }
             } else {
-              // -------------------------------------------------
-              // Fertiges Gebäude
-              // -------------------------------------------------
-              const Assets = window.Assets;
+          // -------------------------------------------------
+// Fertiges Gebäude
+// -------------------------------------------------
+const Assets = window.Assets;
+if (b.__sprite && b.__sprite.atlas && Assets) {
+  const spr = b.__sprite;
+  const atlas = Assets.getAtlas(spr.atlas);
 
-              // 1) Atlas-Rendering (z.B. Hunter) – nur wenn __sprite vorhanden
-              if (b.__sprite && b.__sprite.atlas && Assets) {
-                const spr = b.__sprite;
-                const atlas = Assets.getAtlas?.(spr.atlas);
+  if (atlas?.ok && spr.frame) {
+    let revealP = 1;
 
-                if (atlas?.ok && spr.frame) {
-                  let revealP = 1;
+    if (spr.reveal) {
+      const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
+      revealP = Math.max(0, Math.min(1, t));
+      if (revealP >= 1) spr.reveal = null;
+    }
 
-                  if (spr.reveal) {
-                    const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
-                    revealP = Math.max(0, Math.min(1, t));
-                    if (revealP >= 1) spr.reveal = null;
-                  }
+    ctx.save();
 
-                  try {
-                    ctx.save();
+    // Bottom → Top Reveal
+    const clipH = bh * revealP;
+    ctx.beginPath();
+    ctx.rect(bx, by + (bh - clipH), bw, clipH);
+    ctx.clip();
 
-                    // Bottom → Top Reveal
-                    const clipH = bh * revealP;
-                    ctx.beginPath();
-                    ctx.rect(bx, by + (bh - clipH), bw, clipH);
-                    ctx.clip();
+    Assets.drawAtlasFrame(
+      ctx,
+      spr.atlas,
+      spr.frame,
+      bx + bw / 2,
+      by + bh,
+      { align:'pivot', scale: bw / 256 }
+    );
 
-                    // Hinweis: scale basiert aktuell auf 256px-Frames (dein Hunter-Atlas)
-                    Assets.drawAtlasFrame(
-                      ctx,
-                      spr.atlas,
-                      spr.frame,
-                      bx + bw / 2,
-                      by + bh,
-                      { align:'pivot', scale: bw / 256 }
-                    );
-
-                    ctx.restore();
-                    return; // Atlas erfolgreich gezeichnet
-                  } catch (e) {
-                    WARN('drawAtlasFrame Fehler – Fallback auf PNG/Icon:', e?.message || e);
-                  }
-                }
-              }
-
-              // 2) PNG/Icon-Fallback (HQ, Lumberjack, Quarry, …)
-              const imgB = getBuildingSprite(b.id);
-              if (isDrawableImage(imgB)) {
-                try {
-                  ctx.drawImage(imgB, bx, by, bw, bh);
-                  return;
-                } catch (e) {
-                  WARN('drawImage Gebäude-Fallback-Fehler:', e?.message || e);
-                }
-              }
-
-              // 3) Letzter Fallback: farbiges Rechteck (damit NIEMALS unsichtbar)
-              useFallback = true;
+    ctx.restore();
+    return;
+  }
+}
             }
-
-            if (useFallback) {
-              ctx.fillStyle = col;
-              ctx.fillRect(bx, by, bw, bh);
-              ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-              ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
-            }
-
-          }
+      
+  }
 
 
   function _makeUnitDrawShared(){
