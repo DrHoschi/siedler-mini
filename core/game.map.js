@@ -64,54 +64,39 @@
    *
    * Wenn sich die Struktur ändert, bitte HIER anpassen.
    */
-  function resolveBuildingSpritePath(id, kind='world'){
+  function resolveBuildingSpritePath(id){
     const raw = String(id || '');
-    // Trennung: WORLD-Sprites (auf der Map) vs. UI-Icons (Baumenü)
-    // - WORLD:  assets/buildings/png/<id>.png   (Fallback solange noch keine Atlanten existieren)
-    // - ICON:   assets/icons/buildings/<id>.png
-    //
-    // Hinweis: <id> ist bei uns z.B. "b.hq" / "b.hunter" usw.
-    if (kind === 'icon'){
-      return `assets/icons/buildings/${raw}.png`;
-    }
-    return `assets/buildings/png/${raw}.png`;
+    // Icons-Ordner benutzen:
+    return `assets/icons/buildings/${raw}.png`;
+    // Falls du später eigene Welt-Sprites hast, könntest du hier auch
+    // zwischen icons/ und buildings/ unterscheiden.
   }
 
-
+  /**
+   * Image-Objekt für ein Gebäude holen (mit Cache).
+   */
   function getBuildingSprite(id){
     if (!id) return null;
     if (BuildingSpriteCache.has(id)) return BuildingSpriteCache.get(id);
 
-    // 1) Erst WORLD-PNG probieren (Map-Render)
-    const worldPath = resolveBuildingSpritePath(id, 'world');
-    // 2) Dann ICON-PNG als Fallback (damit nie wieder unsichtbar)
-    const iconPath  = resolveBuildingSpritePath(id, 'icon');
-
-    const img = new Image();
+    const path = resolveBuildingSpritePath(id);
+    const img  = new Image();
 
     img.onload = ()=>{
       if (!img.naturalWidth || !img.naturalHeight){
-        WARN('Gebäudesprite geladen, aber ohne Größe (evtl. defekt):', id, img.src);
+        WARN('Gebäudesprite geladen, aber ohne Größe (evtl. defekt):', id, path);
       } else {
-        LOG('Gebäudesprite geladen:', id, img.src);
+        LOG('Gebäudesprite geladen:', id, path);
       }
     };
-
-    img.onerror = ()=>{
-      // Wenn WORLD fehlt → einmalig auf ICON umschalten.
-      if (img.src && img.src.indexOf('/png/') !== -1){
-        WARN('WORLD-Gebäudesprite fehlt, nutze ICON-Fallback:', id, worldPath, '→', iconPath);
-        img.src = iconPath;
-        return;
-      }
-      WARN('Gebäudesprite NICHT ladbar (auch ICON fehlt):', id, img.src);
+    img.onerror = (e)=>{
+      WARN('Gebäudesprite NICHT ladbar:', id, path, e);
     };
 
-    img.src = worldPath;
+    img.src = path;
     BuildingSpriteCache.set(id, img);
     return img;
   }
-
 
   /**
    * Prüfen, ob ein Image wirklich zeichnbar ist
@@ -463,7 +448,24 @@
     return true;
   }
 
-  function drawWorldGlobalYSort(ctx, cam, ts){
+  
+  // -------------------------------------------------------------------------
+  // BUILDINGS – robuste Quelle (Game.buildings ODER Buildings.list)
+  // -------------------------------------------------------------------------
+  function getBuildingsForDraw(){
+    // Primär: klassische Runtime-Liste
+    const a = window.Game?.buildings;
+    if (Array.isArray(a)) return a;
+    // Fallback: Buildings-Modul (wenn Sync auf Game verpasst wurde)
+    const b = window.Buildings?.list;
+    if (Array.isArray(b)) return b;
+    // Weitere mögliche Aliase (für alte Varianten)
+    const c = window.GameBuildings?.list;
+    if (Array.isArray(c)) return c;
+    return [];
+  }
+
+function drawWorldGlobalYSort(ctx, cam, ts){
     const z = [];
     const MR = window.MapResources;
     const MD = window.MapDecorations;
@@ -475,11 +477,13 @@
     if (MA?.collectDrawables) MA.collectDrawables(z, cam, ts);
 
     // Gebäude
-    if (Array.isArray(window.Game?.buildings)){
+    const __bldList = getBuildingsForDraw();
+
+    if (__bldList.length){
       // IMPORTANT: Baustellen-Sprites initialisieren, sonst sehen wir nur Fallback-Rechtecke
       try { ensureBuildPlaceSprites(); } catch (e) { /* ignore */ }
       let bi = 0;
-      for (const b of window.Game.buildings){
+      for (const b of __bldList){
         const sortY = ((b.y | 0) + (b.h || 1)) * ts;
         z.push({
           sortY,
@@ -552,8 +556,7 @@
           // -------------------------------------------------
 // Fertiges Gebäude
 // -------------------------------------------------
-const Assets = window.Assets;
-if (b.__sprite && b.__sprite.atlas && Assets) {
+if (b.__sprite && b.__sprite.atlas && window.Assets) {
   const spr = b.__sprite;
   const atlas = Assets.getAtlas(spr.atlas);
 
@@ -875,10 +878,11 @@ if (b.__sprite && b.__sprite.atlas && Assets) {
 
 // Gebäude-Overlay (Baustellen + fertige Gebäude)
     // ---------------------------------------------------------------------
-    if (Array.isArray(Game?.buildings) && Game.buildings.length){
+    const __bldList2 = getBuildingsForDraw();
+    if (__bldList2.length){
       ensureBuildPlaceSprites();
 
-      for (const b of Game.buildings){
+      for (const b of __bldList2){
         const bx = (b.x | 0) * ts;
         const by = (b.y | 0) * ts;
         const bw = (b.w || 1) * ts;

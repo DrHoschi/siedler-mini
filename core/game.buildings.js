@@ -101,9 +101,22 @@ if (def.sprite?.type === 'atlas') {
   function syncToGame () {
     if (window.Game) {
       window.Game.buildings = Buildings.list;
+      return true;
     }
+    return false;
   }
+
+  // Sofort versuchen (falls Game schon existiert)
   syncToGame();
 
+  // Robust: wenn Game später gesetzt wird (Load-Reihenfolge / Safari Cache),
+  // dann ein paar Mal nachziehen.
+  (function retrySync(n=0){
+    if (syncToGame()) return;
+    if (n >= 40) return; // ~4s (40 * 100ms)
+    setTimeout(()=> retrySync(n+1), 100);
+  })();
+
+  // Zusätzlich bei Start-Event
   window.addEventListener('cb:game:start', syncToGame);
 })();
