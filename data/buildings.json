@@ -64,7 +64,16 @@
           "qty": 2
         }
       ],
-      "enabled": true
+      "enabled": true,
+      "sprite": {
+        "type": "atlas",
+        "atlas": "hq_building_atlas",
+        "frames": {
+          "place": "frame_0_0",
+          "live": "frame_0_1",
+          "reserve": "frame_0_2"
+        }
+      }
     },
     {
       "id": "b.lumberjack",
@@ -212,14 +221,14 @@
       "id": "b.hunter",
       "name": "Jägerhütte",
       "sprite": {
-    "type": "atlas",
-    "atlas": "hunter_building_atlas",
-    "frames": {
-      "place":   "frame_0_0",
-      "live":    "frame_0_1",
-      "reserve": "frame_0_2"
-    }
-  },
+        "type": "atlas",
+        "atlas": "hunter_building_atlas",
+        "frames": {
+          "place": "frame_0_0",
+          "live": "frame_0_1",
+          "reserve": "frame_0_2"
+        }
+      },
       "epoche": 1,
       "category": "resource",
       "size": {
