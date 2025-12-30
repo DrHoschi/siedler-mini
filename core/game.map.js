@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.13-units-sprites
+ * Version : v25.12.30-final-map-renderer-safe
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -13,6 +13,22 @@
   const LOG  = (...a)=> (window.CBLog?.info ?? console.info)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
+
+  // -------------------------------------------------------------------------
+  // SAFETY – niemals direkt `Game` referenzieren (Safari/iOS wirft sonst hart)
+  // -------------------------------------------------------------------------
+  function getGameSafe(maybeGame){
+    return (maybeGame && typeof maybeGame === 'object') ? maybeGame : (window.Game || null);
+  }
+
+  function getBuildingsSafe(maybeGame){
+    const G = getGameSafe(maybeGame);
+    if (Array.isArray(G?.buildings)) return G.buildings;
+    // Fallbacks (je nach Projektstand):
+    if (Array.isArray(window.GameBuildings?.list)) return window.GameBuildings.list;
+    if (Array.isArray(window.Buildings?.list)) return window.Buildings.list;
+    return [];
+  }
   // -------------------------------------------------------------------------
   // STATE
   // -------------------------------------------------------------------------
@@ -411,7 +427,9 @@
 // -------------------------------------------------------------------------
   // INIT – Map + Tileset laden
   // -------------------------------------------------------------------------
-  function init(Game){
+  function init(maybeGame){
+    const Game = getGameSafe(maybeGame) || maybeGame || {};
+
     const canvas = document.getElementById('game');
     const mapUrl = canvas?.getAttribute('data-map')
                  || 'data/maps/map-epoch1.json';
@@ -448,24 +466,7 @@
     return true;
   }
 
-  
-  // -------------------------------------------------------------------------
-  // BUILDINGS – robuste Quelle (Game.buildings ODER Buildings.list)
-  // -------------------------------------------------------------------------
-  function getBuildingsForDraw(){
-    // Primär: klassische Runtime-Liste
-    const a = window.Game?.buildings;
-    if (Array.isArray(a)) return a;
-    // Fallback: Buildings-Modul (wenn Sync auf Game verpasst wurde)
-    const b = window.Buildings?.list;
-    if (Array.isArray(b)) return b;
-    // Weitere mögliche Aliase (für alte Varianten)
-    const c = window.GameBuildings?.list;
-    if (Array.isArray(c)) return c;
-    return [];
-  }
-
-function drawWorldGlobalYSort(ctx, cam, ts){
+  function drawWorldGlobalYSort(ctx, cam, ts){
     const z = [];
     const MR = window.MapResources;
     const MD = window.MapDecorations;
@@ -477,13 +478,13 @@ function drawWorldGlobalYSort(ctx, cam, ts){
     if (MA?.collectDrawables) MA.collectDrawables(z, cam, ts);
 
     // Gebäude
-    const __bldList = getBuildingsForDraw();
-
-    if (__bldList.length){
+    {
       // IMPORTANT: Baustellen-Sprites initialisieren, sonst sehen wir nur Fallback-Rechtecke
       try { ensureBuildPlaceSprites(); } catch (e) { /* ignore */ }
+
+      const buildings = getBuildingsSafe(null);
       let bi = 0;
-      for (const b of __bldList){
+      for (const b of buildings){
         const sortY = ((b.y | 0) + (b.h || 1)) * ts;
         z.push({
           sortY,
@@ -520,78 +521,117 @@ function drawWorldGlobalYSort(ctx, cam, ts){
     }
   }
 
+
   function _drawOneBuildingYS(ctx, cam, ts, b){
-            const bx = (b.x | 0) * ts;
-            const by = (b.y | 0) * ts;
-            const bw = (b.w || 1) * ts;
-            const bh = (b.h || 1) * ts;
+    const bx = (b.x | 0) * ts;
+    const by = (b.y | 0) * ts;
+    const bw = (b.w || 1) * ts;
+    const bh = (b.h || 1) * ts;
 
-            const stage = typeof b.buildStage === 'number' ? b.buildStage : 3;
+    const stage = (typeof b.buildStage === 'number') ? b.buildStage : 3;
 
-            // Standard-Farben
-            let col = 'rgba(80,200,80,0.9)';   // fertig
-            if (stage === 0) col = 'rgba(200,150,50,0.6)';
-            if (stage === 1) col = 'rgba(220,180,80,0.7)';
-            if (stage === 2) col = 'rgba(140,200,120,0.8)';
+    // Standard-Farben (Fallback)
+    let col = 'rgba(80,200,80,0.9)';   // fertig
+    if (stage === 0) col = 'rgba(200,150,50,0.6)';
+    if (stage === 1) col = 'rgba(220,180,80,0.7)';
+    if (stage === 2) col = 'rgba(140,200,120,0.8)';
 
-            let useFallback = false;
+    // ---------------------------------------------------------------------
+    // 1) Baustelle (buildStage 0..2) → baustelle_0/1/2.png (wenn verfügbar)
+    // ---------------------------------------------------------------------
+    if (stage < 3){
+      const idx = Math.max(0, Math.min(2, stage));
+      const imgSite = BuildPlaceSprites[idx];
 
-            if (stage < 3){
-              // Baustelle 0/1/2
-              const idx    = Math.max(0, Math.min(2, stage));
-              const imgSite = BuildPlaceSprites[idx];
+      if (isDrawableImage(imgSite)){
+        try{
+          ctx.drawImage(imgSite, bx, by, bw, bh);
+          return;
+        }catch(e){
+          WARN('drawImage Baustelle-Fehler:', e?.message || e);
+          // weiter mit Fallback-Rechteck
+        }
+      }
 
-              if (isDrawableImage(imgSite)){
-                try{
-                  ctx.drawImage(imgSite, bx, by, bw, bh);
-                }catch(e){
-                  WARN('drawImage Baustelle-Fehler:', e?.message || e);
-                  useFallback = true;
-                }
-              } else {
-                // Bild noch nicht fertig oder defekt → Fallback-Rechteck
-                useFallback = true;
-              }
-            } else {
-          // -------------------------------------------------
-// Fertiges Gebäude
-// -------------------------------------------------
-if (b.__sprite && b.__sprite.atlas && window.Assets) {
-  const spr = b.__sprite;
-  const atlas = Assets.getAtlas(spr.atlas);
-
-  if (atlas?.ok && spr.frame) {
-    let revealP = 1;
-
-    if (spr.reveal) {
-      const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
-      revealP = Math.max(0, Math.min(1, t));
-      if (revealP >= 1) spr.reveal = null;
+      // Fallback-Rechteck (Baustelle)
+      ctx.save();
+      ctx.fillStyle = col;
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.restore();
+      return;
     }
 
+    // ---------------------------------------------------------------------
+    // 2) Fertiges Gebäude – bevorzugt Atlas/Sprite (z.B. Hunter)
+    // ---------------------------------------------------------------------
+    const Assets = window.Assets;
+
+    // a) Atlas-Sprite (b.__sprite) – unser neuer Weg für "echte" Gebäude-Sprites
+    if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.getAtlas === 'function'){
+      try{
+        const spr   = b.__sprite;
+        const atlas = Assets.getAtlas(spr.atlas);
+
+        if (atlas?.ok && spr.frame && typeof Assets.drawAtlasFrame === 'function'){
+          // Reveal Progress (Bottom→Top), optional
+          let revealP = 1;
+          if (spr.reveal && spr.reveal.start && spr.reveal.dur){
+            const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
+            revealP = Math.max(0, Math.min(1, t));
+            if (revealP >= 1) spr.reveal = null;
+          }
+
+          ctx.save();
+          if (revealP < 1){
+            const clipH = bh * revealP;
+            ctx.beginPath();
+            ctx.rect(bx, by + (bh - clipH), bw, clipH);
+            ctx.clip();
+          }
+
+          // Wir zeichnen am "Fußpunkt" des Tiles (unten mittig), so wie Units.
+          // Standard-Skalierung: Frame wurde i.d.R. in 256px gedacht.
+          const base = (spr.basePx || 256);
+          const scale = bw / base;
+
+          Assets.drawAtlasFrame(ctx, spr.atlas, spr.frame, bx + bw/2, by + bh, {
+            align: 'pivot',
+            scale
+          });
+
+          ctx.restore();
+          return;
+        }
+      }catch(e){
+        WARN('Atlas-Gebäude draw Fehler:', e?.message || e);
+        // weiter mit PNG-Fallback
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 3) PNG-Fallback (Übergangsphase): bestehende Gebäude ohne Atlas
+    //    -> aktuell liegen sie bei dir meist unter assets/icons/buildings/
+    // ---------------------------------------------------------------------
+    const id = b?.id || b?.kind || b?.type;
+    const img = getBuildingSprite(id);
+
+    if (isDrawableImage(img)){
+      try{
+        ctx.drawImage(img, bx, by, bw, bh);
+        return;
+      }catch(e){
+        WARN('drawImage Gebäude-Fallback-Fehler:', id, e?.message || e);
+        // weiter mit Rechteck-Fallback
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 4) Letzter Fallback: Rechteck (damit nie wieder "unsichtbar")
+    // ---------------------------------------------------------------------
     ctx.save();
-
-    // Bottom → Top Reveal
-    const clipH = bh * revealP;
-    ctx.beginPath();
-    ctx.rect(bx, by + (bh - clipH), bw, clipH);
-    ctx.clip();
-
-    Assets.drawAtlasFrame(
-      ctx,
-      spr.atlas,
-      spr.frame,
-      bx + bw / 2,
-      by + bh,
-      { align:'pivot', scale: bw / 256 }
-    );
-
+    ctx.fillStyle = col;
+    ctx.fillRect(bx, by, bw, bh);
     ctx.restore();
-    return;
-  }
-}
-            }
-      
   }
 
 
@@ -817,7 +857,9 @@ if (b.__sprite && b.__sprite.atlas && window.Assets) {
       
   }
 
-  function render(Game){
+  function render(maybeGame){
+    const Game = getGameSafe(maybeGame) || maybeGame || {};
+
     const ctx = Game?.ctx;
     if (!ctx) return;
 
@@ -878,11 +920,10 @@ if (b.__sprite && b.__sprite.atlas && window.Assets) {
 
 // Gebäude-Overlay (Baustellen + fertige Gebäude)
     // ---------------------------------------------------------------------
-    const __bldList2 = getBuildingsForDraw();
-    if (__bldList2.length){
+    if (Array.isArray(Game?.buildings) && Game.buildings.length){
       ensureBuildPlaceSprites();
 
-      for (const b of __bldList2){
+      for (const b of Game.buildings){
         const bx = (b.x | 0) * ts;
         const by = (b.y | 0) * ts;
         const bw = (b.w || 1) * ts;
