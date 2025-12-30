@@ -80,10 +80,35 @@ if (def.sprite?.type === 'atlas') {
   };
   
 // Helper
-  Buildings.setSpriteFrame = function (b, frameName, reveal=false, durationMs=800){
+  Buildings.setSpriteFrame = function (b, frameKey, reveal=false, durationMs=800){
+  // ---------------------------------------------------------------------
+  // Setzt das aktuell zu rendernde Atlas-Frame für ein Gebäude.
+  // frameKey kann sein:
+  //  - "place" | "live" | "reserve"  (semantisch, wird via Registry gemappt)
+  //  - "frame_0_1" etc.              (direkter Frame-Name aus dem Atlas)
+  // reveal=true aktiviert den Bottom→Top "Wachstum"-Reveal (Map-Renderer).
+  // ---------------------------------------------------------------------
   if (!b || !b.__sprite) return;
-  b.__sprite.frame = frameName;
 
+  // 1) Semantische Keys → echtes Frame auflösen (über Registry, falls vorhanden)
+  let resolved = frameKey;
+
+  if (typeof frameKey === 'string' && !frameKey.startsWith('frame_')){
+    try{
+      const reg = window.Registry;
+      const def = (reg && typeof reg.get === 'function')
+        ? reg.get('buildings', b.id)
+        : null;
+
+      const map = def?.sprite?.frames || null;
+      if (map && map[frameKey]) resolved = map[frameKey];
+    }catch(e){}
+  }
+
+  // 2) Frame setzen
+  b.__sprite.frame = resolved || b.__sprite.frame || null;
+
+  // 3) Reveal (Bottom→Top Wachstum) an/aus
   if (reveal){
     b.__sprite.reveal = {
       start: performance.now(),
@@ -101,22 +126,9 @@ if (def.sprite?.type === 'atlas') {
   function syncToGame () {
     if (window.Game) {
       window.Game.buildings = Buildings.list;
-      return true;
     }
-    return false;
   }
-
-  // Sofort versuchen (falls Game schon existiert)
   syncToGame();
 
-  // Robust: wenn Game später gesetzt wird (Load-Reihenfolge / Safari Cache),
-  // dann ein paar Mal nachziehen.
-  (function retrySync(n=0){
-    if (syncToGame()) return;
-    if (n >= 40) return; // ~4s (40 * 100ms)
-    setTimeout(()=> retrySync(n+1), 100);
-  })();
-
-  // Zusätzlich bei Start-Event
   window.addEventListener('cb:game:start', syncToGame);
 })();

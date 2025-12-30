@@ -169,6 +169,27 @@
           }));
         } catch (e) {}
       }
+      // ---------------------------------------------------------------
+      // HQ Atlas-„Wachstum“ (Bottom→Top Reveal)
+      // ---------------------------------------------------------------
+      // HQ ist bei uns sofort 'done' und läuft NICHT durch completeBuilding().
+      // Damit trotzdem der gewünschte Effekt sichtbar ist, triggern wir
+      // EINMALIG einen Wechsel von place → live mit Reveal, kurz nachdem
+      // das HQ initialisiert wurde.
+      if (b.__sprite && window.Buildings?.setSpriteFrame) {
+        if (!b.__sprite.__autoRevealStarted) {
+          b.__sprite.__autoRevealStarted = true;
+
+          // Startzustand explizit: "place" ohne Reveal
+          Buildings.setSpriteFrame(b, 'place', false);
+
+          // Nach kurzer Verzögerung: "live" mit Reveal (Wachstum)
+          setTimeout(() => {
+            try { Buildings.setSpriteFrame(b, 'live', true, 1200); } catch(e) {}
+          }, 600);
+        }
+      }
+
       return;
     }
 
@@ -283,6 +304,32 @@
       time : performance.now?.() ?? Date.now()
     };
     b.drops.push(drop);
+
+    // ---------------------------------------------------------------
+    // Atlas-Auto-Reveal für bereits fertige Gebäude (z.B. aus Save/Spawn)
+    // ---------------------------------------------------------------
+    // Wenn ein Gebäude bereits mit buildStage=3 "done" existiert, aber noch
+    // auf dem place-Frame steht, triggern wir einmalig den Reveal auf "live".
+    if (b.__sprite && window.Buildings?.setSpriteFrame) {
+      if (b.buildStage >= 3 && b.status === 'done' && !b.__sprite.__autoRevealStarted) {
+        // Prüfen, ob wir noch auf "place" stehen
+        let placeFrame = null;
+        try{
+          const reg = window.Registry;
+          const def = (reg && typeof reg.get === 'function') ? reg.get('buildings', b.id) : null;
+          placeFrame = def?.sprite?.frames?.place || null;
+        }catch(e){}
+
+        if (!placeFrame || b.__sprite.frame === placeFrame) {
+          b.__sprite.__autoRevealStarted = true;
+          Buildings.setSpriteFrame(b, 'place', false);
+          setTimeout(() => {
+            try { Buildings.setSpriteFrame(b, 'live', true, 1200); } catch(e) {}
+          }, 600);
+        }
+      }
+    }
+
   }
 
   // ---------------------------------------------------------------------------
@@ -396,7 +443,7 @@
       WARN('cb:build:complete dispatch fehlgeschlagen', e);
     }
 if (b.__sprite && window.Buildings?.setSpriteFrame) {
-  Buildings.setSpriteFrame(b, 'frame_0_1', true, 1200);
+  Buildings.setSpriteFrame(b, 'live', true, 1200);
 }
     LOG('Gebäude fertig', {
       id       : b.id,
