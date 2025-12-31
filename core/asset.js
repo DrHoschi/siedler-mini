@@ -428,33 +428,7 @@
       }
 
       try{
-        // ------------------------------------------------------------
-        // OPTIONAL: Bottom→Top Reveal (Wachstum)
-        //  - opts.reveal: number 0..1  (0 = unsichtbar, 1 = komplett)
-        //  - Wird genutzt, um Gebäude "von unten nach oben" aufzubauen.
-        // ------------------------------------------------------------
-        let reveal = null;
-        if (typeof opts.reveal === 'number') {
-          reveal = Math.max(0, Math.min(1, opts.reveal));
-        } else if (opts.reveal === true) {
-          reveal = 1;
-        }
-
-        if (reveal != null && reveal <= 0){
-          return true; // nichts zu zeichnen, aber kein Fehler
-        }
-
-        if (reveal != null && reveal < 1){
-          // Clip-Rechteck: nur der untere Anteil des Sprites ist sichtbar
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(dx, dy + dh * (1 - reveal), dw, dh * reveal);
-          ctx.clip();
-          ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
-          ctx.restore();
-        } else {
-          ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
-        }
+        ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
         return true;
       }catch(e){
         WARN('drawAtlasFrame failed:', atlasName, frameName, e?.message || e);
@@ -641,6 +615,30 @@ tasks.push(this.loadAtlas(
         'quarry_building_atlas',
         'data/atlases/quarry-sprite_atlas.json',
         'assets/buildings/quarry/quarry-sprite.png'
+      ));
+
+      // --------------------------------------------------------------------
+      // Buildings: Houses (Gebäude-Atlanten)
+      //  - PNG:  assets/buildings/house/house-small-sprite.png
+      //  - JSON: data/atlases/house-small_atlas.json
+      //  - Atlas-Key: 'house_small_building_atlas'
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'house_small_building_atlas',
+        'data/atlases/house-small_atlas.json',
+        'assets/buildings/house/house-small-sprite.png'
+      ));
+
+      // --------------------------------------------------------------------
+      // Buildings: House Middle (Gebäude-Atlas)
+      //  - PNG:  assets/buildings/house/house-middle-sprite.png
+      //  - JSON: data/atlases/house-middle_atlas.json
+      //  - Atlas-Key: 'house_middle_building_atlas'
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'house_middle_building_atlas',
+        'data/atlases/house-middle_atlas.json',
+        'assets/buildings/house/house-middle-sprite.png'
       ));
 
       // Dein Atlas heißt aktuell "fishman-sprite_atlas.json" (Dateiname).
