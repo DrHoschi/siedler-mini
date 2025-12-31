@@ -428,7 +428,33 @@
       }
 
       try{
-        ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
+        // ------------------------------------------------------------
+        // OPTIONAL: Bottom→Top Reveal (Wachstum)
+        //  - opts.reveal: number 0..1  (0 = unsichtbar, 1 = komplett)
+        //  - Wird genutzt, um Gebäude "von unten nach oben" aufzubauen.
+        // ------------------------------------------------------------
+        let reveal = null;
+        if (typeof opts.reveal === 'number') {
+          reveal = Math.max(0, Math.min(1, opts.reveal));
+        } else if (opts.reveal === true) {
+          reveal = 1;
+        }
+
+        if (reveal != null && reveal <= 0){
+          return true; // nichts zu zeichnen, aber kein Fehler
+        }
+
+        if (reveal != null && reveal < 1){
+          // Clip-Rechteck: nur der untere Anteil des Sprites ist sichtbar
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(dx, dy + dh * (1 - reveal), dw, dh * reveal);
+          ctx.clip();
+          ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
+          ctx.restore();
+        } else {
+          ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
+        }
         return true;
       }catch(e){
         WARN('drawAtlasFrame failed:', atlasName, frameName, e?.message || e);

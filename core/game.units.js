@@ -755,6 +755,57 @@ function spawnInitialCarriers(count){
   // -------------------------------------------------------------------------
   // WORKER (einfacher Loop: Home -> WorkArea-Punkt -> kurze Work-Pause -> Home)
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // OCCUPY / EINGANGS-TRIGGER
+  //
+  // Regel:
+  //  - Ein Gebäude gilt als "bewohnt", sobald der Worker das Gebäude
+  //    über den Entrance-Tile erreicht (toHome → arrived).
+  //  - Ab diesem Moment läuft in Buildings das 15s-Wachstums-Timer-System.
+  //
+  // WICHTIG:
+  //  - Wir lösen das NUR einmal pro Worker+Gebäude aus (Flag _enteredHomeOnce).
+  //  - HQ soll NICHT wachsen → Buildings.markOccupied() ignoriert HQ.
+  // -------------------------------------------------------------------------
+  function _findHomeBuildingForWorker(u){
+    const uid = u?.homeUid || u?.homeBuildingUid || null;
+    if (!uid) return null;
+
+    // 1) Game helper?
+    const b1 = window.Game?.getBuildingByUid?.(uid) || null;
+    if (b1) return b1;
+
+    // 2) direkte Liste
+    const list = window.Game?.buildings || window.Buildings?.list || [];
+    if (Array.isArray(list)){
+      const b2 = list.find(bb => bb && (bb.uid === uid || bb._uid === uid));
+      if (b2) return b2;
+    }
+
+    return null;
+  }
+
+  function _tryMarkOccupied(u, b){
+    if (!u || !b) return;
+    if (u._enteredHomeOnce) return;
+
+    u._enteredHomeOnce = true;
+
+    // Event + direkte API: beides unterstützen, damit es robust bleibt
+    try{
+      if (window.Buildings && typeof window.Buildings.markOccupied === 'function'){
+        window.Buildings.markOccupied(b.uid || b._uid || u.homeUid);
+      } else {
+        window.dispatchEvent(new CustomEvent('cb:building:occupied', {
+          detail: { uid: (b.uid || b._uid || u.homeUid), id: b.id, x: b.x, y: b.y }
+        }));
+      }
+    }catch(e){
+      WARN('markOccupied dispatch fehlgeschlagen', e?.message || e);
+    }
+  }
+
   const WORKER_BY_BUILDING = {
     'b.lumberjack': 'u.woodcutter',
     'b.woodcutter': 'u.woodcutter',
@@ -857,9 +908,22 @@ function spawnInitialCarriers(count){
     }
 
     // toHome
-    u.task = { type:'walk', target:{ x: home.x, y: home.y } };
-    const arrivedHome = _moveTowards(u, home, dt);
+    // Ziel: Wenn möglich zur Eingangskachel (Entrance) laufen,
+    // damit wir "bewohnt" korrekt am Eingang triggern können.
+    const hb = _findHomeBuildingForWorker(u);
+    let homeTarget = home;
+
+    // Wenn Entrance bekannt ist: Tile-Mitte anpeilen
+    if (hb && Number.isFinite(Number(hb.entranceTx)) && Number.isFinite(Number(hb.entranceTy))){
+      homeTarget = { x: (hb.entranceTx|0) + 0.5, y: (hb.entranceTy|0) + 0.5 };
+    }
+
+    u.task = { type:'walk', target:{ x: homeTarget.x, y: homeTarget.y } };
+    const arrivedHome = _moveTowards(u, homeTarget, dt);
     if (arrivedHome){
+      // Entrance erreicht → Gebäude gilt als "bewohnt"
+      if (hb) _tryMarkOccupied(u, hb);
+
       u.task = null;
       ai.mode = 'toWork';
       ai.target = null;
