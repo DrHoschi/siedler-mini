@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-29T22:00:50.392Z",
+  "createdAt": "2025-12-31T01:32:02.015Z",
   "root": ".",
-  "count": 548,
+  "count": 562,
   "entries": [
     {
       "type": "dir",
@@ -72,7 +72,7 @@
     {
       "type": "file",
       "path": "assets/animals/deer.png",
-      "size": 1696662
+      "size": 824883
     },
     {
       "type": "file",
@@ -119,6 +119,34 @@
     },
     {
       "type": "dir",
+      "path": "assets/buildings/fishman/"
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/fishman/fischer_wood1.png",
+      "size": 1975790
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/fishman/fishman-sprite.png",
+      "size": 1393495
+    },
+    {
+      "type": "dir",
+      "path": "assets/buildings/hq/"
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/hq/hq_wood.png",
+      "size": 942009
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/hq/hq-sprite.png",
+      "size": 1164656
+    },
+    {
+      "type": "dir",
       "path": "assets/buildings/hunter/"
     },
     {
@@ -152,8 +180,27 @@
     },
     {
       "type": "file",
+      "path": "assets/buildings/lumberjack/lumberjack-sprite.png",
+      "size": 907851
+    },
+    {
+      "type": "file",
       "path": "assets/buildings/lumberjack/Readme",
       "size": 407
+    },
+    {
+      "type": "dir",
+      "path": "assets/buildings/quarry/"
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/quarry/quarry-sprite.png",
+      "size": 769253
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/quarry/steinmetz_wood.png",
+      "size": 317995
     },
     {
       "type": "file",
@@ -169,16 +216,6 @@
       "type": "file",
       "path": "assets/buildings/farm_wood.png",
       "size": 288712
-    },
-    {
-      "type": "file",
-      "path": "assets/buildings/fischer_wood1.png",
-      "size": 1975790
-    },
-    {
-      "type": "file",
-      "path": "assets/buildings/hq_wood.png",
-      "size": 942009
     },
     {
       "type": "file",
@@ -204,11 +241,6 @@
       "type": "file",
       "path": "assets/buildings/schmied_wood0.png",
       "size": 297126
-    },
-    {
-      "type": "file",
-      "path": "assets/buildings/steinmetz_wood.png",
-      "size": 317995
     },
     {
       "type": "file",
@@ -409,7 +441,12 @@
     {
       "type": "file",
       "path": "assets/icons/buildings/b.hq.png",
-      "size": 99205
+      "size": 340558
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/buildings/b.hunter.png",
+      "size": 1411490
     },
     {
       "type": "file",
@@ -526,6 +563,11 @@
     },
     {
       "type": "file",
+      "path": "assets/icons/resources/meat.png",
+      "size": 73606
+    },
+    {
+      "type": "file",
       "path": "assets/icons/resources/ore.png",
       "size": 5240
     },
@@ -533,6 +575,11 @@
       "type": "file",
       "path": "assets/icons/resources/paper.png",
       "size": 6989
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/pelt.png",
+      "size": 106078
     },
     {
       "type": "file",
@@ -1435,7 +1482,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 22822
+      "size": 24139
     },
     {
       "type": "file",
@@ -1525,12 +1572,12 @@
     {
       "type": "file",
       "path": "core/game.buildings.js",
-      "size": 3184
+      "size": 4216
     },
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 20842
+      "size": 22947
     },
     {
       "type": "file",
@@ -1540,7 +1587,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 45089
+      "size": 47795
     },
     {
       "type": "file",
@@ -1752,7 +1799,27 @@
     },
     {
       "type": "file",
+      "path": "data/atlases/fishman-sprite_atlas.json",
+      "size": 1612
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/hq-sprite_atlas.json",
+      "size": 1606
+    },
+    {
+      "type": "file",
       "path": "data/atlases/hunter-sprite_atlas.json",
+      "size": 1610
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/lumberjack-sprite_atlas.json",
+      "size": 1618
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/quarry-sprite_atlas.json",
       "size": 1610
     },
     {
@@ -1827,7 +1894,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 4375
+      "size": 5281
     },
     {
       "type": "file",
@@ -2648,12 +2715,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 54654
+      "size": 54707
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 21329
+      "size": 21332
     },
     {
       "type": "file",
