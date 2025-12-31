@@ -1,8 +1,8 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-split1
- * Zweck   : Zentrale Gebäudeliste + Helper (Create/Get)
+ * Version : v25.12.31-fix-atlas-buildings-on-map
+ * Zweck   : Zentrale Gebäudeliste + Helper (Create/Get/Occupy/Sprite)
  * --------------------------------------------------------------------------
  *  - Buildings.list = EINE Quelle für ALLE Gebäude
  *  - create(type,x,y) liest Größe aus Registry
@@ -15,6 +15,27 @@
   const TAG  = '[buildings]';
   const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+
+  // -----------------------------------------------------------------------
+  // Atlas-Mapping (World-Sprites)
+  // -----------------------------------------------------------------------
+  // Diese Keys werden in core/asset.js registriert.
+  // Wenn ein Gebäude KEIN __sprite hat, zeichnet core/game.map.js als Fallback
+  // das PNG unter assets/icons/buildings/... (das sind deine Baumenü-Bilder).
+  // Daher setzen wir für alle bekannten Atlas-Gebäude __sprite automatisch.
+  const ATLAS_BY_BUILDING_ID = {
+    'b.hq'        : 'hq_building_atlas',
+    'b.hunter'    : 'hunter_building_atlas',
+    'b.lumberjack': 'lumberjack_building_atlas',
+    'b.quarry'    : 'quarry_building_atlas',
+    'b.fisher'    : 'fisher_building_atlas'
+  };
+
+  const DEFAULT_FRAMES = {
+    place  : 'frame_0_0',
+    live   : 'frame_0_0',
+    reserve: 'frame_0_0'
+  };
 
   const Buildings = {
     list: [],
@@ -36,6 +57,8 @@
       const w = def.size?.w ?? def.size?.width ?? 3;
       const h = def.size?.h ?? def.size?.height ?? 3;
 
+      const isHQ = String(buildingType) === 'b.hq';
+
       const b = {
         id         : buildingType,          // einfache ID = Registry-ID
         type       : buildingType,
@@ -43,22 +66,51 @@
         y          : y | 0,
         w,
         h,
-        buildStage : 0,                     // 0 = Baustelle
+        // HQ soll direkt als fertig stehen (keine Bauphasen)
+        buildStage : isHQ ? 3 : 0,          // 0..2 Baustelle, 3 = fertig
         buildTimer : 0,
         stock      : {},                    // Ressourcenlager
-        productionRule: def.productionRule || null
+        productionRule: def.productionRule || null,
+
+        // Occupancy / "bewohnt" (Trigger wenn Worker reingeht)
+        occupied   : false,
+        occupiedAt : 0,
+        occupantId : null
       };
 
       // ------------------------------------------------------------
-// Atlas-Sprite-Init (optional, z.B. Hunter)
-// ------------------------------------------------------------
-if (def.sprite?.type === 'atlas') {
-  b.__sprite = {
-    atlas : def.sprite.atlas,
-    frame : def.sprite.frames?.place || null,
-    reveal: null
-  };
-}
+      // Atlas-Sprite Init (World-Sprites)
+      // ------------------------------------------------------------
+      // 1) Wenn die Registry bereits sprite.type==='atlas' liefert -> übernehmen.
+      // 2) Sonst: Auto-Mapping über Gebäude-ID (Fix für "Icons auf der Map").
+      try {
+        if (def?.sprite?.type === 'atlas' && def.sprite.atlas) {
+          b.__sprite = {
+            atlas : def.sprite.atlas,
+            frame : def.sprite.frames?.place || def.sprite.frames?.live || DEFAULT_FRAMES.place,
+            basePx: def.sprite.basePx || 256,
+            reveal: null
+          };
+        } else {
+          const atlasKey = ATLAS_BY_BUILDING_ID[b.id] || null;
+          if (atlasKey) {
+            b.__sprite = {
+              atlas : atlasKey,
+              frame : DEFAULT_FRAMES.place,
+              basePx: 256,
+              reveal: null
+            };
+          }
+        }
+
+        // HQ: sofort fertig -> Live-Frame setzen (ohne Reveal)
+        if (isHQ && b.__sprite) {
+          b.__sprite.frame = def?.sprite?.frames?.live || DEFAULT_FRAMES.live;
+          b.__sprite.reveal = null;
+        }
+      } catch (e) {
+        // Sprite ist optional; niemals crashen
+      }
       
       this.list.push(b);
       LOG('Gebäude erzeugt:', b.id, 'an', b.x, b.y);
@@ -118,6 +170,19 @@ if (def.sprite?.type === 'atlas') {
     b.__sprite.reveal = null;
   }
 };
+
+  // ---------------------------------------------------------------------
+  // Occupancy-Helper: Worker betritt Eingang => Gebäude ist "bewohnt"
+  // ---------------------------------------------------------------------
+  Buildings.markOccupied = function (b, unitId){
+    if (!b) return;
+    b.occupied = true;
+    b.occupiedAt = performance.now();
+    b.occupantId = unitId ?? b.occupantId ?? null;
+    try{
+      window.dispatchEvent(new CustomEvent('cb:building:occupied', { detail:{ b } }));
+    }catch(e){}
+  };
   
   // global machen
   window.Buildings = Buildings;
