@@ -109,15 +109,10 @@ function _fallbackBuildingAtlasKey(buildingId){
 
 function _fallbackBuildingFrameForKey(frameKey){
   const k = String(frameKey||'').trim();
-  // Semantische Keys aus Registry/Construction → Atlas-Frame-Namen
-  if (k === 'place')   return 'frame_0_0';
-  if (k === 'live')    return 'frame_0_1';
-  if (k === 'reserve') return 'frame_0_2';
-  // Wenn jemand '0_0' liefert, normalisieren wir auf 'frame_0_0'
-  if (/^\d+_\d+$/.test(k)) return 'frame_' + k;
-  return k;
-}
-
+  if (k === 'place')   return '0_0';
+  if (k === 'live')    return '0_1';
+  if (k === 'reserve') return '0_2';
+  return frameKey;
 }
 
 
