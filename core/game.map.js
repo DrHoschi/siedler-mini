@@ -88,6 +88,35 @@
     // zwischen icons/ und buildings/ unterscheiden.
   }
 
+// -------------------------------------------------------------------------
+// ATLAS-SPRITE FALLBACK MAP (World-Sprites)
+//  - Falls ein Building KEIN b.__sprite trägt (z.B. Legacy-Place),
+//    aber Assets-Atlanten bereits geladen sind, zeichnen wir automatisch
+//    die Welt-Sprites statt der UI-Icons.
+// -------------------------------------------------------------------------
+function _fallbackBuildingAtlasKey(buildingId){
+  const id = String(buildingId||'').trim();
+  switch(id){
+    case 'b.hq':         return 'hq_building_atlas';
+    case 'b.hunter':     return 'hunter_building_atlas';
+    case 'b.lumberjack': return 'lumberjack_building_atlas';
+    case 'b.quarry':     return 'quarry_building_atlas';
+    case 'b.fisher':     return 'fisher_building_atlas';
+    case 'b.fisherman':  return 'fisher_building_atlas';
+    default: return null;
+  }
+}
+
+function _fallbackBuildingFrameForKey(frameKey){
+  const k = String(frameKey||'').trim();
+  if (k === 'place')   return '0_0';
+  if (k === 'live')    return '0_1';
+  if (k === 'reserve') return '0_2';
+  return frameKey;
+}
+
+
+
   /**
    * Image-Objekt für ein Gebäude holen (mit Cache).
    */
@@ -605,6 +634,36 @@
       }catch(e){
         WARN('Atlas-Gebäude draw Fehler:', e?.message || e);
         // weiter mit PNG-Fallback
+
+// b) Fallback: Atlas anhand Building-ID erkennen (damit NICHT die UI-Icons auf der Karte landen)
+if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
+  try{
+    const atlasKey = _fallbackBuildingAtlasKey(b.id);
+    const atlas = atlasKey ? Assets.getAtlas(atlasKey) : null;
+
+    if (atlas?.ok){
+      // Frame bestimmen:
+      //  - wenn Construction/Buildings bereits semantische Keys gesetzt hat: b.atlasFrame / b.spriteFrame
+      //  - sonst: place (=0_0)
+      const fk = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
+      const frame = _fallbackBuildingFrameForKey(fk);
+
+      // Wir zeichnen am "Fußpunkt" (unten mittig) + skalieren wie oben.
+      const base = 256;
+      const scale = bw / base;
+
+      Assets.drawAtlasFrame(ctx, atlasKey, frame, bx + bw/2, by + bh, {
+        align: 'pivot',
+        scale
+      });
+      return;
+    }
+  }catch(e){
+    // silent → PNG fallback
+  }
+}
+
+
       }
     }
 

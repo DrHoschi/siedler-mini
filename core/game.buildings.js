@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.31-atlas-place-occupy-grow
+ * Version : v25.11.29-split1
  * Zweck   : Zentrale Gebäudeliste + Helper (Create/Get)
  * --------------------------------------------------------------------------
  *  - Buildings.list = EINE Quelle für ALLE Gebäude
@@ -79,102 +79,6 @@ if (def.sprite?.type === 'atlas') {
     }
   };
   
-
-  // -----------------------------------------------------------------------
-  //  NEU: Bewohnung + Wachstum (Atlas-Gebäude)
-  // -----------------------------------------------------------------------
-  // Idee:
-  //  - 'place' = Frame 0_0 (sofort sichtbar nach Place/Load/BuildComplete)
-  //  - 'live'  = nächstes Upgrade-Frame (z.B. 0_1), erst NACHDEM das Gebäude
-  //             bewohnt wurde (Worker geht in den Eingang) und ein Timer ablief.
-  //
-  // Wichtig:
-  //  - HQ ist Sonderfall: immer 'place', keine Bauphasen und kein Wachstum.
-  //  - Der Worker-Teil wird später ergänzt: er muss beim Erreichen des Entrance
-  //    Buildings.markOccupied(buildingUid) aufrufen oder cb:building:occupied emitten.
-
-  const GROW_DELAY_MS  = 15000;  // 15 Sekunden nach "bewohnt"
-  const GROW_REVEAL_MS = 1200;   // Reveal-Dauer Bottom→Top
-
-  function isHQ(b){
-    return !!b && (b.id === 'b.hq' || b.type === 'b.hq' || b.buildingId === 'b.hq');
-  }
-
-  function isAtlasBuilding(b){
-    // Wir betrachten ein Gebäude als "Atlas-Gebäude", wenn __sprite existiert
-    // (wird beim create() gesetzt, sobald Registry.sprite.type === 'atlas').
-    return !!(b && b.__sprite && b.__sprite.atlas);
-  }
-
-  /**
-   * Markiert ein Gebäude als "bewohnt".
-   * Wird später vom Worker beim Entrance-Erreichen getriggert.
-   */
-  Buildings.markOccupied = function(uidOrBuilding){
-    let b = null;
-
-    if (!uidOrBuilding) return null;
-
-    if (typeof uidOrBuilding === 'object') {
-      b = uidOrBuilding;
-    } else {
-      const uid = uidOrBuilding;
-      b = Buildings.list.find(x => x && x.uid === uid) || null;
-    }
-
-    if (!b || isHQ(b)) return b;
-
-    if (typeof b.occupied !== 'boolean') b.occupied = false;
-    if (typeof b.occupiedAt !== 'number') b.occupiedAt = 0;
-    if (typeof b.grownStage !== 'number') b.grownStage = 0;
-
-    if (!b.occupied){
-      b.occupied = true;
-      b.occupiedAt = performance.now?.() ?? Date.now();
-
-      LOG('Gebäude bewohnt (occupied)', { id: b.id, uid: b.uid, x: b.x, y: b.y });
-    }
-    return b;
-  };
-
-  /**
-   * Tick: prüft bewohnte Atlas-Gebäude und schaltet nach Timer auf "live"
-   * (mit Bottom→Top Reveal).
-   */
-  Buildings.tickGrowth = function(dt){
-    const now = performance.now?.() ?? Date.now();
-
-    for (const b of Buildings.list){
-      if (!b) continue;
-      if (!isAtlasBuilding(b)) continue;
-      if (isHQ(b)) continue;
-
-      if (typeof b.occupied !== 'boolean') b.occupied = false;
-      if (typeof b.occupiedAt !== 'number') b.occupiedAt = 0;
-      if (typeof b.grownStage !== 'number') b.grownStage = 0;
-
-      // Nur einmal upgraden (Stage 0 → 1)
-      if (b.occupied && b.grownStage === 0){
-        if (b.occupiedAt > 0 && (now - b.occupiedAt) >= GROW_DELAY_MS){
-          b.grownStage = 1;
-
-          // Upgrade-Frame: semantisch "live"
-          try {
-            Buildings.setSpriteFrame(b, 'live', true, GROW_REVEAL_MS);
-          } catch(e) {}
-
-          LOG('Atlas-Wachstum: place → live', { id: b.id, uid: b.uid });
-        }
-      }
-    }
-  };
-
-  // Optionaler Listener: Worker/Module können cb:building:occupied senden.
-  window.addEventListener('cb:building:occupied', (ev)=>{
-    const d = ev.detail || {};
-    const uid = d.uid || d.buildingUid || null;
-    if (uid) Buildings.markOccupied(uid);
-  });
 // Helper
   Buildings.setSpriteFrame = function (b, frameKey, reveal=false, durationMs=800){
   // ---------------------------------------------------------------------
