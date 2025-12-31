@@ -97,37 +97,28 @@
 function _fallbackBuildingAtlasKey(buildingId){
   const id = String(buildingId||'').trim();
   switch(id){
-    case 'b.hq':           return 'hq_building_atlas';
-    case 'b.hunter':       return 'hunter_building_atlas';
-    case 'b.lumberjack':   return 'lumberjack_building_atlas';
-    case 'b.quarry':       return 'quarry_building_atlas';
-    case 'b.fisher':       return 'fisher_building_atlas';
-    case 'b.fisherman':    return 'fisher_building_atlas';
-
-    // Houses (neu)
-    case 'b.house_small':  return 'house_small_building_atlas';
-    case 'b.house_middle': return 'house_middle_building_atlas';
-
+    case 'b.hq':         return 'hq_building_atlas';
+    case 'b.hunter':     return 'hunter_building_atlas';
+    case 'b.lumberjack': return 'lumberjack_building_atlas';
+    case 'b.quarry':     return 'quarry_building_atlas';
+    case 'b.fisher':     return 'fisher_building_atlas';
+    case 'b.fisherman':  return 'fisher_building_atlas';
     default: return null;
   }
 }
 
-
 function _fallbackBuildingFrameForKey(frameKey){
   const k = String(frameKey||'').trim();
-
-  // Semantische Keys → konkrete Atlas-Frames
+  // Semantische Keys aus Registry/Construction → Atlas-Frame-Namen
   if (k === 'place')   return 'frame_0_0';
   if (k === 'live')    return 'frame_0_1';
   if (k === 'reserve') return 'frame_0_2';
-
-  // Falls jemand '0_0' liefert → in 'frame_0_0' normalisieren
+  // Wenn jemand '0_0' liefert, normalisieren wir auf 'frame_0_0'
   if (/^\d+_\d+$/.test(k)) return 'frame_' + k;
-
-  // Bereits korrekt (z.B. 'frame_0_0')
   return k;
 }
 
+}
 
 
 
