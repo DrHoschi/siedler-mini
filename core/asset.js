@@ -592,60 +592,41 @@ tasks.push(this.loadAtlas(
         'assets/buildings/hunter/hunter-sprite.png'
       ));
 
-      // --------------------------------------------------------------------
-      // Buildings: HQ (Gebäude-Atlas)
-      //  - PNG:  assets/buildings/hq/hq-sprite.png
-      //  - JSON: data/atlases/hq-sprite_atlas.json
-      //  - Atlas-Key: 'hq_building_atlas'
-      // --------------------------------------------------------------------
+      // ---------------------------------------------------------------
+      // Gebäude-Atlanten (World-Sprites, NICHT UI-Icons)
+      // ---------------------------------------------------------------
+      // Hinweis: loadAtlas(name, jsonUrl, imageOverride)
+      // jsonUrl liegt bei dir unter data/atlases/*.json
+      // imageOverride zeigt auf assets/buildings/<name>/<name>-sprite.png
+
       tasks.push(this.loadAtlas(
         'hq_building_atlas',
         'data/atlases/hq-sprite_atlas.json',
         'assets/buildings/hq/hq-sprite.png'
       ));
 
-
-
-      
-
-      
-
-      
-
-      // --------------------------------------------------------------------
-      // Buildings: Fisher (Fishman) (Gebäude-Atlas)
-      //  - PNG:  assets/buildings/fishman/fishman-sprite.png
-      //  - JSON: data/atlases/fishman-sprite_atlas.json
-      //  - Atlas-Key: 'fishman_building_atlas'
-      // --------------------------------------------------------------------
-      tasks.push(this.loadAtlas(
-        'fishman_building_atlas',
-        'data/atlases/fishman-sprite_atlas.json',
-        'assets/buildings/fishman/fishman-sprite.png'
-      ));
-// --------------------------------------------------------------------
-      // Buildings: Quarry (Gebäude-Atlas)
-      //  - PNG:  assets/buildings/quarry/quarry-sprite.png
-      //  - JSON: data/atlases/quarry-sprite_atlas.json
-      //  - Atlas-Key: 'quarry_building_atlas'
-      // --------------------------------------------------------------------
-      tasks.push(this.loadAtlas(
-        'quarry_building_atlas',
-        'data/atlases/quarry-sprite_atlas.json',
-        'assets/buildings/quarry/quarry-sprite.png'
-      ));
-// --------------------------------------------------------------------
-      // Buildings: Lumberjack (Gebäude-Atlas)
-      //  - PNG:  assets/buildings/lumberjack/lumberjack-sprite.png
-      //  - JSON: data/atlases/lumberjack-sprite_atlas.json
-      //  - Atlas-Key: 'lumberjack_building_atlas'
-      // --------------------------------------------------------------------
       tasks.push(this.loadAtlas(
         'lumberjack_building_atlas',
         'data/atlases/lumberjack-sprite_atlas.json',
         'assets/buildings/lumberjack/lumberjack-sprite.png'
       ));
-await Promise.allSettled(tasks);
+
+      tasks.push(this.loadAtlas(
+        'quarry_building_atlas',
+        'data/atlases/quarry-sprite_atlas.json',
+        'assets/buildings/quarry/quarry-sprite.png'
+      ));
+
+      // Dein Atlas heißt aktuell "fishman-sprite_atlas.json" (Dateiname).
+      // Wir registrieren ihn aber bewusst als "fisher_building_atlas", damit
+      // der Code/Buildings-IDs konsistent bleiben.
+      tasks.push(this.loadAtlas(
+        'fisher_building_atlas',
+        'data/atlases/fishman-sprite_atlas.json',
+        'assets/buildings/fishman/fishman-sprite.png'
+      ));
+
+      await Promise.allSettled(tasks);
 
       this.state.ready = true;
 
