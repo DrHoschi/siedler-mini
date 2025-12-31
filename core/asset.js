@@ -606,7 +606,46 @@ tasks.push(this.loadAtlas(
 
 
 
-      await Promise.allSettled(tasks);
+      
+
+      
+
+      
+
+      // --------------------------------------------------------------------
+      // Buildings: Fisher (Fishman) (Gebäude-Atlas)
+      //  - PNG:  assets/buildings/fishman/fishman-sprite.png
+      //  - JSON: data/atlases/fishman-sprite_atlas.json
+      //  - Atlas-Key: 'fishman_building_atlas'
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'fishman_building_atlas',
+        'data/atlases/fishman-sprite_atlas.json',
+        'assets/buildings/fishman/fishman-sprite.png'
+      ));
+// --------------------------------------------------------------------
+      // Buildings: Quarry (Gebäude-Atlas)
+      //  - PNG:  assets/buildings/quarry/quarry-sprite.png
+      //  - JSON: data/atlases/quarry-sprite_atlas.json
+      //  - Atlas-Key: 'quarry_building_atlas'
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'quarry_building_atlas',
+        'data/atlases/quarry-sprite_atlas.json',
+        'assets/buildings/quarry/quarry-sprite.png'
+      ));
+// --------------------------------------------------------------------
+      // Buildings: Lumberjack (Gebäude-Atlas)
+      //  - PNG:  assets/buildings/lumberjack/lumberjack-sprite.png
+      //  - JSON: data/atlases/lumberjack-sprite_atlas.json
+      //  - Atlas-Key: 'lumberjack_building_atlas'
+      // --------------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'lumberjack_building_atlas',
+        'data/atlases/lumberjack-sprite_atlas.json',
+        'assets/buildings/lumberjack/lumberjack-sprite.png'
+      ));
+await Promise.allSettled(tasks);
 
       this.state.ready = true;
 
