@@ -203,7 +203,7 @@
       },
       "sprite": {
         "type": "atlas",
-        "atlas": "fishman_building_atlas",
+        "atlas": "fisher_building_atlas",
         "frames": {
           "place": "frame_0_0",
           "live": "frame_0_1",
