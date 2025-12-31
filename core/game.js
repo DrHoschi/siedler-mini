@@ -480,80 +480,6 @@ const centerX = building.x + bw / 2;
   //  RENDER
   // -------------------------------------------------------------------------
 
-  // -------------------------------------------------------------------------
-  //  ATLAS BUILDINGS RENDER (World-Building-Atlanten: HQ/Hunter/Lumberjack/...)
-  //
-  //  Ziel:
-  //   - Wenn Buildings.__sprite (atlas+frame) gesetzt ist, zeichnen wir den
-  //     Atlas-Frame zusätzlich (Bottom-Center am Gebäude).
-  //   - Dadurch ist "Frame 0 garantiert" + späterer Reveal/Upgrade sichtbar.
-  //
-  //  Hinweis:
-  //   - Wir zeichnen NUR, wenn __sprite.atlas + __sprite.frame existieren.
-  //   - PNG-Fallbacks bleiben unberührt.
-  // -------------------------------------------------------------------------
-  function _computeReveal01(sprite){
-    if (!sprite) return null;
-    const r = sprite.reveal;
-
-    // 1) direkte Zahl 0..1
-    if (typeof r === 'number'){
-      return Math.max(0, Math.min(1, r));
-    }
-
-    // 2) Reveal-Objekt: { t0, dur } (ms)
-    if (r && typeof r === 'object'){
-      const t0  = Number(r.t0);
-      const dur = Number(r.dur);
-      if (Number.isFinite(t0) && Number.isFinite(dur) && dur > 0){
-        const now = performance.now();
-        return Math.max(0, Math.min(1, (now - t0) / dur));
-      }
-    }
-
-    // 3) true = komplett sichtbar
-    if (r === true) return 1;
-
-    return null;
-  }
-
-  function _renderAtlasBuildings(){
-    const ctx = Game.ctx;
-    if (!ctx) return;
-    const ts = Game.tileSize || 64;
-
-    const list = Array.isArray(Game.buildings) ? Game.buildings : [];
-    if (!list.length) return;
-
-    const Assets = window.Assets;
-    if (!Assets || typeof Assets.drawAtlasFrame !== 'function') return;
-
-    for (const b of list){
-      if (!b) continue;
-      const sp = b.__sprite;
-      if (!sp || !sp.atlas || !sp.frame) continue;
-
-      // Fußpunkt (Bottom-Center) in Pixel:
-      // - X: Mitte des Footprints
-      // - Y: untere Kante des Footprints
-      const w = Math.max(1, (b.w|0) || 1);
-      const h = Math.max(1, (b.h|0) || 1);
-      const worldX = ((b.x || 0) + w/2) * ts;
-      const worldY = ((b.y || 0) + h)   * ts;
-
-      const reveal = _computeReveal01(sp);
-
-      // drawAtlasFrame erwartet worldX/worldY als "Fußpunkt"
-      // (Assets nutzt Pivot/Anchor; default = pivot)
-      Assets.drawAtlasFrame(ctx, sp.atlas, sp.frame, worldX, worldY, {
-        align : 'pivot',
-        scale : 1,
-        reveal: reveal
-      });
-    }
-  }
-
-
   function render(){
     // 1) Terrain + Baustellen/ Gebäude-Overlay direkt aus GameMap
     if (window.GameMap?.render){
@@ -563,11 +489,6 @@ const centerX = building.x + bw / 2;
         ERR('GameMap.render Fehler:', e);
       }
     }
-
-    // 1b) Atlas-Gebäude (HQ/Hunter/...) zeichnen, falls __sprite gesetzt ist
-    //     (Frame 0 garantiert + Reveal/Upgrade sichtbar)
-    try{ _renderAtlasBuildings(); } catch(e){ ERR('AtlasBuildings render Fehler:', e); }
-
 
       // 2) Baustellen-Overlays: Drops + Baufortschrittsbalken
   if (window.GameConstruction?.render){
@@ -671,6 +592,12 @@ const centerX = building.x + bw / 2;
       _ensureBuildingTileAndEntranceFields(building);
       if (!Array.isArray(Game.buildings)) Game.buildings = [];
       Game.buildings.push(building);
+
+      // HQ: World-Atlas initialisieren (immer Frame 0 / place, kein Reveal, kein Wachstum)
+      try{
+        window.Buildings?.ensureSprite?.(building);
+        if (building.__sprite) window.Buildings.setSpriteFrame(building, 'place', false);
+      }catch(e){}
 
       // Optional: Completion-Event (macht Inspector/Worker-Spawn einfacher)
       try{

@@ -1,8 +1,8 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.31-fix-atlas-buildings-on-map
- * Zweck   : Zentrale Gebäudeliste + Helper (Create/Get/Occupy/Sprite)
+ * Version : v25.11.29-split1
+ * Zweck   : Zentrale Gebäudeliste + Helper (Create/Get)
  * --------------------------------------------------------------------------
  *  - Buildings.list = EINE Quelle für ALLE Gebäude
  *  - create(type,x,y) liest Größe aus Registry
@@ -15,27 +15,6 @@
   const TAG  = '[buildings]';
   const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
-
-  // -----------------------------------------------------------------------
-  // Atlas-Mapping (World-Sprites)
-  // -----------------------------------------------------------------------
-  // Diese Keys werden in core/asset.js registriert.
-  // Wenn ein Gebäude KEIN __sprite hat, zeichnet core/game.map.js als Fallback
-  // das PNG unter assets/icons/buildings/... (das sind deine Baumenü-Bilder).
-  // Daher setzen wir für alle bekannten Atlas-Gebäude __sprite automatisch.
-  const ATLAS_BY_BUILDING_ID = {
-    'b.hq'        : 'hq_building_atlas',
-    'b.hunter'    : 'hunter_building_atlas',
-    'b.lumberjack': 'lumberjack_building_atlas',
-    'b.quarry'    : 'quarry_building_atlas',
-    'b.fisher'    : 'fisher_building_atlas'
-  };
-
-  const DEFAULT_FRAMES = {
-    place  : 'frame_0_0',
-    live   : 'frame_0_0',
-    reserve: 'frame_0_0'
-  };
 
   const Buildings = {
     list: [],
@@ -57,8 +36,6 @@
       const w = def.size?.w ?? def.size?.width ?? 3;
       const h = def.size?.h ?? def.size?.height ?? 3;
 
-      const isHQ = String(buildingType) === 'b.hq';
-
       const b = {
         id         : buildingType,          // einfache ID = Registry-ID
         type       : buildingType,
@@ -66,51 +43,22 @@
         y          : y | 0,
         w,
         h,
-        // HQ soll direkt als fertig stehen (keine Bauphasen)
-        buildStage : isHQ ? 3 : 0,          // 0..2 Baustelle, 3 = fertig
+        buildStage : 0,                     // 0 = Baustelle
         buildTimer : 0,
         stock      : {},                    // Ressourcenlager
-        productionRule: def.productionRule || null,
-
-        // Occupancy / "bewohnt" (Trigger wenn Worker reingeht)
-        occupied   : false,
-        occupiedAt : 0,
-        occupantId : null
+        productionRule: def.productionRule || null
       };
 
       // ------------------------------------------------------------
-      // Atlas-Sprite Init (World-Sprites)
-      // ------------------------------------------------------------
-      // 1) Wenn die Registry bereits sprite.type==='atlas' liefert -> übernehmen.
-      // 2) Sonst: Auto-Mapping über Gebäude-ID (Fix für "Icons auf der Map").
-      try {
-        if (def?.sprite?.type === 'atlas' && def.sprite.atlas) {
-          b.__sprite = {
-            atlas : def.sprite.atlas,
-            frame : def.sprite.frames?.place || def.sprite.frames?.live || DEFAULT_FRAMES.place,
-            basePx: def.sprite.basePx || 256,
-            reveal: null
-          };
-        } else {
-          const atlasKey = ATLAS_BY_BUILDING_ID[b.id] || null;
-          if (atlasKey) {
-            b.__sprite = {
-              atlas : atlasKey,
-              frame : DEFAULT_FRAMES.place,
-              basePx: 256,
-              reveal: null
-            };
-          }
-        }
-
-        // HQ: sofort fertig -> Live-Frame setzen (ohne Reveal)
-        if (isHQ && b.__sprite) {
-          b.__sprite.frame = def?.sprite?.frames?.live || DEFAULT_FRAMES.live;
-          b.__sprite.reveal = null;
-        }
-      } catch (e) {
-        // Sprite ist optional; niemals crashen
-      }
+// Atlas-Sprite-Init (optional, z.B. Hunter)
+// ------------------------------------------------------------
+if (def.sprite?.type === 'atlas') {
+  b.__sprite = {
+    atlas : def.sprite.atlas,
+    frame : def.sprite.frames?.place || null,
+    reveal: null
+  };
+}
       
       this.list.push(b);
       LOG('Gebäude erzeugt:', b.id, 'an', b.x, b.y);
@@ -146,6 +94,7 @@
   let resolved = frameKey;
 
   if (typeof frameKey === 'string' && !frameKey.startsWith('frame_')){
+  // Falls ein Key wie "0_0" kommt, normalisieren wir auf "frame_0_0" (Atlas-JSON nutzt dieses Prefix).
     try{
       const reg = window.Registry;
       const def = (reg && typeof reg.get === 'function')
@@ -171,19 +120,89 @@
   }
 };
 
-  // ---------------------------------------------------------------------
-  // Occupancy-Helper: Worker betritt Eingang => Gebäude ist "bewohnt"
-  // ---------------------------------------------------------------------
-  Buildings.markOccupied = function (b, unitId){
+
+  // -------------------------------------------------------------------------
+  // Sprite/Atlas Attach + Occupy/Growth
+  // -------------------------------------------------------------------------
+
+  /**
+   * Sorgt dafür, dass ein Gebäude ein __sprite-Objekt besitzt (Atlas-Key + Frame).
+   * Nutzt buildings.json/Registry: sprite:{type:'atlas', atlas:'..._building_atlas', frames:{place/live/reserve}}
+   */
+  Buildings.ensureSprite = function (b){
     if (!b) return;
-    b.occupied = true;
-    b.occupiedAt = performance.now();
-    b.occupantId = unitId ?? b.occupantId ?? null;
-    try{
-      window.dispatchEvent(new CustomEvent('cb:building:occupied', { detail:{ b } }));
-    }catch(e){}
+    if (b.__sprite && b.__sprite.atlas) return; // bereits ok
+
+    const def = window.Registry?.getBuilding?.(b.id) || window.Registry?.get?.('buildings', b.id) || null;
+    const spr = def?.sprite || null;
+
+    if (spr && spr.type === 'atlas' && spr.atlas){
+      b.__sprite = b.__sprite || {};
+      b.__sprite.atlas  = spr.atlas;
+      b.__sprite.frames = spr.frames || null;
+      b.__sprite.frame  = (spr.frames?.place) ? spr.frames.place : 'frame_0_0';
+      b.__sprite.reveal = null;
+    }
   };
-  
+
+  /** Markiert ein Gebäude als "bewohnt" – startet Upgrade-Timer. */
+  Buildings.markOccupied = function (uid){
+    if (!uid) return;
+
+    // Gebäude finden (primär Buildings.list; Fallback: Game.buildings)
+    let b = Buildings.list.find(x => x && x.uid === uid) || null;
+    if (!b && Array.isArray(window.Game?.buildings)){
+      b = window.Game.buildings.find(x => x && x.uid === uid) || null;
+    }
+    if (!b) return;
+
+    // HQ ist sofort fertig und hat kein Wachstum.
+    if (b.id === 'b.hq') return;
+
+    // Sprite sicherstellen
+    Buildings.ensureSprite(b);
+
+    // Einmalig markieren
+    if (!b.occupiedAt){
+      b.occupiedAt = performance.now();
+      b.occupied   = true;
+      // Debug-Event optional
+      try{
+        window.dispatchEvent(new CustomEvent('cb:build:occupied', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
+      }catch(e){}
+      LOG('occupied', b.id, b.uid);
+    }
+  };
+
+  /**
+   * Tick: prüft alle Gebäude, die "bewohnt" sind und nach 15s upgraden sollen.
+   * Upgrade bedeutet: Frame auf "live" + Reveal bottom→top (600ms).
+   */
+  Buildings.tickGrowth = function (dt){
+    const now = performance.now();
+    for (const b of Buildings.list){
+      if (!b || b.id === 'b.hq') continue;
+      if (!b.occupiedAt) continue;
+
+      // bereits geupgradet?
+      if (b._grown) continue;
+
+      const elapsed = now - b.occupiedAt;
+      if (elapsed < 15000) continue;
+
+      Buildings.ensureSprite(b);
+      if (b.__sprite){
+        // Upgrade: live + Reveal
+        Buildings.setSpriteFrame(b, 'live', true, 600);
+        b._grown = true;
+        try{
+          window.dispatchEvent(new CustomEvent('cb:build:grow', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
+        }catch(e){}
+        LOG('grow', b.id, b.uid);
+      }
+    }
+  };
+
   // global machen
   window.Buildings = Buildings;
 

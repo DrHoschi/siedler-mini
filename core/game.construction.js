@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.construction.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.31-atlas-place-occupy-grow
+ * Version : v25.12.02-buildstep4-multiphasic-clean
  *
  * Zweck   :
  *   - Mehrstufige Baustellen-Logik:
@@ -169,13 +169,25 @@
           }));
         } catch (e) {}
       }
-
-      // HQ-Sprite: immer sofort im "place"-Frame (Frame 0), ohne Reveal.
-      // (HQ hat bei uns keine Bauphasen und kein Wachstum.)
+      // ---------------------------------------------------------------
+      // HQ Atlas-„Wachstum“ (Bottom→Top Reveal)
+      // ---------------------------------------------------------------
+      // HQ ist bei uns sofort 'done' und läuft NICHT durch completeBuilding().
+      // Damit trotzdem der gewünschte Effekt sichtbar ist, triggern wir
+      // EINMALIG einen Wechsel von place → live mit Reveal, kurz nachdem
+      // das HQ initialisiert wurde.
       if (b.__sprite && window.Buildings?.setSpriteFrame) {
-        try {
+        if (!b.__sprite.__autoRevealStarted) {
+          b.__sprite.__autoRevealStarted = true;
+
+          // Startzustand explizit: "place" ohne Reveal
           Buildings.setSpriteFrame(b, 'place', false);
-        } catch (e) {}
+
+          // Nach kurzer Verzögerung: "live" mit Reveal (Wachstum)
+          setTimeout(() => {
+            try { Buildings.setSpriteFrame(b, 'live', true, 1200); } catch(e) {}
+          }, 600);
+        }
       }
 
       return;
@@ -244,15 +256,6 @@
       } else {
         b.buildStage = 0;
       }
-
-    // ---------------------------------------------------------------
-    // Bewohnungs-/Wachstums-Status (NEU)
-    // ---------------------------------------------------------------
-    // occupied wird erst gesetzt, wenn ein Worker den Eingang erreicht.
-    // Danach kann nach einer Zeit (z.B. 15s) das 'live' Frame erscheinen.
-    if (typeof b.occupied !== 'boolean') b.occupied = false;
-    if (typeof b.occupiedAt !== 'number') b.occupiedAt = 0;
-    if (typeof b.grownStage !== 'number') b.grownStage = 0;
     }
 
     // Lokale Bauarbeiter der Baustelle
@@ -301,6 +304,31 @@
       time : performance.now?.() ?? Date.now()
     };
     b.drops.push(drop);
+
+    // ---------------------------------------------------------------
+    // Atlas-Auto-Reveal für bereits fertige Gebäude (z.B. aus Save/Spawn)
+    // ---------------------------------------------------------------
+    // Wenn ein Gebäude bereits mit buildStage=3 "done" existiert, aber noch
+    // auf dem place-Frame steht, triggern wir einmalig den Reveal auf "live".
+    if (b.__sprite && window.Buildings?.setSpriteFrame) {
+      if (b.buildStage >= 3 && b.status === 'done' && !b.__sprite.__autoRevealStarted) {
+        // Prüfen, ob wir noch auf "place" stehen
+        let placeFrame = null;
+        try{
+          const reg = window.Registry;
+          const def = (reg && typeof reg.get === 'function') ? reg.get('buildings', b.id) : null;
+          placeFrame = def?.sprite?.frames?.place || null;
+        }catch(e){}
+
+        if (!placeFrame || b.__sprite.frame === placeFrame) {
+          b.__sprite.__autoRevealStarted = true;
+          Buildings.setSpriteFrame(b, 'place', false);
+          setTimeout(() => {
+            try { Buildings.setSpriteFrame(b, 'live', true, 1200); } catch(e) {}
+          }, 600);
+        }
+      }
+    }
 
   }
 
@@ -415,9 +443,11 @@
       WARN('cb:build:complete dispatch fehlgeschlagen', e);
     }
 if (b.__sprite && window.Buildings?.setSpriteFrame) {
-      // Fertig gebaut: IMMER zuerst Frame 0 zeigen ("place").
-      // Wachstum/Upgrade erfolgt später über Buildings.tickGrowth() nach 'occupied'.
-      try { Buildings.setSpriteFrame(b, 'place', false); } catch(e) {}
+      // Nach Fertigbau: IMMER zuerst das 1. Gebäude-Frame anzeigen (Frame 0 / "place").
+      // Wachstum/Upgrade passiert erst später, wenn das Gebäude "bewohnt" ist.
+      if (b.id !== 'b.hq') {
+        window.Buildings.setSpriteFrame(b, 'place', false);
+      }
     }
     LOG('Gebäude fertig', {
       id       : b.id,
@@ -576,18 +606,12 @@ if (b.__sprite && window.Buildings?.setSpriteFrame) {
           break;
       }
     }
-
-    // ---------------------------------------------------------------
-    // NEU: Wachstum/Upgrade für bewohnte Atlas-Gebäude (nach Timer)
-    // ---------------------------------------------------------------
-    try {
-      if (window.Buildings && typeof window.Buildings.tickGrowth === 'function') {
-        window.Buildings.tickGrowth(dt);
-      }
-    } catch(e) {}
-
-
   }
+
+    // Zusätzlich: Building-Growth/Reveal (bewohnt → Upgrade)
+    try{
+      if (window.Buildings?.tickGrowth) window.Buildings.tickGrowth(dt);
+    }catch(e){}
 
   // ---------------------------------------------------------------------------
   // Rendering: Drops + Fortschrittsbalken + Bauarbeiter
