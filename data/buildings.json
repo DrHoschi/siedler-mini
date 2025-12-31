@@ -108,6 +108,15 @@
         "shape": "circle",
         "radiusTiles": 4.0,
         "selectable": true
+      },
+      "sprite": {
+        "type": "atlas",
+        "atlas": "lumberjack_building_atlas",
+        "frames": {
+          "place": "frame_0_0",
+          "live": "frame_0_1",
+          "reserve": "frame_0_2"
+        }
       }
     },
     {
@@ -147,6 +156,15 @@
         "shape": "circle",
         "radiusTiles": 4.0,
         "selectable": true
+      },
+      "sprite": {
+        "type": "atlas",
+        "atlas": "quarry_building_atlas",
+        "frames": {
+          "place": "frame_0_0",
+          "live": "frame_0_1",
+          "reserve": "frame_0_2"
+        }
       }
     },
     {
@@ -182,6 +200,15 @@
         "shape": "circle",
         "radiusTiles": 4.5,
         "selectable": true
+      },
+      "sprite": {
+        "type": "atlas",
+        "atlas": "fishman_building_atlas",
+        "frames": {
+          "place": "frame_0_0",
+          "live": "frame_0_1",
+          "reserve": "frame_0_2"
+        }
       }
     },
     {
