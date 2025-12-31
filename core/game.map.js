@@ -108,12 +108,32 @@ function _fallbackBuildingAtlasKey(buildingId){
 }
 
 function _fallbackBuildingFrameForKey(frameKey){
+  // Unsere Gebäude-Atlanten benutzen Frame-Namen wie:
+  //   frame_0_0, frame_0_1, frame_0_2, ...
+  // In manchen Stellen kommen semantische Keys:
+  //   place / live / reserve
+  // oder Legacy-Keys:
+  //   0_0 / 0_1 / 0_2
+  //
+  // Diese Funktion normalisiert ALLES auf den echten Atlas-Frame-Namen.
+
   const k = String(frameKey||'').trim();
-  if (k === 'place')   return '0_0';
-  if (k === 'live')    return '0_1';
-  if (k === 'reserve') return '0_2';
-  return frameKey;
+
+  // 1) Semantik → Atlas-Frame
+  if (k === 'place')   return 'frame_0_0';
+  if (k === 'live')    return 'frame_0_1';
+  if (k === 'reserve') return 'frame_0_2';
+
+  // 2) Bereits korrekt?
+  if (k.startsWith('frame_')) return k;
+
+  // 3) Legacy: "0_0" → "frame_0_0"
+  if (/^\d+_\d+$/.test(k)) return 'frame_' + k;
+
+  // 4) Sonst unverändert (falls du später andere Namen nutzt)
+  return k;
 }
+
 
 
 
@@ -1016,111 +1036,19 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
           }
         } else {
           // Fertiges Gebäude
-// -------------------------------------------------------------
-// NEU: Wenn Atlas verfügbar ist (Registry/Buildings setzen b.__sprite),
-// zeichnen wir das Welt-Sprite aus dem Atlas – NICHT die UI-Icons.
-// Dadurch verschwinden die Baumenü-Bilder auf der Map.
-// -------------------------------------------------------------
-const Assets = window.Assets;
-const Reg    = window.Registry;
-
-// 1) Atlas bevorzugen
-if (Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function') {
-  try{
-    let atlasKey  = null;
-    let frameName = null;
-    let reveal    = null;
-
-    // a) Runtime-Sprite-Info (gesetzt von core/game.buildings.js / core/game.construction.js)
-    if (b && b.__sprite && b.__sprite.atlas) {
-      atlasKey  = b.__sprite.atlas;
-      frameName = b.__sprite.frame || null;
-      reveal    = b.__sprite.reveal || null;
-    }
-
-    // b) Registry-Fallback (data/buildings.json → sprite: {type:'atlas', atlas, frames:{place/live/reserve}})
-    if (!atlasKey && Reg && typeof Reg.getBuilding === 'function') {
-      const def = Reg.getBuilding(b.id);
-      if (def && def.sprite && def.sprite.type === 'atlas') {
-        atlasKey = def.sprite.atlas || null;
-
-        // Wenn der Building-State schon einen semantischen Key trägt, mappe ihn:
-        //  - b.atlasFrame / b.spriteFrame / b.frameKey: 'place' | 'live' | 'reserve'
-        const sem = (b.atlasFrame || b.spriteFrame || b.frameKey || null);
-        if (sem && def.sprite.frames && def.sprite.frames[sem]) frameName = def.sprite.frames[sem];
-
-        // Sonst: 'place' als garantierter Start
-        if (!frameName) frameName = def.sprite.frames?.place || 'frame_0_0';
-      }
-    }
-
-    // c) Hard-Fallback für bekannte IDs (wenn Registry noch nicht ready ist)
-    if (!atlasKey) atlasKey = _fallbackBuildingAtlasKey(b.id);
-
-    // Frame: wenn wir nur semantisch wissen, mappe auf frame_0_0 / _0_1 / _0_2
-    if (!frameName) {
-      const sem = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
-      frameName = _fallbackBuildingFrameForKey(sem);
-    }
-
-    // Atlas ok?
-    const atlas = atlasKey ? Assets.getAtlas(atlasKey) : null;
-    if (atlas && atlas.ok && frameName) {
-      const base = 256;                 // unsere Building-Frames sind 256px breit (Sheet-Grid)
-      const scale = bw / base;          // w*tileSize / 256
-      const cx = bx + bw/2;             // Fußpunkt: unten mittig
-      const cy = by + bh;
-
-      // Reveal (Bottom→Top): clip auf Anteil
-      let revealP = 1;
-      if (reveal && reveal.start && reveal.dur) {
-        const t = (performance.now() - reveal.start) / reveal.dur;
-        revealP = Math.max(0, Math.min(1, t));
-      }
-
-      if (revealP < 1) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(bx, by + bh * (1 - revealP), bw, bh * revealP);
-        ctx.clip();
-      }
-
-      const ok = Assets.drawAtlasFrame(ctx, atlasKey, frameName, cx, cy, { scale, align:'pivot' });
-
-      if (revealP < 1) ctx.restore();
-
-      if (ok) {
-        // Atlas erfolgreich – fertig.
-      } else {
-        // Atlas nicht zeichnbar → fällt unten auf PNG/Rect zurück
-        throw new Error('drawAtlasFrame returned false');
-      }
-
-      // Wir sind durch: kein PNG-Fallback nötig.
-      // (return nicht möglich, wir sind im Loop – daher useFallback=false)
-      useFallback = false;
-    }
-  }catch(e){
-    // weiter mit PNG-Fallback
-    useFallback = true;
-  }
-}
-
-// 2) PNG-Fallback (Übergangsphase)
-if (useFallback){
-  const imgB = getBuildingSprite(b.id);
-  if (isDrawableImage(imgB)){
-    try{
-      ctx.drawImage(imgB, bx, by, bw, bh);
-      useFallback = false;
-    }catch(e){
-      WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
-      useFallback = true;
-    }
-  } else {
-    useFallback = true;
-  }
-}}
+          const imgB = getBuildingSprite(b.id);
+          if (isDrawableImage(imgB)){
+            try{
+              ctx.drawImage(imgB, bx, by, bw, bh);
+            }catch(e){
+              WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
+              useFallback = true;
+            }
+          } else {
+            // Sprite noch nicht da oder kaputt → Fallback-Rechteck
+            useFallback = true;
+          }
+        }
 
         if (useFallback){
           ctx.fillStyle = col;
