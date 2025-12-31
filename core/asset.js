@@ -617,30 +617,6 @@ tasks.push(this.loadAtlas(
         'assets/buildings/quarry/quarry-sprite.png'
       ));
 
-      // --------------------------------------------------------------------
-      // Buildings: Houses (Gebäude-Atlanten)
-      //  - PNG:  assets/buildings/house/house-small-sprite.png
-      //  - JSON: data/atlases/house-small_atlas.json
-      //  - Atlas-Key: 'house_small_building_atlas'
-      // --------------------------------------------------------------------
-      tasks.push(this.loadAtlas(
-        'house_small_building_atlas',
-        'data/atlases/house-small_atlas.json',
-        'assets/buildings/house/house-small-sprite.png'
-      ));
-
-      // --------------------------------------------------------------------
-      // Buildings: House Middle (Gebäude-Atlas)
-      //  - PNG:  assets/buildings/house/house-middle-sprite.png
-      //  - JSON: data/atlases/house-middle_atlas.json
-      //  - Atlas-Key: 'house_middle_building_atlas'
-      // --------------------------------------------------------------------
-      tasks.push(this.loadAtlas(
-        'house_middle_building_atlas',
-        'data/atlases/house-middle_atlas.json',
-        'assets/buildings/house/house-middle-sprite.png'
-      ));
-
       // Dein Atlas heißt aktuell "fishman-sprite_atlas.json" (Dateiname).
       // Wir registrieren ihn aber bewusst als "fisher_building_atlas", damit
       // der Code/Buildings-IDs konsistent bleiben.
@@ -649,6 +625,22 @@ tasks.push(this.loadAtlas(
         'data/atlases/fishman-sprite_atlas.json',
         'assets/buildings/fishman/fishman-sprite.png'
       ));
+
+
+// ------------------------------------------------------------
+// Houses (Epoche 1) – World-Atlanten (nicht Baumenü-Icons)
+// ------------------------------------------------------------
+tasks.push(this.loadAtlas(
+  'house_small_building_atlas',
+  'data/atlases/house-small_atlas.json',
+  'assets/buildings/house/house-small-sprite.png'
+));
+
+tasks.push(this.loadAtlas(
+  'house_middle_building_atlas',
+  'data/atlases/house-middle_atlas.json',
+  'assets/buildings/house/house-middle-sprite.png'
+));
 
       await Promise.allSettled(tasks);
 
