@@ -242,7 +242,16 @@
           "qty": 2
         }
       ],
-      "enabled": true
+      "enabled": true,
+      "sprite": {
+        "type": "atlas",
+        "atlas": "house_small_building_atlas",
+        "frames": {
+          "place": "frame_0_0",
+          "live": "frame_0_1",
+          "reserve": "frame_0_2"
+        }
+      }
     },
     {
       "id": "b.hunter",
@@ -294,6 +303,48 @@
         "shape": "circle",
         "radiusTiles": 8.0,
         "selectable": true
+      }
+    },
+    {
+      "id": "b.house_middle",
+      "name": "Mittleres Wohnhaus",
+      "epoche": 1,
+      "category": "housing",
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "entrances": [
+        {
+          "dx": 1,
+          "dy": 3
+        }
+      ],
+      "cost": [
+        {
+          "id": "wood",
+          "qty": 4
+        },
+        {
+          "id": "stone",
+          "qty": 2
+        }
+      ],
+      "spawns": [
+        {
+          "unit": "u.villager",
+          "qty": 3
+        }
+      ],
+      "enabled": true,
+      "sprite": {
+        "type": "atlas",
+        "atlas": "house_middle_building_atlas",
+        "frames": {
+          "place": "frame_0_0",
+          "live": "frame_0_1",
+          "reserve": "frame_0_2"
+        }
       }
     }
   ]
