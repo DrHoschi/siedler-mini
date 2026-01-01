@@ -188,12 +188,12 @@ if (def.sprite?.type === 'atlas') {
       if (b._grown) continue;
 
       const elapsed = now - b.occupiedAt;
-      if (elapsed < 15000) continue;
+      if (elapsed <20000) continue;
 
       Buildings.ensureSprite(b);
       if (b.__sprite){
         // Upgrade: live + Reveal
-        Buildings.setSpriteFrame(b, 'live', true, 600);
+        Buildings.setSpriteFrame(b, 'live', true, 1600);
         b._grown = true;
         try{
           window.dispatchEvent(new CustomEvent('cb:build:grow', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
