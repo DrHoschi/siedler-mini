@@ -752,7 +752,67 @@ function spawnInitialCarriers(count){
     _moveTowards(u, u._idleTarget, dt);
   }
 
-  // -------------------------------------------------------------------------
+  
+
+// -------------------------------------------------------------------------
+// ENTRANCE-HELPERS (aus Gebäudeobjekt ODER Registry, weil wir die Entrances
+//                   zentral in buildings.json gepflegt haben)
+// -------------------------------------------------------------------------
+
+function _getRegistryBuildingDef(buildingId){
+  try{
+    const R = window.Registry;
+    if (!R) return null;
+    if (typeof R.getBuilding === 'function') return R.getBuilding(buildingId);
+    if (typeof R.get === 'function') return R.get('buildings', buildingId);
+  }catch(e){}
+  return null;
+}
+
+/**
+ * Liefert die absolute Entrance-Tile (x/y) für ein Gebäude.
+ * - bevorzugt b.entranceTx/entranceTy (falls schon gesetzt)
+ * - sonst b.entrances[0] (dx/dy relativ)
+ * - sonst Registry.def.entrances[0]
+ * Fallback: südliche Mitte außerhalb des Footprints
+ */
+function _getEntranceTileForBuilding(b){
+  if (!b) return null;
+
+  // 1) direkt gespeichert?
+  if (Number.isFinite(Number(b.entranceTx)) && Number.isFinite(Number(b.entranceTy))){
+    return { x: (b.entranceTx|0), y: (b.entranceTy|0) };
+  }
+
+  // 2) am Objekt: entrances (dx/dy relativ)
+  if (Array.isArray(b.entrances) && b.entrances.length){
+    const e0 = b.entrances[0];
+    const dx = (e0?.dx|0) || 0;
+    const dy = (e0?.dy|0) || 0;
+    return { x: (b.x|0) + dx, y: (b.y|0) + dy };
+  }
+
+  // 3) aus Registry
+  const def = _getRegistryBuildingDef(b.id || b.type || '');
+  if (def && Array.isArray(def.entrances) && def.entrances.length){
+    const e0 = def.entrances[0];
+    const dx = (e0?.dx|0) || 0;
+    const dy = (e0?.dy|0) || 0;
+    return { x: (b.x|0) + dx, y: (b.y|0) + dy };
+  }
+
+  // 4) Fallback: südliche Mitte (außerhalb)
+  const bw = Math.max(1, (b.w|0) || 1);
+  const bh = Math.max(1, (b.h|0) || 1);
+  return { x: (b.x|0) + Math.floor(bw/2), y: (b.y|0) + bh };
+}
+
+function _findHQBuilding(){
+  const list = (window.Game?.buildings || []);
+  return list.find(b => b && (b.id==='b.hq' || b.type==='b.hq')) || null;
+}
+
+// -------------------------------------------------------------------------
   // WORKER (einfacher Loop: Home -> WorkArea-Punkt -> kurze Work-Pause -> Home)
   // -------------------------------------------------------------------------
   const WORKER_BY_BUILDING = {
@@ -791,7 +851,7 @@ function spawnInitialCarriers(count){
   function _ensureWorkerAI(u){
     if (u._ai) return u._ai;
     u._ai = {
-      mode      : 'toWork',  // 'toWork' | 'work' | 'toHome'
+      mode      : 'toEntrance',  // 'toWork' | 'work' | 'toHome'
       timer     : 0,
       target    : null
     };
@@ -831,7 +891,73 @@ function spawnInitialCarriers(count){
     };
 
     // State Machine
-    if (ai.mode === 'toWork'){
+    
+
+// -------------------------------------------------------------------
+// Startsequenz nach Fertigbau:
+//  1) Worker startet am HQ (Spawn) und läuft ZUERST zur Tür seines Gebäudes
+//  2) Beim Betreten der Tür "geht er rein" (kurz unsichtbar)
+//  3) Ab dem Moment gilt das Gebäude als "bewohnt" (Occupy-Trigger)
+// -------------------------------------------------------------------
+if (ai.mode === 'toEntrance'){
+  const bldUid = u.homeBuildingUid || u.homeUid || null;
+  const bld = (bldUid && Array.isArray(window.Game?.buildings))
+    ? window.Game.buildings.find(bb => bb && (bb.uid === bldUid))
+    : null;
+
+  // Türtile bestimmen (Registry-Fallback inklusive)
+  const ent = bld ? _getEntranceTileForBuilding(bld) : null;
+  const target = ent ? { x: ent.x + 0.5, y: ent.y + 0.5 } : home;
+
+  u.task = { type:'walk', target:{ x: target.x, y: target.y } };
+  const arrived = _moveTowards(u, target, dt);
+  if (arrived){
+    u.task = null;
+
+    // Nur beim ERSTEN Eintritt: Occupy triggern + "rein gehen" (hide)
+    if (!u._enteredHome){
+      u._enteredHome = true;
+
+      // Occupy: robust gegenüber unterschiedlichen Signaturen
+      try{
+        const BM = window.Buildings?.markOccupied;
+        if (typeof BM === 'function'){
+          // Variante A: markOccupied(uid)
+          try{ BM(bldUid || bld || uid); }catch(_e){}
+          // Variante B: markOccupied(building, unitId)
+          try{ BM(bld || { uid:bldUid, id:(u.homeDetail?.id||'') }, u.kind); }catch(_e){}
+        }
+      }catch(e){}
+
+      // Worker "geht rein" (5s)
+      u.hiddenUntil = performance.now() + 5000;
+      u.hidden = true;
+    }
+
+    ai.mode  = 'inside';
+    ai.timer = 5.0;
+  }
+  return;
+}
+
+if (ai.mode === 'inside'){
+  // solange inside: unsichtbar
+  const now = performance.now();
+  if (u.hiddenUntil && now < u.hiddenUntil){
+    u.hidden = true;
+  }
+
+  ai.timer -= dt;
+  if (ai.timer <= 0){
+    // wieder raus
+    u.hidden = false;
+    ai.mode = 'toWork';
+    ai.target = null;
+  }
+  return;
+}
+
+if (ai.mode === 'toWork'){
       if (!ai.target){
         ai.target = _pickWorkPoint(area);
       }
@@ -857,44 +983,10 @@ function spawnInitialCarriers(count){
     }
 
     // toHome
-    // ---------------------------------------------------------------------
-    // Neu: Worker gehen NICHT mehr in die Gebäude-Mitte, sondern zum ENTRANCE.
-    // Sobald der Worker am Entrance ankommt, markieren wir das Gebäude als
-    // "bewohnt". Erst ab dann darf später (nach 15s) das Upgrade/Wachstum
-    // auf das nächste Atlas-Frame passieren.
-    // ---------------------------------------------------------------------
-    const bldUid = u.homeUid || u.homeBuildingUid || null;
-    const bld    = (bldUid && Array.isArray(window.Game?.buildings))
-      ? window.Game.buildings.find(bb => bb && bb.uid === bldUid)
-      : null;
-
-    // Entrance-Tile bestimmen (Fallback: Home/Mitte).
-    let homeTarget = { x: home.x, y: home.y };
-    if (bld){
-      // 1) Direkt gespeicherte Entrance-Tiles
-      if (Number.isFinite(bld.entranceTx) && Number.isFinite(bld.entranceTy)){
-        homeTarget = { x: bld.entranceTx + 0.5, y: bld.entranceTy + 0.5 };
-      }
-      // 2) Registry-Entrances als Relative Offsets (b.x + e.x)
-      else if (Array.isArray(bld.entrances) && bld.entrances.length){
-        const e0 = bld.entrances[0];
-        const ex = Number.isFinite(e0.tx) ? e0.tx : (Number.isFinite(e0.x) ? e0.x : 0);
-        const ey = Number.isFinite(e0.ty) ? e0.ty : (Number.isFinite(e0.y) ? e0.y : 0);
-        homeTarget = { x: (bld.x + ex) + 0.5, y: (bld.y + ey) + 0.5 };
-      }
-    }
-
-    u.task = { type:'walk', target:{ x: homeTarget.x, y: homeTarget.y } };
-    const arrivedHome = _moveTowards(u, homeTarget, dt);
+    u.task = { type:'walk', target:{ x: home.x, y: home.y } };
+    const arrivedHome = _moveTowards(u, home, dt);
     if (arrivedHome){
       u.task = null;
-
-      // Occupy-Trigger nur 1x pro Worker/Home.
-      if (bld && !u._enteredHome){
-        u._enteredHome = true;
-        try{ window.Buildings?.markOccupied?.(bld.uid); }catch(e){}
-      }
-
       ai.mode = 'toWork';
       ai.target = null;
       ai.timer = 0;
@@ -973,19 +1065,32 @@ function spawnInitialCarriers(count){
       return;
     }
 
-    const w = d.w ?? 1;
-    const h = d.h ?? 1;
-    const cx = (d.x ?? 0) + w/2;
-    const cy = (d.y ?? 0) + h/2;
+    // Worker spawnt am HQ-Eingang (nicht im Gebäude selbst),
+// damit wir den "läuft vom HQ zum Gebäude"-Flow sehen.
+const hq = _findHQBuilding();
+let sx = 0, sy = 0;
+if (hq){
+  const ent = _getEntranceTileForBuilding(hq);
+  sx = (ent?.x ?? (hq.x|0)) + 0.5;
+  sy = (ent?.y ?? (hq.y|0)) + 0.5;
+} else {
+  // Fallback: Gebäude-Mitte
+  const w = d.w ?? 1;
+  const h = d.h ?? 1;
+  sx = (d.x ?? 0) + w/2;
+  sy = (d.y ?? 0) + h/2;
+}
 
-    const spawned = spawn(workerUnitId, 1, { at:{ tx: cx, ty: cy } });
+const spawned = spawn(workerUnitId, 1, { at:{ tx: sx, ty: sy } });
+(workerUnitId, 1, { at:{ tx: cx, ty: cy } });
     const u = spawned && spawned[0];
     if (!u) return;
 
-    u.homeUid    = uid;
+    u.homeUid        = uid;
+    u.homeBuildingUid = (d.uid || d.buildingUid || uid);
     u.homeX      = cx;
     u.homeY      = cy;
-    u.homeDetail = { id: buildingId, uid, x: d.x, y: d.y, w: d.w, h: d.h };
+    u.homeDetail = { id: buildingId, uid: (d.uid || d.buildingUid || uid), x: d.x, y: d.y, w: d.w, h: d.h };
 
     // AI initialisieren (damit er sofort losläuft)
     u._ai = null;

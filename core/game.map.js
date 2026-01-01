@@ -602,54 +602,6 @@ function _fallbackBuildingFrameForKey(frameKey){
         const atlas = Assets.getAtlas(spr.atlas);
 
         if (atlas?.ok && spr.frame && typeof Assets.drawAtlasFrame === 'function'){
-          // -----------------------------------------------------------------
-          // Overlay-Upgrade: Frame-0 bleibt sichtbar, Ziel-Frame wächst darüber
-          // (erst nach Reveal-Ende wird umgeschaltet)
-          // -----------------------------------------------------------------
-          if (spr.overlayFrame && spr.overlay && spr.overlay.start && spr.overlay.dur){
-            const t = (performance.now() - spr.overlay.start) / spr.overlay.dur;
-            const p = Math.max(0, Math.min(1, t));
-
-            ctx.save();
-
-            // Skalierung (wie unten)
-            const base = (spr.basePx || 256);
-            const scale = bw / base;
-
-            // 1) Basis-Frame immer voll zeichnen
-            Assets.drawAtlasFrame(ctx, spr.atlas, spr.frame, bx + bw/2, by + bh, {
-              align: 'pivot',
-              scale
-            });
-
-            // 2) Overlay-Frame mit Bottom→Top Clip
-            if (p > 0){
-              const clipH = bh * p;
-              ctx.save();
-              ctx.beginPath();
-              ctx.rect(bx, by + (bh - clipH), bw, clipH);
-              ctx.clip();
-
-              Assets.drawAtlasFrame(ctx, spr.atlas, spr.overlayFrame, bx + bw/2, by + bh, {
-                align: 'pivot',
-                scale
-              });
-
-              ctx.restore();
-            }
-
-            ctx.restore();
-
-            // Umschalten nach Ende (zusätzliche Sicherheit – tickGrowth macht es auch)
-            if (p >= 1){
-              spr.frame = spr.overlayFrame;
-              spr.overlayFrame = null;
-              spr.overlay = null;
-            }
-            return;
-          }
-
-
           // Reveal Progress (Bottom→Top), optional
           let revealP = 1;
           if (spr.reveal && spr.reveal.start && spr.reveal.dur){
@@ -1197,6 +1149,20 @@ if (window.GameWorkArea) {
 
       let __ui = 0;
       for (const u of units){
+
+// -------------------------------------------------------------
+// Worker "geht ins Gebäude": Units können temporär hidden sein.
+// (u.hidden=true oder u.hiddenUntil=timestamp)
+// -------------------------------------------------------------
+if (u && (u.hidden === true || (u.hiddenUntil && performance.now() < u.hiddenUntil))) {
+  continue;
+} else if (u && u.hiddenUntil && performance.now() >= u.hiddenUntil) {
+  // Safety: automatisch wieder sichtbar machen
+  u.hidden = false;
+  u.hiddenUntil = 0;
+}
+
+
         const ui = __ui++;
         // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
         const tx = (u.x || 0);

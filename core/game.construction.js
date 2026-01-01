@@ -443,12 +443,8 @@
       WARN('cb:build:complete dispatch fehlgeschlagen', e);
     }
 if (b.__sprite && window.Buildings?.setSpriteFrame) {
-      // Nach Fertigbau: IMMER zuerst das 1. Gebäude-Frame anzeigen (Frame 0 / "place").
-      // Wachstum/Upgrade passiert erst später, wenn das Gebäude "bewohnt" ist.
-      if (b.id !== 'b.hq') {
-        window.Buildings.setSpriteFrame(b, 'place', false);
-      }
-    }
+  Buildings.setSpriteFrame(b, 'live', true, 1200);
+}
     LOG('Gebäude fertig', {
       id       : b.id,
       needs    : b.needs,
@@ -607,11 +603,6 @@ if (b.__sprite && window.Buildings?.setSpriteFrame) {
       }
     }
   }
-
-    // Zusätzlich: Building-Growth/Reveal (bewohnt → Upgrade)
-    try{
-      if (window.Buildings?.tickGrowth) window.Buildings.tickGrowth(dt);
-    }catch(e){}
 
   // ---------------------------------------------------------------------------
   // Rendering: Drops + Fortschrittsbalken + Bauarbeiter
