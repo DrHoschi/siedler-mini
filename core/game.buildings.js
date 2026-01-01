@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.01-occupy-grow-entries-logpatch
+ * Version : v26.01.01-occupy-grow-entries
  *
  * Zweck   :
  *   - Zentrale Gebäudeliste + Create/Get (eine Quelle: Buildings.list)
@@ -288,7 +288,7 @@
       try{
         window.dispatchEvent(new CustomEvent('cb:build:occupied', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y, unitId:b.occupantId } }));
       }catch(e){}
-      LOG('occupied', b.id, b.uid, 'entrance', b.entranceTx, b.entranceTy);
+      LOG('occupied', b.id, b.uid);
     }
   };
 
@@ -330,7 +330,7 @@
         // Base-Frame sicherstellen (falls irgendwas es umgestellt hat)
         Buildings.setSpriteFrame(b, 'place', false);
         // Growth langsam
-        Buildings.startOverlayReveal(b, 'live', 3200);
+        Buildings.startOverlayReveal(b, 'live', 5000);
 
         try{
           window.dispatchEvent(new CustomEvent('cb:build:grow:start', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
