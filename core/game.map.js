@@ -644,21 +644,27 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
     // -------------------------------------------------------------------
     // 2b) GROW-OVERLAY: Frame_0_1 wächst Bottom→Top über Frame_0_0
     //     - Basis bleibt stehen, bis Overlay 100% ist.
-    //     - Opacity "stufig": 10% → dann in 5%-Schritten bis 100%.
+    //     - Opacity "stufig": Start 1% → dann in 1%-Schritten bis 100% (monoton).
     // -------------------------------------------------------------------
     if (spr.overlayFrame && spr.overlay && spr.overlay.start && spr.overlay.dur){
       const now = performance.now();
       const dur = Math.max(50, spr.overlay.dur|0);
       let p = (now - spr.overlay.start) / dur;
       p = Math.max(0, Math.min(1, p));
-
       // Opacity-Stufen (wie von dir gewünscht):
-      // 0.10, 0.15, 0.20, ... , 1.00  => 19 Steps
-      const STEPS = 19;
-      const A0    = 0.10;
-      const ASTEP = 0.05;
-      const si = Math.max(0, Math.min(STEPS-1, Math.floor(p * (STEPS-1))));
-      const alpha = Math.max(0, Math.min(1, A0 + si * ASTEP));
+      // Start bei 1% (0.01) und dann in 1%-Schritten bis 100%.
+      // WICHTIG: Werte dürfen NIE wieder kleiner werden, damit "nichts weggeht".
+      spr.overlay._pMax = Math.max(spr.overlay._pMax || 0, p);
+      const pMax = spr.overlay._pMax;
+
+      // 1% Steps: 0.01, 0.02, ... , 1.00
+      const stepIdx = Math.max(1, Math.min(100, Math.ceil(pMax * 100)));
+      const steppedAlpha = stepIdx / 100;
+
+      // Alpha-Monotonie (falls irgendwas jittert): immer nur erhöhen.
+      spr.overlay._alphaMax = Math.max(spr.overlay._alphaMax || 0, steppedAlpha);
+      const alpha = spr.overlay._alphaMax;
+
 
       const oframeKey = spr.overlayFrame;                 // z.B. 'live'
       const oframe    = _fallbackBuildingFrameForKey(oframeKey);
@@ -667,7 +673,7 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       ctx.globalAlpha = (ctx.globalAlpha || 1) * alpha;
 
       // Bottom→Top Reveal per Clip
-      const clipH = bh * p;
+      const clipH = bh * pMax;
       if (clipH > 0){
         ctx.beginPath();
         ctx.rect(bx, by + (bh - clipH), bw, clipH);
@@ -681,7 +687,7 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       ctx.restore();
 
       // Overlay fertig? → Frame final umschalten (Basis bleibt bis hier sichtbar)
-      if (p >= 1){
+      if (pMax >= 1){
         spr.frame = oframeKey;      // semantisch (z.B. 'live')
         spr.overlayFrame = null;
         spr.overlay = null;
