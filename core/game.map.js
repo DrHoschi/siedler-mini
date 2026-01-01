@@ -609,42 +609,88 @@ function _fallbackBuildingFrameForKey(frameKey){
 if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFrame === 'function') {
   try{
     const spr = b.__sprite;
-    // Frame: bevorzugt spr.frame, sonst semantische Keys
-    const frameKey = spr.frame || spr.atlasFrame || spr.spriteFrame || spr.frameKey || 'place';
-    const frame = _fallbackBuildingFrameForKey(frameKey);
 
-    // Reveal (Bottom→Top) – optional
-    let revealP = 1;
-    if (spr.reveal && spr.reveal.start && spr.reveal.dur){
+    // -------------------------------------------------------------------
+    // FRAME-LOGIK (Basis + Overlay)
+    //  - Basis (spr.frame) bleibt immer sichtbar (frame_0_0).
+    //  - Overlay (spr.overlay + spr.overlayFrame) wächst Bottom→Top darüber.
+    //  - Das eigentliche Umschalten (frame_0_1) passiert erst NACH Reveal-Ende
+    //    in core/game.buildings.js (tickGrowth).
+    // -------------------------------------------------------------------
+
+    // Basis-Frame: bevorzugt spr.frame, sonst semantische Keys
+    const baseFrameKey = spr.frame || spr.atlasFrame || spr.spriteFrame || spr.frameKey || 'place';
+    const baseFrame    = _fallbackBuildingFrameForKey(baseFrameKey);
+
+    // Overlay-Frame (falls aktiv)
+    const hasOverlay = !!(spr.overlay && spr.overlayFrame && spr.overlayStart && spr.overlayDur);
+    const overlayFrame = hasOverlay ? _fallbackBuildingFrameForKey(spr.overlayFrame) : null;
+
+    // Optional: Legacy-Reveal (wurde früher benutzt) – bleibt kompatibel
+    // (wichtig: das betrifft NUR das Zeichnen dieses einen Frames)
+    let legacyRevealP = 1;
+    if (!hasOverlay && spr.reveal && spr.reveal.start && spr.reveal.dur){
       const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
-      revealP = Math.max(0, Math.min(1, t));
-      if (revealP >= 1) spr.reveal = null;
-    }
-
-    ctx.save();
-    if (revealP < 1){
-      const clipH = bh * revealP;
-      ctx.beginPath();
-      ctx.rect(bx, by + (bh - clipH), bw, clipH);
-      ctx.clip();
+      legacyRevealP = Math.max(0, Math.min(1, t));
+      if (legacyRevealP >= 1) spr.reveal = null;
     }
 
     const base = (spr.basePx || 256);
     const scale = bw / base;
 
-    Assets.drawAtlasFrame(ctx, spr.atlas, frame, bx + bw/2, by + bh, {
+    // 1) Basis-Frame immer komplett zeichnen (NICHT clippen!)
+    ctx.save();
+    Assets.drawAtlasFrame(ctx, spr.atlas, baseFrame, bx + bw/2, by + bh, {
       align: 'pivot',
       scale
     });
-
     ctx.restore();
+
+    // 2) Overlay-Reveal (Bottom→Top) – NUR Overlay clippen
+    if (hasOverlay){
+      const now = performance.now();
+      const t = (now - spr.overlayStart) / spr.overlayDur;
+      const p = Math.max(0, Math.min(1, t));
+
+      ctx.save();
+
+      // Clip-Rechteck: von unten nach oben wachsen
+      if (p < 1){
+        const clipH = bh * p;
+        ctx.beginPath();
+        ctx.rect(bx, by + (bh - clipH), bw, clipH);
+        ctx.clip();
+      }
+
+      Assets.drawAtlasFrame(ctx, spr.atlas, overlayFrame, bx + bw/2, by + bh, {
+        align: 'pivot',
+        scale
+      });
+
+      ctx.restore();
+    } else if (legacyRevealP < 1){
+      // Legacy-Reveal (nur wenn kein Overlay läuft) – clippt das Basis-Frame
+      ctx.save();
+      const clipH = bh * legacyRevealP;
+      ctx.beginPath();
+      ctx.rect(bx, by + (bh - clipH), bw, clipH);
+      ctx.clip();
+
+      Assets.drawAtlasFrame(ctx, spr.atlas, baseFrame, bx + bw/2, by + bh, {
+        align: 'pivot',
+        scale
+      });
+
+      ctx.restore();
+    }
+
     return;
   }catch(e){
     WARN('Atlas-Gebäude draw Fehler (b.__sprite):', e?.message || e);
   }
 }
 
-// b) Fallback: Atlas anhand Building-ID erkennen (damit NICHT die UI-Icons auf der Karte landen)
+// b) Fallback: Atlas anhand Building-ID erkennen (damit NICHT die UI-Icons auf der Karte landen) (damit NICHT die UI-Icons auf der Karte landen)
 if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
   try{
     const atlasKey = _fallbackBuildingAtlasKey(b.id);
