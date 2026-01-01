@@ -423,7 +423,7 @@ function spawnInitialCarriers(count){
     }catch(e){ /* silent */ }
   }
 
-  function _moveTowards(u, target, dt){
+  function _moveTo(u, target, dt){
     if (!target) return false;
 
     const dx   = target.x - u.x;
