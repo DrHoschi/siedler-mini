@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-01-01T13:41:28.428Z",
+  "createdAt": "2026-01-01T16:22:43.736Z",
   "root": ".",
   "count": 568,
   "entries": [
@@ -72,7 +72,7 @@
     {
       "type": "file",
       "path": "assets/animals/deer.png",
-      "size": 824883
+      "size": 845284
     },
     {
       "type": "file",
@@ -1606,7 +1606,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 48302
+      "size": 49265
     },
     {
       "type": "file",
@@ -1656,12 +1656,12 @@
     {
       "type": "file",
       "path": "core/game.tick.js",
-      "size": 2545
+      "size": 2789
     },
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 36290
+      "size": 36395
     },
     {
       "type": "file",
@@ -2744,12 +2744,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 56167
+      "size": 56797
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 21960
+      "size": 22230
     },
     {
       "type": "file",
