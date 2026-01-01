@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-12-31T11:18:28.753Z",
+  "createdAt": "2026-01-01T13:41:28.428Z",
   "root": ".",
-  "count": 562,
+  "count": 568,
   "entries": [
     {
       "type": "dir",
@@ -130,6 +130,25 @@
       "type": "file",
       "path": "assets/buildings/fishman/fishman-sprite.png",
       "size": 1393495
+    },
+    {
+      "type": "dir",
+      "path": "assets/buildings/house/"
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/house/house-middle-sprite.png",
+      "size": 1238170
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/house/house-small-sprite.png",
+      "size": 1077185
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/house/Read.md",
+      "size": 1
     },
     {
       "type": "dir",
@@ -1482,7 +1501,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 25186
+      "size": 24644
     },
     {
       "type": "file",
@@ -1572,22 +1591,22 @@
     {
       "type": "file",
       "path": "core/game.buildings.js",
-      "size": 6836
+      "size": 10754
     },
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 22195
+      "size": 22947
     },
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 39625
+      "size": 37347
     },
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 49891
+      "size": 48302
     },
     {
       "type": "file",
@@ -1642,7 +1661,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 34137
+      "size": 36290
     },
     {
       "type": "file",
@@ -1804,6 +1823,16 @@
     },
     {
       "type": "file",
+      "path": "data/atlases/house-middle_atlas.json",
+      "size": 1615
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/house-small_atlas.json",
+      "size": 1614
+    },
+    {
+      "type": "file",
       "path": "data/atlases/hq-sprite_atlas.json",
       "size": 1606
     },
@@ -1894,7 +1923,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 5281
+      "size": 6275
     },
     {
       "type": "file",
