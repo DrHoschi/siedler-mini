@@ -637,33 +637,6 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       scale
     });
 
-    // ---------------------------------------------------------------
-    // Overlay-Reveal (Growth): Base bleibt sichtbar, Overlay wächst
-    // Bottom→Top darüber. Der Frame-Wechsel selbst passiert in
-    // Buildings.tickGrowth() (wenn t>=1), hier wird nur gerendert.
-    // ---------------------------------------------------------------
-    if (spr.overlay && spr.overlayFrame){
-      const oStart = Number(spr.overlay.start) || 0;
-      const oDur   = Math.max(1, Number(spr.overlay.dur) || 1);
-      const oT     = (performance.now() - oStart) / oDur;
-      const oP     = Math.max(0, Math.min(1, oT));
-
-      if (oP > 0){
-        ctx.save();
-        const clipH = bh * oP;
-        ctx.beginPath();
-        ctx.rect(bx, by + (bh - clipH), bw, clipH);
-        ctx.clip();
-
-        Assets.drawAtlasFrame(ctx, spr.atlas, spr.overlayFrame, bx + bw/2, by + bh, {
-          align: 'pivot',
-          scale
-        });
-
-        ctx.restore();
-      }
-    }
-
     ctx.restore();
     return;
   }catch(e){
@@ -679,15 +652,67 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
 
     if (atlas?.ok){
       const fk = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
-      const frame = _fallbackBuildingFrameForKey(fk);
-
+      // -------------------------------------------------------------------
+      // Atlas-Draw (World):
+      // - Standard: draw spr.frame (oder Fallback frame für key)
+      // - Overlay-Reveal (Growth): Base bleibt sichtbar, overlay wächst Bottom→Top
+      //   + "Deckkraft-Stufen": startet bei 10% und steigt in 5%-Schritten bis 100%
+      // -------------------------------------------------------------------
       const base = 256;
       const scale = bw / base;
 
-      Assets.drawAtlasFrame(ctx, atlasKey, frame, bx + bw/2, by + bh, {
+      // Frame-Resolve:
+      // Priorität: b.__sprite.frame (wenn gesetzt) → Fallback Mapping aus key
+      const spr = b.__sprite || null;
+      const frameBase = (spr && spr.frame) ? spr.frame : _fallbackBuildingFrameForKey(fk);
+
+      // 1) Base immer zeichnen
+      Assets.drawAtlasFrame(ctx, atlasKey, frameBase, bx + bw/2, by + bh, {
         align: 'pivot',
         scale
       });
+
+      // 2) Overlay (Bottom→Top) nur wenn aktiv
+      if (spr && spr.overlay && spr.overlayFrame){
+        const now = performance.now();
+        const t = (now - spr.overlay.start) / (spr.overlay.dur || 1);
+        const tt = Math.max(0, Math.min(1, t));
+
+        // "Deckkraft-Stufen": 0.10 → 1.00 in 5%-Schritten (19 Stufen)
+        const ALPHA_START = 0.10;
+        const ALPHA_STEP  = 0.05;
+        const STEPS = Math.round((1 - ALPHA_START) / ALPHA_STEP) + 1; // 19
+        const stepIdx = Math.max(0, Math.min(STEPS-1, Math.floor(tt * (STEPS-1))));
+        const alpha = ALPHA_START + stepIdx * ALPHA_STEP;
+
+        // Sprite-BoundingBox (weil align:'pivot' = bottom-center angenommen)
+        const wpx = base * scale;
+        const hpx = base * scale;
+        const cx  = bx + bw/2;
+        const x0  = cx - (wpx/2);
+        const y0  = (by + bh) - hpx;
+
+        // Clip: nur der untere Anteil wächst nach oben (Bottom→Top)
+        const clipH = hpx * tt;
+        const clipY = (y0 + hpx) - clipH;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x0, clipY, wpx, clipH);
+        ctx.clip();
+
+        const prevA = ctx.globalAlpha;
+        ctx.globalAlpha = prevA * alpha;
+
+        Assets.drawAtlasFrame(ctx, atlasKey, spr.overlayFrame, cx, by + bh, {
+          align: 'pivot',
+          scale
+        });
+
+        ctx.globalAlpha = prevA;
+        ctx.restore();
+      }
+
       return;
     }
   }catch(e){

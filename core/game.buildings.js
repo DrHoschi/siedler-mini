@@ -330,7 +330,7 @@
         // Base-Frame sicherstellen (falls irgendwas es umgestellt hat)
         Buildings.setSpriteFrame(b, 'place', false);
         // Growth langsam
-        Buildings.startOverlayReveal(b, 'live', 5000);
+        Buildings.startOverlayReveal(b, 'live', 20000); // 20s: langsames, realistisches Wachstum
 
         try{
           window.dispatchEvent(new CustomEvent('cb:build:grow:start', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
