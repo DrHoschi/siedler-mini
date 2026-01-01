@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.30-final-map-renderer-safe
+ * Version : v26.01.06-growth-steps-fix
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -613,7 +613,7 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
     const frameKey = spr.frame || spr.atlasFrame || spr.spriteFrame || spr.frameKey || 'place';
     const frame = _fallbackBuildingFrameForKey(frameKey);
 
-    // Reveal (Bottom→Top) – optional
+    // Reveal (Bottom→Top) – optional (Legacy/Alt)
     let revealP = 1;
     if (spr.reveal && spr.reveal.start && spr.reveal.dur){
       const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
@@ -621,6 +621,12 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       if (revealP >= 1) spr.reveal = null;
     }
 
+    const base = (spr.basePx || 256);
+    const scale = bw / base;
+
+    // -------------------------------------------------------------------
+    // 2a) Basis-Frame (immer sichtbar; wenn reveal aktiv, dann clippen)
+    // -------------------------------------------------------------------
     ctx.save();
     if (revealP < 1){
       const clipH = bh * revealP;
@@ -629,15 +635,59 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       ctx.clip();
     }
 
-    const base = (spr.basePx || 256);
-    const scale = bw / base;
-
     Assets.drawAtlasFrame(ctx, spr.atlas, frame, bx + bw/2, by + bh, {
       align: 'pivot',
       scale
     });
-
     ctx.restore();
+
+    // -------------------------------------------------------------------
+    // 2b) GROW-OVERLAY: Frame_0_1 wächst Bottom→Top über Frame_0_0
+    //     - Basis bleibt stehen, bis Overlay 100% ist.
+    //     - Opacity "stufig": 10% → dann in 5%-Schritten bis 100%.
+    // -------------------------------------------------------------------
+    if (spr.overlayFrame && spr.overlay && spr.overlay.start && spr.overlay.dur){
+      const now = performance.now();
+      const dur = Math.max(50, spr.overlay.dur|0);
+      let p = (now - spr.overlay.start) / dur;
+      p = Math.max(0, Math.min(1, p));
+
+      // Opacity-Stufen (wie von dir gewünscht):
+      // 0.10, 0.15, 0.20, ... , 1.00  => 19 Steps
+      const STEPS = 19;
+      const A0    = 0.10;
+      const ASTEP = 0.05;
+      const si = Math.max(0, Math.min(STEPS-1, Math.floor(p * (STEPS-1))));
+      const alpha = Math.max(0, Math.min(1, A0 + si * ASTEP));
+
+      const oframeKey = spr.overlayFrame;                 // z.B. 'live'
+      const oframe    = _fallbackBuildingFrameForKey(oframeKey);
+
+      ctx.save();
+      ctx.globalAlpha = (ctx.globalAlpha || 1) * alpha;
+
+      // Bottom→Top Reveal per Clip
+      const clipH = bh * p;
+      if (clipH > 0){
+        ctx.beginPath();
+        ctx.rect(bx, by + (bh - clipH), bw, clipH);
+        ctx.clip();
+      }
+
+      Assets.drawAtlasFrame(ctx, spr.atlas, oframe, bx + bw/2, by + bh, {
+        align: 'pivot',
+        scale
+      });
+      ctx.restore();
+
+      // Overlay fertig? → Frame final umschalten (Basis bleibt bis hier sichtbar)
+      if (p >= 1){
+        spr.frame = oframeKey;      // semantisch (z.B. 'live')
+        spr.overlayFrame = null;
+        spr.overlay = null;
+      }
+    }
+
     return;
   }catch(e){
     WARN('Atlas-Gebäude draw Fehler (b.__sprite):', e?.message || e);
@@ -652,67 +702,15 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
 
     if (atlas?.ok){
       const fk = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
-      // -------------------------------------------------------------------
-      // Atlas-Draw (World):
-      // - Standard: draw spr.frame (oder Fallback frame für key)
-      // - Overlay-Reveal (Growth): Base bleibt sichtbar, overlay wächst Bottom→Top
-      //   + "Deckkraft-Stufen": startet bei 10% und steigt in 5%-Schritten bis 100%
-      // -------------------------------------------------------------------
+      const frame = _fallbackBuildingFrameForKey(fk);
+
       const base = 256;
       const scale = bw / base;
 
-      // Frame-Resolve:
-      // Priorität: b.__sprite.frame (wenn gesetzt) → Fallback Mapping aus key
-      const spr = b.__sprite || null;
-      const frameBase = (spr && spr.frame) ? spr.frame : _fallbackBuildingFrameForKey(fk);
-
-      // 1) Base immer zeichnen
-      Assets.drawAtlasFrame(ctx, atlasKey, frameBase, bx + bw/2, by + bh, {
+      Assets.drawAtlasFrame(ctx, atlasKey, frame, bx + bw/2, by + bh, {
         align: 'pivot',
         scale
       });
-
-      // 2) Overlay (Bottom→Top) nur wenn aktiv
-      if (spr && spr.overlay && spr.overlayFrame){
-        const now = performance.now();
-        const t = (now - spr.overlay.start) / (spr.overlay.dur || 1);
-        const tt = Math.max(0, Math.min(1, t));
-
-        // "Deckkraft-Stufen": 0.10 → 1.00 in 5%-Schritten (19 Stufen)
-        const ALPHA_START = 0.10;
-        const ALPHA_STEP  = 0.05;
-        const STEPS = Math.round((1 - ALPHA_START) / ALPHA_STEP) + 1; // 19
-        const stepIdx = Math.max(0, Math.min(STEPS-1, Math.floor(tt * (STEPS-1))));
-        const alpha = ALPHA_START + stepIdx * ALPHA_STEP;
-
-        // Sprite-BoundingBox (weil align:'pivot' = bottom-center angenommen)
-        const wpx = base * scale;
-        const hpx = base * scale;
-        const cx  = bx + bw/2;
-        const x0  = cx - (wpx/2);
-        const y0  = (by + bh) - hpx;
-
-        // Clip: nur der untere Anteil wächst nach oben (Bottom→Top)
-        const clipH = hpx * tt;
-        const clipY = (y0 + hpx) - clipH;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(x0, clipY, wpx, clipH);
-        ctx.clip();
-
-        const prevA = ctx.globalAlpha;
-        ctx.globalAlpha = prevA * alpha;
-
-        Assets.drawAtlasFrame(ctx, atlasKey, spr.overlayFrame, cx, by + bh, {
-          align: 'pivot',
-          scale
-        });
-
-        ctx.globalAlpha = prevA;
-        ctx.restore();
-      }
-
       return;
     }
   }catch(e){

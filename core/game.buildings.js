@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.01-occupy-grow-entries
+ * Version : v26.01.06-growth-steps-fix
  *
  * Zweck   :
  *   - Zentrale Gebäudeliste + Create/Get (eine Quelle: Buildings.list)
@@ -21,6 +21,21 @@
   const TAG  = '[buildings]';
   const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+
+  // -------------------------------------------------------------------------
+  // Growth-Defaults (tunable via DevTools)
+  // -------------------------------------------------------------------------
+  const GROW_DELAY_MS_DEFAULT   = 10000; // 10s nach Occupy (wie von dir gewünscht)
+  const GROW_OVERLAY_MS_DEFAULT = 30000; // 30s Overlay-Reveal (realistischer)
+
+  function _growDelayMs(){
+    const v = Number(window.__GROW_DELAY_MS__);
+    return Number.isFinite(v) && v >= 0 ? v : GROW_DELAY_MS_DEFAULT;
+  }
+  function _growOverlayMs(){
+    const v = Number(window.__GROW_OVERLAY_MS__);
+    return Number.isFinite(v) && v >= 200 ? v : GROW_OVERLAY_MS_DEFAULT;
+  }
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -323,14 +338,14 @@
       if (b.__sprite?.overlay) continue;
 
       const elapsed = now - b.occupiedAt;
-      if (elapsed < 10000) continue; // 10s nach Eintritt
+      if (elapsed < _growDelayMs()) continue; // Delay nach Eintritt (tunable)
 
       Buildings.ensureSprite(b);
       if (b.__sprite){
         // Base-Frame sicherstellen (falls irgendwas es umgestellt hat)
         Buildings.setSpriteFrame(b, 'place', false);
         // Growth langsam
-        Buildings.startOverlayReveal(b, 'live', 20000); // 20s: langsames, realistisches Wachstum
+        Buildings.startOverlayReveal(b, 'live', _growOverlayMs());
 
         try{
           window.dispatchEvent(new CustomEvent('cb:build:grow:start', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
