@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.01-map-renderer-atlas-safe
+ * Version : v25.12.30-final-map-renderer-safe
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -109,13 +109,10 @@ function _fallbackBuildingAtlasKey(buildingId){
 
 function _fallbackBuildingFrameForKey(frameKey){
   const k = String(frameKey||'').trim();
-  // Unsere Atlanten benutzen "frame_0_0" usw. (NICHT nur "0_0")
-  if (k === 'place')   return 'frame_0_0';
-  if (k === 'live')    return 'frame_0_1';
-  if (k === 'reserve') return 'frame_0_2';
-  // Falls irgendwo noch "0_0" gespeichert ist: normalisieren
-  if (/^[0-9]+_[0-9]+$/.test(k)) return 'frame_' + k;
-  return k;
+  if (k === 'place')   return '0_0';
+  if (k === 'live')    return '0_1';
+  if (k === 'reserve') return '0_2';
+  return frameKey;
 }
 
 
@@ -136,6 +133,74 @@ function _fallbackBuildingFrameForKey(frameKey){
       } else {
         LOG('Gebäudesprite geladen:', id, path);
       }
+
+// ---------------------------------------------------------------------
+// WORLD-ATLAS: Gebäude über Atlas zeichnen (statt UI-Icons)
+// ---------------------------------------------------------------------
+function _getBuildingSpriteDef(buildingId){
+  try{
+    const R = window.Registry;
+    if (R && typeof R.getBuilding === 'function') return R.getBuilding(buildingId);
+    return (R && R.buildings && R.buildings[buildingId]) || null;
+  }catch(e){
+    return null;
+  }
+}
+
+function _isDrawableImage(img){
+  return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+}
+
+function _drawAtlasRect(ctx, atlasName, frameName, dx, dy, dw, dh, reveal01=null){
+  const A = window.Assets;
+  if (!A || typeof A.getAtlas !== 'function') return false;
+
+  const a = A.getAtlas(atlasName);
+  if (!a || !a.ok || !_isDrawableImage(a.img)) return false;
+
+  const fr = a.frames && a.frames[frameName];
+  if (!fr) return false;
+
+  // Optional: Bottom→Top Reveal (0..1)
+  if (typeof reveal01 === 'number'){
+    const r = Math.max(0, Math.min(1, reveal01));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(dx, dy + dh * (1 - r), dw, dh * r);
+    ctx.clip();
+    ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
+    ctx.restore();
+    return true;
+  }
+
+  ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
+  return true;
+}
+
+function _drawBuildingWorldSprite(ctx, b, dx, dy, dw, dh){
+  // 1) bevorzugt: b.__sprite (gesetzt durch Buildings.create / setSpriteFrame / Growth)
+  const spr = b && b.__sprite ? b.__sprite : null;
+  if (spr && spr.atlas && spr.frame){
+    // Reveal-Progress aus spr.reveal {start,dur} berechnen (falls vorhanden)
+    let reveal01 = null;
+    if (spr.reveal && typeof spr.reveal.start === 'number' && typeof spr.reveal.dur === 'number'){
+      const t = (performance.now() - spr.reveal.start) / Math.max(1, spr.reveal.dur);
+      reveal01 = Math.max(0, Math.min(1, t));
+    }
+    if (_drawAtlasRect(ctx, spr.atlas, spr.frame, dx, dy, dw, dh, reveal01)) return true;
+  }
+
+  // 2) Registry-Def sprite (falls b.__sprite fehlt)
+  const def = _getBuildingSpriteDef(b && b.id);
+  const s2  = def && def.sprite;
+  if (s2 && s2.type === 'atlas' && s2.atlas && s2.frames){
+    // Semantischer Frame: place/live/reserve
+    const frameName = (b && b.buildStage < 3) ? (s2.frames.site || s2.frames.place) : (s2.frames.place || null);
+    if (frameName && _drawAtlasRect(ctx, s2.atlas, frameName, dx, dy, dw, dh, null)) return true;
+  }
+
+  return false;
+}
     };
     img.onerror = (e)=>{
       WARN('Gebäudesprite NICHT ladbar:', id, path, e);
@@ -734,17 +799,6 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
   }
 
   function _drawOneUnitYS(ctx, cam, ts, u, idx, S){
-
-    // ---------------------------------------------------------------
-    // Unit-Hide Support (für "Unit geht ins Gebäude rein"):
-    //  - u.hidden === true  → nie zeichnen
-    //  - u.hiddenUntil (ms, performance.now Basis) → bis dahin nicht zeichnen
-    // ---------------------------------------------------------------
-    try{
-      const pnow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      if (u && u.hidden === true) return;
-      if (u && typeof u.hiddenUntil === 'number' && pnow < u.hiddenUntil) return;
-    }catch(e){ /* ignore */ }
     const Assets = S.Assets;
     const hasAssets = S.hasAssets;
     const carrierOk = S.carrierOk;
@@ -1028,21 +1082,33 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
             // Bild noch nicht fertig oder defekt → Fallback-Rechteck
             useFallback = true;
           }
-        } else {
-          // Fertiges Gebäude
-          const imgB = getBuildingSprite(b.id);
-          if (isDrawableImage(imgB)){
-            try{
-              ctx.drawImage(imgB, bx, by, bw, bh);
-            }catch(e){
-              WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
-              useFallback = true;
-            }
-          } else {
-            // Sprite noch nicht da oder kaputt → Fallback-Rechteck
-            useFallback = true;
-          }
-        }
+
+} else {
+  // Fertiges Gebäude
+  // 1) Versuche WORLD-ATLAS (b.__sprite / Registry sprite.type='atlas')
+  let drawn = false;
+  try{
+    drawn = _drawBuildingWorldSprite(ctx, b, bx, by, bw, bh);
+  }catch(e){
+    WARN('WORLD-ATLAS draw failed id='+b.id+':', e?.message || e);
+  }
+
+  if (!drawn){
+    // 2) Fallback: PNG (UI-Icons / legacy)
+    const imgB = getBuildingSprite(b.id);
+    if (isDrawableImage(imgB)){
+      try{
+        ctx.drawImage(imgB, bx, by, bw, bh);
+      }catch(e){
+        WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
+        useFallback = true;
+      }
+    } else {
+      // Sprite noch nicht da oder kaputt → Fallback-Rechteck
+      useFallback = true;
+    }
+  }
+}
 
         if (useFallback){
           ctx.fillStyle = col;
