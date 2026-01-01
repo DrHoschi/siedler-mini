@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.30-final-map-renderer-safe
+ * Version : v26.01.01-map-renderer-atlas-safe
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -109,13 +109,13 @@ function _fallbackBuildingAtlasKey(buildingId){
 
 function _fallbackBuildingFrameForKey(frameKey){
   const k = String(frameKey||'').trim();
+  // Unsere Atlanten benutzen "frame_0_0" usw. (NICHT nur "0_0")
   if (k === 'place')   return 'frame_0_0';
   if (k === 'live')    return 'frame_0_1';
   if (k === 'reserve') return 'frame_0_2';
-  // Wenn jemand direkt '0_0' liefert, normalisieren wir auf 'frame_0_0'
+  // Falls irgendwo noch "0_0" gespeichert ist: normalisieren
   if (/^[0-9]+_[0-9]+$/.test(k)) return 'frame_' + k;
-  // Wenn bereits 'frame_0_0' übergeben wurde, passt es ohnehin.
-  return frameKey;
+  return k;
 }
 
 
@@ -646,28 +646,12 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
 
     if (atlas?.ok){
       // Frame bestimmen:
-      //  - wenn Construction/Buildings bereits semantische Keys gesetzt hat: b.atlasFrame / b.spriteFrame / b.frameKey
-      //  - sonst: 'place'
+      //  - wenn Construction/Buildings bereits semantische Keys gesetzt hat: b.atlasFrame / b.spriteFrame
+      //  - sonst: place (=0_0)
       const fk = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
       const frame = _fallbackBuildingFrameForKey(fk);
 
-      // Reveal Progress (Bottom→Top), optional (b.__sprite.reveal kompatibel)
-      let revealP = 1;
-      const sprR = b.__sprite?.reveal;
-      if (sprR && sprR.start && sprR.dur){
-        const tt = (performance.now() - sprR.start) / sprR.dur;
-        revealP = Math.max(0, Math.min(1, tt));
-        if (revealP >= 1) b.__sprite.reveal = null;
-      }
-
-      ctx.save();
-      if (revealP < 1){
-        const clipH = bh * revealP;
-        ctx.beginPath();
-        ctx.rect(bx, by + (bh - clipH), bw, clipH);
-        ctx.clip();
-      }
-
+      // Wir zeichnen am "Fußpunkt" (unten mittig) + skalieren wie oben.
       const base = 256;
       const scale = bw / base;
 
@@ -675,15 +659,18 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
         align: 'pivot',
         scale
       });
-
-      ctx.restore();
       return;
     }
   }catch(e){
     // silent → PNG fallback
   }
 }
-// ---------------------------------------------------------------------
+
+
+      }
+    }
+
+    // ---------------------------------------------------------------------
     // 3) PNG-Fallback (Übergangsphase): bestehende Gebäude ohne Atlas
     //    -> aktuell liegen sie bei dir meist unter assets/icons/buildings/
     // ---------------------------------------------------------------------
@@ -747,6 +734,17 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
   }
 
   function _drawOneUnitYS(ctx, cam, ts, u, idx, S){
+
+    // ---------------------------------------------------------------
+    // Unit-Hide Support (für "Unit geht ins Gebäude rein"):
+    //  - u.hidden === true  → nie zeichnen
+    //  - u.hiddenUntil (ms, performance.now Basis) → bis dahin nicht zeichnen
+    // ---------------------------------------------------------------
+    try{
+      const pnow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (u && u.hidden === true) return;
+      if (u && typeof u.hiddenUntil === 'number' && pnow < u.hiddenUntil) return;
+    }catch(e){ /* ignore */ }
     const Assets = S.Assets;
     const hasAssets = S.hasAssets;
     const carrierOk = S.carrierOk;
