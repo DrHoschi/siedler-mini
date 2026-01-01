@@ -109,9 +109,12 @@ function _fallbackBuildingAtlasKey(buildingId){
 
 function _fallbackBuildingFrameForKey(frameKey){
   const k = String(frameKey||'').trim();
-  if (k === 'place')   return '0_0';
-  if (k === 'live')    return '0_1';
-  if (k === 'reserve') return '0_2';
+  if (k === 'place')   return 'frame_0_0';
+  if (k === 'live')    return 'frame_0_1';
+  if (k === 'reserve') return 'frame_0_2';
+  // Wenn jemand direkt '0_0' liefert, normalisieren wir auf 'frame_0_0'
+  if (/^[0-9]+_[0-9]+$/.test(k)) return 'frame_' + k;
+  // Wenn bereits 'frame_0_0' übergeben wurde, passt es ohnehin.
   return frameKey;
 }
 
@@ -643,12 +646,28 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
 
     if (atlas?.ok){
       // Frame bestimmen:
-      //  - wenn Construction/Buildings bereits semantische Keys gesetzt hat: b.atlasFrame / b.spriteFrame
-      //  - sonst: place (=0_0)
+      //  - wenn Construction/Buildings bereits semantische Keys gesetzt hat: b.atlasFrame / b.spriteFrame / b.frameKey
+      //  - sonst: 'place'
       const fk = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
       const frame = _fallbackBuildingFrameForKey(fk);
 
-      // Wir zeichnen am "Fußpunkt" (unten mittig) + skalieren wie oben.
+      // Reveal Progress (Bottom→Top), optional (b.__sprite.reveal kompatibel)
+      let revealP = 1;
+      const sprR = b.__sprite?.reveal;
+      if (sprR && sprR.start && sprR.dur){
+        const tt = (performance.now() - sprR.start) / sprR.dur;
+        revealP = Math.max(0, Math.min(1, tt));
+        if (revealP >= 1) b.__sprite.reveal = null;
+      }
+
+      ctx.save();
+      if (revealP < 1){
+        const clipH = bh * revealP;
+        ctx.beginPath();
+        ctx.rect(bx, by + (bh - clipH), bw, clipH);
+        ctx.clip();
+      }
+
       const base = 256;
       const scale = bw / base;
 
@@ -656,18 +675,15 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
         align: 'pivot',
         scale
       });
+
+      ctx.restore();
       return;
     }
   }catch(e){
     // silent → PNG fallback
   }
 }
-
-
-      }
-    }
-
-    // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
     // 3) PNG-Fallback (Übergangsphase): bestehende Gebäude ohne Atlas
     //    -> aktuell liegen sie bei dir meist unter assets/icons/buildings/
     // ---------------------------------------------------------------------
@@ -1149,20 +1165,6 @@ if (window.GameWorkArea) {
 
       let __ui = 0;
       for (const u of units){
-
-// -------------------------------------------------------------
-// Worker "geht ins Gebäude": Units können temporär hidden sein.
-// (u.hidden=true oder u.hiddenUntil=timestamp)
-// -------------------------------------------------------------
-if (u && (u.hidden === true || (u.hiddenUntil && performance.now() < u.hiddenUntil))) {
-  continue;
-} else if (u && u.hiddenUntil && performance.now() >= u.hiddenUntil) {
-  // Safety: automatisch wieder sichtbar machen
-  u.hidden = false;
-  u.hiddenUntil = 0;
-}
-
-
         const ui = __ui++;
         // Einheit kann tile coords als float haben → wir zeichnen am "Fußpunkt" des Tiles
         const tx = (u.x || 0);
