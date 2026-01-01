@@ -591,150 +591,113 @@ function _fallbackBuildingFrameForKey(frameKey){
     }
 
     // ---------------------------------------------------------------------
+    // 2) Fertiges Gebäude – bevorzugt Atlas/Sprite (z.B. Hunter)
     // ---------------------------------------------------------------------
-// 2) Fertiges Gebäude – bevorzugt Atlas (World-Sprites), niemals UI-Icons
-// ---------------------------------------------------------------------
-const Assets = window.Assets;
+    const Assets = window.Assets;
 
-// Kleine Helper: Frame-Key → tatsächlicher Atlas-Frame-Name
-const _frameKeyToAtlasFrame = (frameKey, defFrames)=>{
-  const k = String(frameKey || '').trim();
+    // a) Atlas-Sprite (b.__sprite) – unser neuer Weg für "echte" Gebäude-Sprites
+    if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.getAtlas === 'function'){
+      try{
+        const spr   = b.__sprite;
+        const atlas = Assets.getAtlas(spr.atlas);
 
-  // Registry kann semantische Keys definieren (place/live/reserve/…)
-  if (defFrames && typeof defFrames === 'object' && defFrames[k]) {
-    return String(defFrames[k]);
-  }
+        if (atlas?.ok && spr.frame && typeof Assets.drawAtlasFrame === 'function'){
+          // -----------------------------------------------------------------
+          // Overlay-Upgrade: Frame-0 bleibt sichtbar, Ziel-Frame wächst darüber
+          // (erst nach Reveal-Ende wird umgeschaltet)
+          // -----------------------------------------------------------------
+          if (spr.overlayFrame && spr.overlay && spr.overlay.start && spr.overlay.dur){
+            const t = (performance.now() - spr.overlay.start) / spr.overlay.dur;
+            const p = Math.max(0, Math.min(1, t));
 
-  // Semantische Defaults (deine Atlanten heißen "frame_0_0" etc.)
-  if (k === 'place')   return 'frame_0_0';
-  if (k === 'live')    return 'frame_0_1';
-  if (k === 'reserve') return 'frame_0_2';
+            ctx.save();
 
-  // Direkt schon korrekt?
-  if (k.startsWith('frame_')) return k;
+            // Skalierung (wie unten)
+            const base = (spr.basePx || 256);
+            const scale = bw / base;
 
-  // Kurzform "0_0" → "frame_0_0"
-  if (/^\d+_\d+$/.test(k)) return 'frame_' + k;
+            // 1) Basis-Frame immer voll zeichnen
+            Assets.drawAtlasFrame(ctx, spr.atlas, spr.frame, bx + bw/2, by + bh, {
+              align: 'pivot',
+              scale
+            });
 
-  // Fallback: unverändert (falls du später andere Namen nutzt)
-  return k;
-};
+            // 2) Overlay-Frame mit Bottom→Top Clip
+            if (p > 0){
+              const clipH = bh * p;
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(bx, by + (bh - clipH), bw, clipH);
+              ctx.clip();
 
-// Helper: bekannte Building-IDs → Atlas-Key (falls Registry fehlt)
-const _fallbackBuildingAtlasKey = (buildingId)=>{
-  const id = String(buildingId || '').trim();
-  switch (id){
-    case 'b.hq':         return 'hq_building_atlas';
-    case 'b.hunter':     return 'hunter_building_atlas';
-    case 'b.lumberjack': return 'lumberjack_building_atlas';
-    case 'b.quarry':     return 'quarry_building_atlas';
-    case 'b.fisher':
-    case 'b.fisherman':  return 'fisher_building_atlas';
-    case 'b.house_small':  return 'house_small_building_atlas';
-    case 'b.house_middle': return 'house_middle_building_atlas';
-    default: return null;
-  }
-};
+              Assets.drawAtlasFrame(ctx, spr.atlas, spr.overlayFrame, bx + bw/2, by + bh, {
+                align: 'pivot',
+                scale
+              });
 
-// Helper: Registry Sprite-Def holen (falls vorhanden)
-const _getSpriteDefFromRegistry = (buildingId)=>{
-  try{
-    const R = window.Registry;
-    if (!R) return null;
-    // Registry hat je nach Projektstand unterschiedliche APIs:
-    if (typeof R.getBuildingDef === 'function') return R.getBuildingDef(buildingId);
-    if (typeof R.getBuilding === 'function')    return R.getBuilding(buildingId);
-    // manchmal liegt es in R.data.buildings:
-    const bd = R.data?.buildings || R.buildings || null;
-    if (bd && typeof bd === 'object') return bd[buildingId] || null;
-  }catch(e){ /* silent */ }
-  return null;
-};
+              ctx.restore();
+            }
 
-// a) 1. Priorität: b.__sprite (wird von Construction/Buildings gesetzt)
-//    Erwartet: { atlas:'*_building_atlas', frame:'frame_0_0', basePx?:256, reveal?:{start,dur} }
-if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
-  try{
-    const spr   = b.__sprite;
-    const atlas = Assets.getAtlas(spr.atlas);
+            ctx.restore();
 
-    if (atlas?.ok){
-      const frame = _frameKeyToAtlasFrame(spr.frame || spr.frameKey || 'place', null);
+            // Umschalten nach Ende (zusätzliche Sicherheit – tickGrowth macht es auch)
+            if (p >= 1){
+              spr.frame = spr.overlayFrame;
+              spr.overlayFrame = null;
+              spr.overlay = null;
+            }
+            return;
+          }
 
-      // Reveal (Bottom→Top) optional
-      let revealP = 1;
-      if (spr.reveal && spr.reveal.start && spr.reveal.dur){
-        const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
-        revealP = Math.max(0, Math.min(1, t));
-        if (revealP >= 1) spr.reveal = null;
-      }
 
-      ctx.save();
-      if (revealP < 1){
-        const clipH = bh * revealP;
-        ctx.beginPath();
-        ctx.rect(bx, by + (bh - clipH), bw, clipH);
-        ctx.clip();
-      }
+          // Reveal Progress (Bottom→Top), optional
+          let revealP = 1;
+          if (spr.reveal && spr.reveal.start && spr.reveal.dur){
+            const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
+            revealP = Math.max(0, Math.min(1, t));
+            if (revealP >= 1) spr.reveal = null;
+          }
 
-      const base  = (spr.basePx || 256);
-      const scale = bw / base;
+          ctx.save();
+          if (revealP < 1){
+            const clipH = bh * revealP;
+            ctx.beginPath();
+            ctx.rect(bx, by + (bh - clipH), bw, clipH);
+            ctx.clip();
+          }
 
-      // Zeichnen am Fußpunkt (unten mittig)
-      Assets.drawAtlasFrame(ctx, spr.atlas, frame, bx + bw/2, by + bh, {
-        align: 'pivot',
-        scale
-      });
+          // Wir zeichnen am "Fußpunkt" des Tiles (unten mittig), so wie Units.
+          // Standard-Skalierung: Frame wurde i.d.R. in 256px gedacht.
+          const base = (spr.basePx || 256);
+          const scale = bw / base;
 
-      ctx.restore();
-      return;
-    }
-  }catch(e){
-    // weiter versuchen über Registry / Fallback
-  }
-}
+          Assets.drawAtlasFrame(ctx, spr.atlas, spr.frame, bx + bw/2, by + bh, {
+            align: 'pivot',
+            scale
+          });
 
-// b) 2. Priorität: Registry buildings.json sprite.type='atlas'
-if (Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
-  try{
-    const def = _getSpriteDefFromRegistry(b.id);
-    const sprDef = def?.sprite || def?.sprites || null;
+          ctx.restore();
+          return;
+        }
+      }catch(e){
+        WARN('Atlas-Gebäude draw Fehler:', e?.message || e);
+        // weiter mit PNG-Fallback
 
-    if (sprDef && (sprDef.type === 'atlas' || sprDef.kind === 'atlas') && sprDef.atlas){
-      const atlasKey = String(sprDef.atlas);
-      const atlas    = Assets.getAtlas(atlasKey);
-
-      if (atlas?.ok){
-        // FrameKey kann aus Construction/Buildings kommen (atlasFrame / frameKey / spriteFrame)
-        const frameKey = b.atlasFrame || b.spriteFrame || b.frameKey || 'place';
-        const frame    = _frameKeyToAtlasFrame(frameKey, sprDef.frames);
-
-        const base  = (sprDef.basePx || sprDef.base || 256);
-        const scale = bw / base;
-
-        Assets.drawAtlasFrame(ctx, atlasKey, frame, bx + bw/2, by + bh, {
-          align: 'pivot',
-          scale
-        });
-        return;
-      }
-    }
-  }catch(e){
-    // ignore → next fallback
-  }
-}
-
-// c) 3. Priorität: Fallback anhand Building-ID (nur wenn Atlas wirklich vorhanden)
-if (Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
+// b) Fallback: Atlas anhand Building-ID erkennen (damit NICHT die UI-Icons auf der Karte landen)
+if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
   try{
     const atlasKey = _fallbackBuildingAtlasKey(b.id);
-    const atlas    = atlasKey ? Assets.getAtlas(atlasKey) : null;
+    const atlas = atlasKey ? Assets.getAtlas(atlasKey) : null;
 
     if (atlas?.ok){
-      const frameKey = b.atlasFrame || b.spriteFrame || b.frameKey || 'place';
-      const frame    = _frameKeyToAtlasFrame(frameKey, null);
+      // Frame bestimmen:
+      //  - wenn Construction/Buildings bereits semantische Keys gesetzt hat: b.atlasFrame / b.spriteFrame
+      //  - sonst: place (=0_0)
+      const fk = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
+      const frame = _fallbackBuildingFrameForKey(fk);
 
-      const base  = 256;
+      // Wir zeichnen am "Fußpunkt" (unten mittig) + skalieren wie oben.
+      const base = 256;
       const scale = bw / base;
 
       Assets.drawAtlasFrame(ctx, atlasKey, frame, bx + bw/2, by + bh, {
@@ -744,11 +707,16 @@ if (Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFr
       return;
     }
   }catch(e){
-    // ignore → PNG fallback
+    // silent → PNG fallback
   }
 }
 
-// 3) PNG-Fallback (Übergangsphase): bestehende Gebäude ohne Atlas
+
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 3) PNG-Fallback (Übergangsphase): bestehende Gebäude ohne Atlas
     //    -> aktuell liegen sie bei dir meist unter assets/icons/buildings/
     // ---------------------------------------------------------------------
     const id = b?.id || b?.kind || b?.type;

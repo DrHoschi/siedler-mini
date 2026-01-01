@@ -93,9 +93,19 @@ if (def.sprite?.type === 'atlas') {
   // 1) Semantische Keys → echtes Frame auflösen (über Registry, falls vorhanden)
   let resolved = frameKey;
 
+  // HQ soll NICHT automatisch wachsen/wechseln.
+  if (b.id === 'b.hq' && frameKey !== 'place' && frameKey !== 'frame_0_0') {
+    return;
+  }
+
   if (typeof frameKey === 'string' && !frameKey.startsWith('frame_')){
   // Falls ein Key wie "0_0" kommt, normalisieren wir auf "frame_0_0" (Atlas-JSON nutzt dieses Prefix).
     try{
+      // Wenn jemand '0_0'/'0_1' etc. übergibt, normalisieren wir auf 'frame_0_0'.
+      if (typeof resolved === 'string' && /^[0-9]+_[0-9]+$/.test(resolved)) {
+        resolved = 'frame_' + resolved;
+      }
+
       const reg = window.Registry;
       const def = (reg && typeof reg.get === 'function')
         ? reg.get('buildings', b.id)
@@ -121,7 +131,43 @@ if (def.sprite?.type === 'atlas') {
 };
 
 
-  // -------------------------------------------------------------------------
+  
+  /**
+   * Startet ein "Wachstum" als Overlay: Frame-0 bleibt sichtbar,
+   * der Ziel-Frame wächst von unten nach oben darüber.
+   * Erst wenn der Reveal fertig ist, wird auf den Ziel-Frame umgeschaltet.
+   */
+  Buildings.startOverlayReveal = function (b, targetKey, durationMs=2200){
+    if (!b) return;
+    Buildings.ensureSprite(b);
+    if (!b.__sprite) return;
+
+    // HQ wächst nicht.
+    if (b.id === 'b.hq') return;
+
+    // Ziel-Frame auflösen (semantisch -> echter Frame-Name)
+    let target = targetKey;
+    if (typeof target === 'string' && !target.startsWith('frame_')){
+      // 0_0 normalisieren
+      if (/^[0-9]+_[0-9]+$/.test(target)) target = 'frame_' + target;
+
+      try{
+        const reg = window.Registry;
+        const def = (reg && typeof reg.get === 'function') ? reg.get('buildings', b.id) : null;
+        const map = def?.sprite?.frames || null;
+        if (map && map[targetKey]) target = map[targetKey];
+      }catch(e){}
+    }
+
+    if (!target) return;
+
+    // Overlay nur starten, wenn nicht schon aktiv
+    const spr = b.__sprite;
+    spr.overlayFrame = target;
+    spr.overlay = { start: performance.now(), dur: durationMs };
+  };
+
+// -------------------------------------------------------------------------
   // Sprite/Atlas Attach + Occupy/Growth
   // -------------------------------------------------------------------------
 
@@ -141,6 +187,16 @@ if (def.sprite?.type === 'atlas') {
       b.__sprite.atlas  = spr.atlas;
       b.__sprite.frames = spr.frames || null;
       b.__sprite.frame  = (spr.frames?.place) ? spr.frames.place : 'frame_0_0';
+      // HQ bleibt immer beim Start-Frame (kein Auto-Growth).
+      if (b.id === 'b.hq') {
+        b.__sprite.frame = (spr.frames?.place) ? spr.frames.place : 'frame_0_0';
+        b.__sprite.overlayFrame = null;
+        b.__sprite.overlay = null;
+        b.__sprite.reveal = null;
+        b._grown = true;
+        b.occupiedAt = null;
+        b.occupied = false;
+      }
       b.__sprite.reveal = null;
     }
   };
@@ -180,25 +236,45 @@ if (def.sprite?.type === 'atlas') {
    */
   Buildings.tickGrowth = function (dt){
     const now = performance.now();
+
+    // 1) Laufende Overlays abschließen (Framewechsel erst nach Reveal-Ende)
+    for (const b of Buildings.list){
+      if (!b || b.id === 'b.hq') continue;
+      const spr = b.__sprite;
+      if (spr && spr.overlay && spr.overlayFrame){
+        const t = (now - spr.overlay.start) / (spr.overlay.dur || 1);
+        if (t >= 1){
+          // Umschalten erst JETZT (damit Frame-0 bis zum Ende sichtbar bleibt)
+          spr.frame = spr.overlayFrame;
+          spr.overlayFrame = null;
+          spr.overlay = null;
+          b._grown = true;
+        }
+      }
+    }
+
+    // 2) Neue Growths starten (15s nach "occupied")
     for (const b of Buildings.list){
       if (!b || b.id === 'b.hq') continue;
       if (!b.occupiedAt) continue;
 
-      // bereits geupgradet?
+      // bereits fertig gewachsen / läuft schon?
       if (b._grown) continue;
+      if (b.__sprite?.overlay) continue;
 
       const elapsed = now - b.occupiedAt;
-      if (elapsed <20000) continue;
+      if (elapsed < 15000) continue;
 
       Buildings.ensureSprite(b);
+
       if (b.__sprite){
-        // Upgrade: live + Reveal
-        Buildings.setSpriteFrame(b, 'live', true, 1600);
-        b._grown = true;
+        // Wachstum (langsamer als vorher)
+        Buildings.startOverlayReveal(b, 'live', 2200); // 2.2s Reveal
+        // b._grown wird erst nach Overlay-Ende gesetzt
         try{
-          window.dispatchEvent(new CustomEvent('cb:build:grow', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
+          window.dispatchEvent(new CustomEvent('cb:build:grow:start', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y } }));
         }catch(e){}
-        LOG('grow', b.id, b.uid);
+        LOG('grow:start', b.id, b.uid);
       }
     }
   };
