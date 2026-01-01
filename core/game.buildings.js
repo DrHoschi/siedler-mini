@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.01-occupy-grow-entries
+ * Version : v26.01.01-occupy-grow-entries-logpatch
  *
  * Zweck   :
  *   - Zentrale Gebäudeliste + Create/Get (eine Quelle: Buildings.list)
@@ -288,7 +288,7 @@
       try{
         window.dispatchEvent(new CustomEvent('cb:build:occupied', { detail:{ uid:b.uid, id:b.id, x:b.x, y:b.y, unitId:b.occupantId } }));
       }catch(e){}
-      LOG('occupied', b.id, b.uid);
+      LOG('occupied', b.id, b.uid, 'entrance', b.entranceTx, b.entranceTy);
     }
   };
 

@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-units-workers-spawnloop1
+ * Version : v26.01.01-worker-entry-trigger-hotfix
  *
  * Zweck   : Zentrale Einheiten-Logik (aktuell nur Träger/Carrier)
  *           – verwaltet HQ-Position & Carrier-Liste
@@ -423,7 +423,7 @@ function spawnInitialCarriers(count){
     }catch(e){ /* silent */ }
   }
 
-  function _moveTo(u, target, dt){
+  function _moveTowards(u, target, dt){
     if (!target) return false;
 
     const dx   = target.x - u.x;
@@ -910,7 +910,7 @@ if (ai.mode === 'toEntrance'){
   const target = ent ? { x: ent.x + 0.5, y: ent.y + 0.5 } : home;
 
   u.task = { type:'walk', target:{ x: target.x, y: target.y } };
-  const arrived = _moveTowards(u, target, dt);
+  const arrived = _moveTo(u, target, dt);
   if (arrived){
     u.task = null;
 
@@ -1082,14 +1082,14 @@ if (hq){
 }
 
 const spawned = spawn(workerUnitId, 1, { at:{ tx: sx, ty: sy } });
-(workerUnitId, 1, { at:{ tx: cx, ty: cy } });
     const u = spawned && spawned[0];
     if (!u) return;
 
     u.homeUid        = uid;
     u.homeBuildingUid = (d.uid || d.buildingUid || uid);
-    u.homeX      = cx;
-    u.homeY      = cy;
+    // Home = Gebäude-Mitte (Tile-Float), damit toHome/toWork stabil bleibt
+    u.homeX      = (Number(d.x)|0) + (Number(d.w ?? 1) / 2);
+    u.homeY      = (Number(d.y)|0) + (Number(d.h ?? 1) / 2);
     u.homeDetail = { id: buildingId, uid: (d.uid || d.buildingUid || uid), x: d.x, y: d.y, w: d.w, h: d.h };
 
     // AI initialisieren (damit er sofort losläuft)
