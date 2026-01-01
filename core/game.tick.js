@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.tick.js
  * Projekt : Neue Siedler
- * Version : v25.11.25
+ * Version : v26.01.02-growth-tickfix (was: v25.11.25
  * Zweck   : Globaler Spiel-Tick – steuert Carrier, Jobs, Produktion, Einheiten
  * Struktur: IMPORTS → Konstanten → Funktionen → Hauptlogik → Export
  * ============================================================================
@@ -34,6 +34,12 @@ function runTick(){
     // 3) Einheiten-Update (Positionsinterpolation, Job-Abarbeitung)
     if (window.GameUnits?.tick){
       GameUnits.tick(dt);
+    }
+
+    // 3a) Gebäude-Growth/Overlay-Reveal (10s nach Occupy)
+    //     Wichtig: Ohne diesen Tick bleibt alles dauerhaft auf frame_0_0.
+    if (window.Buildings?.tickGrowth){
+      Buildings.tickGrowth(dt);
     }
 
 
