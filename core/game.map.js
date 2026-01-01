@@ -97,23 +97,33 @@
 function _fallbackBuildingAtlasKey(buildingId){
   const id = String(buildingId||'').trim();
   switch(id){
-    case 'b.hq':         return 'hq_building_atlas';
-    case 'b.hunter':     return 'hunter_building_atlas';
-    case 'b.lumberjack': return 'lumberjack_building_atlas';
-    case 'b.quarry':     return 'quarry_building_atlas';
-    case 'b.fisher':     return 'fisher_building_atlas';
-    case 'b.fisherman':  return 'fisher_building_atlas';
+    case 'b.hq':          return 'hq_building_atlas';
+    case 'b.hunter':      return 'hunter_building_atlas';
+    case 'b.lumberjack':  return 'lumberjack_building_atlas';
+    case 'b.quarry':      return 'quarry_building_atlas';
+    case 'b.fisher':
+    case 'b.fisherman':   return 'fisher_building_atlas';
+    case 'b.house_small': return 'house_small_building_atlas';
+    case 'b.house_middle':return 'house_middle_building_atlas';
     default: return null;
   }
 }
 
 function _fallbackBuildingFrameForKey(frameKey){
   const k = String(frameKey||'').trim();
-  if (k === 'place')   return '0_0';
-  if (k === 'live')    return '0_1';
-  if (k === 'reserve') return '0_2';
-  return frameKey;
+
+  // Semantische Keys → echte Frame-Namen aus deinen Atlanten
+  if (k === 'place')   return 'frame_0_0';
+  if (k === 'live')    return 'frame_0_1';
+  if (k === 'reserve') return 'frame_0_2';
+
+  // Falls irgendwo noch roh "0_0" verwendet wird → normalisieren
+  if (/^\d+_\d+$/.test(k)) return 'frame_' + k;
+
+  // Wenn bereits "frame_0_0" etc. kommt, unverändert lassen
+  return k;
 }
+
 
 
 
@@ -133,74 +143,6 @@ function _fallbackBuildingFrameForKey(frameKey){
       } else {
         LOG('Gebäudesprite geladen:', id, path);
       }
-
-// ---------------------------------------------------------------------
-// WORLD-ATLAS: Gebäude über Atlas zeichnen (statt UI-Icons)
-// ---------------------------------------------------------------------
-function _getBuildingSpriteDef(buildingId){
-  try{
-    const R = window.Registry;
-    if (R && typeof R.getBuilding === 'function') return R.getBuilding(buildingId);
-    return (R && R.buildings && R.buildings[buildingId]) || null;
-  }catch(e){
-    return null;
-  }
-}
-
-function _isDrawableImage(img){
-  return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-}
-
-function _drawAtlasRect(ctx, atlasName, frameName, dx, dy, dw, dh, reveal01=null){
-  const A = window.Assets;
-  if (!A || typeof A.getAtlas !== 'function') return false;
-
-  const a = A.getAtlas(atlasName);
-  if (!a || !a.ok || !_isDrawableImage(a.img)) return false;
-
-  const fr = a.frames && a.frames[frameName];
-  if (!fr) return false;
-
-  // Optional: Bottom→Top Reveal (0..1)
-  if (typeof reveal01 === 'number'){
-    const r = Math.max(0, Math.min(1, reveal01));
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(dx, dy + dh * (1 - r), dw, dh * r);
-    ctx.clip();
-    ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
-    ctx.restore();
-    return true;
-  }
-
-  ctx.drawImage(a.img, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
-  return true;
-}
-
-function _drawBuildingWorldSprite(ctx, b, dx, dy, dw, dh){
-  // 1) bevorzugt: b.__sprite (gesetzt durch Buildings.create / setSpriteFrame / Growth)
-  const spr = b && b.__sprite ? b.__sprite : null;
-  if (spr && spr.atlas && spr.frame){
-    // Reveal-Progress aus spr.reveal {start,dur} berechnen (falls vorhanden)
-    let reveal01 = null;
-    if (spr.reveal && typeof spr.reveal.start === 'number' && typeof spr.reveal.dur === 'number'){
-      const t = (performance.now() - spr.reveal.start) / Math.max(1, spr.reveal.dur);
-      reveal01 = Math.max(0, Math.min(1, t));
-    }
-    if (_drawAtlasRect(ctx, spr.atlas, spr.frame, dx, dy, dw, dh, reveal01)) return true;
-  }
-
-  // 2) Registry-Def sprite (falls b.__sprite fehlt)
-  const def = _getBuildingSpriteDef(b && b.id);
-  const s2  = def && def.sprite;
-  if (s2 && s2.type === 'atlas' && s2.atlas && s2.frames){
-    // Semantischer Frame: place/live/reserve
-    const frameName = (b && b.buildStage < 3) ? (s2.frames.site || s2.frames.place) : (s2.frames.place || null);
-    if (frameName && _drawAtlasRect(ctx, s2.atlas, frameName, dx, dy, dw, dh, null)) return true;
-  }
-
-  return false;
-}
     };
     img.onerror = (e)=>{
       WARN('Gebäudesprite NICHT ladbar:', id, path, e);
@@ -663,60 +605,55 @@ function _drawBuildingWorldSprite(ctx, b, dx, dy, dw, dh){
     // ---------------------------------------------------------------------
     const Assets = window.Assets;
 
-    // a) Atlas-Sprite (b.__sprite) – unser neuer Weg für "echte" Gebäude-Sprites
-    if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.getAtlas === 'function'){
-      try{
-        const spr   = b.__sprite;
-        const atlas = Assets.getAtlas(spr.atlas);
+// a) Direkter Atlas-Sprite am Building (b.__sprite) – bevorzugt
+if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFrame === 'function') {
+  try{
+    const spr = b.__sprite;
+    // Frame: bevorzugt spr.frame, sonst semantische Keys
+    const frameKey = spr.frame || spr.atlasFrame || spr.spriteFrame || spr.frameKey || 'place';
+    const frame = _fallbackBuildingFrameForKey(frameKey);
 
-        if (atlas?.ok && spr.frame && typeof Assets.drawAtlasFrame === 'function'){
-          // Reveal Progress (Bottom→Top), optional
-          let revealP = 1;
-          if (spr.reveal && spr.reveal.start && spr.reveal.dur){
-            const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
-            revealP = Math.max(0, Math.min(1, t));
-            if (revealP >= 1) spr.reveal = null;
-          }
+    // Reveal (Bottom→Top) – optional
+    let revealP = 1;
+    if (spr.reveal && spr.reveal.start && spr.reveal.dur){
+      const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
+      revealP = Math.max(0, Math.min(1, t));
+      if (revealP >= 1) spr.reveal = null;
+    }
 
-          ctx.save();
-          if (revealP < 1){
-            const clipH = bh * revealP;
-            ctx.beginPath();
-            ctx.rect(bx, by + (bh - clipH), bw, clipH);
-            ctx.clip();
-          }
+    ctx.save();
+    if (revealP < 1){
+      const clipH = bh * revealP;
+      ctx.beginPath();
+      ctx.rect(bx, by + (bh - clipH), bw, clipH);
+      ctx.clip();
+    }
 
-          // Wir zeichnen am "Fußpunkt" des Tiles (unten mittig), so wie Units.
-          // Standard-Skalierung: Frame wurde i.d.R. in 256px gedacht.
-          const base = (spr.basePx || 256);
-          const scale = bw / base;
+    const base = (spr.basePx || 256);
+    const scale = bw / base;
 
-          Assets.drawAtlasFrame(ctx, spr.atlas, spr.frame, bx + bw/2, by + bh, {
-            align: 'pivot',
-            scale
-          });
+    Assets.drawAtlasFrame(ctx, spr.atlas, frame, bx + bw/2, by + bh, {
+      align: 'pivot',
+      scale
+    });
 
-          ctx.restore();
-          return;
-        }
-      }catch(e){
-        WARN('Atlas-Gebäude draw Fehler:', e?.message || e);
-        // weiter mit PNG-Fallback
+    ctx.restore();
+    return;
+  }catch(e){
+    WARN('Atlas-Gebäude draw Fehler (b.__sprite):', e?.message || e);
+  }
+}
 
 // b) Fallback: Atlas anhand Building-ID erkennen (damit NICHT die UI-Icons auf der Karte landen)
-if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
+if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAtlasFrame === 'function'){
   try{
     const atlasKey = _fallbackBuildingAtlasKey(b.id);
     const atlas = atlasKey ? Assets.getAtlas(atlasKey) : null;
 
     if (atlas?.ok){
-      // Frame bestimmen:
-      //  - wenn Construction/Buildings bereits semantische Keys gesetzt hat: b.atlasFrame / b.spriteFrame
-      //  - sonst: place (=0_0)
       const fk = (b.atlasFrame || b.spriteFrame || b.frameKey || 'place');
       const frame = _fallbackBuildingFrameForKey(fk);
 
-      // Wir zeichnen am "Fußpunkt" (unten mittig) + skalieren wie oben.
       const base = 256;
       const scale = bw / base;
 
@@ -731,9 +668,6 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
   }
 }
 
-
-      }
-    }
 
     // ---------------------------------------------------------------------
     // 3) PNG-Fallback (Übergangsphase): bestehende Gebäude ohne Atlas
@@ -1046,77 +980,21 @@ if (b && (!b.__sprite || !b.__sprite.atlas) && Assets && typeof Assets.getAtlas 
     }
 
 // Gebäude-Overlay (Baustellen + fertige Gebäude)
-    // ---------------------------------------------------------------------
-    if (Array.isArray(Game?.buildings) && Game.buildings.length){
-      ensureBuildPlaceSprites();
+// ---------------------------------------------------------------------
+if (Array.isArray(Game?.buildings) && Game.buildings.length){
+  // Baustellen-Sprites initialisieren (baustelle_0/1/2)
+  try { ensureBuildPlaceSprites(); } catch(e) { /* ignore */ }
 
-      for (const b of Game.buildings){
-        const bx = (b.x | 0) * ts;
-        const by = (b.y | 0) * ts;
-        const bw = (b.w || 1) * ts;
-        const bh = (b.h || 1) * ts;
-
-        const stage = typeof b.buildStage === 'number' ? b.buildStage : 3;
-
-        // Standard-Farben
-        let col = 'rgba(80,200,80,0.9)';   // fertig
-        if (stage === 0) col = 'rgba(200,150,50,0.6)';
-        if (stage === 1) col = 'rgba(220,180,80,0.7)';
-        if (stage === 2) col = 'rgba(140,200,120,0.8)';
-
-        let useFallback = false;
-
-        if (stage < 3){
-          // Baustelle 0/1/2
-          const idx    = Math.max(0, Math.min(2, stage));
-          const imgSite = BuildPlaceSprites[idx];
-
-          if (isDrawableImage(imgSite)){
-            try{
-              ctx.drawImage(imgSite, bx, by, bw, bh);
-            }catch(e){
-              WARN('drawImage Baustelle-Fehler:', e?.message || e);
-              useFallback = true;
-            }
-          } else {
-            // Bild noch nicht fertig oder defekt → Fallback-Rechteck
-            useFallback = true;
-          }
-
-} else {
-  // Fertiges Gebäude
-  // 1) Versuche WORLD-ATLAS (b.__sprite / Registry sprite.type='atlas')
-  let drawn = false;
-  try{
-    drawn = _drawBuildingWorldSprite(ctx, b, bx, by, bw, bh);
-  }catch(e){
-    WARN('WORLD-ATLAS draw failed id='+b.id+':', e?.message || e);
-  }
-
-  if (!drawn){
-    // 2) Fallback: PNG (UI-Icons / legacy)
-    const imgB = getBuildingSprite(b.id);
-    if (isDrawableImage(imgB)){
-      try{
-        ctx.drawImage(imgB, bx, by, bw, bh);
-      }catch(e){
-        WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
-        useFallback = true;
-      }
-    } else {
-      // Sprite noch nicht da oder kaputt → Fallback-Rechteck
-      useFallback = true;
+  for (const b of Game.buildings){
+    try{
+      _drawOneBuildingYS(ctx, cam, ts, b);
+    }catch(e){
+      WARN('Gebäude draw Fehler (legacy loop):', e?.message || e);
     }
   }
 }
-
-        if (useFallback){
-          ctx.fillStyle = col;
-          ctx.fillRect(bx, by, bw, bh);
-        }
-      }
-    }
-    // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Ressourcen-Layer (Bäume/Steine/Fische)
 //  - unterstützt beide APIs:
 //      A) MapResources.drawWorld(ctx,{tileSize})
