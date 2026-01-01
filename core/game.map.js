@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.06-growth-steps-fix
+ * Version : v25.12.30-final-map-renderer-safe
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -613,7 +613,7 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
     const frameKey = spr.frame || spr.atlasFrame || spr.spriteFrame || spr.frameKey || 'place';
     const frame = _fallbackBuildingFrameForKey(frameKey);
 
-    // Reveal (Bottom→Top) – optional (Legacy/Alt)
+    // Reveal (Bottom→Top) – optional
     let revealP = 1;
     if (spr.reveal && spr.reveal.start && spr.reveal.dur){
       const t = (performance.now() - spr.reveal.start) / spr.reveal.dur;
@@ -621,12 +621,6 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       if (revealP >= 1) spr.reveal = null;
     }
 
-    const base = (spr.basePx || 256);
-    const scale = bw / base;
-
-    // -------------------------------------------------------------------
-    // 2a) Basis-Frame (immer sichtbar; wenn reveal aktiv, dann clippen)
-    // -------------------------------------------------------------------
     ctx.save();
     if (revealP < 1){
       const clipH = bh * revealP;
@@ -635,65 +629,57 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       ctx.clip();
     }
 
+    const base = (spr.basePx || 256);
+    const scale = bw / base;
+
     Assets.drawAtlasFrame(ctx, spr.atlas, frame, bx + bw/2, by + bh, {
       align: 'pivot',
       scale
     });
-    ctx.restore();
 
     // -------------------------------------------------------------------
-    // 2b) GROW-OVERLAY: Frame_0_1 wächst Bottom→Top über Frame_0_0
-    //     - Basis bleibt stehen, bis Overlay 100% ist.
-    //     - Opacity "stufig": Start 1% → dann in 1%-Schritten bis 100% (monoton).
+    // Growth-Overlay (Bottom→Top) + Opacity-Steps (persistierend)
+    //  - Base-Frame bleibt komplett sichtbar (frame_0_0)
+    //  - Overlay-Frame wächst Bottom→Top darüber
+    //  - Deckkraft in 1%-Schritten (1..100), monoton (nie wieder schwächer)
     // -------------------------------------------------------------------
-    if (spr.overlayFrame && spr.overlay && spr.overlay.start && spr.overlay.dur){
+    if (spr.overlay && spr.overlay.start && spr.overlay.dur && spr.overlayFrame){
       const now = performance.now();
-      const dur = Math.max(50, spr.overlay.dur|0);
-      let p = (now - spr.overlay.start) / dur;
-      p = Math.max(0, Math.min(1, p));
-      // Opacity-Stufen (wie von dir gewünscht):
-      // Start bei 1% (0.01) und dann in 1%-Schritten bis 100%.
-      // WICHTIG: Werte dürfen NIE wieder kleiner werden, damit "nichts weggeht".
-      spr.overlay._pMax = Math.max(spr.overlay._pMax || 0, p);
-      const pMax = spr.overlay._pMax;
+      const t01 = Math.max(0, Math.min(1, (now - spr.overlay.start) / spr.overlay.dur));
 
-      // 1% Steps: 0.01, 0.02, ... , 1.00
-      const stepIdx = Math.max(1, Math.min(100, Math.ceil(pMax * 100)));
-      const steppedAlpha = stepIdx / 100;
+      // 1%-Steps (1..100)
+      const steps = (spr.overlay.steps || 100);
+      const stepIdx = Math.max(1, Math.min(steps, Math.ceil(t01 * steps)));
+      const stepP = stepIdx / steps;
 
-      // Alpha-Monotonie (falls irgendwas jittert): immer nur erhöhen.
-      spr.overlay._alphaMax = Math.max(spr.overlay._alphaMax || 0, steppedAlpha);
-      const alpha = spr.overlay._alphaMax;
+      // Persistenz gegen dt/FPS-Jitter: niemals zurückspringen
+      spr.overlay._maxP = Math.max(spr.overlay._maxP || 0, stepP);
 
+      // Clip (Coverage) wächst ebenfalls monoton (Bottom→Top)
+      const clipP = spr.overlay._maxP;
+      const clipH = bh * clipP;
 
-      const oframeKey = spr.overlayFrame;                 // z.B. 'live'
-      const oframe    = _fallbackBuildingFrameForKey(oframeKey);
+      // Alpha wächst in 1%-Schritten ebenfalls monoton
+      const alpha = spr.overlay._maxP; // 0.01 .. 1.00
 
       ctx.save();
-      ctx.globalAlpha = (ctx.globalAlpha || 1) * alpha;
+      // Clip nur auf den unteren Anteil (Bottom→Top)
+      ctx.beginPath();
+      ctx.rect(bx, by + (bh - clipH), bw, clipH);
+      ctx.clip();
 
-      // Bottom→Top Reveal per Clip
-      const clipH = bh * pMax;
-      if (clipH > 0){
-        ctx.beginPath();
-        ctx.rect(bx, by + (bh - clipH), bw, clipH);
-        ctx.clip();
-      }
+      // Alpha stufig
+      ctx.globalAlpha = alpha;
 
-      Assets.drawAtlasFrame(ctx, spr.atlas, oframe, bx + bw/2, by + bh, {
+      Assets.drawAtlasFrame(ctx, spr.atlas, spr.overlayFrame, bx + bw/2, by + bh, {
         align: 'pivot',
         scale
       });
-      ctx.restore();
 
-      // Overlay fertig? → Frame final umschalten (Basis bleibt bis hier sichtbar)
-      if (pMax >= 1){
-        spr.frame = oframeKey;      // semantisch (z.B. 'live')
-        spr.overlayFrame = null;
-        spr.overlay = null;
-      }
+      ctx.restore();
     }
 
+    ctx.restore();
     return;
   }catch(e){
     WARN('Atlas-Gebäude draw Fehler (b.__sprite):', e?.message || e);
