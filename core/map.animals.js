@@ -29,7 +29,7 @@
     targetJitterPx: 96,                   // Zielpunkt im Umkreis
     retargetEverySec: [1.8, 4.2],          // Zufallsintervall
     // Draw
-    atlas: { deer:'deer_sprite_atlas', fox:'fox_atlas' },
+    atlas: { deer:'deer_atlas', fox:'fox_atlas' },
     framePrefix: { deer:'deer', fox:'fox' },
     // Für später: Jagd/Respawn
     respawnSec: { deer: 18, fox: 24 }
@@ -65,7 +65,35 @@
     return { tx: Math.floor(x/ts), ty: Math.floor(y/ts) };
   }
 
-  function chooseSpawnNearHQ(){
+  
+  // ------------------------------------------------------------
+  // TERRAIN CHECKS (Wasser vermeiden)
+  // ------------------------------------------------------------
+  function _rulesIsWaterTile(tx,ty){
+    // Primäre Quelle: GameRules (nutzt Map-Legend, keine harten Tile-IDs)
+    const GR = window.GameRules;
+    if (GR && typeof GR.isWaterTile === 'function'){
+      try { return !!GR.isWaterTile(tx,ty); } catch(e){ /* ignore */ }
+    }
+    return false; // defensiv: wenn Regeln fehlen, nicht blocken
+  }
+
+  function isWaterWorld(x,y){
+    const ts = State.tileSize || 64;
+    const t  = worldToTile(x,y,ts);
+    return _rulesIsWaterTile(t.tx, t.ty);
+  }
+
+  function randomLandPointAround(x,y,rad,tries=40){
+    // Sucht einen Punkt in der Nähe, der NICHT auf Wasser liegt.
+    // Wenn nichts gefunden wird, fällt auf den Ursprung zurück (besser als Freeze).
+    for (let i=0;i<tries;i++){
+      const p = randomPointAround(x,y,rad);
+      if (!isWaterWorld(p.x,p.y)) return p;
+    }
+    return { x, y };
+  }
+function chooseSpawnNearHQ(){
     // Wir versuchen HQ-Position aus bekannten Quellen zu finden.
     // Wenn nicht: Map-Mitte.
     const ts = State.tileSize || 64;
@@ -130,7 +158,7 @@
       animT:0,
       animF:0,
       nextRetarget: rand(CFG.retargetEverySec[0], CFG.retargetEverySec[1]),
-      target: randomPointAround(x,y,CFG.targetJitterPx)
+      target: randomLandPointAround(x,y,CFG.targetJitterPx)
     };
   }
 
@@ -142,6 +170,13 @@
     a.y = clamp(a.y, ts*0.5, maxY - ts*0.5);
     a.target.x = clamp(a.target.x, ts*0.5, maxX - ts*0.5);
     a.target.y = clamp(a.target.y, ts*0.5, maxY - ts*0.5);
+  
+
+    // Wenn wir durch Clamp „aus Versehen“ auf Wasser landen, schubsen wir auf Land.
+    if (isWaterWorld(a.x, a.y)){
+      const p = randomLandPointAround(a.x, a.y, ts*2, 80);
+      a.x = p.x; a.y = p.y;
+    }
   }
 
   // ------------------------------------------------------------
@@ -153,16 +188,21 @@
     State._t = 0;
     State.ready = true;
 
-    const base = chooseSpawnNearHQ();
+    let base = chooseSpawnNearHQ();
+
+    // HQ kann am Wasser stehen – Tiere spawnen trotzdem nur auf Land.
+    if (isWaterWorld(base.x, base.y)){
+      base = randomLandPointAround(base.x, base.y, 420, 120);
+    }
 
     for (let i=0;i<CFG.spawn.deer;i++){
-      const p = randomPointAround(base.x, base.y, 220);
+      const p = randomLandPointAround(base.x, base.y, 220);
       const a = makeAnimal('deer', p.x, p.y);
       ensureInsideMap(a);
       State.animals.push(a);
     }
     for (let i=0;i<CFG.spawn.fox;i++){
-      const p = randomPointAround(base.x, base.y, 260);
+      const p = randomLandPointAround(base.x, base.y, 260);
       const a = makeAnimal('fox', p.x, p.y);
       ensureInsideMap(a);
       State.animals.push(a);
@@ -186,8 +226,13 @@
       d.t -= dt;
       if (d.t <= 0){
         State.dead.splice(i,1);
-        const base = chooseSpawnNearHQ();
-        const p = randomPointAround(base.x, base.y, 380);
+        let base = chooseSpawnNearHQ();
+
+    // HQ kann am Wasser stehen – Tiere spawnen trotzdem nur auf Land.
+    if (isWaterWorld(base.x, base.y)){
+      base = randomLandPointAround(base.x, base.y, 420, 120);
+    }
+        const p = randomLandPointAround(base.x, base.y, 380);
         const a = makeAnimal(d.kind, p.x, p.y);
         ensureInsideMap(a);
         State.animals.push(a);
@@ -198,7 +243,7 @@
       a.nextRetarget -= dt;
       if (a.nextRetarget <= 0){
         a.nextRetarget = rand(CFG.retargetEverySec[0], CFG.retargetEverySec[1]);
-        a.target = randomPointAround(a.x, a.y, CFG.targetJitterPx);
+        a.target = randomLandPointAround(a.x, a.y, CFG.targetJitterPx);
         ensureInsideMap(a);
       }
 
@@ -211,9 +256,19 @@
       if (dist > 1){
         const nx = dx / dist;
         const ny = dy / dist;
-        a.x += nx * sp * dt;
-        a.y += ny * sp * dt;
-        a.dir = pickDirectionFromDelta(nx, ny);
+        // Nächster Schritt (Wasser vermeiden)
+        const stepX = a.x + nx * sp * dt;
+        const stepY = a.y + ny * sp * dt;
+
+        if (isWaterWorld(stepX, stepY)){
+          // Sofort neu targeten (Land) und NICHT ins Wasser laufen
+          a.target = randomLandPointAround(a.x, a.y, CFG.targetJitterPx, 60);
+          a.nextRetarget = rand(CFG.retargetEverySec[0], CFG.retargetEverySec[1]);
+        } else {
+          a.x = stepX;
+          a.y = stepY;
+          a.dir = pickDirectionFromDelta(nx, ny);
+        }
       }
 
       // Anim
