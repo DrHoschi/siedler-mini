@@ -508,8 +508,8 @@ try{
       // Animals (Reh/Fuchs)
       tasks.push(this.loadAtlas(
         'deer_sprite_atlas',
-        'assets/animals/deer_sprite_atlas.json',
-        'data/atlases/deer_sprite_atlas.png'
+        'data/atlases/deer_sprite_atlas.json',
+        'assets/animals/deer_sprite_atlas.png'
       ));
       tasks.push(this.loadAtlas(
         'fox_atlas',
