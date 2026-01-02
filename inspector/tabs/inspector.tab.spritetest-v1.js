@@ -215,6 +215,10 @@
     });
     wrap.appendChild(canvas);
 
+    // Status / Debug-Ausgabe
+    const status = el('div', { style:'padding:8px 10px; font-size:12px; opacity:0.95; min-height:18px;' }, '');
+    root.appendChild(status);
+
     const hint = el('div', { style:'padding:10px; opacity:0.85; font-size:12px;' },
       `Tipp: Wenn das Tier bei Richtungswechsel „wackelt“, liegt es fast immer an Pivot/Fußlinie im 128×128 Frame.`
     );
@@ -234,6 +238,10 @@
 
     // ---------- Animation State ----------
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.font = '12px monospace';
+
+    function setStatus(html){ try{ status.innerHTML = html || ''; }catch(e){} }
     let raf = 0;
     let running = false;
 
@@ -277,7 +285,25 @@
       state.animT = 0;
       state.animIdx = 0;
 
-      running = true;
+            // ---- Quick-Validate (zeigt sofort, warum ggf. nichts gezeichnet wird) ----
+      try{
+        const A = window.Assets;
+        const a = A?.getAtlas?.(state.atlasName);
+        if (!a || !a.ok) {
+          setStatus(`<span style="color:#ff8080">❌ Atlas "${state.atlasName}" ist nicht ok/geladen.</span>`);
+          return;
+        }
+        const testName = buildFrameName(state.prefix, DIRS[0], 0);
+        if (!a.frames || !a.frames[testName]) {
+          setStatus(`<span style="color:#ffcc66">⚠️ Frame fehlt: <code>${testName}</code> (Prefix/Benennung prüfen)</span>`);
+        } else {
+          setStatus(`<span style="color:#a8ffb0">✅ Atlas ok.</span> Testframe: <code>${testName}</code>`);
+        }
+      }catch(e){
+        setStatus(`<span style="color:#ff8080">❌ SpriteTest error: ${e?.message||e}</span>`);
+      }
+
+running = true;
       last = performance.now();
       tick(last);
     }
@@ -347,8 +373,10 @@
       ctx.restore();
 
       // Wenn Frame nicht existiert: fallback auf Idle (0)
+      setStatus('');
       const ok = window.Assets?.drawAtlasFrame(ctx, state.atlasName, frameName, fx, fy, { scale: 1 });
       if (!ok) {
+        setStatus(`<span style="color:#ffcc66">⚠️ Frame nicht gefunden: <code>${frameName}</code> (Fallback Idle)</span>`);
         const idleName = buildFrameName(state.prefix, dir, 0);
         window.Assets?.drawAtlasFrame(ctx, state.atlasName, idleName, fx, fy, { scale: 1 });
         ctx.save();
