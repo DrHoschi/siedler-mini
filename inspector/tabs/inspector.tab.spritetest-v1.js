@@ -1,43 +1,67 @@
 /* =========================================================================
  *  inspector/tab: SpriteTest
- *  Version: v26.01.05 (Pivot + Path/Trail Visualizer)
- *  Purpose:
+ *  Version: v26.01.05 (Register-Fix + Path/Trail Toggle + Pivot-Lane)
+ *  Zweck:
  *   - Schnelltest für 8-Richtungs-Sprites (1024px / 8x8 => 128x128 Frames)
- *   - Zeigt zusätzlich Pivot/Anker (Crosshair), Bounding-Box, Fußlinie
- *  Notes:
- *   - Frame 0 = Idle (Regel)
- *   - Reihenfolge Richtungen: N, NE, E, SE, S, SW, W, NW
+ *   - Zeigt Pivot/Anker (Crosshair), Bounding-Box, Fußlinie
+ *   - Zeigt zusätzlich den Laufpfad:
+ *       (A) Soll-Pfad (gestrichelt)  [optional]
+ *       (B) Ist-Trail als Linie      [optional]
+ *       (C) Ist-Trail als Punkte     [optional]
+ *
+ *  WICHTIG (Projekt-Konvention):
+ *   - Frame 0 = Idle (Regel, immer der erste Frame pro Richtung)
+ *   - Richtungs-Reihenfolge: N, NE, E, SE, S, SW, W, NW
+ *
+ *  Hinweis:
+ *   - Dieser Tab registriert sich PRIMÄR über window.registerInspectorTab(...)
+ *     (weil das in deinem Projekt das stabile API ist) und fällt erst danach
+ *     auf Inspector.registerTab/addTab zurück.
  * ========================================================================= */
 (function () {
   'use strict';
 
-  // -------------------------------------------------------------------------
-  // Konstanten
-  // -------------------------------------------------------------------------
-  const TAB_ID   = 'SpriteTest';
-  const TAB_NAME = 'SpriteTest';
+  /* -------------------------------------------------------------------------
+   * Konstanten
+   * ---------------------------------------------------------------------- */
+  const TAB_ID   = 'spritetest';     // interne ID (klein, stabil)
+  const TAB_NAME = 'SpriteTest';     // Button-Text
+  const TAB_ICON = '🧪';
+
   const DIRS = ['N','NE','E','SE','S','SW','W','NW'];
 
-  // -------------------------------------------------------------------------
-  // Helper: Inspector-Tab registrieren (kompatibel zu mehreren API-Varianten)
-  // -------------------------------------------------------------------------
-  function registerTab(def){
-    const I = window.Inspector || window.inspector || null;
-    if(!I) return false;
+  // Default: 1024/8 = 128
+  const DEFAULT_FRAME_W = 128;
+  const DEFAULT_FRAME_H = 128;
 
-    // Häufige Varianten, die im Projekt vorkommen können:
-    if(typeof I.registerTab === 'function'){ I.registerTab(def); return true; }
-    if(typeof I.addTab      === 'function'){ I.addTab(def);      return true; }
-    if(I.api && typeof I.api.registerTab === 'function'){ I.api.registerTab(def); return true; }
-    if(I.api && typeof I.api.addTab === 'function'){ I.api.addTab(def); return true; }
-    if(I.tabs && typeof I.tabs.register === 'function'){ I.tabs.register(def); return true; }
+  // Iso-Test: Umrechnung Tile->Screen (für Pivot-Laufspur im Canvas)
+  // (tileW/tileH sind NUR für den Test-Canvas, nicht für dein echtes Game.)
+  const ISO = {
+    tileW: 64,
+    tileH: 32,
+    // Standard-Isometrie: screenX=(tx-ty)*tileW/2, screenY=(tx+ty)*tileH/2
+    toScreen(tx, ty){
+      const x = (tx - ty) * (ISO.tileW * 0.5);
+      const y = (tx + ty) * (ISO.tileH * 0.5);
+      return { x, y };
+    }
+  };
 
-    return false;
-  }
+  // Bewegung in Tile-Space pro Richtung
+  const DIR_VEC = {
+    N : {dx:  0, dy: -1},
+    NE: {dx:  1, dy: -1},
+    E : {dx:  1, dy:  0},
+    SE: {dx:  1, dy:  1},
+    S : {dx:  0, dy:  1},
+    SW: {dx: -1, dy:  1},
+    W : {dx: -1, dy:  0},
+    NW: {dx: -1, dy: -1},
+  };
 
-  // -------------------------------------------------------------------------
-  // Helper: Frame-Meta aus Atlas (robust gegen unterschiedliche Loader-Strukturen)
-  // -------------------------------------------------------------------------
+  /* -------------------------------------------------------------------------
+   * Helper: Atlas Zugriff (robust gegen Loader-Varianten)
+   * ---------------------------------------------------------------------- */
   function getAtlasByName(name){
     const A = window.Assets || null;
     if(!A || !A.atlases) return null;
@@ -46,9 +70,7 @@
 
   function isAtlasOk(atlas){
     if(!atlas) return false;
-    // üblich: atlas.ok true wenn JSON+PNG geladen
     if(atlas.ok === true) return true;
-    // Fallback: manche Loader setzen .image/.img
     if(atlas.image && atlas.image.complete) return true;
     if(atlas.img && atlas.img.complete) return true;
     return false;
@@ -57,13 +79,11 @@
   function getFrameMeta(atlas, key){
     if(!atlas) return null;
 
-    // häufige Stellen
     if(atlas.frames && atlas.frames[key]) return atlas.frames[key];
     if(atlas.data && atlas.data.frames && atlas.data.frames[key]) return atlas.data.frames[key];
     if(atlas.json && atlas.json.frames && atlas.json.frames[key]) return atlas.json.frames[key];
     if(atlas._json && atlas._json.frames && atlas._json.frames[key]) return atlas._json.frames[key];
 
-    // manchmal ist frames ein Array – dann suchen
     if(Array.isArray(atlas.frames)){
       for(const f of atlas.frames){
         if(f && f.name === key) return f;
@@ -78,15 +98,104 @@
     return `${prefix}${dir}_walk_${idx}`;
   }
 
-  // -------------------------------------------------------------------------
-  // Rendering Helpers (Canvas)
-  // -------------------------------------------------------------------------
+  /* -------------------------------------------------------------------------
+   * Helper: Tab-Registration (wichtigster Fix für "Tab nicht sichtbar")
+   *   1) window.registerInspectorTab(...) (Projekt-Standard)
+   *   2) Inspector.registerTab/addTab (Fallback)
+   *   3) DOM-Fallback (wenn Inspector API nicht greifbar)
+   * ---------------------------------------------------------------------- */
+  function tryRegisterViaGlobalAPI(mountFn){
+    if(typeof window.registerInspectorTab !== 'function') return false;
+
+    // Manche Varianten: (name, mount) oder (name, mount, opts)
+    try{
+      window.registerInspectorTab(TAB_ID, mountFn, { id: TAB_ID, title: TAB_NAME, icon: TAB_ICON, order: 90 });
+      return true;
+    }catch(_e1){
+      try{
+        window.registerInspectorTab(TAB_ID, mountFn);
+        return true;
+      }catch(_e2){
+        return false;
+      }
+    }
+  }
+
+  function tryRegisterViaInspectorObj(mountFn){
+    const I = window.Inspector || window.inspector || null;
+    if(!I) return false;
+
+    const def = { id: TAB_ID, title: TAB_NAME, icon: TAB_ICON, onShow: (el)=> mountFn(el) };
+    try{
+      if(typeof I.registerTab === 'function'){ I.registerTab(def); return true; }
+      if(typeof I.addTab      === 'function'){ I.addTab(def);      return true; }
+      if(I.api && typeof I.api.registerTab === 'function'){ I.api.registerTab(def); return true; }
+      if(I.api && typeof I.api.addTab === 'function'){ I.api.addTab(def); return true; }
+      if(I.tabs && typeof I.tabs.register === 'function'){ I.tabs.register(def); return true; }
+    }catch(_){}
+    return false;
+  }
+
+  function tryRegisterDomFallback(mountFn){
+    // Minimaler Fallback: Button + Section direkt in #inspector einhängen.
+    const insp = document.querySelector('#inspector');
+    if(!insp) return false;
+
+    const tabs = insp.querySelector('.insp-tabs');
+    const content = insp.querySelector('.insp-content');
+    if(!tabs || !content) return false;
+
+    // Button nur anlegen, wenn nicht existiert
+    if(tabs.querySelector(`[data-tab="${TAB_ID}"]`)) return true;
+
+    const btn = document.createElement('button');
+    btn.textContent = TAB_NAME;
+    btn.dataset.tab = TAB_ID;
+    btn.className = 'insp-tab'; // passt zu deinem Design
+
+    const sec = document.createElement('section');
+    sec.dataset.panel = TAB_ID;
+    sec.style.display = 'none';
+
+    tabs.appendChild(btn);
+    content.appendChild(sec);
+
+    // sehr einfache Umschalt-Logik (falls der Inspector-Core es nicht übernimmt)
+    btn.addEventListener('click', ()=>{
+      content.querySelectorAll('section').forEach(s=> s.style.display = (s.dataset.panel===TAB_ID ? 'block' : 'none'));
+      window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab: TAB_ID } }));
+      if(!sec.dataset.mounted){
+        mountFn(sec);
+        sec.dataset.mounted = '1';
+      }
+    });
+
+    return true;
+  }
+
+  function registerTab(mountFn){
+    // 1) Global API (sollte bei dir immer funktionieren)
+    if(tryRegisterViaGlobalAPI(mountFn)) return true;
+
+    // 2) Inspector-Objekt-Fallback
+    if(tryRegisterViaInspectorObj(mountFn)) return true;
+
+    // 3) DOM-Fallback
+    if(tryRegisterDomFallback(mountFn)) return true;
+
+    return false;
+  }
+
+  /* -------------------------------------------------------------------------
+   * Rendering Helpers (Canvas)
+   * ---------------------------------------------------------------------- */
   function clearCanvas(ctx, w, h){
     ctx.clearRect(0,0,w,h);
+
     // leichter Grid-Hintergrund
     const step = 32;
     ctx.save();
-    ctx.globalAlpha = 0.15;
+    ctx.globalAlpha = 0.12;
     ctx.beginPath();
     for(let x=0; x<=w; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,h); }
     for(let y=0; y<=h; y+=step){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
@@ -98,7 +207,7 @@
 
   function drawCrosshair(ctx, x, y){
     ctx.save();
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = 0.95;
     ctx.strokeStyle = '#ff4040';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -129,9 +238,51 @@
     ctx.restore();
   }
 
-  // -------------------------------------------------------------------------
-  // UI Render
-  // -------------------------------------------------------------------------
+  function drawDashedPath(ctx, pts){
+    if(!pts || pts.length < 2) return;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8,6]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTrailLine(ctx, pts){
+    if(!pts || pts.length < 2) return;
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = '#ffcc66';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTrailDots(ctx, pts){
+    if(!pts || !pts.length) return;
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = '#ffcc66';
+    for(let i=0;i<pts.length;i++){
+      const p = pts[i];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* -------------------------------------------------------------------------
+   * UI Render
+   * ---------------------------------------------------------------------- */
   function renderUI(root){
     const A = window.Assets || null;
 
@@ -218,20 +369,15 @@
       return {wrap:w, box:c};
     }
 
-    const chkPivot = mkCheck('Pivot anzeigen', true);
-    const chkBox   = mkCheck('BoundingBox anzeigen', true);
-    const chkFoot  = mkCheck('Fußlinie anzeigen', true);
-    toggles.appendChild(chkPivot.wrap);
-    toggles.appendChild(chkBox.wrap);
-    toggles.appendChild(chkFoot.wrap);
-    // Pfad-Visuals (Soll-Pfad + Ist-Trail)
-    const chkPlanPath   = mkCheck('Soll-Pfad anzeigen', true);
-    const chkTrailLine  = mkCheck('Trail Linie', true);
-    const chkTrailPts   = mkCheck('Trail Punkte', false);
-    toggles.appendChild(chkPlanPath.wrap);
-    toggles.appendChild(chkTrailLine.wrap);
-    toggles.appendChild(chkTrailPts.wrap);
+    const chkPivot = mkCheck('Pivot', true);
+    const chkBox   = mkCheck('BBox', true);
+    const chkFoot  = mkCheck('Fußlinie', true);
 
+    const chkPlan  = mkCheck('Soll-Pfad', true);
+    const chkLine  = mkCheck('Trail Linie', true);
+    const chkDots  = mkCheck('Trail Punkte', false);
+
+    [chkPivot,chkBox,chkFoot,chkPlan,chkLine,chkDots].forEach(c=> toggles.appendChild(c.wrap));
 
     // Buttons
     const btnRow = document.createElement('div');
@@ -299,9 +445,9 @@
     root.appendChild(status);
     root.appendChild(canvas);
 
-    // -----------------------------------------------------------------------
-    // Test-Loop
-    // -----------------------------------------------------------------------
+    /* -----------------------------------------------------------------------
+     * Test-Loop
+     * -------------------------------------------------------------------- */
     let running = false;
     let raf = 0;
 
@@ -312,75 +458,73 @@
     let tAcc = 0;
     let circlePhase = 0;
 
-    // pseudo position in tiles (für Anzeige/Bewegung)
+    // position in tiles (für Testbewegung)
     let tx = 0, ty = 0;
 
-    // Trail (Pivot-Positionen) und Soll-Pfad (Waypoints) – für Pivot/Footline Debugging
-    let trail = [];               // {x,y} in Pixeln (Canvas-Koords)
-    const TRAIL_MAX = 240;        // genug für mehrere Richtungswechsel
-    let planTiles = [];           // [{tx,ty}] geplante Tile-Route
-    let planPix = [];             // [{x,y}] geplante Pixel-Route (Canvas-Koords)
+    // Trail: echte Pivot-Positionen (Canvas-Koordinaten)
+    const trail = [];
+    const MAX_TRAIL = 600;
 
-    // Größe einer "Test-Kachel" im SpriteTest-Canvas (unabhängig von tileSize im Spiel!)
-    // -> groß genug, dass du Pivot-Drift sofort siehst
-    const TEST_TILE_PX = 26;
-
-    function rebuildPlannedRoute(tilesPerDir){
-      // Route: jede Richtung tilesPerDir Schritte + danach ein "Octagon-Kreis"
-      const pts = [];
-      let x=0, y=0;
-      pts.push({tx:x,ty:y});
-
-      // 1) Richtungen
-      for(let di=0; di<DIRS.length; di++){
-        const dir = DIRS[di];
-        for(let i=0;i<tilesPerDir;i++){
-          if(dir.includes('N')) y -= 1;
-          if(dir.includes('S')) y += 1;
-          if(dir.includes('E')) x += 1;
-          if(dir.includes('W')) x -= 1;
-          pts.push({tx:x,ty:y});
-        }
-      }
-
-      // 2) Kreis (Octagon), 16 steps
-      const ring = ['E','E','SE','SE','S','S','SW','SW','W','W','NW','NW','N','N','NE','NE'];
-      for(let k=0;k<ring.length;k++){
-        const dir = ring[k];
-        if(dir.includes('N')) y -= 1;
-        if(dir.includes('S')) y += 1;
-        if(dir.includes('E')) x += 1;
-        if(dir.includes('W')) x -= 1;
-        pts.push({tx:x,ty:y});
-      }
-
-      return pts;
-    }
-
-    function tilesToPixels(tilePts, originX, originY){
-      return tilePts.map(p=>({x: originX + p.tx*TEST_TILE_PX, y: originY + p.ty*TEST_TILE_PX}));
-    }
-
-    function setStatusOk(msg){
-      status.style.color = '#c8ffb0';
-      status.textContent = msg;
-    }
-    function setStatusWarn(msg){
-      status.style.color = '#ffd080';
-      status.textContent = msg;
-    }
-    function setStatusErr(msg){
-      status.style.color = '#ff8080';
-      status.textContent = msg;
-    }
+    function setStatusOk(msg){ status.style.color = '#c8ffb0'; status.textContent = msg; }
+    function setStatusWarn(msg){ status.style.color = '#ffd080'; status.textContent = msg; }
+    function setStatusErr(msg){ status.style.color = '#ff8080'; status.textContent = msg; }
 
     function stop(){
       running = false;
       if(raf) cancelAnimationFrame(raf);
       raf = 0;
     }
-
     btnStop.onclick = ()=> stop();
+
+    // Soll-Pfad einmal "vorrechnen" (damit du sofort siehst, ob die Lane stimmt)
+    function buildPlannedPathPoints(cx, cy, tilesPerDir){
+      const pts = [];
+      let ptx=0, pty=0;
+      let pDirIdx=0;
+      let pStepInDir=0;
+      let pCirclePhase=0;
+
+      function push(){
+        const sc = ISO.toScreen(ptx, pty);
+        pts.push({ x: cx + sc.x, y: cy + sc.y });
+      }
+
+      // Startpunkt
+      push();
+
+      // Erst alle 8 Richtungen je tilesPerDir Schritte
+      while(pCirclePhase === 0){
+        const d = DIRS[pDirIdx];
+        const v = DIR_VEC[d];
+        ptx += v.dx; pty += v.dy;
+        pStepInDir++;
+        push();
+
+        if(pStepInDir >= tilesPerDir){
+          pStepInDir = 0;
+          pDirIdx = (pDirIdx + 1) % DIRS.length;
+          if(pDirIdx === 0){
+            pCirclePhase = 1;
+            ptx = 0; pty = 0;
+            push();
+          }
+        }
+
+        // Sicherheitsbremse
+        if(pts.length > 400) break;
+      }
+
+      // Kreis / Octagon: ein paar Runden (nur damit man "runde" Bewegungen sieht)
+      const ring = ['E','E','SE','SE','S','S','SW','SW','W','W','NW','NW','N','N','NE','NE'];
+      for(let r=0; r<ring.length*2; r++){
+        const d = ring[r % ring.length];
+        const v = DIR_VEC[d];
+        ptx += v.dx; pty += v.dy;
+        push();
+      }
+
+      return pts;
+    }
 
     btnStart.onclick = ()=>{
       stop();
@@ -391,26 +535,17 @@
       tAcc = 0;
       circlePhase = 0;
       tx = 0; ty = 0;
-      trail = [];
-      planTiles = rebuildPlannedRoute(Math.max(1, Math.min(20, parseInt(tilesIn.value||'5',10))));
-      // planPix wird im Loop gesetzt (weil origin erst dort bekannt ist)
-      planPix = [];
+      trail.length = 0;
       loop(performance.now());
     };
 
-    function loop(now){
+    function loop(){
       if(!running) return;
 
       const atlasName = atlasSel.value;
       const prefix = prefixIn.value || '';
       const framesPerDir = Math.max(1, Math.min(16, parseInt(framesIn.value||'8',10)));
       const tilesPerDir  = Math.max(1, Math.min(20, parseInt(tilesIn.value||'5',10)));
-      // Wenn Tiles/Dir geändert wurden: Soll-Pfad neu berechnen
-      if(loop._lastTilesPerDir !== tilesPerDir){
-        loop._lastTilesPerDir = tilesPerDir;
-        planTiles = rebuildPlannedRoute(tilesPerDir);
-        planPix = []; // wird später mit origin gesetzt
-      }
 
       const atlas = getAtlasByName(atlasName);
       if(!isAtlasOk(atlas)){
@@ -420,7 +555,7 @@
         return;
       }
 
-      // Animationszeit: 8 FPS für Walk
+      // Animationszeit: ~8 FPS für Walk
       const dt = 16.67;
       tAcc += dt;
 
@@ -430,53 +565,45 @@
         frameIdx = (frameIdx + 1) % framesPerDir;
       }
 
-      // Bewegung: alle ~350ms ein Tile "weiter"
-      // (im SpriteTest-Canvas ist das nur eine Demo)
+      // Bewegung: alle ~350ms ein Tile weiter
       if(!loop._moveAcc) loop._moveAcc = 0;
       loop._moveAcc += dt;
       if(loop._moveAcc >= 350){
         loop._moveAcc = 0;
 
-        // erst jede Richtung 5 Tiles
         if(circlePhase === 0){
-          const dir = DIRS[dirIdx];
+          const d = DIRS[dirIdx];
+          const v = DIR_VEC[d];
+          tx += v.dx; ty += v.dy;
           stepInDir++;
-
-          // nur für Anzeige
-          if(dir.includes('N')) ty -= 1;
-          if(dir.includes('S')) ty += 1;
-          if(dir.includes('E')) tx += 1;
-          if(dir.includes('W')) tx -= 1;
 
           if(stepInDir >= tilesPerDir){
             stepInDir = 0;
             dirIdx = (dirIdx + 1) % DIRS.length;
             if(dirIdx === 0){
-              circlePhase = 1; // danach "Kreis"
+              circlePhase = 1;
               tx = 0; ty = 0;
             }
           }
         } else {
-          // Kreis: 16 steps auf einem "Octagon"
+          // Kreis: Octagon-Ring in Iso (damit man Sprites bei Richtungswechsel sieht)
           const ring = ['E','E','SE','SE','S','S','SW','SW','W','W','NW','NW','N','N','NE','NE'];
-          dirIdx = DIRS.indexOf(ring[(circlePhase-1) % ring.length]);
+          const d = ring[(circlePhase-1) % ring.length];
+          dirIdx = DIRS.indexOf(d);
+          const v = DIR_VEC[d];
+          tx += v.dx; ty += v.dy;
+
           circlePhase++;
           if(circlePhase > ring.length*3){
             circlePhase = 1;
+            tx = 0; ty = 0;
           }
-
-          const dir = DIRS[dirIdx];
-          if(dir.includes('N')) ty -= 1;
-          if(dir.includes('S')) ty += 1;
-          if(dir.includes('E')) tx += 1;
-          if(dir.includes('W')) tx -= 1;
         }
       }
 
       const dir = DIRS[dirIdx];
 
-      // Regel: Frame 0 = Idle → Wenn FrameIdx==0, ist das ok (steht), beim Laufen nutzt man i>=1.
-      // Im Test: wir nutzen 0..framesPerDir-1 (damit du alles durchsiehst).
+      // Im Test: wir laufen 0..framesPerDir-1 durch (damit du alles siehst).
       const key = buildFrameName(prefix, dir, frameIdx);
 
       const meta = getFrameMeta(atlas, key);
@@ -490,92 +617,46 @@
       // --- Zeichnen ---
       clearCanvas(ctx, canvas.width, canvas.height);
 
-      // Zeichnungsanker-ORIGIN im Canvas (Pivot-Punkt für Tile (0,0))
-      const originX = canvas.width * 0.5;
-      const originY = canvas.height * 0.70;
+      // Basisanker (Mitte) + Iso-Offset aus (tx,ty)
+      const baseX = canvas.width * 0.5;
+      const baseY = canvas.height * 0.70;
+      const sc = ISO.toScreen(tx, ty);
+      const cx = baseX + sc.x;
+      const cy = baseY + sc.y;
 
-      // Soll-Pfad in Pixeln einmal pro Lauf neu aufbauen (wenn noch leer)
-      if(planTiles.length === 0){
-        planTiles = rebuildPlannedRoute(tilesPerDir);
-      }
-      if(planPix.length === 0){
-        planPix = tilesToPixels(planTiles, originX, originY);
-      }
+      // Soll-Pfad & Trail (vor dem Sprite zeichnen, damit Sprite oben liegt)
+      const planned = buildPlannedPathPoints(baseX, baseY, tilesPerDir);
+      if(chkPlan.box.checked) drawDashedPath(ctx, planned);
 
-      // Hintergrund: Soll-Pfad (geplant)
-      if(chkPlanPath && chkPlanPath.box && chkPlanPath.box.checked && planPix.length){
-        ctx.save();
-        ctx.globalAlpha = 0.35;
-        ctx.strokeStyle = '#c0c0ff';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6,6]);
-        ctx.beginPath();
-        ctx.moveTo(planPix[0].x, planPix[0].y);
-        for(let i=1;i<planPix.length;i++){
-          ctx.lineTo(planPix[i].x, planPix[i].y);
-        }
-        ctx.stroke();
-        ctx.restore();
-      }
+      // Trail updaten
+      trail.push({ x: cx, y: cy });
+      if(trail.length > MAX_TRAIL) trail.shift();
 
-      // Aktuelle Test-Position in Pixeln (Pivot-Punkt)
-      const cx = originX + tx * TEST_TILE_PX;
-      const cy = originY + ty * TEST_TILE_PX;
+      if(chkLine.box.checked) drawTrailLine(ctx, trail);
+      if(chkDots.box.checked) drawTrailDots(ctx, trail);
 
-      // Ist-Trail (Pivot-Laufspur)
-      if(trail && trail.length){
-        if(chkTrailLine && chkTrailLine.box && chkTrailLine.box.checked){
-          ctx.save();
-          ctx.globalAlpha = 0.55;
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(trail[0].x, trail[0].y);
-          for(let i=1;i<trail.length;i++){
-            ctx.lineTo(trail[i].x, trail[i].y);
-          }
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        if(chkTrailPts && chkTrailPts.box && chkTrailPts.box.checked){
-          ctx.save();
-          ctx.globalAlpha = 0.7;
-          ctx.fillStyle = '#ffffff';
-          for(let i=0;i<trail.length;i+=2){
-            const p = trail[i];
-            ctx.fillRect(p.x-1, p.y-1, 2, 2);
-          }
-          ctx.restore();
-        }
-      }
-
-      // 1) Sprite zeichnen (Asset-API)
+      // 1) Sprite zeichnen
       if(window.Assets && typeof window.Assets.drawAtlasFrame === 'function'){
         // drawAtlasFrame(atlasName, frameKey, x, y, opts)
         // Annahme: (x,y) ist Pivot-Punkt (entspricht meta.pivot)
         window.Assets.drawAtlasFrame(atlasName, key, cx, cy, { ctx });
-        // Trail aktualisieren (Pivot-Punkt)
-        trail.push({x: cx, y: cy});
-        if(trail.length > TRAIL_MAX) trail.splice(0, trail.length - TRAIL_MAX);
       } else {
-        // Notfall: Falls die API nicht existiert, wenigstens Status zeigen
         setStatusErr('✖ Assets.drawAtlasFrame nicht gefunden.');
         raf = requestAnimationFrame(loop);
         return;
       }
 
       // 2) Pivot/Box/Fußlinie überlagern
-      // TopLeft aus Pivot ableiten
-      const fw = (meta.frame && meta.frame.w) ? meta.frame.w : 128;
-      const fh = (meta.frame && meta.frame.h) ? meta.frame.h : 128;
-      const pv = meta.pivot || { x: fw/2, y: fh }; // fallback
+      const fw = (meta.frame && meta.frame.w) ? meta.frame.w : DEFAULT_FRAME_W;
+      const fh = (meta.frame && meta.frame.h) ? meta.frame.h : DEFAULT_FRAME_H;
+      const pv = meta.pivot || { x: fw/2, y: fh }; // fallback: Fußpunkt unten mittig
+
       const topLeftX = cx - pv.x;
       const topLeftY = cy - pv.y;
 
       if(chkFoot.box.checked){
-        // Fußlinie = Pivot-Y in Welt (cy)
-        drawFootLine(ctx, cy, canvas.width);
+        // Fußlinie = Basis-Y (damit du Pivot exakt auf einer "Lane" halten kannst)
+        drawFootLine(ctx, baseY, canvas.width);
       }
       if(chkBox.box.checked){
         drawBox(ctx, topLeftX, topLeftY, fw, fh);
@@ -584,46 +665,45 @@
         drawCrosshair(ctx, cx, cy);
       }
 
-      // Statustext
+      // Status
       const ax = (pv.x / fw).toFixed(2);
       const ay = (pv.y / fh).toFixed(2);
       setStatusOk(
-        `✔ Atlas ok: ${atlasName}\n` +
+        `✔ SpriteTest aktiv (${TAB_ID})\n` +
+        `Atlas: ${atlasName}\n` +
         `Frame: ${key}\n` +
         `DIR=${dir} frame=${frameIdx}/${framesPerDir-1}  tilesPerDir=${tilesPerDir}\n` +
         `Pivot(px): x=${pv.x}, y=${pv.y}  Anchor(norm): x=${ax}, y=${ay}\n` +
-        `BBox: w=${fw}, h=${fh} | DemoPos(tx,ty)=(${tx},${ty})`
+        `BBox: w=${fw}, h=${fh} | TilePos(tx,ty)=(${tx},${ty})\n` +
+        `TrailPts: ${trail.length}`
       );
 
       raf = requestAnimationFrame(loop);
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Tab Mount
-  // -------------------------------------------------------------------------
-  function mount(){
-    const ok = registerTab({
-      id: TAB_ID,
-      title: TAB_NAME,
-      icon: '🧪',
-      onShow: (el)=> renderUI(el)
-    });
-    if(!ok){
-      // Falls Inspector noch nicht existiert: später erneut versuchen
-      let tries = 0;
-      const t = setInterval(()=>{
-        tries++;
-        const ok2 = registerTab({
-          id: TAB_ID,
-          title: TAB_NAME,
-          icon: '🧪',
-          onShow: (el)=> renderUI(el)
-        });
-        if(ok2 || tries > 50) clearInterval(t);
-      }, 200);
-    }
+  /* -------------------------------------------------------------------------
+   * Mount / Bootstrapping
+   * ---------------------------------------------------------------------- */
+  function mount(sectionEl){
+    renderUI(sectionEl);
   }
 
-  mount();
+  function install(){
+    const ok = registerTab(mount);
+    if(ok){
+      // Debug-Info in Konsole (hilft bei "Tab weg")
+      console.info(`[spritetest] Tab registriert (${TAB_ID}).`);
+      return true;
+    }
+    return false;
+  }
+
+  // Sofort versuchen + nochmal wenn Inspector ready Events feuert
+  // (damit es auf iOS/Safari zuverlässig kommt, selbst wenn Scripts anders laden)
+  install();
+  window.addEventListener('cb:insp:core:ready', install);
+  window.addEventListener('cb:insp:content:ready', install);
+  window.addEventListener('cb:inspector:ready', install);
+  document.addEventListener('DOMContentLoaded', install);
 })();
