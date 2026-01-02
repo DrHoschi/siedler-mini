@@ -507,7 +507,7 @@ try{
 
       // Animals (Reh/Fuchs)
       tasks.push(this.loadAtlas(
-        'deer_atlas',
+        'deer_sprite_atlas',
         'assets/animals/deer_sprite_atlas.json',
         'data/atlases/deer_sprite_atlas.png'
       ));
