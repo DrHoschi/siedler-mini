@@ -29,7 +29,7 @@
     targetJitterPx: 96,                   // Zielpunkt im Umkreis
     retargetEverySec: [1.8, 4.2],          // Zufallsintervall
     // Draw
-    atlas: { deer:'deer_atlas', fox:'fox_atlas' },
+    atlas: { deer:'deer_sprite_atlas', fox:'fox_atlas' },
     framePrefix: { deer:'deer', fox:'fox' },
     // Für später: Jagd/Respawn
     respawnSec: { deer: 18, fox: 24 }
