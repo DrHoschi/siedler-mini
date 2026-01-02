@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-01T16:22:43.736Z",
+  "createdAt": "2026-01-02T14:07:50.479Z",
   "root": ".",
-  "count": 568,
+  "count": 569,
   "entries": [
     {
       "type": "dir",
@@ -66,13 +66,8 @@
     },
     {
       "type": "file",
-      "path": "assets/animals/deer_atlas.json",
-      "size": 26207
-    },
-    {
-      "type": "file",
-      "path": "assets/animals/deer.png",
-      "size": 845284
+      "path": "assets/animals/deer_sprite_atlas.png",
+      "size": 668177
     },
     {
       "type": "file",
@@ -1501,7 +1496,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 24644
+      "size": 24669
     },
     {
       "type": "file",
@@ -1591,7 +1586,7 @@
     {
       "type": "file",
       "path": "core/game.buildings.js",
-      "size": 10754
+      "size": 10776
     },
     {
       "type": "file",
@@ -1606,7 +1601,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 49265
+      "size": 49874
     },
     {
       "type": "file",
@@ -1815,6 +1810,11 @@
     {
       "type": "dir",
       "path": "data/atlases/"
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/deer_sprite_atlas.json",
+      "size": 26236
     },
     {
       "type": "file",
@@ -2110,6 +2110,11 @@
       "type": "file",
       "path": "inspector/tabs/inspector.tab.signals-v1.js",
       "size": 17089
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.spritetest-v1.js",
+      "size": 13945
     },
     {
       "type": "file",
@@ -2754,7 +2759,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 18039
+      "size": 18134
     },
     {
       "type": "file",
