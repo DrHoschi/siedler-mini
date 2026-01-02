@@ -1,6 +1,6 @@
 /* =========================================================================
  *  inspector/tab: SpriteTest
- *  Version: v26.01.04 (Pivot/Anchor Visualizer)
+ *  Version: v26.01.05 (Pivot + Path/Trail Visualizer)
  *  Purpose:
  *   - Schnelltest für 8-Richtungs-Sprites (1024px / 8x8 => 128x128 Frames)
  *   - Zeigt zusätzlich Pivot/Anker (Crosshair), Bounding-Box, Fußlinie
@@ -224,6 +224,14 @@
     toggles.appendChild(chkPivot.wrap);
     toggles.appendChild(chkBox.wrap);
     toggles.appendChild(chkFoot.wrap);
+    // Pfad-Visuals (Soll-Pfad + Ist-Trail)
+    const chkPlanPath   = mkCheck('Soll-Pfad anzeigen', true);
+    const chkTrailLine  = mkCheck('Trail Linie', true);
+    const chkTrailPts   = mkCheck('Trail Punkte', false);
+    toggles.appendChild(chkPlanPath.wrap);
+    toggles.appendChild(chkTrailLine.wrap);
+    toggles.appendChild(chkTrailPts.wrap);
+
 
     // Buttons
     const btnRow = document.createElement('div');
@@ -307,6 +315,52 @@
     // pseudo position in tiles (für Anzeige/Bewegung)
     let tx = 0, ty = 0;
 
+    // Trail (Pivot-Positionen) und Soll-Pfad (Waypoints) – für Pivot/Footline Debugging
+    let trail = [];               // {x,y} in Pixeln (Canvas-Koords)
+    const TRAIL_MAX = 240;        // genug für mehrere Richtungswechsel
+    let planTiles = [];           // [{tx,ty}] geplante Tile-Route
+    let planPix = [];             // [{x,y}] geplante Pixel-Route (Canvas-Koords)
+
+    // Größe einer "Test-Kachel" im SpriteTest-Canvas (unabhängig von tileSize im Spiel!)
+    // -> groß genug, dass du Pivot-Drift sofort siehst
+    const TEST_TILE_PX = 26;
+
+    function rebuildPlannedRoute(tilesPerDir){
+      // Route: jede Richtung tilesPerDir Schritte + danach ein "Octagon-Kreis"
+      const pts = [];
+      let x=0, y=0;
+      pts.push({tx:x,ty:y});
+
+      // 1) Richtungen
+      for(let di=0; di<DIRS.length; di++){
+        const dir = DIRS[di];
+        for(let i=0;i<tilesPerDir;i++){
+          if(dir.includes('N')) y -= 1;
+          if(dir.includes('S')) y += 1;
+          if(dir.includes('E')) x += 1;
+          if(dir.includes('W')) x -= 1;
+          pts.push({tx:x,ty:y});
+        }
+      }
+
+      // 2) Kreis (Octagon), 16 steps
+      const ring = ['E','E','SE','SE','S','S','SW','SW','W','W','NW','NW','N','N','NE','NE'];
+      for(let k=0;k<ring.length;k++){
+        const dir = ring[k];
+        if(dir.includes('N')) y -= 1;
+        if(dir.includes('S')) y += 1;
+        if(dir.includes('E')) x += 1;
+        if(dir.includes('W')) x -= 1;
+        pts.push({tx:x,ty:y});
+      }
+
+      return pts;
+    }
+
+    function tilesToPixels(tilePts, originX, originY){
+      return tilePts.map(p=>({x: originX + p.tx*TEST_TILE_PX, y: originY + p.ty*TEST_TILE_PX}));
+    }
+
     function setStatusOk(msg){
       status.style.color = '#c8ffb0';
       status.textContent = msg;
@@ -337,6 +391,10 @@
       tAcc = 0;
       circlePhase = 0;
       tx = 0; ty = 0;
+      trail = [];
+      planTiles = rebuildPlannedRoute(Math.max(1, Math.min(20, parseInt(tilesIn.value||'5',10))));
+      // planPix wird im Loop gesetzt (weil origin erst dort bekannt ist)
+      planPix = [];
       loop(performance.now());
     };
 
@@ -347,6 +405,12 @@
       const prefix = prefixIn.value || '';
       const framesPerDir = Math.max(1, Math.min(16, parseInt(framesIn.value||'8',10)));
       const tilesPerDir  = Math.max(1, Math.min(20, parseInt(tilesIn.value||'5',10)));
+      // Wenn Tiles/Dir geändert wurden: Soll-Pfad neu berechnen
+      if(loop._lastTilesPerDir !== tilesPerDir){
+        loop._lastTilesPerDir = tilesPerDir;
+        planTiles = rebuildPlannedRoute(tilesPerDir);
+        planPix = []; // wird später mit origin gesetzt
+      }
 
       const atlas = getAtlasByName(atlasName);
       if(!isAtlasOk(atlas)){
@@ -426,15 +490,74 @@
       // --- Zeichnen ---
       clearCanvas(ctx, canvas.width, canvas.height);
 
-      // Zeichnungsanker in der Mitte (Pivot-Punkt)
-      const cx = canvas.width * 0.5;
-      const cy = canvas.height * 0.70;
+      // Zeichnungsanker-ORIGIN im Canvas (Pivot-Punkt für Tile (0,0))
+      const originX = canvas.width * 0.5;
+      const originY = canvas.height * 0.70;
+
+      // Soll-Pfad in Pixeln einmal pro Lauf neu aufbauen (wenn noch leer)
+      if(planTiles.length === 0){
+        planTiles = rebuildPlannedRoute(tilesPerDir);
+      }
+      if(planPix.length === 0){
+        planPix = tilesToPixels(planTiles, originX, originY);
+      }
+
+      // Hintergrund: Soll-Pfad (geplant)
+      if(chkPlanPath && chkPlanPath.box && chkPlanPath.box.checked && planPix.length){
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = '#c0c0ff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6,6]);
+        ctx.beginPath();
+        ctx.moveTo(planPix[0].x, planPix[0].y);
+        for(let i=1;i<planPix.length;i++){
+          ctx.lineTo(planPix[i].x, planPix[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Aktuelle Test-Position in Pixeln (Pivot-Punkt)
+      const cx = originX + tx * TEST_TILE_PX;
+      const cy = originY + ty * TEST_TILE_PX;
+
+      // Ist-Trail (Pivot-Laufspur)
+      if(trail && trail.length){
+        if(chkTrailLine && chkTrailLine.box && chkTrailLine.box.checked){
+          ctx.save();
+          ctx.globalAlpha = 0.55;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(trail[0].x, trail[0].y);
+          for(let i=1;i<trail.length;i++){
+            ctx.lineTo(trail[i].x, trail[i].y);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if(chkTrailPts && chkTrailPts.box && chkTrailPts.box.checked){
+          ctx.save();
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = '#ffffff';
+          for(let i=0;i<trail.length;i+=2){
+            const p = trail[i];
+            ctx.fillRect(p.x-1, p.y-1, 2, 2);
+          }
+          ctx.restore();
+        }
+      }
 
       // 1) Sprite zeichnen (Asset-API)
       if(window.Assets && typeof window.Assets.drawAtlasFrame === 'function'){
         // drawAtlasFrame(atlasName, frameKey, x, y, opts)
         // Annahme: (x,y) ist Pivot-Punkt (entspricht meta.pivot)
         window.Assets.drawAtlasFrame(atlasName, key, cx, cy, { ctx });
+        // Trail aktualisieren (Pivot-Punkt)
+        trail.push({x: cx, y: cy});
+        if(trail.length > TRAIL_MAX) trail.splice(0, trail.length - TRAIL_MAX);
       } else {
         // Notfall: Falls die API nicht existiert, wenigstens Status zeigen
         setStatusErr('✖ Assets.drawAtlasFrame nicht gefunden.');
