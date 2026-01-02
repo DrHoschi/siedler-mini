@@ -1,800 +1,571 @@
-/* =====================================================================
-   inspector/tabs/inspector.tab.spritetest-v1.js
-   Neue Siedler – SpriteTest (Pro)
-   Version: v26.01.08-spritetest-pro-markers-registerfix
+/* =========================================================================
+ * Datei   : inspector/tabs/inspector.tab.spritetest-v1.js
+ * Projekt : Neue Siedler (Siedler‑Mini)
+ * Version : v26.01.09 (Stabil + Picker + Pivot/Trail)
+ * Autor   : Mann + ChatGPT
+ *
+ * WICHTIG (Stabilität):
+ *  - Dieses Projekt nutzt inspector.tabs.adapter.js
+ *    => Tabs MÜSSEN über window.registerInspectorTab(name, renderFn) registrieren.
+ *  - Kein direkter Zugriff auf "Inspector"/"Game" globale Objekte!
+ *    (Safari/iOS wirft sonst schnell "Can't find variable" und der Tab verschwindet.)
+ *
+ * Features:
+ *  - Atlas auswählen (alle geladenen Atlanten aus window.Assets.atlases)
+ *  - Frame/Prefix auswählen (aus Atlas-Keys generiert)
+ *  - 8 Richtungen Testlauf (N,NE,E,SE,S,SW,W,NW)
+ *  - Pivot/Anchor Crosshair + BBox + Fußlinie
+ *  - Trail im Canvas (zeigt, ob Pivot stabil auf der Lauf-Linie bleibt)
+ *
+ * Konvention:
+ *  - Frame 0 = Idle (zukünftig)
+ *  - Walk-Frames = _walk_0..N (du passt Reihenfolge/Frames in deinem Atlas an)
+ * ========================================================================= */
 
-   Zweck:
-   - Schnelles Testen von Atlanten/Frames (geladen in Assets.atlases)
-   - Unit/Animal-Test: 8 Richtungen, 5 Tiles/Dir, Soll-Pfad + Pivot-Trail (Linie/Punkte)
-   - Frame-Viewer: Einzel-Frame anzeigen + Marker setzen (Entrance, Chimney, Hand, Carry, ToolTip)
-   - PRO: Marker automatisch auf alle Frames der gleichen "Gruppe" anwenden
-          (z.B. b.hunter_frame_0_0 .. b.hunter_frame_0_2)
-   - Export: Marker-JSON per Copy&Paste (für Registry/Building JSON später)
-
-   WICHTIG:
-   - Diese Datei darf beim Laden KEINEN Zugriff auf "Game" machen!
-     Sonst kann iOS/Safari die Tab-Registrierung abbrechen.
-   ===================================================================== */
-
-(function () {
+(function(){
   'use strict';
 
-  /* ---------------------------------------------------------------
-     0) Mini-Utils
-     --------------------------------------------------------------- */
+  // ---------------------------------------------------------------------------
+  // Konstanten
+  // ---------------------------------------------------------------------------
+  const TAB_KEY = 'spritetest'; // IMPORTANT: lower-case, wie alle anderen Tabs
+  const DIRS = ['N','NE','E','SE','S','SW','W','NW'];
 
-  const DIRS = ['N','NE','E','SE','S','SW','W','NW']; // feste Projekt-Reihenfolge (Uhrzeigersinn)
-  const DEFAULTS = {
-    tilesPerDir: 5,
-    framesPerDir: 8,
-    prefix: 'deer_',
-    mode: 'unit', // 'unit' | 'frame'
-    showPlan: true,
-    showTrailLine: true,
-    showTrailDots: false,
-    applyToGroup: true,
-    markerType: 'entrance', // entrance | chimney | hand | carry | tool
-  };
+  // ---------------------------------------------------------------------------
+  // Kleine Helpers
+  // ---------------------------------------------------------------------------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-  function el(tag, cls, html){
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (html !== undefined) n.innerHTML = html;
-    return n;
-  }
-  function safeNum(v, fallback){
-    const n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
+  function getAssets(){
+    return window.Assets || null;
   }
 
-  /* ---------------------------------------------------------------
-     1) Robuste Tab-Registrierung (damit "Tab weg" nicht mehr passiert)
-     --------------------------------------------------------------- */
+  function listAtlases(){
+    const A = getAssets();
+    const atl = A && A.atlases ? Object.keys(A.atlases) : [];
+    atl.sort();
+    return atl;
+  }
 
-  function registerTabSafely(tabDef){
-    // 1) Primär: global registerInspectorTab (dein Projekt-Standard)
-    if (typeof window.registerInspectorTab === 'function') {
-      window.registerInspectorTab(tabDef);
-      console.info('[spritetest] registered via window.registerInspectorTab');
-      return true;
-    }
-    // 2) Fallback: Inspector.registerTab (falls vorhanden)
-    if (window.Inspector && typeof window.Inspector.registerTab === 'function') {
-      window.Inspector.registerTab(tabDef);
-      console.info('[spritetest] registered via window.Inspector.registerTab');
-      return true;
-    }
-    // 3) Fallback: Sammeln und später registrieren (wenn Inspector erst später lädt)
-    window.__INSPECTOR_TABS__ = window.__INSPECTOR_TABS__ || [];
-    window.__INSPECTOR_TABS__.push(tabDef);
-    console.warn('[spritetest] Inspector API not ready – queued in __INSPECTOR_TABS__');
+  function getAtlas(name){
+    const A = getAssets();
+    if(!A || !A.atlases) return null;
+    return A.atlases[name] || null;
+  }
+
+  function isAtlasOk(atlas){
+    if(!atlas) return false;
+    if(atlas.ok === true) return true;
+    if(atlas.image && atlas.image.complete) return true;
+    if(atlas.img && atlas.img.complete) return true;
     return false;
   }
 
-  /* ---------------------------------------------------------------
-     2) Marker Storage
-     --------------------------------------------------------------- */
-
-  const LS_KEY = 'spritetest:markers:v1'; // bewusst stabil halten
-  function loadMarkerDB(){
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
-    catch(e){ return {}; }
-  }
-  function saveMarkerDB(db){
-    try { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
-    catch(e){ /* ignore */ }
+  function getFrameMeta(atlas, key){
+    if(!atlas) return null;
+    if(atlas.frames && atlas.frames[key]) return atlas.frames[key];
+    if(atlas.data && atlas.data.frames && atlas.data.frames[key]) return atlas.data.frames[key];
+    if(atlas.json && atlas.json.frames && atlas.json.frames[key]) return atlas.json.frames[key];
+    if(atlas._json && atlas._json.frames && atlas._json.frames[key]) return atlas._json.frames[key];
+    return null;
   }
 
-  // Marker werden pro Atlas + FrameName gespeichert:
-  // db[atlasName][frameName] = { entrance:{x,y}, chimney:{x,y}, ... }
-  function getFrameMarkers(db, atlasName, frameName){
-    db[atlasName] = db[atlasName] || {};
-    db[atlasName][frameName] = db[atlasName][frameName] || {};
-    return db[atlasName][frameName];
-  }
+  // Extrahiert aus Keys so etwas wie "deer_" oder "carrier_" usw.
+  // Heuristik: alles bis zum "_<DIR>_".
+  function extractPrefixesFromAtlas(atlas){
+    const keys = collectFrameKeys(atlas);
+    const set = new Set();
 
-  /* ---------------------------------------------------------------
-     3) "PRO" Gruppenschlüssel: Welche Frames gehören zusammen?
-     --------------------------------------------------------------- */
+    // Beispiel keys:
+    //  deer_N_walk_0
+    //  deer_NE_walk_3
+    //  building_hq_frame_0_0
+    // Wir versuchen primär das 8-dir Pattern zu erkennen.
 
-  function deriveGroupKey(frameName){
-    // Buildings: b.hunter_frame_0_0 -> b.hunter
-    const m1 = frameName.match(/^(.+?)_frame_\d+_\d+$/);
-    if (m1) return m1[1];
-
-    // Alternative building naming: b.hunter_place_0 -> b.hunter_place (ohne Index)
-    const m2 = frameName.match(/^(.+?)_(\d+)$/);
-    if (m2) return m2[1];
-
-    // Units/Animals: deer_NE_walk_3 -> deer_walk (oder deer, je nachdem)
-    // Wir gruppieren so, dass alle Directions zusammen gehören:
-    const m3 = frameName.match(/^(.+?)_(N|NE|E|SE|S|SW|W|NW)_(walk|idle)_(\d+)$/);
-    if (m3) return `${m3[1]}_${m3[3]}`; // deer_walk
-
-    // Fallback: alles vor letztem '_' nehmen
-    const ix = frameName.lastIndexOf('_');
-    if (ix > 0) return frameName.slice(0, ix);
-    return frameName;
-  }
-
-  function listFramesForGroup(atlasObj, groupKey){
-    if (!atlasObj || !atlasObj.frames) return [];
-    const out = [];
-    const keys = Object.keys(atlasObj.frames);
-    for (const k of keys) {
-      if (deriveGroupKey(k) === groupKey) out.push(k);
+    for(const k of keys){
+      // 8-dir pattern
+      const m = k.match(/^(.*)_((?:N|NE|E|SE|S|SW|W|NW))_/);
+      if(m && m[1]) {
+        set.add(m[1] + '_');
+        continue;
+      }
+      // sonst: generischer Prefix bis zum letzten '_'
+      const i = k.lastIndexOf('_');
+      if(i > 0) set.add(k.slice(0, i+1));
     }
-    out.sort();
-    return out;
+
+    return Array.from(set).sort();
   }
 
-  /* ---------------------------------------------------------------
-     4) Zeichnen (Canvas)
-     --------------------------------------------------------------- */
+  function collectFrameKeys(atlas){
+    if(!atlas) return [];
+    const keys = [];
+    if(atlas.frames && typeof atlas.frames === 'object') keys.push(...Object.keys(atlas.frames));
+    else if(atlas.data && atlas.data.frames) keys.push(...Object.keys(atlas.data.frames));
+    else if(atlas.json && atlas.json.frames) keys.push(...Object.keys(atlas.json.frames));
+    else if(atlas._json && atlas._json.frames) keys.push(...Object.keys(atlas._json.frames));
+    return keys;
+  }
+
+  function buildWalkKey(prefix, dir, idx){
+    // Standard für Tiere/Units im Test: <prefix><DIR>_walk_<i>
+    // prefix erwartet inkl. trailing underscore (z.B. "deer_")
+    return `${prefix}${dir}_walk_${idx}`;
+  }
 
   function clearCanvas(ctx, w, h){
     ctx.clearRect(0,0,w,h);
-    // leichter Schachbrett-Hintergrund
-    ctx.fillStyle = 'rgba(255,255,255,0.03)';
-    for (let y=0;y<h;y+=16){
-      for (let x=0;x<w;x+=16){
-        if (((x+y)/16)%2===0) ctx.fillRect(x,y,16,16);
+
+    // dezentes Grid
+    const step = 32;
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.beginPath();
+    for(let x=0; x<=w; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,h); }
+    for(let y=0; y<=h; y+=step){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawCrosshair(ctx, x, y){
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = '#ff4040';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x-10, y); ctx.lineTo(x+10, y);
+    ctx.moveTo(x, y-10); ctx.lineTo(x, y+10);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBox(ctx, x, y, w, h){
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = '#40c0ff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
+  function drawFootLine(ctx, y, w){
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTrail(ctx, pts){
+    if(!pts || pts.length < 2) return;
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = '#ffd080';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ---------------------------------------------------------------------------
+  // RenderFn für InspectorContent
+  // ---------------------------------------------------------------------------
+  function renderSpriteTest(root){
+    root.innerHTML = '';
+    root.style.padding = '8px';
+    root.style.color = '#fff';
+    root.style.fontFamily = 'monospace';
+
+    // UI helpers
+    const mkRow = (label, el)=>{
+      const w = document.createElement('div');
+      w.style.margin = '6px 0';
+      const l = document.createElement('div');
+      l.textContent = label;
+      l.style.opacity = '0.85';
+      l.style.marginBottom = '4px';
+      w.appendChild(l);
+      w.appendChild(el);
+      root.appendChild(w);
+      return w;
+    };
+
+    const mkBtn = (txt)=>{
+      const b = document.createElement('button');
+      b.textContent = txt;
+      b.style.padding = '8px';
+      b.style.borderRadius = '999px';
+      return b;
+    };
+
+    const mkCheck = (label, checked=true)=>{
+      const w = document.createElement('label');
+      w.style.display='flex';
+      w.style.alignItems='center';
+      w.style.gap='6px';
+      w.style.userSelect='none';
+      const c = document.createElement('input');
+      c.type='checkbox';
+      c.checked=checked;
+      const t = document.createElement('span');
+      t.textContent=label;
+      w.appendChild(c); w.appendChild(t);
+      return {wrap:w, box:c};
+    };
+
+    // Atlas select
+    const atlasSel = document.createElement('select');
+    atlasSel.style.width='100%';
+    atlasSel.style.padding='6px';
+    atlasSel.style.borderRadius='8px';
+
+    const atlases = listAtlases();
+    atlases.forEach(name=>{
+      const o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      atlasSel.appendChild(o);
+    });
+
+    // Prefix select + manual prefix
+    const prefixSel = document.createElement('select');
+    prefixSel.style.width='100%';
+    prefixSel.style.padding='6px';
+    prefixSel.style.borderRadius='8px';
+
+    const prefixIn = document.createElement('input');
+    prefixIn.type='text';
+    prefixIn.placeholder='z.B. deer_';
+    prefixIn.value='deer_';
+    prefixIn.style.width='100%';
+    prefixIn.style.padding='6px';
+    prefixIn.style.borderRadius='8px';
+
+    // Frames/Dir + Tiles/Dir
+    const framesIn = document.createElement('input');
+    framesIn.type='number';
+    framesIn.min='1';
+    framesIn.max='32';
+    framesIn.value='8';
+    framesIn.style.width='100%';
+    framesIn.style.padding='6px';
+    framesIn.style.borderRadius='8px';
+
+    const tilesIn = document.createElement('input');
+    tilesIn.type='number';
+    tilesIn.min='1';
+    tilesIn.max='50';
+    tilesIn.value='5';
+    tilesIn.style.width='100%';
+    tilesIn.style.padding='6px';
+    tilesIn.style.borderRadius='8px';
+
+    // toggles
+    const toggles = document.createElement('div');
+    toggles.style.display='flex';
+    toggles.style.gap='10px';
+    toggles.style.flexWrap='wrap';
+
+    const chkPivot = mkCheck('Pivot', true);
+    const chkBox   = mkCheck('BBox', true);
+    const chkFoot  = mkCheck('Fußlinie', true);
+    const chkTrail = mkCheck('Trail', true);
+
+    toggles.appendChild(chkPivot.wrap);
+    toggles.appendChild(chkBox.wrap);
+    toggles.appendChild(chkFoot.wrap);
+    toggles.appendChild(chkTrail.wrap);
+
+    // status
+    const status = document.createElement('div');
+    status.style.marginTop='8px';
+    status.style.whiteSpace='pre-wrap';
+    status.style.fontSize='12px';
+
+    const setStatus = (type, msg)=>{
+      status.style.color = type==='ok' ? '#c8ffb0' : type==='warn' ? '#ffd080' : '#ff8080';
+      status.textContent = msg;
+    };
+
+    // canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 520;
+    canvas.height = 420;
+    canvas.style.width='100%';
+    canvas.style.border='1px solid rgba(255,255,255,0.2)';
+    canvas.style.borderRadius='10px';
+    canvas.style.marginTop='10px';
+    const ctx = canvas.getContext('2d');
+
+    // buttons
+    const btnRow = document.createElement('div');
+    btnRow.style.display='flex';
+    btnRow.style.gap='10px';
+    const btnStart = mkBtn('Start Test');
+    btnStart.style.flex='1';
+    const btnStop = mkBtn('Stop');
+    btnStop.style.flex='1';
+    btnRow.appendChild(btnStart);
+    btnRow.appendChild(btnStop);
+
+    // info
+    const info = document.createElement('div');
+    info.style.opacity='0.85';
+    info.style.marginTop='6px';
+    info.textContent = 'Richtungs-Reihenfolge: N → NE → E → SE → S → SW → W → NW | Regel: Frame 0 = Idle';
+
+    // layout
+    mkRow('Atlas', atlasSel);
+    mkRow('Prefix‑Picker (aus Atlas)', prefixSel);
+    mkRow('Prefix (manuell)', prefixIn);
+
+    const grid = document.createElement('div');
+    grid.style.display='grid';
+    grid.style.gridTemplateColumns='1fr 1fr';
+    grid.style.gap='10px';
+
+    const wFrames = document.createElement('div');
+    const wTiles  = document.createElement('div');
+    const lF = document.createElement('div'); lF.textContent='Frames/Dir'; lF.style.opacity='0.85'; lF.style.marginBottom='4px';
+    const lT = document.createElement('div'); lT.textContent='Tiles/Dir';  lT.style.opacity='0.85'; lT.style.marginBottom='4px';
+    wFrames.appendChild(lF); wFrames.appendChild(framesIn);
+    wTiles.appendChild(lT);  wTiles.appendChild(tilesIn);
+    grid.appendChild(wFrames);
+    grid.appendChild(wTiles);
+    root.appendChild(grid);
+
+    root.appendChild(btnRow);
+    root.appendChild(info);
+    root.appendChild(toggles);
+    root.appendChild(status);
+    root.appendChild(canvas);
+
+    // -----------------------------------------------------------------------
+    // Prefix-Liste füllen
+    // -----------------------------------------------------------------------
+    function refreshPrefixPicker(){
+      prefixSel.innerHTML='';
+      const atlas = getAtlas(atlasSel.value);
+      if(!atlas){
+        const o = document.createElement('option');
+        o.value=''; o.textContent='(kein Atlas)';
+        prefixSel.appendChild(o);
+        return;
       }
+      const prefs = extractPrefixesFromAtlas(atlas);
+      if(!prefs.length){
+        const o = document.createElement('option');
+        o.value=''; o.textContent='(keine Frames)';
+        prefixSel.appendChild(o);
+        return;
+      }
+      prefs.forEach(p=>{
+        const o = document.createElement('option');
+        o.value=p;
+        o.textContent=p;
+        prefixSel.appendChild(o);
+      });
+
+      // best guess: wenn deer_ existiert, nimm das
+      const want = prefs.includes('deer_') ? 'deer_' : prefs[0];
+      prefixSel.value = want;
+      prefixIn.value = want;
     }
-  }
 
-  function drawText(ctx, x, y, s){
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.font = '12px monospace';
-    ctx.fillText(s, x, y);
-    ctx.restore();
-  }
+    atlasSel.addEventListener('change', ()=>{
+      refreshPrefixPicker();
+      clearCanvas(ctx, canvas.width, canvas.height);
+      setStatus('warn', 'Atlas gewechselt – starte den Test.');
+    });
 
-  function drawCross(ctx, x, y, r){
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,80,80,0.95)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x-r, y); ctx.lineTo(x+r, y);
-    ctx.moveTo(x, y-r); ctx.lineTo(x, y+r);
-    ctx.stroke();
-    ctx.restore();
-  }
+    prefixSel.addEventListener('change', ()=>{
+      if(prefixSel.value) prefixIn.value = prefixSel.value;
+    });
 
-  function drawDot(ctx, x, y, r){
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,220,80,0.95)';
-    ctx.beginPath();
-    ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fill();
-    ctx.restore();
-  }
+    // initial
+    if(!atlases.length){
+      setStatus('err', '✖ Keine Atlanten gefunden. (Sind Assets geladen?)');
+    } else {
+      refreshPrefixPicker();
+      setStatus('warn', 'Bereit. Wähle Atlas/Prefix und drücke „Start Test“.');
+    }
 
-  function drawDashed(ctx, pts){
-    if (pts.length<2) return;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(120,180,255,0.7)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6,6]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.stroke();
-    ctx.restore();
-  }
+    // -----------------------------------------------------------------------
+    // Test-Loop
+    // -----------------------------------------------------------------------
+    let running = false;
+    let raf = 0;
 
-  function drawLine(ctx, pts){
-    if (pts.length<2) return;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,220,80,0.5)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.stroke();
-    ctx.restore();
-  }
+    let dirIdx = 0;
+    let stepInDir = 0;
+    let frameIdx = 0;
+    let tAcc = 0;
+    let circlePhase = 0;
 
-  /* ---------------------------------------------------------------
-     5) Tab-Implementierung
-     --------------------------------------------------------------- */
+    // Trail points (Canvas)
+    const trail = [];
+    const TRAIL_MAX = 140;
 
-  const TAB = {
-    id: 'SpriteTest',
-    title: 'SpriteTest',
-    icon: '🧪',
+    function stop(){
+      running = false;
+      if(raf) cancelAnimationFrame(raf);
+      raf = 0;
+    }
 
-    onShow(rootEl){
-      // Root vorbereiten
-      rootEl.innerHTML = '';
-      const wrap = el('div','spritetest-root');
-      rootEl.appendChild(wrap);
+    btnStop.onclick = ()=> stop();
 
-      // State
-      const st = {
-        running:false,
-        raf:0,
-        lastT:0,
-        t:0,
-        atlasName:'',
-        frameName:'',
-        prefix: DEFAULTS.prefix,
-        framesPerDir: DEFAULTS.framesPerDir,
-        tilesPerDir: DEFAULTS.tilesPerDir,
-        mode: DEFAULTS.mode,
-        showPlan: DEFAULTS.showPlan,
-        showTrailLine: DEFAULTS.showTrailLine,
-        showTrailDots: DEFAULTS.showTrailDots,
-        applyToGroup: DEFAULTS.applyToGroup,
-        markerType: DEFAULTS.markerType,
-        // Movement simulation position (in "tile units" for test canvas)
-        pos:{x:0,y:0},
-        planPts:[],
-        planIdx:0,
-        trail:[],
-        maxTrail: 300,
-        // for marker viewer
-        db: loadMarkerDB(),
-        status:''
-      };
+    btnStart.onclick = ()=>{
+      stop();
+      running = true;
+      dirIdx = 0;
+      stepInDir = 0;
+      frameIdx = 0;
+      tAcc = 0;
+      circlePhase = 0;
+      trail.length = 0;
+      loop();
+    };
 
-      // ---- UI Top
-      const row1 = el('div','spr-row');
-      const row2 = el('div','spr-row');
-      const row3 = el('div','spr-row');
-      wrap.appendChild(row1);
-      wrap.appendChild(row2);
-      wrap.appendChild(row3);
+    function loop(){
+      if(!running) return;
 
-      // Atlas select
-      const atlasLabel = el('div','spr-label','Atlas');
-      const atlasSel = el('select','spr-input');
-      row1.appendChild(atlasLabel); row1.appendChild(atlasSel);
+      const atlasName = atlasSel.value;
+      const atlas = getAtlas(atlasName);
 
-      // Mode select
-      const modeLabel = el('div','spr-label','Mode');
-      const modeSel = el('select','spr-input');
-      modeSel.innerHTML = `
-        <option value="unit">Unit/Animal Test (8-dir Lauf)</option>
-        <option value="frame">Frame Viewer + Marker</option>
-      `;
-      row1.appendChild(modeLabel); row1.appendChild(modeSel);
+      const prefix = (prefixIn.value || '').trim();
+      const framesPerDir = clamp(parseInt(framesIn.value||'8',10)||8, 1, 32);
+      const tilesPerDir  = clamp(parseInt(tilesIn.value||'5',10)||5, 1, 50);
 
-      // Prefix input
-      const prefixLabel = el('div','spr-label','Prefix (z.B. deer_)');
-      const prefixInp = el('input','spr-input'); prefixInp.value = st.prefix;
-      row2.appendChild(prefixLabel); row2.appendChild(prefixInp);
-
-      // Frames/Dir + Tiles/Dir
-      const fpdLabel = el('div','spr-label','Frames/Dir');
-      const fpdInp = el('input','spr-input'); fpdInp.type='number'; fpdInp.min='1'; fpdInp.max='16'; fpdInp.value = st.framesPerDir;
-      const tpdLabel = el('div','spr-label','Tiles/Dir');
-      const tpdInp = el('input','spr-input'); tpdInp.type='number'; tpdInp.min='1'; tpdInp.max='20'; tpdInp.value = st.tilesPerDir;
-      row2.appendChild(fpdLabel); row2.appendChild(fpdInp);
-      row2.appendChild(tpdLabel); row2.appendChild(tpdInp);
-
-      // Start/Stop
-      const btnRow = el('div','spr-row');
-      const startBtn = el('button','spr-btn','Start');
-      const stopBtn  = el('button','spr-btn','Stop');
-      btnRow.appendChild(startBtn); btnRow.appendChild(stopBtn);
-      wrap.appendChild(btnRow);
-
-      // Toggles
-      const togRow = el('div','spr-row');
-      const cbPlan = el('input'); cbPlan.type='checkbox'; cbPlan.checked = st.showPlan;
-      const cbTrailLine = el('input'); cbTrailLine.type='checkbox'; cbTrailLine.checked = st.showTrailLine;
-      const cbTrailDots = el('input'); cbTrailDots.type='checkbox'; cbTrailDots.checked = st.showTrailDots;
-      togRow.appendChild(el('label','spr-cb', '')); togRow.lastChild.appendChild(cbPlan); togRow.lastChild.appendChild(document.createTextNode(' Soll-Pfad'));
-      togRow.appendChild(el('label','spr-cb', '')); togRow.lastChild.appendChild(cbTrailLine); togRow.lastChild.appendChild(document.createTextNode(' Trail Linie'));
-      togRow.appendChild(el('label','spr-cb', '')); togRow.lastChild.appendChild(cbTrailDots); togRow.lastChild.appendChild(document.createTextNode(' Trail Punkte'));
-      wrap.appendChild(togRow);
-
-      // Frame picker + markers (nur in frame-mode sichtbar)
-      const framePane = el('div','spr-framepane');
-      wrap.appendChild(framePane);
-
-      const frameFilter = el('input','spr-input'); frameFilter.placeholder='Frame Filter (z.B. b.hunter oder deer_)';
-      const frameList = el('select','spr-input'); frameList.size = 8;
-
-      const markerRow = el('div','spr-row');
-      const markerTypeSel = el('select','spr-input');
-      markerTypeSel.innerHTML = `
-        <option value="entrance">Marker: Eingang/Tür</option>
-        <option value="chimney">Marker: Schornstein</option>
-        <option value="hand">Marker: Hand/Tool</option>
-        <option value="carry">Marker: Carry/Load</option>
-        <option value="tool">Marker: ToolTip/Point</option>
-      `;
-      const cbApplyGroup = el('input'); cbApplyGroup.type='checkbox'; cbApplyGroup.checked = st.applyToGroup;
-      const applyLbl = el('label','spr-cb'); applyLbl.appendChild(cbApplyGroup); applyLbl.appendChild(document.createTextNode(' PRO: auf ganze Gruppe anwenden'));
-      const exportBtn = el('button','spr-btn','Export JSON');
-      const clearBtn = el('button','spr-btn','Clear Marker (Frame)');
-      const clearGroupBtn = el('button','spr-btn','Clear Marker (Gruppe)');
-      markerRow.appendChild(markerTypeSel);
-      markerRow.appendChild(applyLbl);
-      markerRow.appendChild(exportBtn);
-      markerRow.appendChild(clearBtn);
-      markerRow.appendChild(clearGroupBtn);
-
-      framePane.appendChild(el('div','spr-label','Frame Auswahl (nur Frame-Mode)'));
-      framePane.appendChild(frameFilter);
-      framePane.appendChild(frameList);
-      framePane.appendChild(markerRow);
-
-      // Status line
-      const statusEl = el('div','spr-status','');
-      wrap.appendChild(statusEl);
-
-      // Canvas
-      const canvas = el('canvas','spr-canvas');
-      canvas.width = 520; canvas.height = 360;
-      wrap.appendChild(canvas);
-      const ctx = canvas.getContext('2d');
-
-      // Helper: Assets/Atlas Zugriff
-      function getAtlas(){
-        const A = window.Assets;
-        if (!A || !A.atlases) return null;
-        const a = A.atlases[st.atlasName];
-        return a || null;
-      }
-      function atlasOk(a){
-        return !!(a && a.ok && a.img && a.frames);
-      }
-      function setStatus(msg, isErr){
-        statusEl.innerHTML = (isErr ? '❌ ' : '✅ ') + msg;
-        statusEl.style.color = isErr ? '#ff6b6b' : '#b9ffb9';
-      }
-
-      // Atlas dropdown füllen
-      function rebuildAtlasList(){
-        atlasSel.innerHTML = '';
-        const A = window.Assets;
-        const names = (A && A.atlases) ? Object.keys(A.atlases) : [];
-        names.sort();
-        for (const n of names){
-          const opt = el('option'); opt.value = n; opt.textContent = n;
-          atlasSel.appendChild(opt);
-        }
-        st.atlasName = names[0] || '';
-        atlasSel.value = st.atlasName;
-      }
-
-      // Frame list füllen
-      function rebuildFrameList(){
-        frameList.innerHTML = '';
-        const a = getAtlas();
-        if (!atlasOk(a)) return;
-        const q = (frameFilter.value || '').trim().toLowerCase();
-        const keys = Object.keys(a.frames || {});
-        keys.sort();
-        const max = 800; // UI Schutz
-        let cnt = 0;
-        for (const k of keys){
-          if (q && !k.toLowerCase().includes(q)) continue;
-          const opt = el('option'); opt.value = k; opt.textContent = k;
-          frameList.appendChild(opt);
-          cnt++;
-          if (cnt>=max) break;
-        }
-        st.frameName = frameList.value || '';
-      }
-
-      function ensureFrame(name){
-        const a = getAtlas();
-        if (!atlasOk(a)) return null;
-        return a.frames[name] || null;
-      }
-
-      // Plan: 5 Tiles pro Richtung + kleiner Kreis
-      function buildPlan(){
-        const tile = 32; // Testcanvas tile-size (nur fürs Tool)
-        const cx = canvas.width * 0.5;
-        const cy = canvas.height * 0.55;
-
-        // Start in der Mitte
-        const pts = [{x: cx, y: cy}];
-
-        function add(dx, dy, steps){
-          const last = pts[pts.length-1];
-          pts.push({x: last.x + dx*steps, y: last.y + dy*steps});
-        }
-
-        // 8 dirs je 5 "tiles"
-        const s = st.tilesPerDir * tile;
-        add( 0,-1, s); // N
-        add( 1,-1, s); // NE
-        add( 1, 0, s); // E
-        add( 1, 1, s); // SE
-        add( 0, 1, s); // S
-        add(-1, 1, s); // SW
-        add(-1, 0, s); // W
-        add(-1,-1, s); // NW
-
-        // kleiner Kreis (8 Punkte)
-        const r = 2.2*tile;
-        const center = pts[pts.length-1];
-        for (let i=0;i<=16;i++){
-          const ang = (i/16)*Math.PI*2;
-          pts.push({x:center.x + Math.cos(ang)*r, y:center.y + Math.sin(ang)*r});
-        }
-
-        st.planPts = pts;
-        st.planIdx = 0;
-        st.pos.x = pts[0].x;
-        st.pos.y = pts[0].y;
-        st.trail = [];
-      }
-
-      // Direction aus Bewegungsvektor (Testcanvas: y+ nach unten)
-      function dirFromVec(vx, vy){
-        // 8-Sektor Mapping: Winkel 0 = E, CCW
-        const ang = Math.atan2(-vy, vx); // wichtig: -vy, damit N oben ist
-        let a = ang;
-        if (a < 0) a += Math.PI*2;
-        const sector = Math.round(a / (Math.PI/4)) % 8;
-        // Mapping sector->DIR (0=E,1=NE,2=N,3=NW,4=W,5=SW,6=S,7=SE)
-        const map = ['E','NE','N','NW','W','SW','S','SE'];
-        return map[sector];
-      }
-
-      // Frame Name für Unit-Test
-      function unitFrameName(dir, idx){
-        // Standard: <prefix><DIR>_walk_<i>
-        // Beispiel: deer_NE_walk_3
-        return `${st.prefix}${dir}_walk_${idx}`;
-      }
-
-      function drawFrame(atlasName, frameName, x, y, opts){
-        const A = window.Assets;
-        if (!A || typeof A.drawAtlasFrame !== 'function') return false;
-        try{
-          A.drawAtlasFrame(ctx, atlasName, frameName, x, y, opts || {});
-          return true;
-        }catch(e){
-          return false;
-        }
-      }
-
-      // Marker-Overlay zeichnen (Frame Viewer)
-      function drawMarkers(atlasName, frameName, drawX, drawY){
-        const a = getAtlas();
-        if (!atlasOk(a)) return;
-
-        const fr = a.frames[frameName];
-        if (!fr) return;
-
-        const pm = fr.pivot || {x: fr.frame.w/2, y: fr.frame.h};
-        // Pivot-Kreuz
-        drawCross(ctx, drawX + pm.x, drawY + pm.y, 6);
-
-        // Frame-Border
-        ctx.save();
-        ctx.strokeStyle = 'rgba(120,180,255,0.5)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(drawX, drawY, fr.frame.w, fr.frame.h);
-        ctx.restore();
-
-        // Fußlinie = Pivot-Y
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-        ctx.setLineDash([4,4]);
-        ctx.beginPath();
-        ctx.moveTo(drawX, drawY + pm.y);
-        ctx.lineTo(drawX + fr.frame.w, drawY + pm.y);
-        ctx.stroke();
-        ctx.restore();
-
-        // Custom marker points
-        const fm = getFrameMarkers(st.db, atlasName, frameName);
-        for (const [k,v] of Object.entries(fm)){
-          if (!v) continue;
-          // Farbe pro Typ
-          const col = (k==='entrance') ? 'rgba(80,255,140,0.9)'
-                    : (k==='chimney') ? 'rgba(255,120,120,0.9)'
-                    : (k==='hand') ? 'rgba(120,180,255,0.9)'
-                    : (k==='carry') ? 'rgba(255,220,80,0.9)'
-                    : 'rgba(200,200,255,0.9)';
-          ctx.save();
-          ctx.fillStyle = col;
-          ctx.beginPath();
-          ctx.arc(drawX + v.x, drawY + v.y, 5, 0, Math.PI*2);
-          ctx.fill();
-          ctx.restore();
-          drawText(ctx, drawX + v.x + 8, drawY + v.y - 6, k);
-        }
-      }
-
-      // Klick im Frame-Viewer: Marker setzen
-      function onCanvasClick(ev){
-        if (st.mode !== 'frame') return;
-        const a = getAtlas();
-        if (!atlasOk(a)) return;
-        const fr = a.frames[st.frameName];
-        if (!fr) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const mx = (ev.clientX - rect.left) * (canvas.width / rect.width);
-        const my = (ev.clientY - rect.top)  * (canvas.height / rect.height);
-
-        // Frame wird im Viewer mittig gezeichnet:
-        const drawX = (canvas.width  - fr.frame.w) * 0.5;
-        const drawY = (canvas.height - fr.frame.h) * 0.5;
-
-        // Nur innerhalb der Frame-Box
-        if (mx < drawX || my < drawY || mx > drawX + fr.frame.w || my > drawY + fr.frame.h) return;
-
-        const lx = Math.round(mx - drawX);
-        const ly = Math.round(my - drawY);
-
-        // Marker im DB setzen
-        const fm = getFrameMarkers(st.db, st.atlasName, st.frameName);
-        fm[st.markerType] = {x: lx, y: ly};
-
-        // PRO: auf Gruppe anwenden
-        if (st.applyToGroup){
-          const gk = deriveGroupKey(st.frameName);
-          const groupFrames = listFramesForGroup(a, gk);
-          for (const fn of groupFrames){
-            const gm = getFrameMarkers(st.db, st.atlasName, fn);
-            gm[st.markerType] = {x: lx, y: ly};
-          }
-        }
-
-        saveMarkerDB(st.db);
-      }
-
-      canvas.addEventListener('click', onCanvasClick);
-
-      /* ---------------- UI Events ---------------- */
-
-      atlasSel.addEventListener('change', ()=>{
-        st.atlasName = atlasSel.value;
-        rebuildFrameList();
-        renderOnce();
-      });
-      modeSel.addEventListener('change', ()=>{
-        st.mode = modeSel.value;
-        framePane.style.display = (st.mode === 'frame') ? 'block' : 'none';
-        renderOnce();
-      });
-      prefixInp.addEventListener('input', ()=>{ st.prefix = prefixInp.value; });
-      fpdInp.addEventListener('input', ()=>{ st.framesPerDir = clamp(safeNum(fpdInp.value,8),1,16); });
-      tpdInp.addEventListener('input', ()=>{ st.tilesPerDir = clamp(safeNum(tpdInp.value,5),1,40); buildPlan(); renderOnce(); });
-
-      cbPlan.addEventListener('change', ()=>{ st.showPlan = cbPlan.checked; renderOnce(); });
-      cbTrailLine.addEventListener('change', ()=>{ st.showTrailLine = cbTrailLine.checked; renderOnce(); });
-      cbTrailDots.addEventListener('change', ()=>{ st.showTrailDots = cbTrailDots.checked; renderOnce(); });
-
-      frameFilter.addEventListener('input', ()=>{ rebuildFrameList(); renderOnce(); });
-      frameList.addEventListener('change', ()=>{ st.frameName = frameList.value; renderOnce(); });
-
-      markerTypeSel.addEventListener('change', ()=>{ st.markerType = markerTypeSel.value; renderOnce(); });
-      cbApplyGroup.addEventListener('change', ()=>{ st.applyToGroup = cbApplyGroup.checked; });
-
-      exportBtn.addEventListener('click', ()=>{
-        const a = getAtlas();
-        if (!atlasOk(a)) { setStatus('Atlas nicht ok/geladen.', true); return; }
-        // Export: nur aktueller Frame ODER ganze Gruppe (falls applyToGroup aktiv)
-        const out = { atlas: st.atlasName, frames: {} };
-        if (!st.frameName) { setStatus('Kein Frame ausgewählt.', true); return; }
-
-        const frames = st.applyToGroup ? listFramesForGroup(a, deriveGroupKey(st.frameName)) : [st.frameName];
-        for (const fn of frames){
-          const fm = getFrameMarkers(st.db, st.atlasName, fn);
-          if (fm && Object.keys(fm).length) out.frames[fn] = fm;
-        }
-        const txt = JSON.stringify(out, null, 2);
-        navigator.clipboard?.writeText(txt).catch(()=>{});
-        alert('Marker-JSON wurde in die Zwischenablage kopiert (wenn Browser es erlaubt).');
-      });
-
-      clearBtn.addEventListener('click', ()=>{
-        if (!st.frameName) return;
-        st.db[st.atlasName] = st.db[st.atlasName] || {};
-        st.db[st.atlasName][st.frameName] = {};
-        saveMarkerDB(st.db);
-        renderOnce();
-      });
-
-      clearGroupBtn.addEventListener('click', ()=>{
-        const a = getAtlas();
-        if (!atlasOk(a) || !st.frameName) return;
-        const frames = listFramesForGroup(a, deriveGroupKey(st.frameName));
-        for (const fn of frames){
-          st.db[st.atlasName] = st.db[st.atlasName] || {};
-          st.db[st.atlasName][fn] = {};
-        }
-        saveMarkerDB(st.db);
-        renderOnce();
-      });
-
-      startBtn.addEventListener('click', ()=>{
-        st.running = true;
-        buildPlan();
-        st.lastT = performance.now();
-        tick();
-      });
-
-      stopBtn.addEventListener('click', ()=>{
-        st.running = false;
-        if (st.raf) cancelAnimationFrame(st.raf);
-        st.raf = 0;
-        renderOnce();
-      });
-
-      /* ---------------- Render/Tick ---------------- */
-
-      function renderOnce(){
-        const a = getAtlas();
+      if(!isAtlasOk(atlas)){
         clearCanvas(ctx, canvas.width, canvas.height);
-
-        if (!st.atlasName) { setStatus('Kein Atlas vorhanden.', true); return; }
-        if (!atlasOk(a)) {
-          setStatus(`Atlas "${st.atlasName}" ist nicht ok/geladen.`, true);
-          return;
-        }
-
-        if (st.mode === 'frame') {
-          framePane.style.display = 'block';
-          setStatus(`Frame-Viewer aktiv. Klicke in den Frame um Marker zu setzen.`, false);
-
-          // Frame wählen
-          if (!st.frameName) st.frameName = frameList.value || '';
-          const fr = a.frames[st.frameName];
-          if (!fr) { setStatus(`Frame fehlt: ${st.frameName}`, true); return; }
-
-          const drawX = (canvas.width  - fr.frame.w) * 0.5;
-          const drawY = (canvas.height - fr.frame.h) * 0.5;
-
-          // Draw sprite
-          const ok = drawFrame(st.atlasName, st.frameName, drawX, drawY, { alpha: 1.0 });
-          if (!ok) { setStatus(`Draw fehlgeschlagen: ${st.frameName}`, true); return; }
-
-          // Overlay Markers + Pivot
-          drawMarkers(st.atlasName, st.frameName, drawX, drawY);
-
-          // Debug
-          const pv = fr.pivot || {x: fr.frame.w/2, y: fr.frame.h};
-          drawText(ctx, 10, 16, `Atlas: ${st.atlasName}`);
-          drawText(ctx, 10, 32, `Frame: ${st.frameName}`);
-          drawText(ctx, 10, 48, `Pivot(px): ${pv.x.toFixed(1)}, ${pv.y.toFixed(1)}  |  Anchor: ${(pv.x/fr.frame.w).toFixed(3)}, ${(pv.y/fr.frame.h).toFixed(3)}`);
-          drawText(ctx, 10, 64, `PRO-Gruppe: ${deriveGroupKey(st.frameName)}  (${listFramesForGroup(a, deriveGroupKey(st.frameName)).length} Frames)`);
-          return;
-        }
-
-        // Unit/Animal-Test
-        framePane.style.display = 'none';
-        setStatus(`Unit-Test aktiv. DIR-Reihenfolge: ${DIRS.join('→')}. Frame0=Idle.`, false);
-
-        // Sollpfad zeichnen
-        if (st.showPlan && st.planPts.length) drawDashed(ctx, st.planPts);
-
-        // Trail zeichnen
-        if (st.showTrailLine && st.trail.length) drawLine(ctx, st.trail);
-        if (st.showTrailDots && st.trail.length){
-          for (let i=0;i<st.trail.length;i+=6) drawDot(ctx, st.trail[i].x, st.trail[i].y, 2);
-        }
-
-        // Aktuelles Target
-        const p0 = st.planPts[st.planIdx] || st.planPts[0];
-        const p1 = st.planPts[st.planIdx+1] || p0;
-
-        // Richtung aus Vektor
-        const vx = p1.x - st.pos.x;
-        const vy = p1.y - st.pos.y;
-        const dir = dirFromVec(vx, vy);
-
-        // Laufphase
-        const phase = Math.floor((st.t/120) % st.framesPerDir); // 120ms pro Frame
-        const fn = unitFrameName(dir, phase);
-
-        // Frame draw (centered on pos)
-        // Wir zeichnen so, dass Pivot im Mittelpunkt der Bewegung liegt:
-        const fr = ensureFrame(fn) || ensureFrame(unitFrameName(dir,0)); // fallback auf idle
-        if (!fr) {
-          drawText(ctx, 10, 16, `Fehlende Frames, z.B.: ${fn}`);
-          return;
-        }
-        const pv = fr.pivot || {x: fr.frame.w/2, y: fr.frame.h};
-        const drawX = st.pos.x - pv.x;
-        const drawY = st.pos.y - pv.y;
-
-        drawFrame(st.atlasName, fr.__name || fn, drawX, drawY, { alpha: 1.0 });
-        // Pivot
-        drawCross(ctx, st.pos.x, st.pos.y, 6);
-
-        drawText(ctx, 10, 16, `Atlas: ${st.atlasName}`);
-        drawText(ctx, 10, 32, `Prefix: ${st.prefix}`);
-        drawText(ctx, 10, 48, `DIR: ${dir}  Frame: ${phase}  Name: ${fn}`);
-        drawText(ctx, 10, 64, `Pivot(px): ${pv.x.toFixed(1)}, ${pv.y.toFixed(1)}  |  Anchor: ${(pv.x/fr.frame.w).toFixed(3)}, ${(pv.y/fr.frame.h).toFixed(3)}`);
+        setStatus('err', `✖ Atlas "${atlasName}" ist nicht ok/geladen.\n(Tipp: Pfade in core/asset.js prüfen + 404 im Network)`);
+        raf = requestAnimationFrame(loop);
+        return;
       }
 
-      function tick(){
-        if (!st.running) return;
+      const A = getAssets();
+      if(!A || typeof A.drawAtlasFrame !== 'function'){
+        clearCanvas(ctx, canvas.width, canvas.height);
+        setStatus('err', '✖ Assets.drawAtlasFrame() nicht gefunden.');
+        raf = requestAnimationFrame(loop);
+        return;
+      }
 
-        const now = performance.now();
-        const dt = now - st.lastT;
-        st.lastT = now;
-        st.t += dt;
+      // Timing
+      const dt = 16.67;
+      tAcc += dt;
 
-        // Bewegung entlang Plan
-        if (st.planPts.length >= 2){
-          const a = getAtlas();
-          const speed = 0.12 * dt; // px/ms -> ca. 120px/s
-          const tgt = st.planPts[st.planIdx+1] || st.planPts[st.planIdx];
-          const dx = tgt.x - st.pos.x;
-          const dy = tgt.y - st.pos.y;
-          const dist = Math.hypot(dx,dy);
+      // Frame: ~8 FPS
+      if(tAcc >= 120){
+        tAcc = 0;
+        frameIdx = (frameIdx + 1) % framesPerDir;
+      }
 
-          if (dist < 1.5){
-            st.planIdx++;
-            if (st.planIdx >= st.planPts.length-2){
-              st.planIdx = 0; // loop
-              st.pos.x = st.planPts[0].x;
-              st.pos.y = st.planPts[0].y;
-              st.trail = [];
-            }
-          } else {
-            st.pos.x += (dx/dist) * speed;
-            st.pos.y += (dy/dist) * speed;
+      // Richtung wechseln: alle ~350ms ein Tile
+      if(!loop._moveAcc) loop._moveAcc = 0;
+      loop._moveAcc += dt;
+      if(loop._moveAcc >= 350){
+        loop._moveAcc = 0;
+
+        if(circlePhase === 0){
+          stepInDir++;
+          if(stepInDir >= tilesPerDir){
+            stepInDir = 0;
+            dirIdx = (dirIdx + 1) % DIRS.length;
+            if(dirIdx === 0) circlePhase = 1; // danach Kreis
           }
-
-          // Trail (Pivot-Punkt)
-          st.trail.push({x: st.pos.x, y: st.pos.y});
-          if (st.trail.length > st.maxTrail) st.trail.splice(0, st.trail.length - st.maxTrail);
+        } else {
+          const ring = ['E','E','SE','SE','S','S','SW','SW','W','W','NW','NW','N','N','NE','NE'];
+          const di = ring[(circlePhase-1) % ring.length];
+          dirIdx = DIRS.indexOf(di);
+          circlePhase++;
+          if(circlePhase > ring.length*3) circlePhase = 1;
         }
-
-        renderOnce();
-        st.raf = requestAnimationFrame(tick);
       }
 
-      /* ---------------- Init ---------------- */
+      const dir = DIRS[dirIdx];
+      const key = buildWalkKey(prefix, dir, frameIdx);
 
-      // Minimal CSS (inspektor-intern)
-      const style = el('style');
-      style.textContent = `
-        .spritetest-root{ font-family: ui-monospace, Menlo, Monaco, monospace; padding:10px; }
-        .spr-row{ display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap:wrap; }
-        .spr-label{ opacity:0.85; min-width:140px; }
-        .spr-input{ background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); color:#fff; padding:6px 8px; border-radius:8px; }
-        .spr-btn{ background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.22); color:#fff; padding:6px 10px; border-radius:10px; }
-        .spr-status{ margin-top:8px; padding:8px 10px; background:rgba(0,0,0,0.25); border-radius:10px; border:1px solid rgba(255,255,255,0.12); }
-        .spr-canvas{ width:100%; max-width:520px; border:1px solid rgba(255,255,255,0.12); border-radius:10px; margin-top:10px; }
-        .spr-cb{ display:flex; gap:6px; align-items:center; opacity:0.9; }
-        .spr-framepane{ margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.15); }
-      `;
-      wrap.appendChild(style);
-
-      rebuildAtlasList();
-
-      // Default atlas: wenn deer_sprite_atlas vorhanden, direkt wählen
-      const A = window.Assets;
-      if (A && A.atlases && A.atlases['deer_sprite_atlas']){
-        st.atlasName = 'deer_sprite_atlas';
-        atlasSel.value = st.atlasName;
+      const meta = getFrameMeta(atlas, key);
+      if(!meta){
+        clearCanvas(ctx, canvas.width, canvas.height);
+        setStatus('warn', `⚠ Frame fehlt: ${key}\nAtlas: ${atlasName}\nPrefix: "${prefix}" | DIR=${dir} frame=${frameIdx}`);
+        raf = requestAnimationFrame(loop);
+        return;
       }
 
-      modeSel.value = st.mode;
-      framePane.style.display = (st.mode === 'frame') ? 'block' : 'none';
+      // --- draw ---
+      clearCanvas(ctx, canvas.width, canvas.height);
 
-      buildPlan();
-      // Frames list erst aufbauen, wenn Atlas ok ist
-      setTimeout(()=>{ rebuildFrameList(); renderOnce(); }, 0);
+      // erwarteter Pivot-Punkt im Canvas
+      const cx = canvas.width * 0.5;
+      const cy = canvas.height * 0.70;
 
-      // onHide cleanup (wenn Inspector es unterstützt)
-      TAB.onHide = function(){
-        st.running = false;
-        if (st.raf) cancelAnimationFrame(st.raf);
-        st.raf = 0;
-      };
+      // Trail (Pivot-Position)
+      if(chkTrail.box.checked){
+        trail.push({x:cx, y:cy});
+        if(trail.length > TRAIL_MAX) trail.splice(0, trail.length - TRAIL_MAX);
+        drawTrail(ctx, trail);
+      }
+
+      // Sprite
+      A.drawAtlasFrame(atlasName, key, cx, cy, { ctx });
+
+      // Meta -> Box ableiten
+      const fw = meta.frame && meta.frame.w ? meta.frame.w : 128;
+      const fh = meta.frame && meta.frame.h ? meta.frame.h : 128;
+      const pv = meta.pivot || { x: fw/2, y: fh }; // fallback: bottom-center
+      const topLeftX = cx - pv.x;
+      const topLeftY = cy - pv.y;
+
+      if(chkFoot.box.checked) drawFootLine(ctx, cy, canvas.width);
+      if(chkBox.box.checked)  drawBox(ctx, topLeftX, topLeftY, fw, fh);
+      if(chkPivot.box.checked) drawCrosshair(ctx, cx, cy);
+
+      const ax = (pv.x / fw).toFixed(2);
+      const ay = (pv.y / fh).toFixed(2);
+
+      setStatus('ok',
+        `✔ Atlas ok: ${atlasName}\n`+
+        `Frame: ${key}\n`+
+        `DIR=${dir} frame=${frameIdx}/${framesPerDir-1} | tilesPerDir=${tilesPerDir}\n`+
+        `Pivot(px): x=${pv.x}, y=${pv.y} | Anchor(norm): x=${ax}, y=${ay}\n`+
+        `BBox: w=${fw}, h=${fh}\n`+
+        `Hinweis: Wenn es "wackelt", liegt es fast immer an pivot/footline im 128×128 Frame.`
+      );
+
+      raf = requestAnimationFrame(loop);
     }
-  };
 
-  // Tab registrieren (robust)
-  registerTabSafely(TAB);
+    // cleanup wenn Tab neu gerendert wird
+    root._spritetest_cleanup = ()=> stop();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Registrierung (robust, wie die anderen Tabs)
+  // ---------------------------------------------------------------------------
+  function registerNow(){
+    if(typeof window.registerInspectorTab !== 'function') return false;
+    window.registerInspectorTab(TAB_KEY, renderSpriteTest);
+    return true;
+  }
+
+  // sofort versuchen
+  if(!registerNow()){
+    // Fallback: ein paar Mal versuchen (iOS Lade-Reihenfolge)
+    let tries = 0;
+    const t = setInterval(()=>{
+      tries++;
+      if(registerNow() || tries > 60) clearInterval(t);
+    }, 150);
+  }
 
 })();
