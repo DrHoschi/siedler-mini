@@ -279,6 +279,13 @@
     running: false,
     raf: 0,
 
+    // Mode:
+    //  - ANIM    : 8-Richtungen Walk-Test (wie bisher)
+    //  - PREVIEW : einzelnes Frame aus Atlas rendern (für Buildings/Deko/Icons)
+    mode: 'ANIM',
+    previewFilter: '',
+    previewFrame: '',
+
     atlas: '',
     prefix: 'deer_',
     framesPerDir: 8,
@@ -309,10 +316,9 @@
     try{
       // Basic root styling
       root.innerHTML = '';
-      root.style.padding = '6px';
+      root.style.padding = '8px';
       root.style.color = '#fff';
       root.style.fontFamily = 'monospace';
-      root.style.fontSize = '13px';
 
       // UI builders
       const row = (label, el)=>{
@@ -334,6 +340,17 @@
         s.style.padding = '6px';
         s.style.borderRadius = '8px';
         return s;
+      };
+
+      const mkText = (val='')=>{
+        const i = document.createElement('input');
+        i.type = 'text';
+        i.value = val;
+        i.placeholder = '';
+        i.style.width = '100%';
+        i.style.padding = '6px';
+        i.style.borderRadius = '8px';
+        return i;
       };
 
       const mkInput = (val)=>{
@@ -385,9 +402,31 @@
       }
 
       // Widgets
+      // Mode selector
+      const modeSel = mkSel();
+      {
+        const o1 = document.createElement('option');
+        o1.value = 'ANIM';
+        o1.textContent = 'Anim (8 Richtungen / Walk)';
+        modeSel.appendChild(o1);
+        const o2 = document.createElement('option');
+        o2.value = 'PREVIEW';
+        o2.textContent = 'Preview (einzelnes Frame)';
+        modeSel.appendChild(o2);
+        modeSel.value = S.mode;
+      }
+
       const atlasSel  = mkSel();
       const prefixSel = mkSel();
       const prefixIn  = mkInput(S.prefix);
+
+      // Preview controls (A): Frame-Dropdown + Filter
+      const previewWrap = document.createElement('div');
+      previewWrap.style.display = (S.mode === 'PREVIEW') ? 'block' : 'none';
+      // Text-Input (mkText gibt es in diesem Projekt nicht -> mkInput verwenden)
+      const frameFilterIn = mkInput(S.previewFilter);
+      frameFilterIn.placeholder = 'Filter (z.B. "b.hq" oder "frame_0_0")';
+      const frameSel = mkSel();
 
       const framesIn = mkNum(S.framesPerDir, 1, 32);
       const tilesIn  = mkNum(S.tilesPerDir,  1, 30);
@@ -482,7 +521,33 @@
       canvas.style.background='rgba(0,0,0,0.25)';
 
       // Layout
+      row('Modus', modeSel);
       row('Atlas', atlasSel);
+
+      // Preview UI (wird dynamisch gezeigt/hidden)
+      {
+        const r1 = document.createElement('div');
+        r1.style.margin = '6px 0';
+        const l1 = document.createElement('div');
+        l1.textContent = 'Frame-Filter';
+        l1.style.opacity = '0.85';
+        l1.style.marginBottom = '4px';
+        r1.appendChild(l1);
+        r1.appendChild(frameFilterIn);
+
+        const r2 = document.createElement('div');
+        r2.style.margin = '6px 0';
+        const l2 = document.createElement('div');
+        l2.textContent = 'Frame auswählen';
+        l2.style.opacity = '0.85';
+        l2.style.marginBottom = '4px';
+        r2.appendChild(l2);
+        r2.appendChild(frameSel);
+
+        previewWrap.appendChild(r1);
+        previewWrap.appendChild(r2);
+        root.appendChild(previewWrap);
+      }
       row('Prefix-Picker (aus Atlas)', prefixSel);
       row('Prefix (manuell)', prefixIn);
 
@@ -590,6 +655,34 @@
           status.style.color='#a7ff9a';
           setTimeout(()=>{ status.style.color='#ff6b6b'; }, 1200);
         }
+
+        // Preview frame list (A)
+        frameSel.innerHTML='';
+        if(atlasName){
+          const frames = listFrames(atlasName);
+          const f = String(frameFilterIn.value || '').trim().toLowerCase();
+          const filtered = f ? frames.filter(n => String(n).toLowerCase().includes(f)) : frames;
+
+          const o0 = document.createElement('option');
+          o0.value='';
+          o0.textContent = filtered.length ? '– Frame wählen –' : '– keine Frames –';
+          frameSel.appendChild(o0);
+
+          for(const n of filtered){
+            const o = document.createElement('option');
+            o.value = n;
+            o.textContent = n;
+            frameSel.appendChild(o);
+          }
+
+          // keep selection if still present
+          if (S.previewFrame && filtered.includes(S.previewFrame)) frameSel.value = S.previewFrame;
+        } else {
+          const o0 = document.createElement('option');
+          o0.value='';
+          o0.textContent='– erst Atlas wählen –';
+          frameSel.appendChild(o0);
+        }
       }
 
       function rebuildPlan(){
@@ -634,19 +727,26 @@
         const atlas = getAtlasByName(S.atlas);
         const ok = isAtlasOk(atlas);
 
-        // choose direction
-        let dir = 'E';
-        if(S.dirLock !== 'AUTO') dir = S.dirLock;
-        else if(S.plan.length >= 2){
-          const maxSeg = (S.plan.length - 1);
-          const a = S.plan[S.segIdx % maxSeg];
-          const b = S.plan[(S.segIdx + 1) % maxSeg];
-          dir = vecToDir(b.x - a.x, b.y - a.y);
-        }
+        // Preview zeichnet immer in der Mitte, Anim nutzt Pfad.
+        const pivotX = (S.mode === 'PREVIEW') ? (CANVAS_W * 0.5) : S.x;
+        const pivotY = (S.mode === 'PREVIEW') ? (CANVAS_H * 0.65) : S.y;
 
-        const frameName = buildFrameName(S.prefix, dir, 0); // idle
-        const pivotX = S.x;
-        const pivotY = S.y;
+        let frameName = '';
+        if (S.mode === 'PREVIEW'){
+          frameName = String(frameSel.value || S.previewFrame || '').trim();
+          S.previewFrame = frameName;
+        } else {
+          // choose direction
+          let dir = 'E';
+          if(S.dirLock !== 'AUTO') dir = S.dirLock;
+          else if(S.plan.length >= 2){
+            const maxSeg = (S.plan.length - 1);
+            const a = S.plan[S.segIdx % maxSeg];
+            const b = S.plan[(S.segIdx + 1) % maxSeg];
+            dir = vecToDir(b.x - a.x, b.y - a.y);
+          }
+          frameName = buildFrameName(S.prefix, dir, 0); // idle
+        }
 
         if(!S.atlas){
           status.textContent='✖ Bitte Atlas auswählen.';
@@ -678,7 +778,7 @@
           ctx.globalAlpha=0.85;
           ctx.fillStyle='#ffaaaa';
           ctx.font='14px monospace';
-          ctx.fillText(`Frame nicht gefunden: ${frameName}`, 12, 22);
+          ctx.fillText(`Frame nicht gefunden: ${frameName || '(leer)'}`, 12, 22);
           ctx.restore();
           if(chkPivot.box.checked) drawCrosshair(ctx, pivotX, pivotY);
         }
@@ -686,6 +786,13 @@
 
       function tick(ts){
         if(!S.running){ S.raf = 0; return; }
+
+        // Preview hat keine Bewegung/Animation – wir rendern einfach „standbild“.
+        if (S.mode === 'PREVIEW'){
+          drawOnce();
+          S.raf = requestAnimationFrame(tick);
+          return;
+        }
 
         if(!S.lastTs) S.lastTs = ts;
         const dt = Math.max(0.0, (ts - S.lastTs) / 1000);
@@ -826,6 +933,25 @@
       atlasSel.addEventListener('change', ()=>{
         S.atlas = atlasSel.value;
         repopulate();
+        drawOnce();
+      });
+
+      modeSel.addEventListener('change', ()=>{
+        S.mode = modeSel.value || 'ANIM';
+        previewWrap.style.display = (S.mode === 'PREVIEW') ? 'block' : 'none';
+        // Stop anim if switching to preview
+        if (S.mode === 'PREVIEW') S.running = false;
+        drawOnce();
+      });
+
+      frameFilterIn.addEventListener('input', ()=>{
+        S.previewFilter = String(frameFilterIn.value || '');
+        repopulate();
+        drawOnce();
+      });
+
+      frameSel.addEventListener('change', ()=>{
+        S.previewFrame = frameSel.value || '';
         drawOnce();
       });
 
