@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-02T14:07:50.479Z",
+  "createdAt": "2026-01-03T02:21:12.963Z",
   "root": ".",
-  "count": 569,
+  "count": 571,
   "entries": [
     {
       "type": "dir",
@@ -67,12 +67,12 @@
     {
       "type": "file",
       "path": "assets/animals/deer_sprite_atlas.png",
-      "size": 668177
+      "size": 1157006
     },
     {
       "type": "file",
-      "path": "assets/animals/fox_atlas.json",
-      "size": 26142
+      "path": "assets/animals/fox_sprite_atlas.png",
+      "size": 865335
     },
     {
       "type": "file",
@@ -445,17 +445,22 @@
     {
       "type": "file",
       "path": "assets/icons/buildings/b.fisher.png",
-      "size": 99587
+      "size": 1323518
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/buildings/b.house_middle.png",
+      "size": 1104502
     },
     {
       "type": "file",
       "path": "assets/icons/buildings/b.house_small.png",
-      "size": 1761817
+      "size": 1185246
     },
     {
       "type": "file",
       "path": "assets/icons/buildings/b.hq.png",
-      "size": 340558
+      "size": 1381268
     },
     {
       "type": "file",
@@ -465,12 +470,12 @@
     {
       "type": "file",
       "path": "assets/icons/buildings/b.lumberjack.png",
-      "size": 106970
+      "size": 1110976
     },
     {
       "type": "file",
       "path": "assets/icons/buildings/b.quarry.png",
-      "size": 104839
+      "size": 1120484
     },
     {
       "type": "file",
@@ -1496,7 +1501,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 24669
+      "size": 24687
     },
     {
       "type": "file",
@@ -1701,7 +1706,7 @@
     {
       "type": "file",
       "path": "core/map.animals.js",
-      "size": 10088
+      "size": 13011
     },
     {
       "type": "file",
@@ -1820,6 +1825,11 @@
       "type": "file",
       "path": "data/atlases/fishman-sprite_atlas.json",
       "size": 1612
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/fox_sprite_atlas.json",
+      "size": 26171
     },
     {
       "type": "file",
@@ -2114,7 +2124,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.spritetest-v1.js",
-      "size": 13945
+      "size": 29127
     },
     {
       "type": "file",
@@ -2749,17 +2759,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 56797
+      "size": 56933
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22230
+      "size": 22304
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 18134
+      "size": 18129
     },
     {
       "type": "file",
