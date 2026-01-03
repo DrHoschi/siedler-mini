@@ -1,0 +1,138 @@
+/* ============================================================================
+ * Datei   : inspector/ui-inspector-v1.css
+ * Version : v25.11.01-final
+ * Zweck   : Layout für Overlay, Tabs und FAB (Zahnrad)
+ * ========================================================================== */
+
+/* ---- Host/Overlay ------------------------------------------------------- */
+#inspector.inspector-host{
+  position: fixed;
+  inset: 0;
+  display: none;                         /* sichtbar via Body-Flag */
+  z-index: 99998;                        /* unter FAB */
+  background: rgba(18,18,20,.96);
+  color: #eee;
+  pointer-events: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+body.is-inspector #inspector{ display: block !important; }
+body.inspector-open #inspector{ display: block !important; } /* Legacy */
+
+/* Shell + Grundaufbau */
+#inspector .insp-shell{ position:absolute; inset: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); display:flex; flex-direction:column; }
+#inspector .insp-header{ background:#1f1f23; padding:8px; border:1px solid #2b2b30; border-radius:8px 8px 0 0; }
+#inspector .insp-tabs{ display:flex; gap:6px; flex-wrap:wrap; }
+#inspector .insp-content{ flex:1; overflow:auto; padding:10px; background:#151518;
+  border:1px solid #2b2b30; border-top:none; border-radius:0 0 8px 8px; }
+
+/* Tabs/Buttons */
+.insp-tab{ background:#2a2a2e; color:#ccc; border:none; padding:5px 10px; cursor:pointer; border-radius:8px; line-height:1.2; }
+.insp-tab.active{ background:#4a4a50; color:#fff; }
+
+/* Tabellen */
+.insp-table{ width:100%; border-collapse:collapse; font-size:12px; }
+.insp-table th,.insp-table td{ border:1px solid #2b2b30; padding:4px 6px; }
+.insp-table thead th{ background:#202024; color:#cfd3ff; text-align:left; }
+
+/* Panels sicher sichtbar/unsichtbar schalten */
+#inspector .insp-content > section{ display:block; }
+#inspector .insp-content > section[hidden]{ display:none !important; }
+
+/* ---- FAB (Zahnrad) ------------------------------------------------------ */
+#inspector-fab{
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 100000;                        /* über Overlay/HUD/Canvas */
+  width: 48px; height: 48px;
+  border: 0; border-radius: 50%;
+  background: var(--insp-header,#2a2a2e); color: #eee;
+  font-size: 22px; line-height: 48px; text-align: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,.35);
+  cursor: pointer; transition: transform .15s ease, opacity .15s ease;
+}
+#inspector-fab:hover{ transform: scale(1.05); opacity:.9; }
+
+/* FAB bleibt auch geöffnet klickbar (wenn du ausblenden willst, hier auf display:none ändern) */
+body.is-inspector #inspector-fab{
+  opacity: 1 !important; pointer-events: auto !important; display: block !important;
+}
+
+/* Mobile-Feintuning */
+@media (max-width:900px){
+  #inspector-fab{ right: calc(12px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); }
+}
+/* ============================================================================
+   [Logs-Tab Farbcodierung]
+   Zweck : Farbige Hervorhebung der Log-Typen (info/warn/error/debug)
+   Gültig: innerh. #inspector
+   ========================================================================= */
+#inspector [data-panel="logs"] table.insp-table tbody tr td {
+  padding: 4px 6px;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.3em;
+}
+
+#inspector [data-panel="logs"] tbody tr:nth-child(odd) {
+  background: rgba(255,255,255,0.02);
+}
+
+/* Farbcodes pro Typ */
+#inspector [data-panel="logs"] tbody tr td:nth-child(2):contains("info") {
+  color: #8ab4f8;
+}
+#inspector [data-panel="logs"] tbody tr td:nth-child(2):contains("warn") {
+  color: #ffcc00;
+}
+#inspector [data-panel="logs"] tbody tr td:nth-child(2):contains("error") {
+  color: #ff6666;
+}
+#inspector [data-panel="logs"] tbody tr td:nth-child(2):contains("debug") {
+  color: #64e986;
+}
+
+/* Alternativ ohne :contains – stabilere Variante über Klassen */
+#inspector [data-panel="logs"] tbody tr.log-info td:nth-child(2) { color: #8ab4f8; }
+#inspector [data-panel="logs"] tbody tr.log-warn td:nth-child(2) { color: #ffcc00; }
+#inspector [data-panel="logs"] tbody tr.log-error td:nth-child(2){ color: #ff6666; }
+#inspector [data-panel="logs"] tbody tr.log-debug td:nth-child(2){ color: #64e986; }
+
+/* Toolbar-Anpassung */
+#inspector [data-panel="logs"] .insp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: .4rem;
+}
+
+#inspector [data-panel="logs"] .insp-btn {
+  background: #2a2a2e;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #ddd;
+  padding: .2rem .5rem;
+  font-size: 13px;
+  cursor: pointer;
+}
+#inspector [data-panel="logs"] .insp-btn:hover {
+  background: #35353a;
+}
+/* ---------------------------------------------------------------------------
+ * RESPONSIVE: Inspector auf kleinen Screens (iPhone / iPad SplitView)
+ * Ziel: kein abgeschnittener Inhalt, weniger "Luft", bessere Scrollbarkeit.
+ * ------------------------------------------------------------------------- */
+@media (max-height: 820px){
+  #inspector .insp-shell{ inset: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); }
+  #inspector .insp-header{ padding: 6px 8px; }
+  #inspector .insp-tabs{ gap: 6px; }
+  .insp-tab{ padding:4px 8px; font-size: 12px; }
+  #inspector .insp-content{ padding: 8px; }
+}
+/* Extra klein (Landscape iPhone) */
+@media (max-height: 520px){
+  #inspector .insp-header{ padding: 4px 6px; }
+  #inspector .insp-content{ padding: 6px; }
+  .insp-tab{ padding:3px 7px; font-size: 11px; }
+}
