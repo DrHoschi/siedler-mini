@@ -44,7 +44,6 @@ body.inspector-open #inspector-overlay {
 ============================================================================ */
 .insp-shell {
   position: absolute;
-  /* Default: Desktop */
   inset: 32px;
   display: grid;
   grid-template-rows: auto 1fr;
@@ -53,39 +52,6 @@ body.inspector-open #inspector-overlay {
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0,0,0,.4);
   overflow: hidden;
-}
-
-/* ==========================================================================
-   Responsive: iPhone/iPad – Inspector muss vollständig in den Viewport passen
-   (inkl. Safe-Area). Ziel: keine abgeschnittenen Controls/Canvas.
-   ======================================================================= */
-
-@media (max-width: 900px) {
-  .insp-shell {
-    /* mehr Platz auf kleinen Displays */
-    inset: 12px;
-    border-radius: 10px;
-  }
-  .insp-header { padding: 6px; }
-  .insp-tab { padding: 4px 8px; font-size: 12px; }
-  .insp-content { padding: 6px 8px; }
-}
-
-@media (max-width: 520px) {
-  .insp-shell { inset: 6px; }
-  .insp-tabs { gap: 4px; }
-  .insp-tab { padding: 3px 7px; font-size: 12px; }
-}
-
-/* iOS Safe-Area: verhindert, dass Header/Buttons unter Notch/Home-Bar liegen */
-@supports (padding: env(safe-area-inset-top)) {
-  .insp-shell {
-    inset:
-      calc(6px + env(safe-area-inset-top))
-      calc(6px + env(safe-area-inset-right))
-      calc(6px + env(safe-area-inset-bottom))
-      calc(6px + env(safe-area-inset-left));
-  }
 }
 
 .insp-header {
@@ -237,3 +203,32 @@ body.inspector-open #btn-inspector { /* bleibt sichtbar */ }
 
 /* Safety: Overlay-Layout */
 #inspector, #inspector-overlay { position:fixed; inset:0; }
+
+/* ============================================================================
+   [7] MOBILE FIT TWEAKS
+   - Auf iPhone/iPad (Safari) war der Inspector-Inhalt teils zu "groß", sodass
+     der Preview-Bereich unten abgeschnitten wurde.
+   - Wir skalieren NICHT per transform (macht Touch/Scrolling kaputt), sondern
+     reduzieren Abstände + Schrift minimal und geben dem Content mehr Höhe.
+============================================================================ */
+@media (max-width: 600px){
+  #inspector, #inspector-overlay{
+    /* weniger Rand -> mehr Platz für Inhalt */
+    padding: 8px;
+  }
+  #inspector .insp-shell, #inspector-overlay .insp-shell{
+    inset: 8px;
+  }
+  #inspector .insp-content, #inspector-overlay .insp-content{
+    padding: 8px;
+    gap: 8px;
+  }
+  #inspector .insp-tabs button, #inspector-overlay .insp-tabs button{
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  #inspector .insp-close, #inspector-overlay .insp-close{
+    width: 32px;
+    height: 32px;
+  }
+}
