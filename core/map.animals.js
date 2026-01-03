@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei    : core/map.animals.js
- * Version  : v25.12.29-animals-v2-mapready-ySort-tick
+ * Version  : v26.01.13-animals-no-water-deerSpriteAtlas
  *
  * Zweck:
  *   - Rehe & Füchse als "dynamische Ressourcen" (wandern auf der Map)
@@ -29,10 +29,15 @@
     targetJitterPx: 96,                   // Zielpunkt im Umkreis
     retargetEverySec: [1.8, 4.2],          // Zufallsintervall
     // Draw
-    atlas: { deer:'deer_atlas', fox:'fox_atlas' },
+    // IMPORTANT: deer MUST match core/asset.js loadAtlas('deer_sprite_atlas', ...)
+    atlas: { deer:'deer_sprite_atlas', fox:'fox_atlas' },
     framePrefix: { deer:'deer', fox:'fox' },
     // Für später: Jagd/Respawn
-    respawnSec: { deer: 18, fox: 24 }
+    respawnSec: { deer: 18, fox: 24 },
+
+    // Water avoidance
+    avoidWater: true,
+    landPickTries: 18
   };
 
   // ------------------------------------------------------------
@@ -46,7 +51,8 @@
     tileSize: 64,
     animals : [],        // aktive Tiere
     dead    : [],        // respawn queue
-    _t      : 0
+    _t      : 0,
+    _warnedNoWaterAPI: false
   };
 
   // ------------------------------------------------------------
@@ -65,35 +71,76 @@
     return { tx: Math.floor(x/ts), ty: Math.floor(y/ts) };
   }
 
-  
-  // ------------------------------------------------------------
-  // TERRAIN CHECKS (Wasser vermeiden)
-  // ------------------------------------------------------------
-  function _rulesIsWaterTile(tx,ty){
-    // Primäre Quelle: GameRules (nutzt Map-Legend, keine harten Tile-IDs)
-    const GR = window.GameRules;
-    if (GR && typeof GR.isWaterTile === 'function'){
-      try { return !!GR.isWaterTile(tx,ty); } catch(e){ /* ignore */ }
+  // ------------------------------------------------------------------------
+  // Map / Tile access (best effort). If unknown -> do NOT block.
+  // ------------------------------------------------------------------------
+  function getTileIdAt(tx, ty){
+    try{
+      if (window.GameMap && typeof window.GameMap.getTileId === 'function'){
+        return window.GameMap.getTileId(tx, ty);
+      }
+      if (window.Map && typeof window.Map.getTileId === 'function'){
+        return window.Map.getTileId(tx, ty);
+      }
+      if (window.Game && window.Game.map && typeof window.Game.map.getTileId === 'function'){
+        return window.Game.map.getTileId(tx, ty);
+      }
+    }catch(e){
+      // ignore
     }
-    return false; // defensiv: wenn Regeln fehlen, nicht blocken
+    return null;
   }
 
-  function isWaterWorld(x,y){
+  function isWaterTile(tx, ty){
+    // 1) direct APIs
+    try{
+      if (window.GameMap && typeof window.GameMap.isWaterTile === 'function'){
+        return !!window.GameMap.isWaterTile(tx, ty);
+      }
+      if (window.GameRules && typeof window.GameRules.isWaterTile === 'function'){
+        return !!window.GameRules.isWaterTile(tx, ty);
+      }
+      if (window.MapRules && typeof window.MapRules.isWaterTile === 'function'){
+        return !!window.MapRules.isWaterTile(tx, ty);
+      }
+    }catch(e){
+      // ignore
+    }
+
+    // 2) tileId fallback
+    const id = getTileIdAt(tx, ty);
+    if (id == null){
+      if (!State._warnedNoWaterAPI){
+        State._warnedNoWaterAPI = true;
+        WARN('No isWaterTile()/getTileId() found -> water-block disabled (best effort).');
+      }
+      return false; // IMPORTANT: unknown -> allow
+    }
+
+    const TILE = window.TILE || window.Tiles || null;
+    if (TILE && TILE.WATER != null){
+      return (id|0) === (TILE.WATER|0);
+    }
+
+    const waterIds = window.GameMap?.waterIds || window.GameRules?.waterIds || window.MapRules?.waterIds;
+    if (waterIds && typeof waterIds.has === 'function'){
+      return waterIds.has(id|0);
+    }
+
+    return false;
+  }
+
+  function pickLandPointAround(x, y, rad){
     const ts = State.tileSize || 64;
-    const t  = worldToTile(x,y,ts);
-    return _rulesIsWaterTile(t.tx, t.ty);
+    for (let i=0;i<CFG.landPickTries;i++){
+      const p = randomPointAround(x, y, rad);
+      const t = worldToTile(p.x, p.y, ts);
+      if (!CFG.avoidWater || !isWaterTile(t.tx, t.ty)) return p;
+    }
+    return randomPointAround(x, y, rad);
   }
 
-  function randomLandPointAround(x,y,rad,tries=40){
-    // Sucht einen Punkt in der Nähe, der NICHT auf Wasser liegt.
-    // Wenn nichts gefunden wird, fällt auf den Ursprung zurück (besser als Freeze).
-    for (let i=0;i<tries;i++){
-      const p = randomPointAround(x,y,rad);
-      if (!isWaterWorld(p.x,p.y)) return p;
-    }
-    return { x, y };
-  }
-function chooseSpawnNearHQ(){
+  function chooseSpawnNearHQ(){
     // Wir versuchen HQ-Position aus bekannten Quellen zu finden.
     // Wenn nicht: Map-Mitte.
     const ts = State.tileSize || 64;
@@ -158,7 +205,7 @@ function chooseSpawnNearHQ(){
       animT:0,
       animF:0,
       nextRetarget: rand(CFG.retargetEverySec[0], CFG.retargetEverySec[1]),
-      target: randomLandPointAround(x,y,CFG.targetJitterPx)
+      target: pickLandPointAround(x,y,CFG.targetJitterPx)
     };
   }
 
@@ -170,13 +217,6 @@ function chooseSpawnNearHQ(){
     a.y = clamp(a.y, ts*0.5, maxY - ts*0.5);
     a.target.x = clamp(a.target.x, ts*0.5, maxX - ts*0.5);
     a.target.y = clamp(a.target.y, ts*0.5, maxY - ts*0.5);
-  
-
-    // Wenn wir durch Clamp „aus Versehen“ auf Wasser landen, schubsen wir auf Land.
-    if (isWaterWorld(a.x, a.y)){
-      const p = randomLandPointAround(a.x, a.y, ts*2, 80);
-      a.x = p.x; a.y = p.y;
-    }
   }
 
   // ------------------------------------------------------------
@@ -188,21 +228,16 @@ function chooseSpawnNearHQ(){
     State._t = 0;
     State.ready = true;
 
-    let base = chooseSpawnNearHQ();
-
-    // HQ kann am Wasser stehen – Tiere spawnen trotzdem nur auf Land.
-    if (isWaterWorld(base.x, base.y)){
-      base = randomLandPointAround(base.x, base.y, 420, 120);
-    }
+    const base = chooseSpawnNearHQ();
 
     for (let i=0;i<CFG.spawn.deer;i++){
-      const p = randomLandPointAround(base.x, base.y, 220);
+      const p = pickLandPointAround(base.x, base.y, 220);
       const a = makeAnimal('deer', p.x, p.y);
       ensureInsideMap(a);
       State.animals.push(a);
     }
     for (let i=0;i<CFG.spawn.fox;i++){
-      const p = randomLandPointAround(base.x, base.y, 260);
+      const p = pickLandPointAround(base.x, base.y, 260);
       const a = makeAnimal('fox', p.x, p.y);
       ensureInsideMap(a);
       State.animals.push(a);
@@ -226,13 +261,8 @@ function chooseSpawnNearHQ(){
       d.t -= dt;
       if (d.t <= 0){
         State.dead.splice(i,1);
-        let base = chooseSpawnNearHQ();
-
-    // HQ kann am Wasser stehen – Tiere spawnen trotzdem nur auf Land.
-    if (isWaterWorld(base.x, base.y)){
-      base = randomLandPointAround(base.x, base.y, 420, 120);
-    }
-        const p = randomLandPointAround(base.x, base.y, 380);
+        const base = chooseSpawnNearHQ();
+        const p = randomPointAround(base.x, base.y, 380);
         const a = makeAnimal(d.kind, p.x, p.y);
         ensureInsideMap(a);
         State.animals.push(a);
@@ -243,7 +273,7 @@ function chooseSpawnNearHQ(){
       a.nextRetarget -= dt;
       if (a.nextRetarget <= 0){
         a.nextRetarget = rand(CFG.retargetEverySec[0], CFG.retargetEverySec[1]);
-        a.target = randomLandPointAround(a.x, a.y, CFG.targetJitterPx);
+        a.target = pickLandPointAround(a.x, a.y, CFG.targetJitterPx);
         ensureInsideMap(a);
       }
 
@@ -256,17 +286,23 @@ function chooseSpawnNearHQ(){
       if (dist > 1){
         const nx = dx / dist;
         const ny = dy / dist;
-        // Nächster Schritt (Wasser vermeiden)
-        const stepX = a.x + nx * sp * dt;
-        const stepY = a.y + ny * sp * dt;
 
-        if (isWaterWorld(stepX, stepY)){
-          // Sofort neu targeten (Land) und NICHT ins Wasser laufen
-          a.target = randomLandPointAround(a.x, a.y, CFG.targetJitterPx, 60);
-          a.nextRetarget = rand(CFG.retargetEverySec[0], CFG.retargetEverySec[1]);
+        const nextX = a.x + nx * sp * dt;
+        const nextY = a.y + ny * sp * dt;
+
+        if (CFG.avoidWater){
+          const nt = worldToTile(nextX, nextY, ts);
+          if (isWaterTile(nt.tx, nt.ty)){
+            // Block: force retarget to land
+            a.nextRetarget = 0;
+          } else {
+            a.x = nextX;
+            a.y = nextY;
+            a.dir = pickDirectionFromDelta(nx, ny);
+          }
         } else {
-          a.x = stepX;
-          a.y = stepY;
+          a.x = nextX;
+          a.y = nextY;
           a.dir = pickDirectionFromDelta(nx, ny);
         }
       }
@@ -372,6 +408,7 @@ function chooseSpawnNearHQ(){
     tick,
     collectDrawables,
     worldToTile: (x,y)=>worldToTile(x,y, State.tileSize||64),
+    isWaterTile,
     findNearestInRadius,
     consumeAnimal
   };
