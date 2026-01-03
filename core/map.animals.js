@@ -127,6 +127,10 @@
       return waterIds.has(id|0);
     }
 
+
+    // 3) Hard fallback: in unseren Tilesets sind Wasser-IDs typischerweise 8/9
+    if ((id|0)===8 || (id|0)===9) return true;
+
     return false;
   }
 
@@ -181,17 +185,17 @@
 
   function pickDirectionFromDelta(dx,dy){
     // 8 Richtungen (für Frame-Namen)
-    // WICHTIG: Diese Zuordnung MUSS identisch zu SpriteTest sein,
-    // sonst sehen die Tiere im Inspector "richtig" aus, auf der Map aber verdreht.
-    //
-    // SpriteTest-Logik:
-    //   idx = round(angle/45)
-    //   map = ['E','SE','S','SW','W','NW','N','NE']
     const ang = Math.atan2(dy, dx); // -pi..pi
     const deg = (ang * 180/Math.PI + 360) % 360;
-    const idx = Math.round(deg / 45) % 8;
-    const map = ['E','SE','S','SW','W','NW','N','NE'];
-    return map[idx];
+    // E=0, NE=45, N=90, ...
+    if (deg < 22.5 || deg >= 337.5) return 'E';
+    if (deg < 67.5)  return 'NE';
+    if (deg < 112.5) return 'N';
+    if (deg < 157.5) return 'NW';
+    if (deg < 202.5) return 'W';
+    if (deg < 247.5) return 'SW';
+    if (deg < 292.5) return 'S';
+    return 'SE';
   }
 
   function makeAnimal(kind, x, y){

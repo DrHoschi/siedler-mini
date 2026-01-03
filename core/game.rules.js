@@ -55,35 +55,60 @@
     return window.GameMap?._state || window.Game?.map || null;
   }
 
-  // -----------------------------------------------------------------------
-  //  GRID ACCESS (FIX)
-  //  In v4.6 war isWaterTile() bereits auf _getGrid(map) umgestellt,
-  //  aber die Helper-Funktion fehlte komplett -> ReferenceError.
-  //  Ergebnis: Wasser-Checks "fallen durch" und Systeme (z.B. Animals)
-  //  laufen trotzdem ins Wasser.
-  //
-  //  Erwartete Map-Struktur (GameMap._state):
-  //    map.grid[y][x] = tileId
-  // -----------------------------------------------------------------------
-  function _getGrid(map){
-    try{
-      if (!map) return null;
-      // Standard: core/game.map.js setzt Mod.grid
-      if (map.grid) return map.grid;
-      // seltene Varianten / Legacy:
-      if (map.tiles) return map.tiles;
-      if (map.tileGrid) return map.tileGrid;
-      if (map.layers && map.layers[0] && map.layers[0].grid) return map.layers[0].grid;
-      // falls aus Versehen der Wrapper statt _state übergeben wird
-      if (map._state && map._state.grid) return map._state.grid;
-    }catch(e){ /* ignore */ }
-    return null;
-  }
-
   function _getLegend(map){
     return map?.legend || map?.metadata?.legend || null;
   }
 
+
+  // -------------------------------------------------------------------------
+  //  GRID ACCESS (defensiv)
+  //  - Map-State kann je nach Build variieren (GameMap._state, Game.map, etc.).
+  //  - Diese Helfer verhindern "undefined grid" und sorgen dafür, dass Water-
+  //    Checks überall identisch funktionieren.
+  // -------------------------------------------------------------------------
+  function _getGrid(map){
+    const m = map || _getMapState();
+    if (!m) return null;
+    return m.grid || m._state?.grid || m._grid || null;
+  }
+
+  function _waterIdSet(map){
+    const m = map || _getMapState();
+    return _getWaterIds(m);
+  }
+
+  // -------------------------------------------------------------------------
+  //  GRID ACCESS (defensiv)
+  //  - Map-State kann je nach Build variieren (GameMap._state, Game.map, etc.).
+  //  - Diese Helfer verhindern "undefined grid" und sorgen dafür, dass Water-
+  //    Checks überall identisch funktionieren.
+  // -------------------------------------------------------------------------
+  function _getGrid(map){
+    const m = map || _getMapState();
+    if (!m) return null;
+    return m.grid || m._state?.grid || m._grid || null;
+  }
+
+  function _waterIdSet(map){
+    const m = map || _getMapState();
+    return _getWaterIds(m);
+  }
+
+  // -------------------------------------------------------------------------
+  //  GRID ACCESS (defensiv)
+  //  - Map-State kann je nach Build variieren (GameMap._state, Game.map, etc.).
+  //  - Diese Helfer verhindern "undefined grid" und sorgen dafür, dass Water-
+  //    Checks überall identisch funktionieren.
+  // -------------------------------------------------------------------------
+  function _getGrid(map){
+    const m = map || _getMapState();
+    return m?.grid || m?._state?.grid || m?._grid || null;
+  }
+
+  function _waterIdSet(map){
+    // Alias, damit isWaterTile() lesbarer ist.
+    return _getWaterIds(map || _getMapState());
+  }
   function _legendNameForTileId(map, tid){
     const legend = _getLegend(map);
     if (!legend) return null;
@@ -162,7 +187,7 @@
     const ids = _buildIdSetBySubstrings(map, _ALIASES.water);
 
     // 2) Hard-Fallback (konservativ)
-    if (!ids.size) ids.add(8);
+    if (!ids.size){ ids.add(8); ids.add(9); }
 
     _cache.waterIds = ids;
     return ids;
