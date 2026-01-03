@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei    : core/map.animals.js
- * Version  : v26.01.03-animals-forestspawn-scale065-inspectorfit
+ * Version  : v26.01.13-animals-no-water-deerSpriteAtlas
  *
  * Zweck:
  *   - Rehe & Füchse als "dynamische Ressourcen" (wandern auf der Map)
@@ -22,29 +22,67 @@
   // KONFIG
   // ------------------------------------------------------------
   const CFG = {
-    enabled: true,
-    spawn: { deer: 6, fox: 3 },
-    // Hard-Cap: niemals unbegrenzt viele Tiere (Performance + Spielgefühl)
-    maxTotal: 10,
-    // Spawn Bias: Tiere bevorzugt in Wald-Gebieten (Tree-Density Hotspots)
-    forestSpawn: { enabled:true, samples: 220, radiusTiles: 8, minTrees: 8 },
-    // Draw-Scale: Default 0.65 (später Option B via Rules/Registry pro Tier)
-    scale: { deer: 0.35, fox: 0.30 },
-    // Wanderung
-    speedPxPerSec: { deer: 18, fox: 26 }, // langsame, „siedlerige“ Bewegung
-    targetJitterPx: 96,                   // Zielpunkt im Umkreis
-    retargetEverySec: [1.8, 4.2],          // Zufallsintervall
-    // Draw
-    // IMPORTANT: deer MUST match core/asset.js loadAtlas('deer_sprite_atlas', ...)
-    atlas: { deer:'deer_sprite_atlas', fox:'fox_atlas' },
-    framePrefix: { deer:'deer', fox:'fox' },
-    // Für später: Jagd/Respawn
-    respawnSec: { deer: 18, fox: 24 },
+  enabled: true,
 
-    // Water avoidance
-    avoidWater: true,
-    landPickTries: 18
-  };
+  // ----------------------------------------------------------
+  // Spawn / Counts (Hard-Cap damit nicht „zu viele“ Tiere rumlaufen)
+  // ----------------------------------------------------------
+  // Hinweis: spawn-Zahlen sind gewünschte Zielanzahl pro Tierart.
+  // Das System respektiert maxTotal als Obergrenze.
+  maxTotal: 14,
+  spawn: { deer: 6, fox: 3, rabbit: 0, boar: 0 },
+
+  // ----------------------------------------------------------
+  // Bewegung
+  // ----------------------------------------------------------
+  speedPxPerSec: { deer: 18, fox: 26, rabbit: 22, boar: 20 }, // „siedlerige“ Bewegung
+  targetJitterPx: 96,                   // Zielpunkt im Umkreis
+  retargetEverySec: [1.8, 4.2],          // Zufallsintervall
+
+  // ----------------------------------------------------------
+  // Draw / Assets
+  // ----------------------------------------------------------
+  // IMPORTANT: Keys müssen exakt mit core/asset.js loadAtlas(...) matchen.
+  atlas:       { deer:'deer_sprite_atlas', fox:'fox_atlas', rabbit:'rabbit_atlas', boar:'boar_atlas' },
+  framePrefix: { deer:'deer',             fox:'fox',       rabbit:'rabbit',       boar:'boar' },
+
+  // Skalierung (User-Wunsch: Reh 0.35, Fuchs 0.30)
+  // Später (Option B) ziehen wir das aus Registry/Rules. Dafür ist getAnimalScale() schon vorbereitet.
+  scale: { deer: 0.35, fox: 0.30, rabbit: 0.30, boar: 0.38 },
+
+  // E/W-Flip Toggle: bleibt erst mal MASTER=true für alle Tiere,
+  // weil unser aktuelles Iso/Screen-Delta in der Map ggf. gespiegelt ist.
+  // WICHTIG: Wenn wir später das Projekt-Koordinatensystem komplett vereinheitlichen,
+  // kann flipEW wieder auf false oder komplett entfernt werden.
+  flipEW: { deer: true, fox: true, rabbit: true, boar: true },
+
+  // ----------------------------------------------------------
+  // Forest-Bias: Spawn bevorzugt dort, wo viele Bäume sind
+  // ----------------------------------------------------------
+  spawnPreferTrees: true,
+  forestCellSizeTiles: 8,   // grobe Zellgröße für Baum-Dichte-Histogramm
+  forestPickRadiusTiles: 10, // um Hotspot herum
+  forestSamples: 120,        // wie viele Tree-Nodes fürs Histogramm genutzt werden
+
+  // ----------------------------------------------------------
+  // Für später: Jagd/Respawn
+  // ----------------------------------------------------------
+  respawnSec: { deer: 18, fox: 24, rabbit: 18, boar: 26 },
+
+  // ----------------------------------------------------------
+  // Water avoidance
+  // ----------------------------------------------------------
+  avoidWater: true,
+  landPickTries: 18
+};
+
+// ------------------------------------------------------------
+// CFG Helpers (Option B Vorbereitung: später Registry/Rules)
+// ------------------------------------------------------------
+function getAnimalScale(kind){
+  return (CFG.scale && CFG.scale[kind] != null) ? CFG.scale[kind] : 1.0;
+}
+
 
   // ------------------------------------------------------------
   // STATE
@@ -67,110 +105,7 @@
   function rand(a,b){ return a + Math.random()*(b-a); }
   function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
 
-// ------------------------------------------------------------
-// FOREST / TREE-DENSITY HELPERS
-// ------------------------------------------------------------
-/**
- * Liefert eine Liste aller Tree-Nodes (Tile-Koordinaten) aus MapResources.
- * Pattern in core/map.resources.js:
- *   State.trees: [{x,y,...}] und State.nodes kind:'tree'
- */
-function getTreeNodes(){
-  const st = window.MapResources?.state;
-  if (!st) return [];
-  if (Array.isArray(st.trees) && st.trees.length) return st.trees;
-  if (Array.isArray(st.nodes) && st.nodes.length) return st.nodes.filter(n => n && n.kind === 'tree');
-  return [];
-}
-
-/**
- * Zählt Trees im Umkreis (Radius in Tiles).
- * NOTE: absichtlich simpel (O(n)) – bei den Node-Zahlen in Epoche 1 okay.
- * Später kann man hier Spatial Hashing einbauen (wenn nötig).
- */
-function countTreesInRadius(tx, ty, rTiles){
-  const trees = getTreeNodes();
-  if (!trees.length) return 0;
-  const r2 = (rTiles|0) * (rTiles|0);
-  let c = 0;
-  for (const t of trees){
-    const dx = (t.x|0) - tx;
-    const dy = (t.y|0) - ty;
-    if ((dx*dx + dy*dy) <= r2) c++;
-  }
-  return c;
-}
-
-/**
- * Findet einen "Wald-Hotspot": Tile mit hoher Tree-Density.
- * Strategie: random sampling über die ganze Map und bestes Scoring nehmen.
- *
- * Falls keine Trees vorhanden sind, fällt das automatisch auf HQ/Mitte zurück.
- */
-function chooseSpawnForestHotspot(){
-  const cfg = CFG.forestSpawn || { enabled:false };
-  if (!cfg.enabled) return null;
-
-  const trees = getTreeNodes();
-  if (!trees.length) return null;
-
-  const samples = clamp(cfg.samples|0, 30, 1200);
-  const rTiles   = clamp(cfg.radiusTiles|0, 2, 24);
-  const minTrees = clamp(cfg.minTrees|0, 0, 999999);
-
-  let best = null;
-  let bestScore = -1;
-
-  // Sampling: wir picken zufällige Tiles und zählen Trees im Radius.
-  // Zusätzliche Regel: Tile muss Land sein (kein Wasser).
-  for (let i=0;i<samples;i++){
-    const tx = randInt(1, Math.max(1, State.cols-2));
-    const ty = randInt(1, Math.max(1, State.rows-2));
-    if (isWaterTile(tx, ty)) continue;
-
-    const score = countTreesInRadius(tx, ty, rTiles);
-    if (score > bestScore){
-      bestScore = score;
-      best = { tx, ty, score };
-    }
-  }
-
-  if (!best || bestScore < minTrees){
-    return null;
-  }
-
-  const ts = State.tileSize || 64;
-  return tileCenterToWorld(best.tx, best.ty, ts);
-}
-
-
-
-  
-/**
- * Scale pro Tier:
- *   1) optional aus Rules/Registry (später Option B):
- *        - window.GameRules?.animals?.deer?.scale
- *        - window.GameRules?.animalsScale?.deer
- *   2) CFG.scale[kind]
- *   3) Default 0.65
- */
-function getAnimalScale(kind){
-  try{
-    const gr = window.GameRules;
-    const scaleFromRules =
-      gr?.animals?.[kind]?.scale ??
-      gr?.animalsScale?.[kind] ??
-      window.MapRules?.animals?.[kind]?.scale ??
-      null;
-    if (Number.isFinite(scaleFromRules)) return scaleFromRules;
-  }catch(_){ /* ignore */ }
-
-  const s = CFG.scale && CFG.scale[kind];
-  if (Number.isFinite(s)) return s;
-  return 0.65;
-}
-
-function tileCenterToWorld(tx,ty,ts){
+  function tileCenterToWorld(tx,ty,ts){
     // Unser GameMap rendert orthogonal in WORLD-Pixel: tileTopLeft = tx*ts, ty*ts
     // Zentrum: +0.5
     return { x:(tx+0.5)*ts, y:(ty+0.5)*ts };
@@ -179,6 +114,12 @@ function tileCenterToWorld(tx,ty,ts){
   function worldToTile(x,y,ts){
     return { tx: Math.floor(x/ts), ty: Math.floor(y/ts) };
   }
+function tileToWorld(tx, ty, ts){
+  // Tile-Mitte als World-Pixel (Screen-Grid, nicht Iso-Projection).
+  // Für unsere einfache Animal-Wanderung reicht das völlig.
+  return { x: (tx + 0.5) * ts, y: (ty + 0.5) * ts };
+}
+
 
   // ------------------------------------------------------------------------
   // Map / Tile access (best effort). If unknown -> do NOT block.
@@ -263,6 +204,111 @@ function tileCenterToWorld(tx,ty,ts){
         const ty = clamp(Math.floor(hq.y), 1, Math.max(1,State.rows-2));
         return tileCenterToWorld(tx,ty,ts);
       }
+// ------------------------------------------------------------
+// Forest Hotspot Spawn (Bäume-Dichte)
+// ------------------------------------------------------------
+function _getMapResourcesState(){
+  // MapResources ist bei dir je nach Stand manchmal .state oder .State
+  return window.MapResources?.state || window.MapResources?.State || null;
+}
+
+function _isTreeLike(node){
+  const s = (node?.kind || node?.type || node?.id || node?.name || '').toString().toLowerCase();
+  return s.includes('tree') || s.includes('baum') || s.includes('pine') || s.includes('oak');
+}
+
+function _treeNodesToTileList(nodes){
+  const out = [];
+  const ts = State.tileSize || 64;
+  for (const n of (nodes || [])){
+    if (!n) continue;
+    // bevorzugt tile coords
+    let tx = n.tx ?? n.TX ?? n.tileX ?? n.gridX;
+    let ty = n.ty ?? n.TY ?? n.tileY ?? n.gridY;
+    if (tx == null || ty == null){
+      // fallback world coords
+      const x = n.x ?? n.px ?? n.worldX;
+      const y = n.y ?? n.py ?? n.worldY;
+      if (x != null && y != null){
+        const t = worldToTile(x, y, ts);
+        tx = t.tx; ty = t.ty;
+      }
+    }
+    if (tx == null || ty == null) continue;
+    out.push({ tx: tx|0, ty: ty|0 });
+  }
+  return out;
+}
+
+function getTreeTiles(){
+  // Heuristik: wir suchen in MapResources nach möglichen Baum-Arrays
+  const st = _getMapResourcesState();
+  if (!st) return [];
+  const candidates = [];
+
+  // häufige Feldnamen
+  if (Array.isArray(st.trees)) candidates.push(...st.trees);
+  if (Array.isArray(st.decos)) candidates.push(...st.decos);
+  if (Array.isArray(st.decorations)) candidates.push(...st.decorations);
+  if (Array.isArray(st.nodes)) candidates.push(...st.nodes);
+
+  // wenn nichts gefunden: versuche alle Array-Felder aus state zu scannen (vorsichtig)
+  if (candidates.length === 0){
+    for (const k of Object.keys(st)){
+      const v = st[k];
+      if (Array.isArray(v) && v.length && typeof v[0] === 'object'){
+        // nur wenn es „tree-like“ Einträge enthält
+        if (v.some(_isTreeLike)) candidates.push(...v);
+      }
+    }
+  }
+
+  // filter: nur tree-like
+  const trees = candidates.filter(_isTreeLike);
+  return _treeNodesToTileList(trees);
+}
+
+function chooseSpawnForestHotspot(){
+  const ts = State.tileSize || 64;
+  const trees = getTreeTiles();
+  if (!trees.length){
+    return chooseSpawnNearHQ(); // fallback
+  }
+
+  const cell = Math.max(2, CFG.forestCellSizeTiles|0);
+  const samples = Math.min(CFG.forestSamples|0, trees.length);
+  const hist = new Map();
+
+  // sample first N (oder random falls viele)
+  for (let i=0; i<samples; i++){
+    const t = trees[(Math.random()*trees.length)|0];
+    const cx = (t.tx / cell) | 0;
+    const cy = (t.ty / cell) | 0;
+    const key = cx + ',' + cy;
+    hist.set(key, (hist.get(key)||0) + 1);
+  }
+
+  // best cell
+  let bestKey = null, best = -1;
+  for (const [k,v] of hist.entries()){
+    if (v > best){ best = v; bestKey = k; }
+  }
+  if (!bestKey){
+    // fallback: random tree tile
+    const t = trees[(Math.random()*trees.length)|0];
+    return tileToWorld(t.tx, t.ty, ts);
+  }
+
+  const [cx, cy] = bestKey.split(',').map(n=>parseInt(n,10));
+  const centerTx = cx * cell + (cell>>1);
+  const centerTy = cy * cell + (cell>>1);
+
+  // pick a land point around hotspot
+  const radTiles = Math.max(3, CFG.forestPickRadiusTiles|0);
+  const centerWorld = tileToWorld(centerTx, centerTy, ts);
+  return pickLandPointAround(centerWorld.x, centerWorld.y, radTiles * ts);
+}
+
     }
 
     // 2) Production BUILDINGS_BY_UID cache (enthält b.hq nach build complete)
@@ -288,26 +334,53 @@ function tileCenterToWorld(tx,ty,ts){
     };
   }
 
-  function pickDirectionFromDelta(dx,dy){
-    // 8 Richtungen (für Frame-Namen)
-    const ang = Math.atan2(dy, dx); // -pi..pi
-    const deg = (ang * 180/Math.PI + 360) % 360;
-    // E=0, NE=45, N=90, ...
-    if (deg < 22.5 || deg >= 337.5) return 'E';
-    if (deg < 67.5)  return 'NE';
-    if (deg < 112.5) return 'N';
-    if (deg < 157.5) return 'NW';
-    if (deg < 202.5) return 'W';
-    if (deg < 247.5) return 'SW';
-    if (deg < 292.5) return 'S';
-    return 'SE';
+  function pickDirectionFromDelta(dx, dy, kind){
+  // ----------------------------------------------------------
+  // Richtungsauswahl (8 Richtungen) – CLOCKWISE
+  // ----------------------------------------------------------
+  // WICHTIG:
+  // - In Canvas/Screen ist Y nach unten positiv.
+  // - atan2(dy, dx) liefert: 0° = rechts(E), 90° = unten(S), 180° = links(W), 270° = oben(N).
+  //
+  // Unsere Sprite-Reihenfolge ist (im Uhrzeigersinn):
+  // N → NE → E → SE → S → SW → W → NW
+  //
+  // Für die Auswahl mappen wir den Winkel aber direkt auf die 8 Labels.
+  // Falls E/W später nach einer Koordinaten-Vereinheitlichung „plötzlich“ wieder passt,
+  // kann CFG.flipEW[...] auf false gestellt werden (siehe CFG-Kommentar).
+  const ang = Math.atan2(dy, dx); // -pi..pi
+  const deg = (ang * 180 / Math.PI + 360) % 360;
+
+  // E=0, SE=45, S=90, SW=135, W=180, NW=225, N=270, NE=315
+  let dir;
+  if (deg < 22.5 || deg >= 337.5) dir = 'E';
+  else if (deg < 67.5)  dir = 'SE';
+  else if (deg < 112.5) dir = 'S';
+  else if (deg < 157.5) dir = 'SW';
+  else if (deg < 202.5) dir = 'W';
+  else if (deg < 247.5) dir = 'NW';
+  else if (deg < 292.5) dir = 'N';
+  else                  dir = 'NE';
+
+  // Optionaler E/W-Flip (MASTER=true für alle Tiere aktuell).
+  if (kind && CFG.flipEW && CFG.flipEW[kind]){
+    if (dir === 'E') dir = 'W';
+    else if (dir === 'W') dir = 'E';
+    else if (dir === 'NE') dir = 'NW';
+    else if (dir === 'NW') dir = 'NE';
+    else if (dir === 'SE') dir = 'SW';
+    else if (dir === 'SW') dir = 'SE';
   }
+  return dir;
+}
+
 
   function makeAnimal(kind, x, y){
     const uid = `${kind}@${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
     return {
       uid,
-      kind,                 // 'deer' | 'fox'
+      kind,                 // 'deer' | 'fox' | 'rabbit' | 'boar'
+      scale: getAnimalScale(kind),
       x, y,                 // WORLD-Pixel
       vx:0, vy:0,
       dir:'S',
@@ -332,41 +405,40 @@ function tileCenterToWorld(tx,ty,ts){
   // INIT / RESET
   // ------------------------------------------------------------
   function reset(){
-    State.animals.length = 0;
-    State.dead.length = 0;
-    State._t = 0;
-    State.ready = true;
+  State.animals.length = 0;
+  State.dead.length = 0;
+  State._t = 0;
+  State.ready = true;
 
-    // Spawn-Base: bevorzugt Wald-Hotspot (wo die meisten Trees sind), sonst HQ/Mitte.
-    const base = chooseSpawnForestHotspot() || chooseSpawnNearHQ();
+  // Spawn-Base: bevorzugt Wald-Hotspots, sonst HQ/Mitte.
+  const base = (CFG.spawnPreferTrees ? chooseSpawnForestHotspot() : chooseSpawnNearHQ());
 
-    // ----------------------------------------------------------
-// Spawn-Count (Hard-Cap)
-// ----------------------------------------------------------
-const wantDeer = (CFG.spawn?.deer|0) || 0;
-const wantFox  = (CFG.spawn?.fox |0) || 0;
-const maxTotal = clamp((CFG.maxTotal|0) || (wantDeer+wantFox) || 0, 0, 9999);
-let remaining  = maxTotal;
+  function spawnKind(kind, n, rad){
+    for (let i=0; i<n; i++){
+      if (State.animals.length >= (CFG.maxTotal|0)) return;
+      const p = pickLandPointAround(base.x, base.y, rad);
+      const a = makeAnimal(kind, p.x, p.y);
+      ensureInsideMap(a);
+      State.animals.push(a);
+    }
+  }
 
-// Deer zuerst (Wald-Feeling), dann Fox.
-const deerN = clamp(wantDeer, 0, remaining); remaining -= deerN;
-const foxN  = clamp(wantFox,  0, remaining); remaining -= foxN;
+  spawnKind('deer',   CFG.spawn.deer|0,   320);
+  spawnKind('fox',    CFG.spawn.fox|0,    380);
+  spawnKind('rabbit', CFG.spawn.rabbit|0, 340);
+  spawnKind('boar',   CFG.spawn.boar|0,   420);
 
-for (let i=0;i<deerN;i++){
-  const p = pickLandPointAround(base.x, base.y, 220);
-  const a = makeAnimal('deer', p.x, p.y);
-  ensureInsideMap(a);
-  State.animals.push(a);
-}
-for (let i=0;i<foxN;i++){
-  const p = pickLandPointAround(base.x, base.y, 260);
-  const a = makeAnimal('fox', p.x, p.y);
-  ensureInsideMap(a);
-  State.animals.push(a);
+  LOG('spawned', State.animals.length, 'animals', CFG.spawnPreferTrees ? '(forest-hotspot)' : '(near HQ/middle)');
 }
 
-LOG('spawned', State.animals.length, 'animals (base:', (CFG.forestSpawn?.enabled?'forestHotspot':'HQ/middle') + ')');
+    for (let i=0;i<CFG.spawn.fox;i++){
+      const p = pickLandPointAround(base.x, base.y, 260);
+      const a = makeAnimal('fox', p.x, p.y);
+      ensureInsideMap(a);
+      State.animals.push(a);
+    }
 
+    LOG('spawned', State.animals.length, 'animals near HQ/middle');
   }
 
   // ------------------------------------------------------------
@@ -384,8 +456,7 @@ LOG('spawned', State.animals.length, 'animals (base:', (CFG.forestSpawn?.enabled
       d.t -= dt;
       if (d.t <= 0){
         State.dead.splice(i,1);
-        // Spawn-Base: bevorzugt Wald-Hotspot (wo die meisten Trees sind), sonst HQ/Mitte.
-    const base = chooseSpawnForestHotspot() || chooseSpawnNearHQ();
+        const base = chooseSpawnNearHQ();
         const p = randomPointAround(base.x, base.y, 380);
         const a = makeAnimal(d.kind, p.x, p.y);
         ensureInsideMap(a);
@@ -422,12 +493,12 @@ LOG('spawned', State.animals.length, 'animals (base:', (CFG.forestSpawn?.enabled
           } else {
             a.x = nextX;
             a.y = nextY;
-            a.dir = pickDirectionFromDelta(nx, ny);
+            a.dir = pickDirectionFromDelta(nx, ny, a.kind);
           }
         } else {
           a.x = nextX;
           a.y = nextY;
-          a.dir = pickDirectionFromDelta(nx, ny);
+          a.dir = pickDirectionFromDelta(nx, ny, a.kind);
         }
       }
 
@@ -462,7 +533,7 @@ LOG('spawned', State.animals.length, 'animals (base:', (CFG.forestSpawn?.enabled
           // Welt-Pixel: wir zeichnen zentriert am Fußpunkt
           Assets.drawAtlasFrame(ctx, atlasName, frameName, a.x, a.y, {
             anchor: { x: 0.5, y: 0.90 }, // Fußpunkt ~ 90%
-            scale: getAnimalScale(a.kind)
+            scale : a.scale,
           });
         }
       });
