@@ -1540,7 +1540,7 @@
   "meta": {
     "app": "NeueSiedler-GridAtlas",
     "version": "1.0",
-    "image": "fox.png",
+    "image": "assets/animals/fox_sprite_atlas.png",
     "size": {
       "w": 1024,
       "h": 1024
