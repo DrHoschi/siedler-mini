@@ -44,6 +44,7 @@ body.inspector-open #inspector-overlay {
 ============================================================================ */
 .insp-shell {
   position: absolute;
+  /* Default: Desktop */
   inset: 32px;
   display: grid;
   grid-template-rows: auto 1fr;
@@ -52,6 +53,39 @@ body.inspector-open #inspector-overlay {
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0,0,0,.4);
   overflow: hidden;
+}
+
+/* ==========================================================================
+   Responsive: iPhone/iPad – Inspector muss vollständig in den Viewport passen
+   (inkl. Safe-Area). Ziel: keine abgeschnittenen Controls/Canvas.
+   ======================================================================= */
+
+@media (max-width: 900px) {
+  .insp-shell {
+    /* mehr Platz auf kleinen Displays */
+    inset: 12px;
+    border-radius: 10px;
+  }
+  .insp-header { padding: 6px; }
+  .insp-tab { padding: 4px 8px; font-size: 12px; }
+  .insp-content { padding: 6px 8px; }
+}
+
+@media (max-width: 520px) {
+  .insp-shell { inset: 6px; }
+  .insp-tabs { gap: 4px; }
+  .insp-tab { padding: 3px 7px; font-size: 12px; }
+}
+
+/* iOS Safe-Area: verhindert, dass Header/Buttons unter Notch/Home-Bar liegen */
+@supports (padding: env(safe-area-inset-top)) {
+  .insp-shell {
+    inset:
+      calc(6px + env(safe-area-inset-top))
+      calc(6px + env(safe-area-inset-right))
+      calc(6px + env(safe-area-inset-bottom))
+      calc(6px + env(safe-area-inset-left));
+  }
 }
 
 .insp-header {
