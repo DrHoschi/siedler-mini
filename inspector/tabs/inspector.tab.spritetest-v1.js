@@ -309,9 +309,10 @@
     try{
       // Basic root styling
       root.innerHTML = '';
-      root.style.padding = '8px';
+      root.style.padding = '6px';
       root.style.color = '#fff';
       root.style.fontFamily = 'monospace';
+      root.style.fontSize = '13px';
 
       // UI builders
       const row = (label, el)=>{
