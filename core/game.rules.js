@@ -55,6 +55,31 @@
     return window.GameMap?._state || window.Game?.map || null;
   }
 
+  // -----------------------------------------------------------------------
+  //  GRID ACCESS (FIX)
+  //  In v4.6 war isWaterTile() bereits auf _getGrid(map) umgestellt,
+  //  aber die Helper-Funktion fehlte komplett -> ReferenceError.
+  //  Ergebnis: Wasser-Checks "fallen durch" und Systeme (z.B. Animals)
+  //  laufen trotzdem ins Wasser.
+  //
+  //  Erwartete Map-Struktur (GameMap._state):
+  //    map.grid[y][x] = tileId
+  // -----------------------------------------------------------------------
+  function _getGrid(map){
+    try{
+      if (!map) return null;
+      // Standard: core/game.map.js setzt Mod.grid
+      if (map.grid) return map.grid;
+      // seltene Varianten / Legacy:
+      if (map.tiles) return map.tiles;
+      if (map.tileGrid) return map.tileGrid;
+      if (map.layers && map.layers[0] && map.layers[0].grid) return map.layers[0].grid;
+      // falls aus Versehen der Wrapper statt _state übergeben wird
+      if (map._state && map._state.grid) return map._state.grid;
+    }catch(e){ /* ignore */ }
+    return null;
+  }
+
   function _getLegend(map){
     return map?.legend || map?.metadata?.legend || null;
   }

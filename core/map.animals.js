@@ -179,26 +179,19 @@
     };
   }
 
-  function normalizePrefix(p){
-    // Unterstützt sowohl 'deer' als auch 'deer_' (wie im SpriteTest-Prefix-Picker).
-    // Wir erzeugen IMMER 'prefix_DIR_walk_i' ohne Doppel-Underscore.
-    if (typeof p !== 'string') return '';
-    return p.endsWith('_') ? p.slice(0, -1) : p;
-  }
-
   function pickDirectionFromDelta(dx,dy){
     // 8 Richtungen (für Frame-Namen)
+    // WICHTIG: Diese Zuordnung MUSS identisch zu SpriteTest sein,
+    // sonst sehen die Tiere im Inspector "richtig" aus, auf der Map aber verdreht.
+    //
+    // SpriteTest-Logik:
+    //   idx = round(angle/45)
+    //   map = ['E','SE','S','SW','W','NW','N','NE']
     const ang = Math.atan2(dy, dx); // -pi..pi
     const deg = (ang * 180/Math.PI + 360) % 360;
-    // E=0, NE=45, N=90, ...
-    if (deg < 22.5 || deg >= 337.5) return 'E';
-    if (deg < 67.5)  return 'NE';
-    if (deg < 112.5) return 'N';
-    if (deg < 157.5) return 'NW';
-    if (deg < 202.5) return 'W';
-    if (deg < 247.5) return 'SW';
-    if (deg < 292.5) return 'S';
-    return 'SE';
+    const idx = Math.round(deg / 45) % 8;
+    const map = ['E','SE','S','SW','W','NW','N','NE'];
+    return map[idx];
   }
 
   function makeAnimal(kind, x, y){
@@ -300,9 +293,7 @@
         if (CFG.avoidWater){
           const nt = worldToTile(nextX, nextY, ts);
           if (isWaterTile(nt.tx, nt.ty)){
-            // Block: nächster Schritt wäre Wasser → sofort neues LAND-Ziel wählen
-            // (Wichtig: nicht bewegen, sonst 'schwimmen' die Tiere auf Wasser.)
-            a.target = pickLandPointAround(a.x, a.y, CFG.targetJitterPx);
+            // Block: force retarget to land
             a.nextRetarget = 0;
           } else {
             a.x = nextX;
@@ -338,8 +329,7 @@
     for (const a of State.animals){
       const atlasName = CFG.atlas[a.kind];
       const prefix    = CFG.framePrefix[a.kind];
-      const p = normalizePrefix(prefix);
-      const frameName = `${p}_${a.dir}_walk_${a.animF}`;
+      const frameName = `${prefix}_${a.dir}_walk_${a.animF}`;
 
       // Y-Sort: wir sortieren nach "Fußpunkt" (a.y)
       out.push({
