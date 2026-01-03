@@ -179,6 +179,13 @@
     };
   }
 
+  function normalizePrefix(p){
+    // Unterstützt sowohl 'deer' als auch 'deer_' (wie im SpriteTest-Prefix-Picker).
+    // Wir erzeugen IMMER 'prefix_DIR_walk_i' ohne Doppel-Underscore.
+    if (typeof p !== 'string') return '';
+    return p.endsWith('_') ? p.slice(0, -1) : p;
+  }
+
   function pickDirectionFromDelta(dx,dy){
     // 8 Richtungen (für Frame-Namen)
     const ang = Math.atan2(dy, dx); // -pi..pi
@@ -293,7 +300,9 @@
         if (CFG.avoidWater){
           const nt = worldToTile(nextX, nextY, ts);
           if (isWaterTile(nt.tx, nt.ty)){
-            // Block: force retarget to land
+            // Block: nächster Schritt wäre Wasser → sofort neues LAND-Ziel wählen
+            // (Wichtig: nicht bewegen, sonst 'schwimmen' die Tiere auf Wasser.)
+            a.target = pickLandPointAround(a.x, a.y, CFG.targetJitterPx);
             a.nextRetarget = 0;
           } else {
             a.x = nextX;
@@ -329,7 +338,8 @@
     for (const a of State.animals){
       const atlasName = CFG.atlas[a.kind];
       const prefix    = CFG.framePrefix[a.kind];
-      const frameName = `${prefix}_${a.dir}_walk_${a.animF}`;
+      const p = normalizePrefix(prefix);
+      const frameName = `${p}_${a.dir}_walk_${a.animF}`;
 
       // Y-Sort: wir sortieren nach "Fußpunkt" (a.y)
       out.push({
