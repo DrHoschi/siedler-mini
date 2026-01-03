@@ -1,0 +1,234 @@
+/* ============================================================================
+   Datei   : ui/css/ui-inspector.css
+   Projekt : Neue Siedler – Inspector
+   Version : v25.10.31-final (unified: layout + open/close + FAB-A)
+   Zweck   : Inspector-Overlay + Layout + zuverlässige Sichtbarkeit/Interaktion
+   Hinweise:
+     • Unterstützt beide Body-Flags: .is-inspector (neu) und .inspector-open (legacy)
+     • FAB (#btn-inspector) bleibt IMMER sichtbar (Variante A) und liegt über dem Overlay
+     • Nutzt, falls vorhanden, Theme-Variablen aus ui.css (:root[data-theme])
+============================================================================ */
+
+/* ============================================================================
+   [1] OVERLAY-HOST (#inspector ODER #inspector-overlay)
+============================================================================ */
+#inspector,
+#inspector-overlay {
+  position: fixed;
+  inset: 0;
+  display: none; /* über Flag sichtbar */
+  background: var(--ui-bg, var(--insp-bg, rgba(18,18,20,.96)));
+  color: var(--ui-text, #e6e6e6);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  z-index: var(--z-inspector, 99990); /* unter FAB */
+  pointer-events: auto;
+}
+
+/* Sichtbarkeit über Body-Flags (neu & legacy) */
+body.is-inspector #inspector,
+body.is-inspector #inspector-overlay,
+body.inspector-open #inspector,
+body.inspector-open #inspector-overlay {
+  display: block;
+}
+
+/* Sicherheitsnetz: unsichtbares Overlay blockiert NIE Klicks */
+#inspector[aria-hidden="true"],
+#inspector-overlay[aria-hidden="true"] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================================
+   [2] INNENLEBEN / SHELL / RAHMEN (neutral, theme-fähig)
+============================================================================ */
+.insp-shell {
+  position: absolute;
+  inset: 32px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: var(--ui-surface, #131316);
+  border: 1px solid var(--ui-border, #2a2a2e);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  overflow: hidden;
+}
+
+.insp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ui-surface-2, #1f1f23);
+  border-bottom: 1px solid var(--ui-border, #2a2a2e);
+  padding: 8px;
+}
+
+.insp-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.insp-tab {
+  appearance: none;
+  border: 1px solid var(--ui-border, #2a2a2e);
+  background: var(--ui-surface, #131316);
+  color: var(--ui-text, #e6e6e6);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  transition: all .15s ease;
+}
+.insp-tab:hover { filter: brightness(1.08); }
+.insp-tab.active {
+  border-color: var(--ui-accent, #6aa0ff);
+  outline: 2px solid var(--ui-accent, #6aa0ff);
+}
+
+.insp-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  background: var(--ui-surface, #131316);
+  color: var(--ui-text, #e6e6e6);
+  overflow: auto;
+  padding: 8px 10px;
+}
+.insp-content > * { display: block; }
+.insp-content > [hidden] { display: none !important; }
+
+/* Tabellen-Stil (für Logs/Resources etc.) */
+.inspector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.inspector-table th, .inspector-table td {
+  border: 1px solid var(--ui-border, #2a2a2e);
+  padding: 4px 6px;
+  text-align: left;
+}
+.inspector-table thead th {
+  background: var(--ui-surface-2, #1f1f23);
+  position: sticky; top: 0; z-index: 2;
+}
+
+/* Utilities */
+.ok { color: var(--ui-ok, #5ad67d); }
+.warn { color: var(--ui-warn, #ffb84d); }
+.error { color: var(--ui-error, #ff6b6b); }
+.info { color: var(--ui-info, #7ab8ff); }
+.muted { color: var(--ui-text-dim, #b1b1b3); }
+.hidden { display: none !important; }
+.pad { padding: 4px 6px; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0 10px; }
+.hint { opacity: .7; font-size: .9em; margin-left: auto; }
+
+/* ============================================================================
+   [3] THEME HOLZRAHMEN (optional über :root[data-theme="wood"])
+============================================================================ */
+:root[data-theme="wood"] #inspector .insp-shell,
+:root[data-theme="wood"] #inspector .insp-header,
+:root[data-theme="wood"] #inspector .insp-tabs,
+:root[data-theme="wood"] #inspector .insp-content,
+:root[data-theme="wood"] #inspector-overlay .insp-shell,
+:root[data-theme="wood"] #inspector-overlay .insp-header,
+:root[data-theme="wood"] #inspector-overlay .insp-tabs,
+:root[data-theme="wood"] #inspector-overlay .insp-content {
+  border: 12px solid transparent;
+  border-image-source: url("../../assets/ui/panel.svg");
+  border-image-slice: 12;
+  border-image-width: 12;
+  border-image-repeat: stretch;
+}
+:root[data-theme="wood"] .insp-tab.active {
+  border-color: transparent;
+  outline: 2px solid var(--ui-accent, #6aa0ff);
+}
+
+/* ============================================================================
+   [4] LAYER/POINTER-REGELN
+   - Inspector überlagert Spiel/HUD
+   - FAB bleibt stets klickbar (liegt darüber)
+============================================================================ */
+body.inspector-open #hud-top,
+body.inspector-open #build-dock,
+body.inspector-open #game,
+body.inspector-open #game-canvas,
+body.is-inspector #hud-top,
+body.is-inspector #build-dock,
+body.is-inspector #game,
+body.is-inspector #game-canvas {
+  pointer-events: none;
+}
+
+body.inspector-open #inspector,
+body.inspector-open #inspector-overlay,
+body.is-inspector #inspector,
+body.is-inspector #inspector-overlay,
+#btn-inspector {
+  pointer-events: auto;
+}
+
+/* ============================================================================
+   [5] FAB (Variante A: immer sichtbar, über dem Overlay)
+============================================================================ */
+#btn-inspector{
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 99999;            /* über Overlay */
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Wichtig: NICHT ausblenden, wenn Inspector offen (Variante A) */
+body.is-inspector #btn-inspector,
+body.inspector-open #btn-inspector { /* bleibt sichtbar */ }
+
+/* ============================================================================
+   [6] DEFENSIVE
+   - Unsichtbare/inert gekennzeichnete Hosts blocken niemals Klicks
+============================================================================ */
+.inert, [inert] { pointer-events: none !important; }
+#inspector[hidden], #inspector-overlay[hidden] { display:none !important; }
+
+/* Inspector erzwingt seine Sichtbarkeitslogik selbst */
+#inspector .insp-content section,
+#inspector-overlay .insp-content section { display:block; }
+
+#inspector .insp-content section[hidden],
+#inspector-overlay .insp-content section[hidden] { display:none !important; }
+
+/* Safety: Text wirklich sichtbar, Hintergrund nicht transparent */
+#inspector, #inspector-overlay { color:#e6e6e6; }
+#inspector .insp-content, #inspector-overlay .insp-content { background:#131316; }
+
+/* Safety: Overlay-Layout */
+#inspector, #inspector-overlay { position:fixed; inset:0; }
+
+/* ============================================================================
+   [7] MOBILE FIT TWEAKS
+   - Auf iPhone/iPad (Safari) war der Inspector-Inhalt teils zu "groß", sodass
+     der Preview-Bereich unten abgeschnitten wurde.
+   - Wir skalieren NICHT per transform (macht Touch/Scrolling kaputt), sondern
+     reduzieren Abstände + Schrift minimal und geben dem Content mehr Höhe.
+============================================================================ */
+@media (max-width: 600px){
+  #inspector, #inspector-overlay{
+    /* weniger Rand -> mehr Platz für Inhalt */
+    padding: 8px;
+  }
+  #inspector .insp-shell, #inspector-overlay .insp-shell{
+    inset: 8px;
+  }
+  #inspector .insp-content, #inspector-overlay .insp-content{
+    padding: 8px;
+    gap: 8px;
+  }
+  #inspector .insp-tabs button, #inspector-overlay .insp-tabs button{
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  #inspector .insp-close, #inspector-overlay .insp-close{
+    width: 32px;
+    height: 32px;
+  }
+}
