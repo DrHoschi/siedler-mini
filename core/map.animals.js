@@ -29,7 +29,7 @@
     // Spawn Bias: Tiere bevorzugt in Wald-Gebieten (Tree-Density Hotspots)
     forestSpawn: { enabled:true, samples: 220, radiusTiles: 8, minTrees: 8 },
     // Draw-Scale: Default 0.65 (später Option B via Rules/Registry pro Tier)
-    scale: { deer: 0.65, fox: 0.65 },
+    scale: { deer: 0.35, fox: 0.30 },
     // Wanderung
     speedPxPerSec: { deer: 18, fox: 26 }, // langsame, „siedlerige“ Bewegung
     targetJitterPx: 96,                   // Zielpunkt im Umkreis
