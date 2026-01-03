@@ -513,8 +513,8 @@ try{
       ));
       tasks.push(this.loadAtlas(
         'fox_atlas',
-        'assets/animals/fox_atlas.json',
-        'assets/animals/fox.png'
+        'data/atlases/fox_sprite_atlas.json',
+        'assets/animals/fox_sprite_atlas.png'
       ));
 
 
