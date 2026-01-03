@@ -14,6 +14,7 @@
   // -------------------------------------------------------------------------
   // Konstanten
   // -------------------------------------------------------------------------
+  const TAB_KEY   = 'SpriteTest';
   const TAB_ID   = 'SpriteTest';
   const TAB_NAME = 'SpriteTest';
   const DIRS = ['N','NE','E','SE','S','SW','W','NW'];
