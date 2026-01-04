@@ -23,16 +23,15 @@
   // ------------------------------------------------------------
   const CFG = {
     enabled: true,
-    spawn: { deer: 6, fox: 3, rabbit: 4, boar: 2 },
+    spawn: { deer: 6, fox: 3 },
     // Wanderung
     speedPxPerSec: { deer: 18, fox: 26 }, // langsame, „siedlerige“ Bewegung
     targetJitterPx: 96,                   // Zielpunkt im Umkreis
     retargetEverySec: [1.8, 4.2],          // Zufallsintervall
     // Draw
     // IMPORTANT: deer MUST match core/asset.js loadAtlas('deer_sprite_atlas', ...)
-    atlas: { deer:'deer_sprite_atlas', fox:'fox_atlas', rabbit:'rabbit_sprite_atlas', boar:'boar_sprite_atlas' },
-    framePrefix: { deer:'deer', fox:'fox', rabbit:'rabbit', boar:'boar' },
-  scaleByKind: { deer: 0.35, fox: 0.30, rabbit: 0.25, boar: 0.28 },
+    atlas: { deer:'deer_sprite_atlas', fox:'fox_atlas' },
+    framePrefix: { deer:'deer', fox:'fox' },
     // Für später: Jagd/Respawn
     respawnSec: { deer: 18, fox: 24 },
 
@@ -40,15 +39,6 @@
     avoidWater: true,
     landPickTries: 18
   };
-
-// Per-Tierart: Atlas-Key + Prefix + Default-Scale (werden von dir später feinjustiert)
-const KIND = {
-  deer:   { atlasKey: 'deer_sprite_atlas',   prefix: 'deer_',   scale: 0.35 },
-  fox:    { atlasKey: 'fox_atlas',          prefix: 'fox_',    scale: 0.30 },
-  rabbit: { atlasKey: 'rabbit_sprite_atlas',prefix: 'rabbit_', scale: 0.25 },
-  boar:   { atlasKey: 'boar_sprite_atlas',  prefix: 'boar_',   scale: 0.28 },
-};
-
 
   // ------------------------------------------------------------
   // STATE
@@ -191,7 +181,7 @@ const KIND = {
 
   function pickDirectionFromDelta(dx,dy){
     // 8 Richtungen (für Frame-Namen)
-    const ang = Math.atan2(-dy, dx); // -pi..pi
+    const ang = Math.atan2(dy, dx); // -pi..pi
     const deg = (ang * 180/Math.PI + 360) % 360;
     // E=0, NE=45, N=90, ...
     if (deg < 22.5 || deg >= 337.5) return 'E';
@@ -240,21 +230,20 @@ const KIND = {
 
     const base = chooseSpawnNearHQ();
 
-    
-    // --- Initial-Spawn: über CFG.spawn steuerbar (deer/fox/rabbit/boar) ---
-    Object.keys(CFG.spawn).forEach((kind)=>{
-      const count = CFG.spawn[kind] || 0;
-      // Etwas unterschiedliche Radien, damit nicht alles übereinander liegt
-      const radius = (kind==='deer') ? 240 : (kind==='fox') ? 280 : (kind==='rabbit') ? 220 : (kind==='boar') ? 260 : 240;
-      for (let i=0; i<count; i++){
-        const p = pickLandPointAround(base.x, base.y, radius);
-        const a = makeAnimal(kind, p.x, p.y);
-        ensureInsideMap(a);
-        State.animals.push(a);
-      }
-    });
+    for (let i=0;i<CFG.spawn.deer;i++){
+      const p = pickLandPointAround(base.x, base.y, 220);
+      const a = makeAnimal('deer', p.x, p.y);
+      ensureInsideMap(a);
+      State.animals.push(a);
+    }
+    for (let i=0;i<CFG.spawn.fox;i++){
+      const p = pickLandPointAround(base.x, base.y, 260);
+      const a = makeAnimal('fox', p.x, p.y);
+      ensureInsideMap(a);
+      State.animals.push(a);
+    }
 
-    LOG('spawned', State.animals.length, 'animals (initial)');
+    LOG('spawned', State.animals.length, 'animals near HQ/middle');
   }
 
   // ------------------------------------------------------------
@@ -349,7 +338,7 @@ const KIND = {
           // Welt-Pixel: wir zeichnen zentriert am Fußpunkt
           Assets.drawAtlasFrame(ctx, atlasName, frameName, a.x, a.y, {
             anchor: { x: 0.5, y: 0.90 }, // Fußpunkt ~ 90%
-            // scale: 1
+            scale: (CFG.scale && (CFG.scale[a.kind] != null)) ? CFG.scale[a.kind] : 1
           });
         }
       });
