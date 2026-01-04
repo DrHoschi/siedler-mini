@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/asset.js
  * Projekt : Neue Siedler – Epoche 1
- * Version  : v26.01.14-animals-atlas-add
+ * Version : v25.12.14-assets-status+inspector
  *
  * Zweck   :
  *   Zentrale Asset-Schicht:
@@ -517,20 +517,6 @@ try{
         'assets/animals/fox_sprite_atlas.png'
       ));
 
-      // Boar (Wildschwein) + Rabbit (Hase/Kaninchen)
-      // Hinweis: JSON liegt in data/animals/, PNG in assets/animals/
-      tasks.push(this.loadAtlas(
-        'boar_sprite_atlas',
-        'data/animals/boar_sprite_atlas.json',
-        'assets/animals/boar_sprite_atlas.png'
-      ));
-      tasks.push(this.loadAtlas(
-        'rabbit_sprite_atlas',
-        'data/animals/rabbit_sprite_atlas.json',
-        'assets/animals/rabbit_sprite_atlas.png'
-      ));
-
-
 
 
 
@@ -554,6 +540,16 @@ try{
         ],
         // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer)
         'assets/tex/deco/deco_plants_mega_atlas.png'
+      ));
+      tasks.push(this.loadAtlas(
+        'boar_sprite_atlas',
+        'data/atlases/boar_sprite_atlas.json',
+        'assets/animals/boar_sprite_atlas.png'
+      ));
+      tasks.push(this.loadAtlas(
+        'rabbit_sprite_atlas',
+        'data/atlases/rabbit_sprite_atlas.json',
+        'assets/animals/rabbit_sprite_atlas.png'
       ));
       // Characters / Units: Carrier (Träger)
       // Hinweis: JSON kann meta.image="carrier.png" enthalten, deshalb geben wir
