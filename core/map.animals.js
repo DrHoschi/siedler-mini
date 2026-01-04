@@ -22,6 +22,12 @@
   // KONFIG
   // ------------------------------------------------------------
   const CFG = {
+  // -------------------------------------------------------------------------
+  // BOOT LOG (damit du 100% siehst, welche Version/Skalen wirklich laufen)
+  // -------------------------------------------------------------------------
+  LOG('Animals loaded', VERSION);
+  try { LOG('Scale cfg:', JSON.stringify(CFG.scale)); } catch(e) { LOG('Scale cfg (raw)', CFG.scale); }
+
     enabled: true,
     spawn: { deer: 6, fox: 3 },
     // Wanderung
@@ -337,6 +343,7 @@
         draw(ctx){
           // Welt-Pixel: wir zeichnen zentriert am Fußpunkt
           Assets.drawAtlasFrame(ctx, atlasName, frameName, a.x, a.y, {
+            useAnchor: true,
             anchor: { x: 0.5, y: 0.90 }, // Fußpunkt ~ 90%
             scale: (CFG.scale && (CFG.scale[a.kind] != null)) ? CFG.scale[a.kind] : 1
           });
