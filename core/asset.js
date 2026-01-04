@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/asset.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.14-assets-status+inspector
+ * Version  : v26.01.14-animals-atlas-add
  *
  * Zweck   :
  *   Zentrale Asset-Schicht:
@@ -516,6 +516,20 @@ try{
         'data/atlases/fox_sprite_atlas.json',
         'assets/animals/fox_sprite_atlas.png'
       ));
+
+      // Boar (Wildschwein) + Rabbit (Hase/Kaninchen)
+      // Hinweis: JSON liegt in data/animals/, PNG in assets/animals/
+      tasks.push(this.loadAtlas(
+        'boar_sprite_atlas',
+        'data/animals/boar_sprite_atlas.json',
+        'assets/animals/boar_sprite_atlas.png'
+      ));
+      tasks.push(this.loadAtlas(
+        'rabbit_sprite_atlas',
+        'data/animals/rabbit_sprite_atlas.json',
+        'assets/animals/rabbit_sprite_atlas.png'
+      ));
+
 
 
 
