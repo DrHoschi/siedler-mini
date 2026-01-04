@@ -1,4 +1,16 @@
-/* ============================================================================
+/*
+      // Animals (Rabbit/Boar)
+      tasks.push(this.loadAtlas(
+        'rabbit_sprite_atlas',
+        'data/animals/rabbit_sprite_atlas.json',
+        'assets/animals/rabbit_sprite_atlas.png'
+      ));
+      tasks.push(this.loadAtlas(
+        'boar_sprite_atlas',
+        'data/animals/boar_sprite_atlas.json',
+        'assets/animals/boar_sprite_atlas.png'
+      ));
+ ============================================================================
  * Datei   : core/asset.js
  * Projekt : Neue Siedler – Epoche 1
  * Version : v25.12.14-assets-status+inspector
@@ -540,16 +552,6 @@ try{
         ],
         // PNG-Pfad bei Bedarf anpassen (Override gewinnt immer)
         'assets/tex/deco/deco_plants_mega_atlas.png'
-      ));
-      tasks.push(this.loadAtlas(
-        'boar_sprite_atlas',
-        'data/atlases/boar_sprite_atlas.json',
-        'assets/animals/boar_sprite_atlas.png'
-      ));
-      tasks.push(this.loadAtlas(
-        'rabbit_sprite_atlas',
-        'data/atlases/rabbit_sprite_atlas.json',
-        'assets/animals/rabbit_sprite_atlas.png'
       ));
       // Characters / Units: Carrier (Träger)
       // Hinweis: JSON kann meta.image="carrier.png" enthalten, deshalb geben wir
