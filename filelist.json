@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-03T02:21:12.963Z",
+  "createdAt": "2026-01-04T21:36:15.421Z",
   "root": ".",
-  "count": 571,
+  "count": 579,
   "entries": [
     {
       "type": "dir",
@@ -66,6 +66,11 @@
     },
     {
       "type": "file",
+      "path": "assets/animals/boar_sprite_atlas.png",
+      "size": 1108601
+    },
+    {
+      "type": "file",
       "path": "assets/animals/deer_sprite_atlas.png",
       "size": 1157006
     },
@@ -78,6 +83,11 @@
       "type": "file",
       "path": "assets/animals/fox.png",
       "size": 1625267
+    },
+    {
+      "type": "file",
+      "path": "assets/animals/rabbit_sprite_atlas.png",
+      "size": 1478098
     },
     {
       "type": "file",
@@ -1501,7 +1511,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 24687
+      "size": 25068
     },
     {
       "type": "file",
@@ -1581,7 +1591,7 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 5474
+      "size": 5481
     },
     {
       "type": "file",
@@ -1651,7 +1661,7 @@
     {
       "type": "file",
       "path": "core/game.rules.js",
-      "size": 20412
+      "size": 22371
     },
     {
       "type": "file",
@@ -1706,7 +1716,7 @@
     {
       "type": "file",
       "path": "core/map.animals.js",
-      "size": 13011
+      "size": 17312
     },
     {
       "type": "file",
@@ -1818,6 +1828,16 @@
     },
     {
       "type": "file",
+      "path": "data/atlases/boar_sprite_altas.json",
+      "size": 26236
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/boar_sprite_atlas.json",
+      "size": 26329
+    },
+    {
+      "type": "file",
       "path": "data/atlases/deer_sprite_atlas.json",
       "size": 26236
     },
@@ -1860,6 +1880,11 @@
       "type": "file",
       "path": "data/atlases/quarry-sprite_atlas.json",
       "size": 1610
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/rabbit_sprite_atlas.json",
+      "size": 26459
     },
     {
       "type": "dir",
@@ -2124,7 +2149,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.spritetest-v1.js",
-      "size": 29127
+      "size": 33609
     },
     {
       "type": "file",
@@ -2172,6 +2197,11 @@
     },
     {
       "type": "file",
+      "path": "inspector/ui-inspector-test.css",
+      "size": 8213
+    },
+    {
+      "type": "file",
       "path": "inspector/ui-inspector-v1.css",
       "size": 4732
     },
@@ -2184,6 +2214,20 @@
       "type": "file",
       "path": "inspector/ui-inspector.content-v1.js",
       "size": 5612
+    },
+    {
+      "type": "file",
+      "path": "inspector/ui-inspector.css",
+      "size": 5776
+    },
+    {
+      "type": "dir",
+      "path": "inspektor/"
+    },
+    {
+      "type": "file",
+      "path": "inspektor/ui-inspector-transparent.css",
+      "size": 8213
     },
     {
       "type": "dir",
@@ -2603,11 +2647,6 @@
     },
     {
       "type": "file",
-      "path": "ui/css/ui-inspector.css",
-      "size": 7213
-    },
-    {
-      "type": "file",
       "path": "ui/css/ui-inspector.final.css",
       "size": 9387
     },
@@ -2759,17 +2798,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 56933
+      "size": 57169
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22304
+      "size": 22416
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 18129
+      "size": 18121
     },
     {
       "type": "file",
