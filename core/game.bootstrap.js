@@ -119,7 +119,7 @@ window.addEventListener('cb:game:start', () => {
   __START_RES_DONE__ = true;
 
   if (window.Game?.resources?.reset) {
-    Game.resources.reset({
+    window.Game.resources.reset({
       wood: 20,
       stone: 20,
       fish: 20
