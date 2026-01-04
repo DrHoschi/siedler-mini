@@ -517,7 +517,8 @@ try{
         'assets/animals/fox_sprite_atlas.png'
       ));
 
-      // Animals (Wildschwein/Hase) – vorbereitet (Atlas + PNG müssen vorhanden sein)
+      // Animals (Wildschwein / Kaninchen)
+      // Achtung: Diese Keys müssen 1:1 mit core/map.animals.js übereinstimmen.
       tasks.push(this.loadAtlas(
         'boar_sprite_atlas',
         'data/atlases/boar_sprite_atlas.json',
@@ -528,6 +529,7 @@ try{
         'data/atlases/rabbit_sprite_atlas.json',
         'assets/animals/rabbit_sprite_atlas.png'
       ));
+
 
 
 
