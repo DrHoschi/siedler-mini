@@ -564,6 +564,49 @@
   document.addEventListener('cb:assets-ready', onAssetsReady);
   document.addEventListener('cb:registry:ready', onAssetsReady);
 
+  // ------------------------------------------------------------
+  // PROFI-STABILITÄT (Cache/Script-Reihenfolge):
+  // Falls 'cb:map:ready' schon gefeuert hat, bevor dieses Modul geladen wurde,
+  // würden wir die Map nie "sehen" -> keine Spawns -> keine Tiere sichtbar.
+  // Daher versuchen wir direkt + kurzzeitig per Poll, ein Map-Objekt zu finden
+  // (window.GameMap oder window.Game.map) und rufen dann onMapReady() nachträglich.
+  // ------------------------------------------------------------
+  (function animalsLateInit() {
+    let tries = 0;
+    const MAX_TRIES = 40;     // ~10s bei 250ms
+    const DELAY_MS  = 250;
+
+    function getMapCandidate() {
+      // Standard: GameMap ist bei euch häufig global verfügbar.
+      if (window.GameMap) return window.GameMap;
+      // Fallback: wenn ihr irgendwo ein Game-Objekt habt.
+      try { if (window.Game && window.Game.map) return window.Game.map; } catch (e) {}
+      return null;
+    }
+
+    function tick() {
+      if (State.ready) return; // bereits initialisiert
+      tries++;
+
+      const gm = getMapCandidate();
+      if (gm && typeof gm.worldToTile === 'function' && typeof gm.tileToWorld === 'function') {
+        // Simuliere cb:map:ready-Event-Payload
+        try {
+          onMapReady({ detail: { map: gm } });
+          logInfo('[animals] lateInit: map detected -> onMapReady() nachgeholt');
+        } catch (e) {
+          console.warn('[animals] lateInit failed:', e);
+        }
+        return;
+      }
+
+      if (tries < MAX_TRIES) setTimeout(tick, DELAY_MS);
+    }
+
+    setTimeout(tick, 0);
+  })();
+
+
   // Fallback: wenn es schon global da ist
   if (!State.assets) {
     if (window.Assets) State.assets = window.Assets;
