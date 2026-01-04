@@ -526,7 +526,7 @@ try{
         'assets/animals/deer_sprite_atlas.png'
       ));
       tasks.push(this.loadAtlas(
-        'fox_atlas',
+        'fox_sprite_atlas',
         'data/atlases/fox_sprite_atlas.json',
         'assets/animals/fox_sprite_atlas.png'
       ));
