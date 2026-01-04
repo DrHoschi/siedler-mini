@@ -510,14 +510,14 @@ try{
     // Animals (Hase/Kaninchen)
     tasks.push(this.loadAtlas(
       'rabbit_sprite_atlas',
-      'data/animals/rabbit_sprite_atlas.json',
+      'data/atlases/rabbit_sprite_atlas.json',
       'assets/animals/rabbit_sprite_atlas.png'
     ));
 
     // Animals (Wildschwein)
     tasks.push(this.loadAtlas(
       'boar_sprite_atlas',
-      'data/animals/boar_sprite_atlas.json',
+      'data/atlases/boar_sprite_atlas.json',
       'assets/animals/boar_sprite_atlas.png'
     ));
       tasks.push(this.loadAtlas(
