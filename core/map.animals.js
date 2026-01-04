@@ -122,7 +122,7 @@
     maxTotal: 14,
 
     // Default-Anzahl pro Tierart (rabbit/boar vorbereitet, default 0)
-    spawn: { deer: 6, fox: 3, rabbit: 0, boar: 0 },
+    spawn: { deer: 6, fox: 3, rabbit: 10, boar: 4 },
 
     // --------------------------------------------------------
     // Wanderung
