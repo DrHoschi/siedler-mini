@@ -1,6 +1,6 @@
 {
   "frames": {
-    "rabbit_N_walk_0": {
+    "boar_N_walk_0": {
       "frame": {
         "x": 0,
         "y": 0,
@@ -24,7 +24,7 @@
         "y": 128
       }
     },
-    "rabbit_N_walk_1": {
+    "boar_N_walk_1": {
       "frame": {
         "x": 128,
         "y": 0,
@@ -48,7 +48,7 @@
         "y": 128
       }
     },
-    "rabbit_N_walk_2": {
+    "boar_N_walk_2": {
       "frame": {
         "x": 256,
         "y": 0,
@@ -72,7 +72,7 @@
         "y": 128
       }
     },
-    "rabbit_N_walk_3": {
+    "boar_N_walk_3": {
       "frame": {
         "x": 384,
         "y": 0,
@@ -96,7 +96,7 @@
         "y": 128
       }
     },
-    "rabbit_N_walk_4": {
+    "boar_N_walk_4": {
       "frame": {
         "x": 512,
         "y": 0,
@@ -120,7 +120,7 @@
         "y": 128
       }
     },
-    "rabbit_N_walk_5": {
+    "boar_N_walk_5": {
       "frame": {
         "x": 640,
         "y": 0,
@@ -144,7 +144,7 @@
         "y": 128
       }
     },
-    "rabbit_N_walk_6": {
+    "boar_N_walk_6": {
       "frame": {
         "x": 768,
         "y": 0,
@@ -168,7 +168,7 @@
         "y": 128
       }
     },
-    "rabbit_N_walk_7": {
+    "boar_N_walk_7": {
       "frame": {
         "x": 896,
         "y": 0,
@@ -192,7 +192,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_0": {
+    "boar_NE_walk_0": {
       "frame": {
         "x": 0,
         "y": 128,
@@ -216,7 +216,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_1": {
+    "boar_NE_walk_1": {
       "frame": {
         "x": 128,
         "y": 128,
@@ -240,7 +240,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_2": {
+    "boar_NE_walk_2": {
       "frame": {
         "x": 256,
         "y": 128,
@@ -264,7 +264,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_3": {
+    "boar_NE_walk_3": {
       "frame": {
         "x": 384,
         "y": 128,
@@ -288,7 +288,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_4": {
+    "boar_NE_walk_4": {
       "frame": {
         "x": 512,
         "y": 128,
@@ -312,7 +312,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_5": {
+    "boar_NE_walk_5": {
       "frame": {
         "x": 640,
         "y": 128,
@@ -336,7 +336,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_6": {
+    "boar_NE_walk_6": {
       "frame": {
         "x": 768,
         "y": 128,
@@ -360,7 +360,7 @@
         "y": 128
       }
     },
-    "rabbit_NE_walk_7": {
+    "boar_NE_walk_7": {
       "frame": {
         "x": 896,
         "y": 128,
@@ -384,7 +384,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_0": {
+    "boar_E_walk_0": {
       "frame": {
         "x": 0,
         "y": 256,
@@ -408,7 +408,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_1": {
+    "boar_E_walk_1": {
       "frame": {
         "x": 128,
         "y": 256,
@@ -432,7 +432,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_2": {
+    "boar_E_walk_2": {
       "frame": {
         "x": 256,
         "y": 256,
@@ -456,7 +456,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_3": {
+    "boar_E_walk_3": {
       "frame": {
         "x": 384,
         "y": 256,
@@ -480,7 +480,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_4": {
+    "boar_E_walk_4": {
       "frame": {
         "x": 512,
         "y": 256,
@@ -504,7 +504,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_5": {
+    "boar_E_walk_5": {
       "frame": {
         "x": 640,
         "y": 256,
@@ -528,7 +528,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_6": {
+    "boar_E_walk_6": {
       "frame": {
         "x": 768,
         "y": 256,
@@ -552,7 +552,7 @@
         "y": 128
       }
     },
-    "rabbit_E_walk_7": {
+    "boar_E_walk_7": {
       "frame": {
         "x": 896,
         "y": 256,
@@ -576,7 +576,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_0": {
+    "boar_SE_walk_0": {
       "frame": {
         "x": 0,
         "y": 384,
@@ -600,7 +600,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_1": {
+    "boar_SE_walk_1": {
       "frame": {
         "x": 128,
         "y": 384,
@@ -624,7 +624,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_2": {
+    "boar_SE_walk_2": {
       "frame": {
         "x": 256,
         "y": 384,
@@ -648,7 +648,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_3": {
+    "boar_SE_walk_3": {
       "frame": {
         "x": 384,
         "y": 384,
@@ -672,7 +672,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_4": {
+    "boar_SE_walk_4": {
       "frame": {
         "x": 512,
         "y": 384,
@@ -696,7 +696,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_5": {
+    "boar_SE_walk_5": {
       "frame": {
         "x": 640,
         "y": 384,
@@ -720,7 +720,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_6": {
+    "boar_SE_walk_6": {
       "frame": {
         "x": 768,
         "y": 384,
@@ -744,7 +744,7 @@
         "y": 128
       }
     },
-    "rabbit_SE_walk_7": {
+    "boar_SE_walk_7": {
       "frame": {
         "x": 896,
         "y": 384,
@@ -768,7 +768,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_0": {
+    "boar_S_walk_0": {
       "frame": {
         "x": 0,
         "y": 512,
@@ -792,7 +792,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_1": {
+    "boar_S_walk_1": {
       "frame": {
         "x": 128,
         "y": 512,
@@ -816,7 +816,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_2": {
+    "boar_S_walk_2": {
       "frame": {
         "x": 256,
         "y": 512,
@@ -840,7 +840,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_3": {
+    "boar_S_walk_3": {
       "frame": {
         "x": 384,
         "y": 512,
@@ -864,7 +864,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_4": {
+    "boar_S_walk_4": {
       "frame": {
         "x": 512,
         "y": 512,
@@ -888,7 +888,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_5": {
+    "boar_S_walk_5": {
       "frame": {
         "x": 640,
         "y": 512,
@@ -912,7 +912,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_6": {
+    "boar_S_walk_6": {
       "frame": {
         "x": 768,
         "y": 512,
@@ -936,7 +936,7 @@
         "y": 128
       }
     },
-    "rabbit_S_walk_7": {
+    "boar_S_walk_7": {
       "frame": {
         "x": 896,
         "y": 512,
@@ -960,7 +960,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_0": {
+    "boar_SW_walk_0": {
       "frame": {
         "x": 0,
         "y": 640,
@@ -984,7 +984,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_1": {
+    "boar_SW_walk_1": {
       "frame": {
         "x": 128,
         "y": 640,
@@ -1008,7 +1008,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_2": {
+    "boar_SW_walk_2": {
       "frame": {
         "x": 256,
         "y": 640,
@@ -1032,7 +1032,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_3": {
+    "boar_SW_walk_3": {
       "frame": {
         "x": 384,
         "y": 640,
@@ -1056,7 +1056,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_4": {
+    "boar_SW_walk_4": {
       "frame": {
         "x": 512,
         "y": 640,
@@ -1080,7 +1080,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_5": {
+    "boar_SW_walk_5": {
       "frame": {
         "x": 640,
         "y": 640,
@@ -1104,7 +1104,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_6": {
+    "boar_SW_walk_6": {
       "frame": {
         "x": 768,
         "y": 640,
@@ -1128,7 +1128,7 @@
         "y": 128
       }
     },
-    "rabbit_SW_walk_7": {
+    "boar_SW_walk_7": {
       "frame": {
         "x": 896,
         "y": 640,
@@ -1152,7 +1152,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_0": {
+    "boar_W_walk_0": {
       "frame": {
         "x": 0,
         "y": 768,
@@ -1176,7 +1176,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_1": {
+    "boar_W_walk_1": {
       "frame": {
         "x": 128,
         "y": 768,
@@ -1200,7 +1200,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_2": {
+    "boar_W_walk_2": {
       "frame": {
         "x": 256,
         "y": 768,
@@ -1224,7 +1224,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_3": {
+    "boar_W_walk_3": {
       "frame": {
         "x": 384,
         "y": 768,
@@ -1248,7 +1248,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_4": {
+    "boar_W_walk_4": {
       "frame": {
         "x": 512,
         "y": 768,
@@ -1272,7 +1272,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_5": {
+    "boar_W_walk_5": {
       "frame": {
         "x": 640,
         "y": 768,
@@ -1296,7 +1296,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_6": {
+    "boar_W_walk_6": {
       "frame": {
         "x": 768,
         "y": 768,
@@ -1320,7 +1320,7 @@
         "y": 128
       }
     },
-    "rabbit_W_walk_7": {
+    "boar_W_walk_7": {
       "frame": {
         "x": 896,
         "y": 768,
@@ -1344,7 +1344,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_0": {
+    "boar_NW_walk_0": {
       "frame": {
         "x": 0,
         "y": 896,
@@ -1368,7 +1368,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_1": {
+    "boar_NW_walk_1": {
       "frame": {
         "x": 128,
         "y": 896,
@@ -1392,7 +1392,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_2": {
+    "boar_NW_walk_2": {
       "frame": {
         "x": 256,
         "y": 896,
@@ -1416,7 +1416,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_3": {
+    "boar_NW_walk_3": {
       "frame": {
         "x": 384,
         "y": 896,
@@ -1440,7 +1440,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_4": {
+    "boar_NW_walk_4": {
       "frame": {
         "x": 512,
         "y": 896,
@@ -1464,7 +1464,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_5": {
+    "boar_NW_walk_5": {
       "frame": {
         "x": 640,
         "y": 896,
@@ -1488,7 +1488,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_6": {
+    "boar_NW_walk_6": {
       "frame": {
         "x": 768,
         "y": 896,
@@ -1512,7 +1512,7 @@
         "y": 128
       }
     },
-    "rabbit_NW_walk_7": {
+    "boar_NW_walk_7": {
       "frame": {
         "x": 896,
         "y": 896,
@@ -1540,7 +1540,7 @@
   "meta": {
     "app": "NeueSiedler-GridAtlas",
     "version": "1.0",
-    "image": "assets/animals/rabbit_sprite_atlas.png",
+    "image": "assets/animals/boar_sprite_atlas.png",
     "size": {
       "w": 1024,
       "h": 1024
