@@ -1540,7 +1540,7 @@
   "meta": {
     "app": "grid-gen",
     "version": "1.0",
-    "image": "rabbit_sprite_atlas.png",
+    "image": "assets/animals/rabbit_sprite_atlas.png",
     "format": "RGBA8888",
     "size": {
       "w": 1024,
