@@ -506,6 +506,20 @@ try{
       ));
 
       // Animals (Reh/Fuchs)
+
+    // Animals (Hase/Kaninchen)
+    tasks.push(this.loadAtlas(
+      'rabbit_sprite_atlas',
+      'data/animals/rabbit_sprite_atlas.json',
+      'assets/animals/rabbit_sprite_atlas.png'
+    ));
+
+    // Animals (Wildschwein)
+    tasks.push(this.loadAtlas(
+      'boar_sprite_atlas',
+      'data/animals/boar_sprite_atlas.json',
+      'assets/animals/boar_sprite_atlas.png'
+    ));
       tasks.push(this.loadAtlas(
         'deer_sprite_atlas',
         'data/atlases/deer_sprite_atlas.json',
@@ -516,20 +530,6 @@ try{
         'data/atlases/fox_sprite_atlas.json',
         'assets/animals/fox_sprite_atlas.png'
       ));
-
-      // Animals (Wildschwein / Kaninchen)
-      // Achtung: Diese Keys müssen 1:1 mit core/map.animals.js übereinstimmen.
-      tasks.push(this.loadAtlas(
-        'boar_sprite_atlas',
-        'data/atlases/boar_sprite_atlas.json',
-        'assets/animals/boar_sprite_atlas.png'
-      ));
-      tasks.push(this.loadAtlas(
-        'rabbit_sprite_atlas',
-        'data/atlases/rabbit_sprite_atlas.json',
-        'assets/animals/rabbit_sprite_atlas.png'
-      ));
-
 
 
 
