@@ -1,445 +1,588 @@
-/**
- * core/map.animals.js
- * Version  : v26.01.04-animals-hotfix-nobug-scale-dir
- * Zweck    : Tiere (Reh/Fuchs/Wildschwein/Hase) auf der World-Map rendern + bewegen
+/* ============================================================================
+ *  core/map.animals.js
+ *  v26.01.04-animals-final
+ *  Zweck:
+ *   - Wildtiere (Deer/Fox/Boar/Rabbit) auf der Map spawnen & bewegen
+ *   - Wald-Priorität (Spawn dort, wo viele Bäume sind) + Fallback
+ *   - Wasser wird gemieden (Spawn + Bewegung + Retarget)
+ *   - Richtungs-Frame wird korrekt aus Bewegungsvektor bestimmt (mit optionalem EW-Flip)
  *
- * Fixes in diesem Patch:
- *  - ✅ SyntaxError entfernt ("Animals loaded" war versehentlich in einer Parameterliste gelandet)
- *  - ✅ Scale pro Tier wird WIRKLICH an Assets.drawAtlasFrame übergeben (opts.scale)
- *  - ✅ Richtungs-Mapping konsistent: N→NE→E→SE→S→SW→W→NW (Uhrzeigersinn)
- *  - ✅ No-Water: Tiere betreten kein Wasser (wenn Water-Checker verfügbar ist)
- *  - ✅ Spawns: bevorzugt "tree-dense" Bereiche, fällt aber sauber zurück (damit nie wieder 0 Tiere)
- *
- * Hinweis:
- *  - Wir nutzen ausschließlich Atlas-Frames: <prefix>_<DIR>_walk_<i>
- *    (Frame 0 gilt bei euch als "Idle-Pose" → bleibt kompatibel)
- */
-
-(function(){
+ *  Hinweis zur Richtungslogik:
+ *   Eure Atlas-"Dir"-Benennung ist im Uhrzeigersinn (N→NE→E→SE→S→SW→W→NW).
+ *   Wenn euer Projekt-Koordinatensystem später global vereinheitlicht wird,
+ *   kann es sein, dass ihr CFG.flipEW wieder auf false stellen wollt.
+ * ========================================================================== */
+(() => {
   'use strict';
 
-  // ------------------------------------------------------------
-  // SHORTCUTS / SAFE HELPERS
-  // ------------------------------------------------------------
-  const now = ()=> (performance && performance.now) ? performance.now() : Date.now();
+  /* ========================================================================
+   *  KONSTANTEN / DEFAULTS
+   * ====================================================================== */
 
-  const LOG  = (...a)=> console.log('[animals]', ...a);
-  const WARN = (...a)=> console.warn('[animals]', ...a);
+  // Debug-Log Prefix
+  const TAG = '[animals]';
 
-  // ------------------------------------------------------------
-  // CONFIG
-  // ------------------------------------------------------------
+  // Globale Konfiguration (bewusst "einfach" gehalten, damit du schnell testen kannst)
   const CFG = {
     enabled: true,
 
-    // Max. Anzahl pro Tierart (damit nichts explodiert)
-    maxTotal: 20,
-
-    // Spawn-Counts (kannst du später über Registry/JSON steuern)
-    spawn: {
+    // Maximale Anzahl pro Tierart (damit nicht "unbegrenzt" gespawnt wird)
+    maxPerType: {
       deer: 8,
       fox: 6,
       boar: 4,
-      rabbit: 6
+      rabbit: 10,
     },
 
-    // Anim
-    animFps: 6,          // Frames pro Sekunde
-    movePxPerSec: 18,    // Welt-Pixel pro Sekunde (klein = ruhiger)
+    // Spawn-Verhalten
+    spawn: {
+      // Wie viele Kandidaten wir testen, um einen guten Wald-Spawn zu finden
+      forestCandidates: 48,
+      // Radius (in Pixeln) um einen Baum/Tree-Node herum, wo wir spawnen dürfen
+      forestRadiusPx: 260,
+      // Minimaler Abstand zum HQ (in Pixeln), damit nicht alles direkt am HQ klebt
+      minDistToHQ: 220,
+      // Fallback-Radius (in Pixeln) um HQ, wenn keine Tree-Daten vorhanden sind
+      fallbackRadiusPx: 900,
+    },
 
-    // Retarget (wie oft neue Zielpunkte gesucht werden)
-    retargetSecMin: 1.8,
-    retargetSecMax: 3.4,
+    // Bewegung
+    move: {
+      speedPxPerSec: 28,       // Basisspeed
+      wanderMinPx: 120,        // Minimaler Ziel-Abstand
+      wanderMaxPx: 520,        // Maximaler Ziel-Abstand
+      retargetCooldownMs: 350, // Kurzer Cooldown gegen "Ziel-Flattern"
+    },
 
-    // Spawn-Suche
-    spawnSearchTries: 80,        // wie oft wir "gute" Spawn-Punkte suchen
-    spawnPreferTreesMin: 6,      // Minimum "Baum-Punkte" in 5x5 Umgebung
-    spawnRadiusFromCenter: 520,  // initiale Suche rund um Map-Mitte (fallback-sicher)
+    // Rendering / Skalierung (deine Vorgabe)
+    scales: {
+      deer: 0.35,
+      fox: 0.30,
+      // Für Boar/Rabbit hattest du noch keine finalen Werte genannt → Defaults:
+      boar: 0.35,
+      rabbit: 0.30,
+    },
 
-    // Dir-Order (Master): Uhrzeigersinn
-    dirLabels: ['N','NE','E','SE','S','SW','W','NW'],
+    // Atlas/Frame-Namensschema (Master-Keys)
+    // Erwartete Frame-Namen: <prefix>_<DIR>_walk_<frameIndex>
+    // Beispiel: deer_N_walk_0
+    types: {
+      deer:   { atlasKey: 'deer_sprite_atlas',   prefix: 'deer'   },
+      fox:    { atlasKey: 'fox_sprite_atlas',    prefix: 'fox'    },
+      boar:   { atlasKey: 'boar_sprite_atlas',   prefix: 'boar'   },
+      rabbit: { atlasKey: 'rabbit_sprite_atlas', prefix: 'rabbit' },
+    },
+
+    // Wenn eure Sprites links/rechts vertauscht erscheinen: true lassen (aktuell dein Wunsch).
+    // (Später, wenn ihr das gesamte Koordinatensystem vereinheitlicht, evtl. wieder false.)
+    flipEW: true,
+
+    // Optional: Spawn-Logs
+    logSpawn: true,
   };
 
-  // Tier-Definitionen (AtlasKey + Prefix + Scale)
-  const KIND = {
-    deer:   { atlas:'deer_sprite_atlas',   prefix:'deer_',   scale:0.35 },
-    fox:    { atlas:'fox_sprite_atlas',    prefix:'fox_',    scale:0.30 },
-    boar:   { atlas:'boar_sprite_atlas',   prefix:'boar_',   scale:0.40 },
-    rabbit: { atlas:'rabbit_sprite_atlas', prefix:'rabbit_', scale:0.28 },
-  };
+  // Richtungscode (fix, weil Atlas so benannt ist)
+  const DIRS = ['N','NE','E','SE','S','SW','W','NW'];
 
-  // ------------------------------------------------------------
-  // STATE
-  // ------------------------------------------------------------
+  /* ========================================================================
+   *  STATE
+   * ====================================================================== */
+
   const State = {
-    ready:false,
-    cols:0,
-    rows:0,
-    tileSize:64,
-    mapId:null,
+    ready: false,
+    mapId: null,
+    cols: 0,
+    rows: 0,
+    tileSize: 64, // wird bei map-ready überschrieben, falls verfügbar
 
-    animals:[],
-    dead:[],
-    _t:0,
-    _lastDrawT:0,
+    assets: null,
+    diag: null,
+
+    animals: [],
+
+    // Für Wasser-Check
+    waterIdSet: null,
+
+    // Für "Wald-Spawn"
+    treeNodes: null, // [{x,y, ...}] aus MapResources
+
+    // HQ Position (Pixel)
+    hqX: 0,
+    hqY: 0,
   };
 
-  // ------------------------------------------------------------
-  // MAP HELPERS (Water / Trees)
-  // ------------------------------------------------------------
-  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+  /* ========================================================================
+   *  HELPER
+   * ====================================================================== */
 
-  function worldToTile(x,y){
-    const ts = State.tileSize||64;
+  function nowMs() { return Date.now(); }
+
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  function rand(min, max) { return min + Math.random() * (max - min); }
+
+  function randInt(min, maxIncl) { return Math.floor(min + Math.random() * (maxIncl - min + 1)); }
+
+  function dist2(ax, ay, bx, by) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    return dx*dx + dy*dy;
+  }
+
+  function ensureInsideMapPx(x, y) {
+    const maxX = (State.cols * State.tileSize) - 1;
+    const maxY = (State.rows * State.tileSize) - 1;
     return {
-      tx: Math.floor(x/ts),
-      ty: Math.floor(y/ts),
+      x: clamp(x, 0, maxX),
+      y: clamp(y, 0, maxY),
     };
   }
 
-  function tileToWorldCenter(tx,ty){
-    const ts = State.tileSize||64;
+  function worldToTile(x, y) {
+    const ts = State.tileSize || 64;
     return {
-      x: (tx+0.5)*ts,
-      y: (ty+0.5)*ts,
+      tx: Math.floor(x / ts),
+      ty: Math.floor(y / ts),
     };
   }
 
-  function insideTile(tx,ty){
-    return (tx>=0 && ty>=0 && tx<State.cols && ty<State.rows);
+  function tileToWorldCenter(tx, ty) {
+    const ts = State.tileSize || 64;
+    return {
+      x: (tx * ts) + ts * 0.5,
+      y: (ty * ts) + ts * 0.5,
+    };
   }
 
-  // --- Water detection: wir unterstützen mehrere mögliche APIs (weil dein Projekt historisch gewachsen ist)
-  function isWater(tx,ty){
-    try{
-      const GM = window.GameMap;
-      // 1) GameMap.isWater(tx,ty)
-      if (GM && typeof GM.isWater === 'function') return !!GM.isWater(tx,ty);
-      // 2) GameMap.terrainAt(tx,ty) -> {water:true}
-      if (GM && typeof GM.terrainAt === 'function') {
-        const t = GM.terrainAt(tx,ty);
-        if (t && typeof t.water !== 'undefined') return !!t.water;
-      }
-      // 3) GameMap.getTerrain(tx,ty) -> string
-      if (GM && typeof GM.getTerrain === 'function') {
-        const v = GM.getTerrain(tx,ty);
-        if (typeof v === 'string') return (v.toLowerCase().includes('water') || v.toLowerCase().includes('sea') || v.toLowerCase().includes('river'));
-      }
-      // 4) GameMap.isWaterTileId(tileId)
-      if (GM && typeof GM.getTileId === 'function' && typeof GM.isWaterTileId === 'function') {
-        const id = GM.getTileId(tx,ty);
-        return !!GM.isWaterTileId(id);
-      }
-    }catch(e){ /* ignore */ }
-    return false; // fallback: wenn wir Wasser nicht erkennen können, blocken wir nicht hart (aber meist habt ihr eine API)
-  }
+  /* ------------------------------------------------------------------------
+   * Wasser-Erkennung über GameMap._state.grid + legend (robust)
+   * --------------------------------------------------------------------- */
 
-  // --- Tree density: ebenfalls mehrere APIs/fallbacks
-  function treeScore(tx,ty){
-    // Scoring in 5x5 (radius 2): zählt "Baum-ähnliche" Deko/World-Objekte
-    let score = 0;
-    const r = 2;
-    for (let yy=ty-r; yy<=ty+r; yy++) for (let xx=tx-r; xx<=tx+r; xx++) {
-      if (!insideTile(xx,yy)) continue;
-      // Wasser-Tiles zählen nicht
-      if (isWater(xx,yy)) continue;
+  function computeWaterIdSetFromLegend(legend) {
+    try {
+      const out = new Set();
+      if (!legend) return out;
 
-      // 1) GameMap.hasTree(tx,ty)
-      const GM = window.GameMap;
-      try{
-        if (GM && typeof GM.hasTree === 'function') {
-          if (GM.hasTree(xx,yy)) score += 2;
-          continue;
+      // 1) idByName
+      if (legend.idByName && typeof legend.idByName === 'object') {
+        for (const [name, id] of Object.entries(legend.idByName)) {
+          if (String(name).toLowerCase().includes('water')) out.add(Number(id));
         }
-      }catch(e){}
+      }
 
-      // 2) GameMap.getDecoAt(tx,ty) -> array/obj; name includes 'tree'
-      try{
-        if (GM && typeof GM.getDecoAt === 'function') {
-          const d = GM.getDecoAt(xx,yy);
-          if (d){
-            const arr = Array.isArray(d) ? d : [d];
-            for (const it of arr){
-              const name = (it?.name || it?.id || it?.key || '').toString().toLowerCase();
-              if (name.includes('tree') || name.includes('pine') || name.includes('fir')) score += 2;
-            }
+      // 2) terrainNameById
+      if (legend.terrainNameById && typeof legend.terrainNameById === 'object') {
+        for (const [id, name] of Object.entries(legend.terrainNameById)) {
+          if (String(name).toLowerCase().includes('water')) out.add(Number(id));
+        }
+      }
+
+      // 3) names + ids parallel
+      if (Array.isArray(legend.names) && Array.isArray(legend.ids) && legend.names.length === legend.ids.length) {
+        for (let i=0;i<legend.names.length;i++) {
+          if (String(legend.names[i]).toLowerCase().includes('water')) {
+            out.add(Number(legend.ids[i]));
           }
-          continue;
         }
-      }catch(e){}
+      }
 
-      // 3) Fallback: keine Deko-API → wir können nicht scoren
+      return out;
+    } catch (e) {
+      return new Set();
     }
-    return score;
   }
 
-  // ------------------------------------------------------------
-  // DIR MAPPING (Master: N→NE→E→SE→S→SW→W→NW)
-  // ------------------------------------------------------------
-  function vecToDir8(dx,dy){
-    const eps = 0.00001;
-    if (Math.abs(dx)<eps && Math.abs(dy)<eps) return 0; // N (egal) – bleibt stabil
+  function getTerrainTileId(tx, ty) {
+    const gm = window.GameMap;
+    const st = gm && gm._state;
+    const grid = st && st.grid;
+    if (!grid) return null;
 
-    // Bildschirm-Koordinaten: +x rechts, +y runter.
-    // atan2 -> 0 = E, 90° = S, 180° = W, 270° = N
-    const ang = Math.atan2(dy, dx); // -pi..pi
-    let idxE = Math.round(ang / (Math.PI/4)); // -4..4
-    idxE = ((idxE % 8) + 8) % 8;             // 0..7 (0=E,1=SE,...,6=N,7=NE)
-
-    // Umrechnung in N-Order: (idxE+2)%8 → 0=N,1=NE,2=E,...
-    return (idxE + 2) % 8;
-  }
-
-  // ------------------------------------------------------------
-  // ANIMAL FACTORY
-  // ------------------------------------------------------------
-  function makeAnimal(kind, x, y){
-    const k = KIND[kind] || KIND.deer;
-    const a = {
-      id: 'a_' + Math.random().toString(36).slice(2,9),
-      kind,
-      x, y,
-      vx:0, vy:0,
-      tx: x, ty: y,     // target world
-      dir:0,
-      animT:0,
-      animI:0,
-      nextRetarget: rand(CFG.retargetSecMin, CFG.retargetSecMax),
-    };
-    // initial target
-    pickNewTarget(a);
-    return a;
-  }
-
-  function rand(a,b){ return a + Math.random()*(b-a); }
-
-  function pickNewTarget(a){
-    // Ziel in der Nähe suchen – aber nicht aufs Wasser
-    const ts = State.tileSize||64;
-
-    for (let i=0;i<30;i++){
-      const rx = a.x + rand(-220, 220);
-      const ry = a.y + rand(-220, 220);
-      const t = worldToTile(rx, ry);
-      if (!insideTile(t.tx,t.ty)) continue;
-      if (isWater(t.tx,t.ty)) continue;
-      const w = tileToWorldCenter(t.tx,t.ty);
-      a.tx = w.x; a.ty = w.y;
-      return;
+    if (Array.isArray(grid)) {
+      // 2D?
+      if (Array.isArray(grid[0])) {
+        const row = grid[ty];
+        return row ? row[tx] : null;
+      }
+      // flat?
+      const idx = ty * State.cols + tx;
+      return grid[idx];
     }
-    // Fallback: stehen bleiben
-    a.tx = a.x; a.ty = a.y;
+    return null;
   }
 
-  // ------------------------------------------------------------
-  // SPAWN SELECTION
-  // ------------------------------------------------------------
-  function chooseSpawnBase(){
-    // 1) Wenn HQ bekannt ist → grob in der Nähe (aber wir wollen ja "waldiger")
-    try{
-      const b = window.Game?.buildings?.list?.find?.(x=>x?.id==='b.hq' || x?.key==='b.hq' || x?.type==='b.hq');
-      if (b && typeof b.x === 'number' && typeof b.y === 'number') return {x:b.x, y:b.y};
-    }catch(e){}
+  function isWaterAtWorld(x, y) {
+    const { tx, ty } = worldToTile(x, y);
+    if (tx < 0 || ty < 0 || tx >= State.cols || ty >= State.rows) return true;
 
-    // 2) Map-Mitte (sicher)
-    const cx = (State.cols*State.tileSize)*0.5;
-    const cy = (State.rows*State.tileSize)*0.5;
-    return {x:cx,y:cy};
+    // Wenn wir nicht wissen, was Wasser ist: nicht blocken (Debug-freundlich)
+    if (!State.waterIdSet) return false;
+
+    const id = getTerrainTileId(tx, ty);
+    if (id == null) return false;
+    return State.waterIdSet.has(Number(id));
   }
 
-  function findForestishPoint(){
-    const base = chooseSpawnBase();
-    const ts = State.tileSize||64;
+  /* ------------------------------------------------------------------------
+   * Richtungs-Mapping
+   * --------------------------------------------------------------------- */
 
+  function pickDirectionFromDelta(dx, dy) {
+    // Acht Richtungen anhand Winkel (0° = Osten, CCW positiv)
+    const ang = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+
+    let dir;
+    if (ang >= 337.5 || ang < 22.5) dir = 'E';
+    else if (ang < 67.5) dir = 'NE';
+    else if (ang < 112.5) dir = 'N';
+    else if (ang < 157.5) dir = 'NW';
+    else if (ang < 202.5) dir = 'W';
+    else if (ang < 247.5) dir = 'SW';
+    else if (ang < 292.5) dir = 'S';
+    else dir = 'SE';
+
+    if (!CFG.flipEW) return dir;
+
+    // EW flip (und diagonalen)
+    if (dir === 'E') return 'W';
+    if (dir === 'W') return 'E';
+    if (dir === 'NE') return 'NW';
+    if (dir === 'NW') return 'NE';
+    if (dir === 'SE') return 'SW';
+    if (dir === 'SW') return 'SE';
+    return dir;
+  }
+
+  function frameKeyFor(a) {
+    const typeCfg = CFG.types[a.kind];
+    const prefix = (typeCfg && typeCfg.prefix) ? typeCfg.prefix : a.kind;
+    const dir = a.dir || 'S';
+    const animF = a.animF || 0;
+    return `${prefix}_${dir}_walk_${animF}`;
+  }
+
+  /* ------------------------------------------------------------------------
+   * Tree/Forest Spawn Heuristik
+   * --------------------------------------------------------------------- */
+
+  function refreshTreeNodes() {
+    const mr = window.MapResources;
+    const st = mr && (mr._state || mr.State || mr.state);
+    const trees = (st && st.trees) || null;
+    State.treeNodes = Array.isArray(trees) ? trees : null;
+  }
+
+  function chooseSpawnInForest() {
+    const trees = State.treeNodes;
+    if (!trees || trees.length < 10) return null;
+
+    const tries = Math.min(CFG.spawn.forestCandidates, trees.length);
     let best = null;
     let bestScore = -1;
 
-    for (let i=0;i<CFG.spawnSearchTries;i++){
-      const rx = base.x + rand(-CFG.spawnRadiusFromCenter, CFG.spawnRadiusFromCenter);
-      const ry = base.y + rand(-CFG.spawnRadiusFromCenter, CFG.spawnRadiusFromCenter);
-      const t = worldToTile(rx, ry);
-      if (!insideTile(t.tx,t.ty)) continue;
-      if (isWater(t.tx,t.ty)) continue;
+    for (let i=0;i<tries;i++) {
+      const t = trees[randInt(0, trees.length - 1)];
+      const cx = t.x;
+      const cy = t.y;
 
-      const s = treeScore(t.tx,t.ty);
-      if (s > bestScore){
-        bestScore = s;
-        best = {tx:t.tx, ty:t.ty, score:s};
+      const r2 = CFG.spawn.forestRadiusPx * CFG.spawn.forestRadiusPx;
+      let score = 0;
+
+      // sampling statt full-scan
+      const sample = Math.min(60, trees.length);
+      for (let k=0;k<sample;k++) {
+        const tt = trees[randInt(0, trees.length - 1)];
+        if (dist2(cx, cy, tt.x, tt.y) <= r2) score++;
       }
-      if (s >= CFG.spawnPreferTreesMin) break;
-    }
 
-    // fallback: wenn scoring nicht möglich war → nehmen wir zumindest ein land-tile
-    if (!best){
-      for (let i=0;i<200;i++){
-        const rx = base.x + rand(-CFG.spawnRadiusFromCenter, CFG.spawnRadiusFromCenter);
-        const ry = base.y + rand(-CFG.spawnRadiusFromCenter, CFG.spawnRadiusFromCenter);
-        const t = worldToTile(rx, ry);
-        if (!insideTile(t.tx,t.ty)) continue;
-        if (isWater(t.tx,t.ty)) continue;
-        best = {tx:t.tx, ty:t.ty, score:0};
-        break;
+      // nicht zu nah am HQ
+      const d2hq = dist2(cx, cy, State.hqX, State.hqY);
+      if (d2hq < CFG.spawn.minDistToHQ * CFG.spawn.minDistToHQ) score -= 999;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x: cx, y: cy };
       }
     }
 
-    if (!best){
-      // absolute last resort: tile 0,0 (wird später geklemmt)
-      best = {tx:0,ty:0,score:0};
-    }
+    if (!best) return null;
 
-    const w = tileToWorldCenter(best.tx,best.ty);
-    return {x:w.x,y:w.y, score:bestScore};
+    const ang = rand(0, Math.PI * 2);
+    const rad = rand(40, CFG.spawn.forestRadiusPx);
+    let x = best.x + Math.cos(ang) * rad;
+    let y = best.y + Math.sin(ang) * rad;
+
+    const p = ensureInsideMapPx(x, y);
+    x = p.x; y = p.y;
+
+    if (isWaterAtWorld(x, y)) return null;
+
+    return { x, y };
   }
 
-  // ------------------------------------------------------------
-  // RESET / INIT
-  // ------------------------------------------------------------
-  function reset(){
-    State.animals.length = 0;
-    State.dead.length = 0;
-    State._t = 0;
-    State.ready = true;
+  function chooseSpawnFallback() {
+    // Fallback: random um HQ, aber nicht zu nah
+    for (let i=0;i<80;i++) {
+      const ang = rand(0, Math.PI * 2);
+      const rad = rand(CFG.spawn.minDistToHQ, CFG.spawn.fallbackRadiusPx);
+      const x = State.hqX + Math.cos(ang) * rad;
+      const y = State.hqY + Math.sin(ang) * rad;
+      const p = ensureInsideMapPx(x, y);
+      if (!isWaterAtWorld(p.x, p.y)) return p;
+    }
 
-    const base = findForestishPoint();
-
-    const add = (kind, n, radius)=>{
-      for (let i=0;i<n;i++){
-        // kleine Random-Cloud um base
-        const rx = base.x + rand(-radius, radius);
-        const ry = base.y + rand(-radius, radius);
-        const t = worldToTile(rx,ry);
-        if (!insideTile(t.tx,t.ty)) { i--; continue; }
-        if (isWater(t.tx,t.ty)) { i--; continue; }
-        const w = tileToWorldCenter(t.tx,t.ty);
-        State.animals.push(makeAnimal(kind, w.x, w.y));
-        if (State.animals.length >= CFG.maxTotal) return;
-      }
-    };
-
-    add('deer',   CFG.spawn.deer,   320);
-    add('fox',    CFG.spawn.fox,    360);
-    add('boar',   CFG.spawn.boar,   360);
-    add('rabbit', CFG.spawn.rabbit, 380);
-
-    LOG('Animals loaded:', State.animals.length, 'baseScore=', base.score);
+    // Ultra-Fallback: Map-Mitte
+    const mid = tileToWorldCenter(Math.floor(State.cols/2), Math.floor(State.rows/2));
+    return ensureInsideMapPx(mid.x, mid.y);
   }
 
-  // ------------------------------------------------------------
-  // TICK + DRAW
-  // ------------------------------------------------------------
-  function tick(dt){
-    if (!CFG.enabled || !State.ready) return;
+  function chooseSpawnPoint() {
+    const pForest = chooseSpawnInForest();
+    if (pForest) return pForest;
+    return chooseSpawnFallback();
+  }
 
-    const speed = CFG.movePxPerSec;
-    const fps   = CFG.animFps;
+  /* ------------------------------------------------------------------------
+   * Zielwahl (Wander)
+   * --------------------------------------------------------------------- */
 
-    // simple movement
-    for (const a of State.animals){
-      a.nextRetarget -= dt;
-      if (a.nextRetarget <= 0){
-        a.nextRetarget = rand(CFG.retargetSecMin, CFG.retargetSecMax);
-        pickNewTarget(a);
-      }
+  function chooseNewTarget(a) {
+    const baseAng = rand(0, Math.PI * 2);
+    const baseDist = rand(CFG.move.wanderMinPx, CFG.move.wanderMaxPx);
 
-      const dx = a.tx - a.x;
-      const dy = a.ty - a.y;
-      const dist = Math.hypot(dx,dy);
+    for (let i=0;i<24;i++) {
+      const ang = baseAng + (i * (Math.PI/12));
+      const dist = baseDist;
+      const x = a.x + Math.cos(ang) * dist;
+      const y = a.y + Math.sin(ang) * dist;
+      const p = ensureInsideMapPx(x, y);
+      if (isWaterAtWorld(p.x, p.y)) continue;
+      a.tx = p.x;
+      a.ty = p.y;
+      a._retargetAt = nowMs();
+      return;
+    }
 
-      if (dist > 2){
-        const nx = dx / dist;
-        const ny = dy / dist;
+    // Wenn wir gar nichts finden: bleib stehen
+    a.tx = a.x;
+    a.ty = a.y;
+    a._retargetAt = nowMs();
+  }
 
-        // next step
-        const step = speed * dt;
-        const nxw = a.x + nx*step;
-        const nyw = a.y + ny*step;
+  /* ========================================================================
+   *  CORE LOGIC
+   * ====================================================================== */
 
-        // water-block: check next tile
-        const t = worldToTile(nxw,nyw);
-        if (insideTile(t.tx,t.ty) && !isWater(t.tx,t.ty)){
-          a.x = nxw; a.y = nyw;
-          a.dir = vecToDir8(nx, ny);
-        } else {
-          // retarget wenn blockiert
-          a.nextRetarget = 0;
+  function countByKind(kind) {
+    let c = 0;
+    for (const a of State.animals) if (a.kind === kind) c++;
+    return c;
+  }
+
+  function ensureSpawns() {
+    if (!CFG.enabled) return;
+
+    refreshTreeNodes();
+
+    for (const kind of Object.keys(CFG.types)) {
+      const max = (CFG.maxPerType && CFG.maxPerType[kind]) || 0;
+      const cur = countByKind(kind);
+      if (cur >= max) continue;
+
+      const need = max - cur;
+      for (let i=0;i<need;i++) {
+        const p = chooseSpawnPoint();
+
+        const a = {
+          kind,
+          x: p.x,
+          y: p.y,
+          tx: p.x,
+          ty: p.y,
+
+          dir: 'S',
+          animF: 0,
+
+          _animAcc: 0,
+          _retargetAt: 0,
+        };
+
+        chooseNewTarget(a);
+        State.animals.push(a);
+
+        if (CFG.logSpawn) {
+          const t = worldToTile(a.x, a.y);
+          console.info(`${TAG} spawn ${kind} @ px(${a.x.toFixed(1)},${a.y.toFixed(1)}) tile(${t.tx},${t.ty})`);
         }
       }
-
-      // anim
-      a.animT += dt;
-      const fi = Math.floor(a.animT * fps) % 8; // default 8 frames
-      a.animI = fi;
     }
   }
 
-  function draw(ctx){
-    if (!CFG.enabled || !State.ready) return;
-    const Assets = window.Assets;
-    if (!Assets || typeof Assets.drawAtlasFrame !== 'function') return;
+  function stepAnimals(dt) {
+    for (const a of State.animals) {
+      const dx = a.tx - a.x;
+      const dy = a.ty - a.y;
+      const d2 = dx*dx + dy*dy;
 
-    for (const a of State.animals){
-      const k = KIND[a.kind] || KIND.deer;
-      const dirLabel = CFG.dirLabels[a.dir] || 'S';
-      const frameName = `${k.prefix}${dirLabel}_walk_${a.animI}`;
+      // Ziel erreicht → retarget
+      if (d2 < 6*6) {
+        if (nowMs() - (a._retargetAt || 0) > CFG.move.retargetCooldownMs) {
+          chooseNewTarget(a);
+        }
+        continue;
+      }
 
-      // Scale wird jetzt wirklich angewendet!
-      Assets.drawAtlasFrame(ctx, k.atlas, frameName, a.x, a.y, {
-        scale: k.scale,
-        // align: 'pivot' (default)
+      // Richtung fürs Sprite
+      a.dir = pickDirectionFromDelta(dx, dy);
+
+      // Bewegung
+      const dist = Math.sqrt(d2) || 1;
+      const vx = dx / dist;
+      const vy = dy / dist;
+
+      const speed = CFG.move.speedPxPerSec;
+      const nx = a.x + vx * speed * dt;
+      const ny = a.y + vy * speed * dt;
+
+      // Wasser-Block
+      if (isWaterAtWorld(nx, ny)) {
+        chooseNewTarget(a);
+        continue;
+      }
+
+      a.x = nx;
+      a.y = ny;
+
+      // Animation: 0..7
+      a._animAcc += dt;
+      const fps = 8;
+      if (a._animAcc >= (1 / fps)) {
+        a._animAcc = 0;
+        a.animF = (a.animF + 1) % 8;
+      }
+    }
+  }
+
+  /* ========================================================================
+   *  RENDER
+   * ====================================================================== */
+
+  function draw(ctx) {
+    if (!State.assets) return;
+
+    for (const a of State.animals) {
+      const typeCfg = CFG.types[a.kind];
+      if (!typeCfg) continue;
+
+      const atlasKey = typeCfg.atlasKey;
+      const frameKey = frameKeyFor(a);
+
+      // Scale pro Tierart
+      const scale = (CFG.scales && CFG.scales[a.kind] != null) ? CFG.scales[a.kind] : 1;
+
+      State.assets.drawAtlasFrame(ctx, atlasKey, frameKey, a.x, a.y, {
+        scale,
       });
     }
   }
 
-  // ------------------------------------------------------------
-  // HOOKS (engine integration)
-  // ------------------------------------------------------------
-  // Wir hängen uns an euren globalYSort()-Mechanismus, wenn vorhanden.
-  function installDrawHook(){
-    const GM = window.GameMap;
-    if (GM && typeof GM.globalYSort === 'function'){
-      // wir registrieren eine Draw-Function als "Drawable"
-      try{
-        GM.globalYSort('animals', (ctx,dt)=>{ tick(dt); draw(ctx); });
-        return true;
-      }catch(e){}
-    }
+  /* ========================================================================
+   *  EVENT / INTEGRATION
+   * ====================================================================== */
 
-    // Fallback: cb:render (wenn vorhanden)
-    window.addEventListener('cb:render', (ev)=>{
-      const d = ev?.detail || {};
-      const ctx = d.ctx;
-      const dt = (typeof d.dt==='number') ? d.dt : 0.016;
-      if (!ctx) return;
-      tick(dt);
-      draw(ctx);
-    });
-    return false;
-  }
+  function onMapReady(e) {
+    const d = (e && e.detail) ? e.detail : {};
 
-  // ------------------------------------------------------------
-  // EVENTS
-  // ------------------------------------------------------------
-  window.addEventListener('cb:map:ready', (ev)=>{
-    const d = ev?.detail || {};
-    State.mapId    = d.mapId || null;
-    State.cols     = d.cols || d.w || d.width  || State.cols;
-    State.rows     = d.rows || d.h || d.height || State.rows;
+    State.mapId = d.mapId || State.mapId;
+    State.cols = d.cols || State.cols;
+    State.rows = d.rows || State.rows;
     State.tileSize = d.tileSize || State.tileSize;
 
-    if (!State.cols || !State.rows){
-      WARN('map:ready ohne cols/rows – spawn verschoben');
-      return;
+    // HQ
+    State.hqX = (d.hqX != null) ? d.hqX : (window.Game && window.Game.hq && window.Game.hq.x) || (State.cols * State.tileSize * 0.5);
+    State.hqY = (d.hqY != null) ? d.hqY : (window.Game && window.Game.hq && window.Game.hq.y) || (State.rows * State.tileSize * 0.5);
+
+    // WaterSet via GameMap legend
+    const gm = window.GameMap;
+    const st = gm && gm._state;
+    const legend = st && st.legend;
+    State.waterIdSet = computeWaterIdSetFromLegend(legend);
+
+    State.ready = true;
+
+    if (CFG.logSpawn) {
+      console.info(`${TAG} map-ready cols=${State.cols} rows=${State.rows} ts=${State.tileSize} waterIds=${State.waterIdSet ? State.waterIdSet.size : 0}`);
     }
-    reset();
-  });
 
-  window.addEventListener('cb:game:start', ()=>{
-    if (State.cols && State.rows) reset();
-  });
+    ensureSpawns();
+  }
 
-  // ------------------------------------------------------------
-  // BOOT
-  // ------------------------------------------------------------
-  installDrawHook();
-  LOG('module loaded', 'v26.01.04-animals-hotfix-nobug-scale-dir');
+  function onAssetsReady(e) {
+    const d = (e && e.detail) ? e.detail : {};
+    State.assets = d.assets || d.assetManager || window.Assets || window.assetManager || State.assets || null;
+    State.diag = d.diag || window.Diag || State.diag || null;
+
+    if (CFG.logSpawn) console.info(`${TAG} assets-ready: ${!!State.assets}`);
+  }
+
+  function tick(dtMs) {
+    if (!State.ready || !CFG.enabled) return;
+
+    const dt = (typeof dtMs === 'number' && isFinite(dtMs)) ? (dtMs / 1000) : (1/60);
+
+    ensureSpawns();
+    stepAnimals(dt);
+  }
+
+  function collectDrawables() {
+    return [{
+      id: 'animals',
+      z: 25,
+      draw,
+    }];
+  }
+
+  /* ========================================================================
+   *  PUBLIC API
+   * ====================================================================== */
+
+  const API = {
+    CFG,
+    _state: State,
+
+    onMapReady,
+    onAssetsReady,
+
+    tick,
+    collectDrawables,
+  };
+
+  window.MapAnimals = API;
+
+  // Events (dein Projekt nutzt CustomEvents)
+  document.addEventListener('cb:map:ready', onMapReady);
+  document.addEventListener('cb:assets-ready', onAssetsReady);
+  document.addEventListener('cb:registry:ready', onAssetsReady);
+
+  // Fallback: wenn es schon global da ist
+  if (!State.assets) {
+    if (window.Assets) State.assets = window.Assets;
+    if (window.assetManager) State.assets = window.assetManager;
+  }
+
+  // Fallback: wenn GameMap schon da ist
+  try {
+    const gm = window.GameMap && window.GameMap._state;
+    if (gm && gm.cols && gm.rows) {
+      State.cols = gm.cols;
+      State.rows = gm.rows;
+      State.tileSize = gm.tileSize || State.tileSize;
+      State.waterIdSet = computeWaterIdSetFromLegend(gm.legend);
+      State.hqX = State.hqX || (State.cols * State.tileSize * 0.5);
+      State.hqY = State.hqY || (State.rows * State.tileSize * 0.5);
+      State.ready = true;
+    }
+  } catch (e) { /* ignore */ }
+
+  if (CFG.logSpawn) console.info(`${TAG} loaded v26.01.04-animals-final`);
 })();
