@@ -588,7 +588,7 @@
       previewRow.appendChild(previewLbl);
       previewRow.appendChild(previewRange);
       previewRow.appendChild(previewVal);
-      wrap.appendChild(previewRow);
+      root.appendChild(previewRow);
 
 
       const status = document.createElement('div');
