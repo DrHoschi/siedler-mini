@@ -1,4 +1,3 @@
-/* HOTFIX v1.0.3: robust registration + auto-mount */
 /* ============================================================================
  * inspector/tab/inspector.tab.spritetest-v1.js
  * v26.01.05-spritetest-final
@@ -18,12 +17,6 @@
 (() => {
   'use strict';
 
-      // ------------------------------[A] Guards---------------------------------
-  if(typeof window.registerInspectorTab !== 'function'){
-    console.warn('[spritetest] registerInspectorTab fehlt – Tab wird nicht registriert.');
-    return;
-  }
-  
   // --------------------------------------------------------------------------
   // Imports (keine externen Imports – bewusst "drop-in" für GitHub Pages)
   // --------------------------------------------------------------------------
@@ -940,76 +933,44 @@
   // --------------------------------------------------------------------------
   // Registration (Projektstandard: window.registerInspectorTab)
   // --------------------------------------------------------------------------
-  
-
-function doRegister() {
-  try {
-    // ------------------------------------------------------------------------
-    // Robust Tab-Registration
-    // ------------------------------------------------------------------------
-    // Symptom: Tab "Spritetest" ist nicht sichtbar.
-    // Ursache: Die Registrierung kann zu spät passieren (Script-Reihenfolge/
-    // Cache/Reload), nachdem InspectorContent bereits gemountet und Tabs gebaut hat.
-    // Fix: Registrierung mehrfach versuchen + nach erfolgreicher Registrierung
-    // InspectorContent.mount() triggern, damit die Buttons neu aufgebaut werden.
-
-    if (window.__spritetest_registered_v1) return true;
-
-    // 1) Bevorzugt: Adapter-API (baut Registry)
-    if (typeof window.registerInspectorTab === 'function') {
-      window.registerInspectorTab('spritetest', mountSpriteTest, {
-        // Optional: meta (falls dein Adapter damit etwas anfangen kann)
-        order: 90,
-        title: 'Spritetest',
-      });
-      window.__spritetest_registered_v1 = true;
+  function doRegister() {
+    // Guard A: Nur registrieren, wenn Adapter vorhanden ist.
+    const reg = window.registerInspectorTab;
+    if (typeof reg !== 'function') {
+      // Fallback: später nochmal versuchen (wenn Inspector erst später lädt)
+      window.setTimeout(doRegister, 250);
+      return;
     }
 
-    // 2) Fallback: Direkte Registrierung an InspectorContent
-    if (!window.__spritetest_registered_v1 && window.InspectorContent && typeof window.InspectorContent.register === 'function') {
-      window.InspectorContent.register('spritetest', mountSpriteTest);
-      window.__spritetest_registered_v1 = true;
-    }
+    reg({
+      id: TAB_ID,
+      title: TAB_TITLE,
+      // Inspector erwartet: (containerEl, api?) – wir nehmen nur containerEl
+      mount: (containerEl) => {
+        try {
+          mountSpriteTest(containerEl);
+        } catch (e) {
+          // harte Crashes vermeiden: Tab bleibt benutzbar
+          const msg = `[spritetest] Render crash: ${e?.message || e}`;
+          console.error(msg, e);
+          containerEl.innerHTML = '';
+          containerEl.append(el('pre', { style: {
+            whiteSpace:'pre-wrap',
+            color:'#ff6b6b',
+            padding:'10px',
+            fontFamily:'ui-monospace, Menlo, Monaco, Consolas, "Courier New", monospace',
+          }}, txt(msg)));
+        }
+      },
+    });
 
-    // Nach erfolgreicher Registrierung: Tabs neu aufbauen
-    if (window.__spritetest_registered_v1) {
-      if (window.InspectorContent && typeof window.InspectorContent.mount === 'function') {
-        try { window.InspectorContent.mount(); } catch (e) {}
-      }
-      // Zusätzlich: wenn jemand stattdessen über Events arbeitet
-      try {
-        window.dispatchEvent(new CustomEvent('req:insp:content:mount', { detail: {} }));
-      } catch (e) {}
-      return true;
-    }
-  } catch (e) {
-    console.warn('[spritetest] register failed', e);
+    // Force a (re)mount so the tab list is rebuilt if InspectorContent was mounted
+    // before this tab finished loading (iOS/Safari + cache timing edge cases).
+    try {
+      window.dispatchEvent(new CustomEvent('req:insp:content:mount'));
+    } catch (e) { /* ignore */ }
   }
-  return false;
-}
 
-// -----------------------------------------------------------------------------
-// Boot: Retry-Loop (max ~8s) + Event-Hooks
-// -----------------------------------------------------------------------------
-(function bootstrapSpriteTestTab() {
-  try {
-    window.__spritetest_loaded_v1 = true;
-    window.__spritetest_version = 'v1.0.3-hotfix-register';
-    console.info('[spritetest] loaded', window.__spritetest_version);
-
-    const t0 = Date.now();
-    const tryRegister = () => {
-      if (doRegister()) return;
-      if (Date.now() - t0 < 8000) setTimeout(tryRegister, 250);
-    };
-
-    // Sofort versuchen
-    tryRegister();
-
-    // Später nochmal, wenn InspectorContent ready ist
-    window.addEventListener('cb:insp:content:ready', tryRegister);
-    window.addEventListener('load', tryRegister);
-  } catch (e) {
-    console.warn('[spritetest] bootstrap failed', e);
-  }
+  // Sofort registrieren
+  doRegister();
 })();
