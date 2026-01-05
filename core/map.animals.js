@@ -73,7 +73,7 @@
     },
 
     // Bewegung (in TILES pro Sekunde, unabhängig vom Pixel-Scale)
-    moveTilesPerSec: 0.40,          // Grundspeed (kannst du später im Inspector regeln)
+    moveTilesPerSec: 0.10,          // Grundspeed (kannst du später im Inspector regeln)
     retargetMinTiles: 2.0,
     retargetMaxTiles: 9.0,
     retargetCooldownMs: 350,
