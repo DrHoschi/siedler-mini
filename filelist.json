@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-04T21:36:15.421Z",
+  "createdAt": "2026-01-05T19:23:44.933Z",
   "root": ".",
-  "count": 579,
+  "count": 578,
   "entries": [
     {
       "type": "dir",
@@ -67,7 +67,7 @@
     {
       "type": "file",
       "path": "assets/animals/boar_sprite_atlas.png",
-      "size": 1108601
+      "size": 802271
     },
     {
       "type": "file",
@@ -87,7 +87,7 @@
     {
       "type": "file",
       "path": "assets/animals/rabbit_sprite_atlas.png",
-      "size": 1478098
+      "size": 919514
     },
     {
       "type": "file",
@@ -1511,7 +1511,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 25068
+      "size": 25075
     },
     {
       "type": "file",
@@ -1716,7 +1716,7 @@
     {
       "type": "file",
       "path": "core/map.animals.js",
-      "size": 17312
+      "size": 17181
     },
     {
       "type": "file",
@@ -1828,13 +1828,8 @@
     },
     {
       "type": "file",
-      "path": "data/atlases/boar_sprite_altas.json",
-      "size": 26236
-    },
-    {
-      "type": "file",
       "path": "data/atlases/boar_sprite_atlas.json",
-      "size": 26329
+      "size": 26345
     },
     {
       "type": "file",
@@ -1884,7 +1879,7 @@
     {
       "type": "file",
       "path": "data/atlases/rabbit_sprite_atlas.json",
-      "size": 26459
+      "size": 26475
     },
     {
       "type": "dir",
@@ -2149,7 +2144,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.spritetest-v1.js",
-      "size": 33609
+      "size": 31567
     },
     {
       "type": "file",
@@ -2219,15 +2214,6 @@
       "type": "file",
       "path": "inspector/ui-inspector.css",
       "size": 5776
-    },
-    {
-      "type": "dir",
-      "path": "inspektor/"
-    },
-    {
-      "type": "file",
-      "path": "inspektor/ui-inspector-transparent.css",
-      "size": 8213
     },
     {
       "type": "dir",
@@ -2792,23 +2778,33 @@
     },
     {
       "type": "file",
+      "path": "asset.js",
+      "size": 25075
+    },
+    {
+      "type": "file",
       "path": "filelist-audit.txt",
       "size": 1361
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 57169
+      "size": 57996
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22416
+      "size": 22759
     },
     {
       "type": "file",
       "path": "index.html",
       "size": 18121
+    },
+    {
+      "type": "file",
+      "path": "map.animals.js",
+      "size": 17312
     },
     {
       "type": "file",

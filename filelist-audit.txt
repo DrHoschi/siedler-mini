@@ -28,10 +28,12 @@ Gesamt Dateien: 516
  - docs/digraph-Struktur
  - qa/Readme
  - ui/css/readme
+ - asset.js
  - filelist-audit.txt
  - filelist.json
  - filelist.txt
  - index.html
+ - map.animals.js
  - package.json
  - Projekt_Masterliste.md
  - README.md
