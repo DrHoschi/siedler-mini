@@ -21,6 +21,12 @@
 (function(){
   'use strict';
 
+    // ------------------------------[A] Guards---------------------------------
+  if(typeof window.registerInspectorTab !== 'function'){
+    console.warn('[spritetest] registerInspectorTab fehlt – Tab wird nicht registriert.');
+    return;
+  }
+  
   // -------------------------------------------------------------------------
   // TAB META
   // -------------------------------------------------------------------------
