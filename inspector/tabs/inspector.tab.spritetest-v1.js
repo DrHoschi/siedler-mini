@@ -45,8 +45,8 @@
     { id:'CIRCLE', label:'Kreis (Iso-Ellipse)' }
   ];
 
-  const CANVAS_W = 520;
-  const CANVAS_H = 360;
+  const S.cw = 520;
+  const S.ch = 360;
   const TRAIL_MAX = 220;
 
   // Fallback: Wenn die Atlas-Registry (Assets.atlases) leer ist (z. B. wegen Load-Order,
@@ -317,6 +317,12 @@
   // STATE
   // -------------------------------------------------------------------------
   const S = {
+  // Dynamische Preview-Größe (wird anhand des sichtbaren Canvas-Wrappers gesetzt)
+  cw: BASE_CANVAS_W,
+  ch: BASE_CANVAS_H,
+  // UI: Preview-Höhe (CSS) + optionaler Zoom (reines Render-Scaling)
+  viewH: 280,
+  viewZoom: 1.0,
     running: false,
     raf: 0,
 
@@ -344,8 +350,8 @@
     lastTs: 0,
 
     plan: [],
-    x: CANVAS_W * 0.55,
-    y: CANVAS_H * 0.70,
+  x: 0, // wird in applyCanvasSize() gesetzt
+  y: 0, // wird in applyCanvasSize() gesetzt,
 
     trail: []
   };
@@ -503,6 +509,61 @@
       fpsLbl.style.opacity='0.9';
       fpsLbl.textContent = `${S.animFps} fps`;
 
+
+      // Preview-Größe (Höhe) + Render-Zoom
+      const viewRow = document.createElement('div');
+      viewRow.style.display='flex';
+      viewRow.style.gap='10px';
+      viewRow.style.flexWrap='wrap';
+      viewRow.style.alignItems='center';
+
+      const viewHLbl = document.createElement('div');
+      viewHLbl.textContent = `Preview-Höhe`;
+      viewHLbl.style.opacity='0.85';
+      viewHLbl.style.minWidth='120px';
+
+      const viewHOut = document.createElement('div');
+      viewHOut.textContent = `${S.viewH}px`;
+      viewHOut.style.opacity='0.85';
+      viewHOut.style.minWidth='80px';
+      viewHOut.style.textAlign='right';
+
+      const viewHRange = mkRange(180, 520, 5, S.viewH);
+      viewHRange.oninput = () => {
+        S.viewH = parseInt(viewHRange.value,10) || S.viewH;
+        viewHOut.textContent = `${S.viewH}px`;
+        canvasWrap.style.height = S.viewH + 'px';
+        // applyCanvasSize wird via ResizeObserver getriggert; fallback:
+        try { applyCanvasSize(); } catch(e){}
+      };
+
+      const zoomLbl = document.createElement('div');
+      zoomLbl.textContent = `Zoom`;
+      zoomLbl.style.opacity='0.85';
+      zoomLbl.style.minWidth='60px';
+
+      const zoomOut = document.createElement('div');
+      zoomOut.textContent = `Zoom ${S.viewZoom.toFixed(2)}x`;
+      zoomOut.style.opacity='0.85';
+      zoomOut.style.minWidth='110px';
+      zoomOut.style.textAlign='right';
+
+      const zoomRange = mkRange(0.50, 2.50, 0.05, S.viewZoom);
+      zoomRange.oninput = () => {
+        S.viewZoom = parseFloat(zoomRange.value) || 1.0;
+        zoomOut.textContent = `Zoom ${S.viewZoom.toFixed(2)}x`;
+        if (typeof render === 'function') render();
+      };
+
+      viewRow.appendChild(viewHLbl);
+      viewRow.appendChild(viewHRange);
+      viewRow.appendChild(viewHOut);
+      viewRow.appendChild(zoomLbl);
+      viewRow.appendChild(zoomRange);
+      viewRow.appendChild(zoomOut);
+      root.appendChild(viewRow);
+
+
       const toggles = document.createElement('div');
       toggles.style.display='flex';
       toggles.style.gap='10px';
@@ -554,12 +615,20 @@
       status.style.margin='8px 0';
       status.style.color='#ff6b6b';
 
+      const canvasWrap = document.createElement('div');
+      // Wrapper bestimmt die sichtbare Größe (Höhe via Slider). Canvas passt sich per ResizeObserver an.
+      canvasWrap.style.width = '100%';
+      canvasWrap.style.height = S.viewH + 'px';
+      canvasWrap.style.borderRadius = '10px';
+      canvasWrap.style.overflow = 'hidden';
+      canvasWrap.style.background = 'rgba(0,0,0,0.25)';
+      canvasWrap.style.position = 'relative';
+
       const canvas = document.createElement('canvas');
-      canvas.width=CANVAS_W;
-      canvas.height=CANVAS_H;
-      canvas.style.width='100%';
-      canvas.style.borderRadius='10px';
-      canvas.style.background='rgba(0,0,0,0.25)';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.display = 'block';
+
 
       // Layout
       row('Modus', modeSel);
@@ -639,9 +708,48 @@
       root.appendChild(toggles);
       root.appendChild(btnRefresh);
       root.appendChild(status);
-      root.appendChild(canvas);
+      canvasWrap.appendChild(canvas);
+      root.appendChild(canvasWrap);
 
       const ctx = canvas.getContext('2d');
+      // --- Preview sizing -------------------------------------------------------
+      // Wir rendern IMMER in die echte Canvas-Pixelgröße (CSS * DPR), damit es scharf bleibt.
+      // Zusätzlich gibt es einen reinen Render-Zoom (S.viewZoom), falls du Details größer sehen willst.
+      function applyCanvasSize() {
+        const rect = canvasWrap.getBoundingClientRect();
+        // Fallbacks, falls iOS kurzzeitig 0 meldet (z.B. beim Tab-Wechsel)
+        const cssW = Math.max(120, Math.round(rect.width || canvasWrap.clientWidth || BASE_CANVAS_W));
+        const cssH = Math.max(120, Math.round(rect.height || canvasWrap.clientHeight || S.viewH || BASE_CANVAS_H));
+
+        S.cw = cssW;
+        S.ch = cssH;
+
+        canvas.width  = Math.max(2, Math.round(cssW * DPR));
+        canvas.height = Math.max(2, Math.round(cssH * DPR));
+
+        // Zentrum/Footline neu setzen (damit Plan immer im Bild bleibt)
+        S.x = S.cw * 0.5;
+        S.y = S.ch * 0.62;
+      }
+
+      // ResizeObserver: reagiert auf Slider + responsive Layout
+      let _ro = null;
+      try {
+        _ro = new ResizeObserver(() => {
+          applyCanvasSize();
+          // Plan neu aufbauen, damit Bounding/Center stimmt
+          if (typeof rebuildPlan === 'function') rebuildPlan();
+          if (typeof render === 'function') render();
+        });
+        _ro.observe(canvasWrap);
+      } catch (e) {
+        // älteres iOS: ignorieren, wir setzen Größe trotzdem bei wichtigen Events
+      }
+
+      // Initial setzen
+      applyCanvasSize();
+
+
 
       // ------------------------------
       // internal helpers
@@ -727,9 +835,28 @@
       }
 
       function rebuildPlan(){
-        const cx = CANVAS_W * 0.50;
-        const cy = CANVAS_H * 0.65;
-        S.plan = buildPlanPoints(S.pathMode, S.tilesPerDir, cx, cy);
+        const cx = S.cw * 0.50;
+        const cy = S.ch * 0.62; // etwas höher, damit der Plan auch auf großen Displays nicht unten "rausläuft"
+        let plan = buildPlanPoints(S.pathMode, S.tilesPerDir, cx, cy);
+
+        // --- Plan automatisch ins sichtbare Fenster "fitten" -------------------
+        // Damit der Pfad bei großen Displays / anderen DPI nicht aus dem View läuft,
+        // skalieren wir die Plan-Punkte (um cx/cy), wenn die BoundingBox zu groß ist.
+        const PAD = 18;
+        if (plan && plan.length > 1) {
+          let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+          for (const p of plan) { minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
+          const bw = Math.max(1, maxX-minX);
+          const bh = Math.max(1, maxY-minY);
+          const sx = (S.cw - PAD*2) / bw;
+          const sy = (S.ch - PAD*2) / bh;
+          const s = Math.min(1, sx, sy);
+          if (s < 1) {
+            plan = plan.map(p => ({ x: cx + (p.x - cx)*s, y: cy + (p.y - cy)*s }));
+          }
+        }
+
+        S.plan = plan;
         S.segIdx = 0;
         S.segT = 0;
         S.x = (S.plan[0] && S.plan[0].x) || cx;
@@ -760,17 +887,28 @@
 
         if(!S.plan || !S.plan.length) rebuildPlan();
 
-        clearCanvas(ctx, CANVAS_W, CANVAS_H);
+        // Canvas komplett löschen (in echten Pixeln), dann CSS-Koordinatensystem + Zoom setzen
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+
+        // 1) DPR -> wir zeichnen in CSS-Pixeln, Canvas ist aber DPR-skaliert
+        // 2) Zoom um die Mitte, damit nichts "nach unten rechts" wegrutscht
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+        ctx.translate(S.cw/2, S.ch/2);
+        ctx.scale(S.viewZoom, S.viewZoom);
+        ctx.translate(-S.cw/2, -S.ch/2);
+
+        clearCanvas(ctx, S.cw, S.ch);
         if(chkPlan.box.checked)  drawPlan(ctx, S.plan);
-        if(chkFoot.box.checked)  drawFootLine(ctx, CANVAS_H * 0.75, CANVAS_W);
+        if(chkFoot.box.checked)  drawFootLine(ctx, S.ch * 0.75, S.cw);
         if(chkTrail.box.checked) drawTrail(ctx, S.trail);
 
         const atlas = getAtlasByName(S.atlas);
         const ok = isAtlasOk(atlas);
 
         // Preview zeichnet immer in der Mitte, Anim nutzt Pfad.
-        const pivotX = (S.mode === 'PREVIEW') ? (CANVAS_W * 0.5) : S.x;
-        const pivotY = (S.mode === 'PREVIEW') ? (CANVAS_H * 0.65) : S.y;
+        const pivotX = (S.mode === 'PREVIEW') ? (S.cw * 0.5) : S.x;
+        const pivotY = (S.mode === 'PREVIEW') ? (S.ch * 0.65) : S.y;
 
         let frameName = '';
         if (S.mode === 'PREVIEW'){
@@ -854,9 +992,9 @@
 
         if(!S.plan || !S.plan.length) rebuildPlan();
 
-        clearCanvas(ctx, CANVAS_W, CANVAS_H);
+        clearCanvas(ctx, S.cw, S.ch);
         if(chkPlan.box.checked) drawPlan(ctx, S.plan);
-        if(chkFoot.box.checked) drawFootLine(ctx, CANVAS_H * 0.75, CANVAS_W);
+        if(chkFoot.box.checked) drawFootLine(ctx, S.ch * 0.75, S.cw);
 
         // advance along plan
         if(S.plan.length >= 2){
