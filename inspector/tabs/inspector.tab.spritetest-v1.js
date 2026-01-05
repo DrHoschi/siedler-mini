@@ -244,6 +244,41 @@
       stepDir('W', tilesPerDir);
       return pts;
     }
+
+  // Passt den Plan so an, dass er in der Vorschau garantiert komplett sichtbar bleibt.
+  // (Wichtig für große Displays + wenn der Testpfad sonst oben/rechts "rausläuft".)
+  function fitPlanToCanvas(points, w, h, margin){
+    if(!Array.isArray(points) || points.length===0) return points;
+    let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+    for(const p of points){
+      if(!p) continue;
+      if(p.x<minX) minX=p.x;
+      if(p.y<minY) minY=p.y;
+      if(p.x>maxX) maxX=p.x;
+      if(p.y>maxY) maxY=p.y;
+    }
+    if(!isFinite(minX) || !isFinite(minY)) return points;
+
+    const cx = (minX+maxX)*0.5;
+    const cy = (minY+maxY)*0.5;
+
+    // Ziel: leicht unter der Mitte, damit UI oben nicht "gefühlt" drückt.
+    let dx = (w*0.5) - cx;
+    let dy = (h*0.68) - cy;
+
+    // Erst zentrieren…
+    let nMinX=minX+dx, nMaxX=maxX+dx, nMinY=minY+dy, nMaxY=maxY+dy;
+
+    // …dann auf Ränder clampen.
+    if(nMinX < margin){ dx += (margin - nMinX); nMinX=minX+dx; nMaxX=maxX+dx; }
+    if(nMaxX > (w - margin)){ dx -= (nMaxX - (w - margin)); nMinX=minX+dx; nMaxX=maxX+dx; }
+
+    if(nMinY < margin){ dy += (margin - nMinY); nMinY=minY+dy; nMaxY=maxY+dy; }
+    if(nMaxY > (h - margin)){ dy -= (nMaxY - (h - margin)); nMinY=minY+dy; nMaxY=maxY+dy; }
+
+    return points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+  }
+
     if(mode === 'SQUARE'){
       stepDir('E', tilesPerDir);
       stepDir('S', tilesPerDir);
@@ -305,6 +340,13 @@
     plan: [],
     x: CANVAS_W * 0.55,
     y: CANVAS_H * 0.70,
+
+    // Preview-Canvas (CSS) Höhe in px (skalierbar für große/kleine Displays)
+    // Hinweis: Das Canvas hat intern CANVAS_W/H, wird aber per CSS skaliert.
+    previewH: 320,
+
+    // Auto-Fit des Test-Pfads in die Canvas-Fläche (damit nix "rausläuft")
+    planMargin: 26,
 
     trail: []
   };
@@ -509,6 +551,46 @@
       hint.style.opacity='0.9';
       hint.textContent='Regel: Frame 0 = Idle. Teste Richtungen mit Pfad + Speed/FPS.';
 
+      // --- Preview-Größe (Canvas-Höhe) ---
+      // Damit du im Inspector die Vorschau bequem kleiner/größer ziehen kannst.
+      const previewRow = document.createElement('div');
+      previewRow.style.display='flex';
+      previewRow.style.alignItems='center';
+      previewRow.style.gap='10px';
+      previewRow.style.margin='8px 0 6px';
+      previewRow.style.flexWrap='wrap';
+
+      const previewLbl = document.createElement('div');
+      previewLbl.textContent='Preview-Höhe';
+      previewLbl.style.minWidth='110px';
+      previewLbl.style.opacity='0.9';
+
+      const previewRange = document.createElement('input');
+      previewRange.type='range';
+      previewRange.min='180';
+      previewRange.max='520';
+      previewRange.step='10';
+      previewRange.value=String(S.previewH || 320);
+      previewRange.style.flex='1';
+
+      const previewVal = document.createElement('div');
+      previewVal.textContent=(S.previewH || 320) + ' px';
+      previewVal.style.minWidth='70px';
+      previewVal.style.textAlign='right';
+      previewVal.style.opacity='0.9';
+
+      previewRange.addEventListener('input', () => {
+        S.previewH = clampInt(previewRange.value, 180, 520);
+        previewVal.textContent = S.previewH + ' px';
+        if (canvas) canvas.style.height = S.previewH + 'px';
+      });
+
+      previewRow.appendChild(previewLbl);
+      previewRow.appendChild(previewRange);
+      previewRow.appendChild(previewVal);
+      wrap.appendChild(previewRow);
+
+
       const status = document.createElement('div');
       status.style.margin='8px 0';
       status.style.color='#ff6b6b';
@@ -516,6 +598,13 @@
       const canvas = document.createElement('canvas');
       canvas.width=CANVAS_W;
       canvas.height=CANVAS_H;
+
+      // Canvas per CSS skalierbar machen (damit Inspector auf großen/kleinen Displays passt)
+      // Intern bleibt CANVAS_W/H gleich, wir skalieren nur die Darstellung.
+      canvas.style.height = (S.previewH || 320) + 'px';
+      canvas.style.maxHeight = '55vh';
+      canvas.style.touchAction = 'none';
+
       canvas.style.width='100%';
       canvas.style.borderRadius='10px';
       canvas.style.background='rgba(0,0,0,0.25)';
@@ -689,6 +778,8 @@
         const cx = CANVAS_W * 0.50;
         const cy = CANVAS_H * 0.65;
         S.plan = buildPlanPoints(S.pathMode, S.tilesPerDir, cx, cy);
+        // Auto-Fit: Plan in die Canvas-Fläche schieben, damit nix abgeschnitten wird.
+        S.plan = fitPlanToCanvas(S.plan, CANVAS_W, CANVAS_H, (S.planMargin||26));
         S.segIdx = 0;
         S.segT = 0;
         S.x = (S.plan[0] && S.plan[0].x) || cx;
