@@ -17,6 +17,13 @@
 (() => {
   'use strict';
 
+       // ------------------------------[A] Guards---------------------------------
+  if(typeof window.registerInspectorTab !== 'function'){
+    console.warn('[spritetest] registerInspectorTab fehlt – Tab wird nicht registriert.');
+    return;
+  }
+  
+
   // --------------------------------------------------------------------------
   // Imports (keine externen Imports – bewusst "drop-in" für GitHub Pages)
   // --------------------------------------------------------------------------
