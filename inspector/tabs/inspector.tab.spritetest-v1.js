@@ -1,983 +1,518 @@
-/* ============================================================================
- * inspector/tab/inspector.tab.spritetest-v1.js
- * v26.01.05-spritetest-final
- * ----------------------------------------------------------------------------
- * Ziel:
- *  - Stabiler SpriteTest-Tab (ohne Render-Crashes)
- *  - Atlas/Frame-Auswahl funktioniert auch, wenn Assets später laden
- *  - Preview ist auf iOS "verkleinerbar": per Höhen-Slider + Zoom-Slider
- *  - Pfad/Plan bleibt IMMER im Sichtfenster (zentriert + safe margins)
- *  - Debug-Overlays: Pivot, BBox, Fußlinie, Trail, Plan, Grid
- *
- * WICHTIG:
- *  - Keine Abhängigkeit von externem CSS nötig (wir stylen inline minimal).
- *  - Nutzt window.Assets.drawAtlasFrame(...) falls vorhanden (Projektstandard).
- *  - Falls Assets/Atlanten noch nicht verfügbar sind, zeigt Tab Hinweis + Retry.
- * ============================================================================ */
-(() => {
+/* =========================================================================
+ *  inspector/tab: SpriteTest
+ *  Version: v26.01.04 (Pivot/Anchor Visualizer)
+ *  Purpose:
+ *   - Schnelltest für 8-Richtungs-Sprites (1024px / 8x8 => 128x128 Frames)
+ *   - Zeigt zusätzlich Pivot/Anker (Crosshair), Bounding-Box, Fußlinie
+ *  Notes:
+ *   - Frame 0 = Idle (Regel)
+ *   - Reihenfolge Richtungen: N, NE, E, SE, S, SW, W, NW
+ * ========================================================================= */
+(function () {
   'use strict';
 
-       // ------------------------------[A] Guards---------------------------------
-  if(typeof window.registerInspectorTab !== 'function'){
-    console.warn('[spritetest] registerInspectorTab fehlt – Tab wird nicht registriert.');
-    return;
-  }
-  
+/* -------------------------------------------------------------
+   REGISTER HELPER (robust across inspector versions)
+   - some older files used `registerTab(...)`
+   - current project uses `window.registerInspectorTab(...)`
+------------------------------------------------------------- */
+function registerTabSafe(tabDef){
+  const fn = (typeof window!=='undefined') && (window.registerInspectorTab || window.registerTab || window.register_inspector_tab);
+  if(!fn) return false;
+  try { fn(tabDef); return true; }
+  catch (e){ try{ console.warn('[spritetest] registerTab failed:', e); } catch(_){} return false; }
+}
 
-  // --------------------------------------------------------------------------
-  // Imports (keine externen Imports – bewusst "drop-in" für GitHub Pages)
-  // --------------------------------------------------------------------------
-
-  // --------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Konstanten
-  // --------------------------------------------------------------------------
-  const TAB_ID = 'spritetest';
-  const TAB_TITLE = 'Spritetest';
+  // -------------------------------------------------------------------------
+  const TAB_ID   = 'SpriteTest';
+  const TAB_NAME = 'SpriteTest';
+  const DIRS = ['N','NE','E','SE','S','SW','W','NW'];
 
-  // iOS hat kein natives "resize-handle" für DIVs -> wir machen Slider.
-  const PREVIEW_H_MIN = 140;
-  const PREVIEW_H_MAX = 560;
+  // -------------------------------------------------------------------------
+  // Helper: Inspector-Tab registrieren (kompatibel zu mehreren API-Varianten)
+  // -------------------------------------------------------------------------
+  function registerTabSafe(def){
+    const I = window.Inspector || window.inspector || null;
+    if(!I) return false;
 
-  const ZOOM_MIN = 0.20;
-  const ZOOM_MAX = 3.00;
+    // Häufige Varianten, die im Projekt vorkommen können:
+    if(typeof I.registerTab === 'function'){ I.registerTabSafe(def); return true; }
+    if(typeof I.addTab      === 'function'){ I.addTab(def);      return true; }
+    if(I.api && typeof I.api.registerTab === 'function'){ I.api.registerTabSafe(def); return true; }
+    if(I.api && typeof I.api.addTab === 'function'){ I.api.addTab(def); return true; }
+    if(I.tabs && typeof I.tabs.register === 'function'){ I.tabs.register(def); return true; }
 
-  const SPEED_MIN = 10;
-  const SPEED_MAX = 600;
-
-  const FPS_MIN = 1;
-  const FPS_MAX = 24;
-
-  // Plan bleibt innerhalb dieser Safe-Margins (in % des View-Min-Dim).
-  const SAFE_MARGIN_FRAC = 0.12;
-
-  // Richtung-Reihenfolge (Master): N, NE, E, SE, S, SW, W, NW (Uhrzeiger).
-  const DIR8 = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-
-  // --------------------------------------------------------------------------
-  // State (pro Tab-Instance)
-  // --------------------------------------------------------------------------
-  const S = {
-    // Auswahl
-    atlasKey: '',
-    frameKey: '',
-    mode: 'single', // 'single' | 'walk'
-    path: 'line',   // 'line' | 'circle' | 'box'
-    dirMode: 'auto',// 'auto' | 'lock'
-    dirLock: 'S',
-
-    // Animation / Test
-    pxPerSec: 100,
-    fps: 6,
-    isRunning: false,
-
-    // Preview
-    previewH: 320,
-    zoom: 1.0,
-
-    // Overlay toggles
-    showPivot: true,
-    showBBox: true,
-    showFoot: true,
-    showTrail: true,
-    showPlan: true,
-    showGrid: false,
-
-    // Intern
-    rafId: 0,
-    lastT: 0,
-    animAcc: 0,
-    step: 0,
-    t: 0,
-
-    // Plan data
-    planPts: [],     // {x,y} in view-space
-    trailPts: [],    // last points
-
-    // DOM refs
-    root: null,
-    msg: null,
-    selAtlas: null,
-    selFrame: null,
-    selMode: null,
-    selPath: null,
-    selDirMode: null,
-    selDirLock: null,
-    rngSpeed: null,
-    rngFps: null,
-    rngZoom: null,
-    rngPrevH: null,
-    btnStart: null,
-    btnStop: null,
-    btnRefresh: null,
-    canvas: null,
-    ctx: null,
-    previewWrap: null,
-    footerLeft: null,
-    footerRight: null,
-  };
-
-  // --------------------------------------------------------------------------
-  // Helpers – DOM
-  // --------------------------------------------------------------------------
-  function el(tag, attrs = {}, children = null) {
-    const n = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
-      if (k === 'style' && v && typeof v === 'object') Object.assign(n.style, v);
-      else if (k === 'class') n.className = v;
-      else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
-      else if (v === true) n.setAttribute(k, '');
-      else if (v !== false && v != null) n.setAttribute(k, String(v));
-    }
-    if (children == null) return n;
-    if (Array.isArray(children)) children.forEach(c => n.append(c));
-    else n.append(children);
-    return n;
-  }
-  function txt(s) { return document.createTextNode(String(s)); }
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-  function fmt(n, d=0) { return Number(n).toFixed(d); }
-
-  // --------------------------------------------------------------------------
-  // Helpers – Assets / Atlases
-  // --------------------------------------------------------------------------
-  function getAssets() {
-    return (window.Assets && typeof window.Assets === 'object') ? window.Assets : null;
+    return false;
   }
 
-  function getAtlasesRaw() {
-    const A = getAssets();
-    if (!A) return null;
-    // Projekt: window.Assets.atlases kann Map oder Object sein.
-    return A.atlases || A.AtlasMap || null;
+  // -------------------------------------------------------------------------
+  // Helper: Frame-Meta aus Atlas (robust gegen unterschiedliche Loader-Strukturen)
+  // -------------------------------------------------------------------------
+  function getAtlasByName(name){
+    const A = window.Assets || null;
+    if(!A || !A.atlases) return null;
+    return A.atlases[name] || null;
   }
 
-  function listAtlasKeys() {
-    const atl = getAtlasesRaw();
-    if (!atl) return [];
-    if (atl instanceof Map) return Array.from(atl.keys()).sort();
-    // Object
-    return Object.keys(atl).sort();
+  function isAtlasOk(atlas){
+    if(!atlas) return false;
+    // üblich: atlas.ok true wenn JSON+PNG geladen
+    if(atlas.ok === true) return true;
+    // Fallback: manche Loader setzen .image/.img
+    if(atlas.image && atlas.image.complete) return true;
+    if(atlas.img && atlas.img.complete) return true;
+    return false;
   }
 
-  function getAtlas(key) {
-    if (!key) return null;
-    const atl = getAtlasesRaw();
-    if (!atl) return null;
-    if (atl instanceof Map) return atl.get(key) || null;
-    return atl[key] || null;
-  }
+  function getFrameMeta(atlas, key){
+    if(!atlas) return null;
 
-  function listFrameKeys(atlasKey) {
-    const a = getAtlas(atlasKey);
-    if (!a) return [];
-    const frames = a.frames || a.data?.frames || null;
-    if (!frames) return [];
-    return Object.keys(frames).sort();
-  }
+    // häufige Stellen
+    if(atlas.frames && atlas.frames[key]) return atlas.frames[key];
+    if(atlas.data && atlas.data.frames && atlas.data.frames[key]) return atlas.data.frames[key];
+    if(atlas.json && atlas.json.frames && atlas.json.frames[key]) return atlas.json.frames[key];
+    if(atlas._json && atlas._json.frames && atlas._json.frames[key]) return atlas._json.frames[key];
 
-  // Sehr defensiv: "frame" kann unterschiedlich strukturiert sein.
-  function getFrame(atlasKey, frameKey) {
-    const a = getAtlas(atlasKey);
-    if (!a) return null;
-    const frames = a.frames || a.data?.frames || null;
-    if (!frames) return null;
-    return frames[frameKey] || null;
-  }
-
-  function assetsCanDraw() {
-    const A = getAssets();
-    return !!(A && typeof A.drawAtlasFrame === 'function');
-  }
-
-  // --------------------------------------------------------------------------
-  // Helpers – Direction / Mapping
-  // --------------------------------------------------------------------------
-  function vecToDir8(dx, dy) {
-    // Acht Richtungen im Uhrzeigersinn ab N.
-    const ang = Math.atan2(dy, dx); // -pi..pi, 0 = +x (E)
-    // Wir wollen 0 = N -> daher drehen: N entspricht -pi/2 im atan2.
-    // delta = ang - (-pi/2) = ang + pi/2
-    let a = ang + Math.PI / 2;
-    while (a < 0) a += Math.PI * 2;
-    while (a >= Math.PI * 2) a -= Math.PI * 2;
-    const slice = (Math.PI * 2) / 8;
-    const idx = Math.floor((a + slice / 2) / slice) % 8;
-    return DIR8[idx];
-  }
-
-  // --------------------------------------------------------------------------
-  // Preview / Canvas sizing
-  // --------------------------------------------------------------------------
-  function syncCanvasSize() {
-    if (!S.canvas || !S.previewWrap) return;
-    const dpr = window.devicePixelRatio || 1;
-
-    // Höhe per Slider (iOS friendly)
-    const h = clamp(S.previewH, PREVIEW_H_MIN, PREVIEW_H_MAX);
-    S.previewWrap.style.height = `${h}px`;
-
-    // Breite: 100% der Tab-Spalte
-    const cssW = Math.max(10, S.previewWrap.clientWidth);
-    const cssH = Math.max(10, S.previewWrap.clientHeight);
-
-    // Physische Pixel
-    S.canvas.width  = Math.floor(cssW * dpr);
-    S.canvas.height = Math.floor(cssH * dpr);
-
-    // CSS Pixel
-    S.canvas.style.width = `${cssW}px`;
-    S.canvas.style.height = `${cssH}px`;
-
-    // 2D context, scaled by DPR
-    const ctx = S.canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = false; // Pixel-Style / Crisp
-    S.ctx = ctx;
-
-    rebuildPlan();    // Plan an neue View-Größe anpassen
-    drawOnce();       // Sofort neu zeichnen
-  }
-
-  function getViewWH() {
-    if (!S.previewWrap) return { w: 520, h: 320 };
-    return {
-      w: Math.max(10, S.previewWrap.clientWidth),
-      h: Math.max(10, S.previewWrap.clientHeight),
-    };
-  }
-
-  // --------------------------------------------------------------------------
-  // Plan generation (immer innerhalb Sichtfenster)
-  // --------------------------------------------------------------------------
-  function rebuildPlan() {
-    const { w, h } = getViewWH();
-    const m = Math.min(w, h) * SAFE_MARGIN_FRAC;
-    const cx = w * 0.50;
-    const cy = h * 0.62; // etwas tiefer, damit Sprite unten Platz hat
-
-    let pts = [];
-    const len = Math.min(w, h) * 0.32;
-
-    if (S.path === 'line') {
-      pts = [
-        { x: cx - len, y: cy + len * 0.25 },
-        { x: cx + len, y: cy - len * 0.25 },
-      ];
-    } else if (S.path === 'box') {
-      const r = len * 0.65;
-      pts = [
-        { x: cx - r, y: cy - r },
-        { x: cx + r, y: cy - r },
-        { x: cx + r, y: cy + r },
-        { x: cx - r, y: cy + r },
-        { x: cx - r, y: cy - r },
-      ];
-    } else { // circle
-      const r = len * 0.75;
-      const steps = 24;
-      for (let i = 0; i <= steps; i++) {
-        const a = (i / steps) * Math.PI * 2;
-        pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+    // manchmal ist frames ein Array – dann suchen
+    if(Array.isArray(atlas.frames)){
+      for(const f of atlas.frames){
+        if(f && f.name === key) return f;
       }
     }
-
-    // Clamp safe
-    pts = pts.map(p => ({
-      x: clamp(p.x, m, w - m),
-      y: clamp(p.y, m, h - m),
-    }));
-
-    S.planPts = pts;
-    // Trail reset beim Planwechsel
-    S.trailPts = [];
-    S.step = 0;
-    S.t = 0;
+    return null;
   }
 
-  // --------------------------------------------------------------------------
-  // UI update helpers
-  // --------------------------------------------------------------------------
-  function setMsg(s) {
-    if (!S.msg) return;
-    S.msg.textContent = s || '';
+  // FrameName-Konvention (wie im Tool angezeigt)
+  // Beispiel: deer_N_walk_0
+  function buildFrameName(prefix, dir, idx){
+    return `${prefix}${dir}_walk_${idx}`;
   }
 
-  function populateAtlases(keepSelection = true) {
-    const keys = listAtlasKeys();
-    const prev = S.atlasKey;
-
-    // Clear
-    S.selAtlas.innerHTML = '';
-    if (keys.length === 0) {
-      const opt = el('option', { value: '' }, txt('— keine Atlanten —'));
-      S.selAtlas.append(opt);
-      S.atlasKey = '';
-      populateFrames(false);
-      setMsg('✖ Keine Atlanten gefunden. (Sind Assets geladen?)');
-      return false;
-    }
-
-    S.selAtlas.append(el('option', { value: '' }, txt('— Atlas wählen —')));
-    keys.forEach(k => S.selAtlas.append(el('option', { value: k }, txt(k))));
-
-    if (keepSelection && prev && keys.includes(prev)) {
-      S.selAtlas.value = prev;
-      S.atlasKey = prev;
-    } else {
-      S.selAtlas.value = keys[0];
-      S.atlasKey = keys[0];
-    }
-
-    populateFrames(true);
-    setMsg('');
-    return true;
+  // -------------------------------------------------------------------------
+  // Rendering Helpers (Canvas)
+  // -------------------------------------------------------------------------
+  function clearCanvas(ctx, w, h){
+    ctx.clearRect(0,0,w,h);
+    // leichter Grid-Hintergrund
+    const step = 32;
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.beginPath();
+    for(let x=0; x<=w; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,h); }
+    for(let y=0; y<=h; y+=step){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
   }
 
-  function populateFrames(keepSelection = true) {
-    const frames = listFrameKeys(S.atlasKey);
-    const prev = S.frameKey;
-
-    S.selFrame.innerHTML = '';
-    if (!S.atlasKey || frames.length === 0) {
-      S.selFrame.append(el('option', { value: '' }, txt('— keine Frames —')));
-      S.frameKey = '';
-      return;
-    }
-
-    S.selFrame.append(el('option', { value: '' }, txt('— Frame wählen —')));
-    frames.forEach(f => S.selFrame.append(el('option', { value: f }, txt(f))));
-
-    if (keepSelection && prev && frames.includes(prev)) {
-      S.selFrame.value = prev;
-      S.frameKey = prev;
-    } else {
-      // heuristik: bevorzugt frame 0 / idle
-      const idle = frames.find(x => /_0$/.test(x) || /idle/i.test(x)) || frames[0];
-      S.selFrame.value = idle;
-      S.frameKey = idle;
-    }
+  function drawCrosshair(ctx, x, y){
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = '#ff4040';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x-10, y); ctx.lineTo(x+10, y);
+    ctx.moveTo(x, y-10); ctx.lineTo(x, y+10);
+    ctx.stroke();
+    ctx.restore();
   }
 
-  // Retry-Mechanismus, falls Assets erst nach Tab-Open fertig sind.
-  function retryAtlasDiscovery(triesLeft = 12) {
-    if (populateAtlases(true)) return;
-    if (triesLeft <= 0) return;
-    window.setTimeout(() => retryAtlasDiscovery(triesLeft - 1), 350);
+  function drawBox(ctx, x, y, w, h){
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = '#40c0ff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
   }
 
-  // --------------------------------------------------------------------------
-  // Drawing
-  // --------------------------------------------------------------------------
-  function clearCanvas() {
-    if (!S.ctx) return;
-    const { w, h } = getViewWH();
-    S.ctx.clearRect(0, 0, w, h);
-  }
-
-  function drawGrid() {
-    if (!S.ctx || !S.showGrid) return;
-    const { w, h } = getViewWH();
-    const ctx = S.ctx;
+  function drawFootLine(ctx, y, w){
     ctx.save();
     ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = '#2aa3ff';
-    ctx.lineWidth = 1;
-
-    const step = 24; // leichte Rasterdichte
-    for (let x = 0; x <= w; x += step) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= h; y += step) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function drawPlan() {
-    if (!S.ctx || !S.showPlan || !S.planPts.length) return;
-    const ctx = S.ctx;
-    ctx.save();
-    ctx.globalAlpha = 0.7;
-    ctx.strokeStyle = '#5fb7ff';
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
     ctx.beginPath();
-    ctx.moveTo(S.planPts[0].x, S.planPts[0].y);
-    for (let i = 1; i < S.planPts.length; i++) ctx.lineTo(S.planPts[i].x, S.planPts[i].y);
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
     ctx.stroke();
     ctx.restore();
   }
 
-  function drawTrail() {
-    if (!S.ctx || !S.showTrail || S.trailPts.length < 2) return;
-    const ctx = S.ctx;
-    ctx.save();
-    ctx.globalAlpha = 0.65;
-    ctx.strokeStyle = '#9ad1ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(S.trailPts[0].x, S.trailPts[0].y);
-    for (let i = 1; i < S.trailPts.length; i++) ctx.lineTo(S.trailPts[i].x, S.trailPts[i].y);
-    ctx.stroke();
-    ctx.restore();
-  }
+  // -------------------------------------------------------------------------
+  // UI Render
+  // -------------------------------------------------------------------------
+  function renderUI(root){
+    const A = window.Assets || null;
 
-  function drawPivot(x, y) {
-    if (!S.ctx || !S.showPivot) return;
-    const ctx = S.ctx;
-    ctx.save();
-    ctx.strokeStyle = '#ff3b30';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x - 10, y);
-    ctx.lineTo(x + 10, y);
-    ctx.moveTo(x, y - 10);
-    ctx.lineTo(x, y + 10);
-    ctx.stroke();
-    ctx.restore();
-  }
+    root.innerHTML = '';
+    root.style.padding = '8px';
+    root.style.color = '#fff';
+    root.style.fontFamily = 'monospace';
 
-  function drawBBox(frame, x, y, scale) {
-    if (!S.ctx || !S.showBBox || !frame) return;
-    const fr = normalizeFrame(frame);
-    if (!fr) return;
-    const ctx = S.ctx;
-    const dx = x - fr.pivotX * scale;
-    const dy = y - fr.pivotY * scale;
+    const row = (label, el)=>{
+      const wrap = document.createElement('div');
+      wrap.style.margin = '6px 0';
+      const l = document.createElement('div');
+      l.textContent = label;
+      l.style.opacity = '0.85';
+      l.style.marginBottom = '4px';
+      wrap.appendChild(l);
+      wrap.appendChild(el);
+      root.appendChild(wrap);
+      return wrap;
+    };
 
-    ctx.save();
-    ctx.strokeStyle = '#00c7ff';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(dx, dy, fr.w * scale, fr.h * scale);
-    ctx.restore();
-  }
+    // Atlas Select
+    const atlasSel = document.createElement('select');
+    atlasSel.style.width = '100%';
+    atlasSel.style.padding = '6px';
+    atlasSel.style.borderRadius = '8px';
 
-  function drawFoot(frame, x, y, scale) {
-    if (!S.ctx || !S.showFoot || !frame) return;
-    const fr = normalizeFrame(frame);
-    if (!fr) return;
-    const ctx = S.ctx;
-
-    // Fußlinie: y = (frame.footY ? footY : h) relativ zum frame-top
-    const footY = (typeof fr.footY === 'number') ? fr.footY : fr.h;
-    const dy = y - fr.pivotY * scale;
-    const yLine = dy + footY * scale;
-
-    ctx.save();
-    ctx.strokeStyle = '#ffd60a';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x - 18, yLine);
-    ctx.lineTo(x + 18, yLine);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Frame-Normalisierung, damit wir pivot/w/h stabil lesen können.
-  function normalizeFrame(frameObj) {
-    if (!frameObj) return null;
-    const f = frameObj.frame || frameObj; // manchmal steckt es unter .frame
-    const w = f.w ?? f.width;
-    const h = f.h ?? f.height;
-    if (!(w > 0 && h > 0)) return null;
-
-    // pivotX/pivotY: Projekt nutzt oft frameObj.pivotX/Y oder data.pivot...
-    const px = frameObj.pivotX ?? frameObj.px ?? frameObj.pivot?.x ?? 0;
-    const py = frameObj.pivotY ?? frameObj.py ?? frameObj.pivot?.y ?? 0;
-
-    // Optional: footY
-    const fy = frameObj.footY ?? frameObj.foot?.y;
-
-    return { w, h, pivotX: px, pivotY: py, footY: fy };
-  }
-
-  function drawOnce() {
-    clearCanvas();
-    drawGrid();
-    drawPlan();
-    drawTrail();
-
-    // In single-mode zeichnen wir das aktuell selektierte Frame mittig.
-    if (S.mode === 'single' && S.atlasKey && S.frameKey && assetsCanDraw()) {
-      const { w, h } = getViewWH();
-      const x = w * 0.50;
-      const y = h * 0.62;
-
-      const frame = getFrame(S.atlasKey, S.frameKey);
-      const scale = S.zoom;
-
-      // Sprite
-      try {
-        window.Assets.drawAtlasFrame(S.ctx, S.atlasKey, S.frameKey, x, y, { scale });
-      } catch (e) {
-        setMsg('✖ drawAtlasFrame Fehler: ' + (e?.message || e));
-      }
-
-      drawBBox(frame, x, y, scale);
-      drawFoot(frame, x, y, scale);
-      drawPivot(x, y);
+    const atlasNames = (A && A.atlases) ? Object.keys(A.atlases) : [];
+    atlasNames.sort();
+    for(const name of atlasNames){
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      atlasSel.appendChild(opt);
     }
 
-    // Footer Labels
-    if (S.footerLeft) S.footerLeft.textContent = 'Frame 0 = Idle';
-    if (S.footerRight) S.footerRight.textContent = `Atlas: ${S.atlasKey || '—'}`;
-  }
+    // Prefix input
+    const prefixIn = document.createElement('input');
+    prefixIn.type = 'text';
+    prefixIn.value = 'deer_';
+    prefixIn.placeholder = 'z.B. deer_';
+    prefixIn.style.width = '100%';
+    prefixIn.style.padding = '6px';
+    prefixIn.style.borderRadius = '8px';
 
-  // --------------------------------------------------------------------------
-  // Animation loop
-  // --------------------------------------------------------------------------
-  function start() {
-    if (S.isRunning) return;
-    S.isRunning = true;
-    S.lastT = performance.now();
-    S.animAcc = 0;
-    S.t = 0;
-    S.step = 0;
-    S.trailPts = [];
-    tick();
-  }
+    // Frames/Dir
+    const framesIn = document.createElement('input');
+    framesIn.type = 'number';
+    framesIn.min = '1';
+    framesIn.max = '16';
+    framesIn.value = '8';
+    framesIn.style.width = '100%';
+    framesIn.style.padding = '6px';
+    framesIn.style.borderRadius = '8px';
 
-  function stop() {
-    S.isRunning = false;
-    if (S.rafId) cancelAnimationFrame(S.rafId);
-    S.rafId = 0;
-    drawOnce();
-  }
+    // Tiles/Dir
+    const tilesIn = document.createElement('input');
+    tilesIn.type = 'number';
+    tilesIn.min = '1';
+    tilesIn.max = '20';
+    tilesIn.value = '5';
+    tilesIn.style.width = '100%';
+    tilesIn.style.padding = '6px';
+    tilesIn.style.borderRadius = '8px';
 
-  function tick() {
-    if (!S.isRunning) return;
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - S.lastT) / 1000);
-    S.lastT = now;
+    // Visual toggles
+    const toggles = document.createElement('div');
+    toggles.style.display = 'flex';
+    toggles.style.gap = '10px';
+    toggles.style.flexWrap = 'wrap';
 
-    const { w, h } = getViewWH();
-    const scale = S.zoom;
-
-    // Position entlang Plan
-    const pts = S.planPts;
-    if (!pts || pts.length < 2) rebuildPlan();
-
-    const speed = clamp(S.pxPerSec, SPEED_MIN, SPEED_MAX);
-    const fps = clamp(S.fps, FPS_MIN, FPS_MAX);
-
-    // Wir laufen segmentweise entlang der Plan-Punkte.
-    const segA = pts[S.step] || pts[0];
-    const segB = pts[S.step + 1] || pts[pts.length - 1];
-
-    const vx = segB.x - segA.x;
-    const vy = segB.y - segA.y;
-    const segLen = Math.hypot(vx, vy) || 1;
-
-    // t in [0..1] über Segment
-    S.t += (speed * dt) / segLen;
-    if (S.t >= 1) {
-      S.t = 0;
-      S.step++;
-      if (S.step >= pts.length - 1) S.step = 0;
+    function mkCheck(label, checked=true){
+      const w = document.createElement('label');
+      w.style.display='flex';
+      w.style.alignItems='center';
+      w.style.gap='6px';
+      w.style.userSelect='none';
+      const c = document.createElement('input');
+      c.type='checkbox';
+      c.checked=checked;
+      const t = document.createElement('span');
+      t.textContent=label;
+      w.appendChild(c); w.appendChild(t);
+      return {wrap:w, box:c};
     }
 
-    const x = segA.x + vx * S.t;
-    const y = segA.y + vy * S.t;
-
-    // Trail
-    S.trailPts.push({ x, y });
-    if (S.trailPts.length > 90) S.trailPts.shift();
-
-    // Direction
-    let dir = S.dirLock;
-    if (S.dirMode === 'auto') {
-      dir = vecToDir8(vx, vy);
-    }
-
-    // Frame wählen:
-    // - Für Walk: wir versuchen ..._<dir>_walk_<n> / ..._<dir>_<n>
-    // - Fallback: frameKey aus Auswahl
-    let frameKey = S.frameKey;
-    if (S.mode === 'walk' && S.atlasKey) {
-      const frames = listFrameKeys(S.atlasKey);
-      // kleine heuristik: suche lauf-sequenz
-      const base = frames.find(k => k.includes(`_${dir}_walk_`)) ? 'walk' : null;
-      const walkFrames = frames.filter(k => base ? k.includes(`_${dir}_walk_`) : k.includes(`_${dir}_`));
-      if (walkFrames.length) {
-        // anim index
-        S.animAcc += dt;
-        const idx = Math.floor(S.animAcc * fps) % walkFrames.length;
-        frameKey = walkFrames[idx];
-      }
-    }
-
-    // Render
-    clearCanvas();
-    drawGrid();
-    drawPlan();
-    drawTrail();
-
-    if (S.atlasKey && frameKey && assetsCanDraw()) {
-      const frame = getFrame(S.atlasKey, frameKey);
-      try {
-        window.Assets.drawAtlasFrame(S.ctx, S.atlasKey, frameKey, x, y, { scale });
-      } catch (e) {
-        setMsg('✖ drawAtlasFrame Fehler: ' + (e?.message || e));
-      }
-      drawBBox(frame, x, y, scale);
-      drawFoot(frame, x, y, scale);
-      drawPivot(x, y);
-    }
-
-    // Footer
-    if (S.footerLeft) S.footerLeft.textContent = 'Frame 0 = Idle';
-    if (S.footerRight) S.footerRight.textContent = `Atlas: ${S.atlasKey || '—'} | Dir: ${dir}`;
-
-    S.rafId = requestAnimationFrame(tick);
-  }
-
-  // --------------------------------------------------------------------------
-  // Mount Tab
-  // --------------------------------------------------------------------------
-  function mountSpriteTest(containerEl) {
-    // Guard: Container muss existieren
-    if (!containerEl) return;
-
-    // Root
-    const root = el('div', { class: 'spritetest-root', style: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-      padding: '10px',
-      color: '#e8e8e8',
-      fontFamily: 'ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-      fontSize: '14px',
-    }});
-
-    // Top: controls grid
-    const grid = el('div', { style: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '10px 12px',
-      alignItems: 'center',
-    }});
-
-    const mkLabel = (t) => el('div', { style: { opacity: 0.9 }}, txt(t));
-    const mkSelect = () => el('select', { style: ctlStyleSelect() });
-    const mkRange = (min,max,step,val) => el('input', { type:'range', min, max, step, value: val, style: ctlStyleRange() });
-
-    // Atlas select
-    grid.append(mkLabel('Atlas'));
-    S.selAtlas = mkSelect();
-    grid.append(S.selAtlas);
-
-    // Frame select
-    grid.append(mkLabel('Frame'));
-    S.selFrame = mkSelect();
-    grid.append(S.selFrame);
-
-    // Mode
-    grid.append(mkLabel('Modus'));
-    S.selMode = mkSelect();
-    S.selMode.append(el('option', { value:'single' }, txt('Single (Preview)')));
-    S.selMode.append(el('option', { value:'walk' }, txt('Walk (Pfad)')));
-    grid.append(S.selMode);
-
-    // Path
-    grid.append(mkLabel('Pfad'));
-    S.selPath = mkSelect();
-    S.selPath.append(el('option', { value:'line' }, txt('Linie')));
-    S.selPath.append(el('option', { value:'box' }, txt('Viereck')));
-    S.selPath.append(el('option', { value:'circle' }, txt('Kreis')));
-    grid.append(S.selPath);
-
-    // Dir mode
-    grid.append(mkLabel('Richtung'));
-    S.selDirMode = mkSelect();
-    S.selDirMode.append(el('option', { value:'auto' }, txt('AUTO (aus Pfad)')));
-    S.selDirMode.append(el('option', { value:'lock' }, txt('LOCK (fix)')));
-    grid.append(S.selDirMode);
-
-    // Dir lock
-    grid.append(mkLabel('Fix-Richtung'));
-    S.selDirLock = mkSelect();
-    DIR8.forEach(d => S.selDirLock.append(el('option', { value:d }, txt(d))));
-    grid.append(S.selDirLock);
-
-    // Speed
-    grid.append(mkLabel('Speed'));
-    const speedWrap = el('div', { style: { display:'flex', gap:'10px', alignItems:'center' }});
-    S.rngSpeed = mkRange(SPEED_MIN, SPEED_MAX, 1, S.pxPerSec);
-    const speedTxt = el('div', { style: { minWidth:'80px', textAlign:'right', opacity:0.9 }}, txt(`${S.pxPerSec} px/s`));
-    speedWrap.append(S.rngSpeed);
-    speedWrap.append(speedTxt);
-    grid.append(speedWrap);
-
-    // FPS
-    grid.append(mkLabel('Anim FPS'));
-    const fpsWrap = el('div', { style: { display:'flex', gap:'10px', alignItems:'center' }});
-    S.rngFps = mkRange(FPS_MIN, FPS_MAX, 1, S.fps);
-    const fpsTxt = el('div', { style: { minWidth:'60px', textAlign:'right', opacity:0.9 }}, txt(`${S.fps} fps`));
-    fpsWrap.append(S.rngFps);
-    fpsWrap.append(fpsTxt);
-    grid.append(fpsWrap);
-
-    // Zoom
-    grid.append(mkLabel('Zoom'));
-    const zoomWrap = el('div', { style: { display:'flex', gap:'10px', alignItems:'center' }});
-    S.rngZoom = mkRange(ZOOM_MIN, ZOOM_MAX, 0.05, S.zoom);
-    const zoomTxt = el('div', { style: { minWidth:'80px', textAlign:'right', opacity:0.9 }}, txt(`Zoom ${fmt(S.zoom,2)}x`));
-    zoomWrap.append(S.rngZoom);
-    zoomWrap.append(zoomTxt);
-    grid.append(zoomWrap);
-
-    // Preview height
-    grid.append(mkLabel('Preview-Höhe'));
-    const phWrap = el('div', { style: { display:'flex', gap:'10px', alignItems:'center' }});
-    S.rngPrevH = mkRange(PREVIEW_H_MIN, PREVIEW_H_MAX, 5, S.previewH);
-    const phTxt = el('div', { style: { minWidth:'80px', textAlign:'right', opacity:0.9 }}, txt(`${S.previewH}px`));
-    phWrap.append(S.rngPrevH);
-    phWrap.append(phTxt);
-    grid.append(phWrap);
+    const chkPivot = mkCheck('Pivot anzeigen', true);
+    const chkBox   = mkCheck('BoundingBox anzeigen', true);
+    const chkFoot  = mkCheck('Fußlinie anzeigen', true);
+    toggles.appendChild(chkPivot.wrap);
+    toggles.appendChild(chkBox.wrap);
+    toggles.appendChild(chkFoot.wrap);
 
     // Buttons
-    const btnRow = el('div', { style: { display:'flex', gap:'10px' }});
-    S.btnStart = el('button', { style: ctlStyleButton(true) }, txt('Start Test'));
-    S.btnStop  = el('button', { style: ctlStyleButton(false) }, txt('Stop'));
-    btnRow.append(S.btnStart);
-    btnRow.append(S.btnStop);
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '10px';
 
-    // Toggles
-    const togRow = el('div', { style: { display:'flex', gap:'14px', flexWrap:'wrap', alignItems:'center' }});
-    const mkChk = (label, key) => {
-      const id = `spritetest-${key}-${Math.random().toString(16).slice(2)}`;
-      const cb = el('input', { id, type:'checkbox' });
-      cb.checked = !!S[key];
-      cb.addEventListener('change', () => { S[key] = cb.checked; drawOnce(); });
-      const lb = el('label', { for:id, style:{ display:'flex', gap:'6px', alignItems:'center', cursor:'pointer' }}, [
-        cb, el('span', {}, txt(label))
-      ]);
-      return lb;
-    };
-    togRow.append(mkChk('Pivot', 'showPivot'));
-    togRow.append(mkChk('BBox', 'showBBox'));
-    togRow.append(mkChk('Fußlinie', 'showFoot'));
-    togRow.append(mkChk('Trail', 'showTrail'));
-    togRow.append(mkChk('Plan', 'showPlan'));
-    togRow.append(mkChk('Grid', 'showGrid'));
+    const btnStart = document.createElement('button');
+    btnStart.textContent = 'Start Test';
+    btnStart.style.flex = '1';
+    btnStart.style.padding = '8px';
+    btnStart.style.borderRadius = '999px';
 
-    // Refresh button
-    S.btnRefresh = el('button', { style: ctlStyleButton(false) }, txt('↻ Refresh Atlases'));
+    const btnStop = document.createElement('button');
+    btnStop.textContent = 'Stop';
+    btnStop.style.flex = '1';
+    btnStop.style.padding = '8px';
+    btnStop.style.borderRadius = '999px';
 
-    // Message
-    S.msg = el('div', { style: { opacity: 0.85, minHeight:'18px' }}, txt(''));
+    btnRow.appendChild(btnStart);
+    btnRow.appendChild(btnStop);
 
-    // Preview wrap + canvas
-    S.previewWrap = el('div', { style: {
-      position: 'relative',
-      width: '100%',
-      height: `${S.previewH}px`,
-      borderRadius: '14px',
-      background: 'rgba(0,0,0,0.20)',
-      boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
-      overflow: 'hidden',
-    }});
-    S.canvas = el('canvas', { style: { display:'block' }});
-    S.previewWrap.append(S.canvas);
+    // Info
+    const info = document.createElement('div');
+    info.style.opacity = '0.85';
+    info.style.marginTop = '6px';
+    info.textContent = 'Richtungs-Reihenfolge: N → NE → E → SE → S → SW → W → NW | Regel: Frame 0 = Idle';
 
-    // Footer inside preview
-    const footer = el('div', { style: {
-      position:'absolute',
-      left:'10px', right:'10px', bottom:'10px',
-      display:'flex', justifyContent:'space-between', gap:'10px',
-      pointerEvents:'none',
-      opacity: 0.9,
-    }});
-    S.footerLeft = el('div', { style: footerPillStyle() }, txt('Frame 0 = Idle'));
-    S.footerRight = el('div', { style: footerPillStyle() }, txt('Atlas: —'));
-    footer.append(S.footerLeft, S.footerRight);
-    S.previewWrap.append(footer);
+    // Status
+    const status = document.createElement('div');
+    status.style.marginTop = '8px';
+    status.style.whiteSpace = 'pre-wrap';
+    status.style.fontSize = '12px';
 
-    // Assemble
-    root.append(grid);
-    root.append(btnRow);
-    root.append(togRow);
-    root.append(S.btnRefresh);
-    root.append(S.msg);
-    root.append(S.previewWrap);
+    // Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 520;
+    canvas.height = 420;
+    canvas.style.width = '100%';
+    canvas.style.border = '1px solid rgba(255,255,255,0.2)';
+    canvas.style.borderRadius = '10px';
+    canvas.style.marginTop = '10px';
+    const ctx = canvas.getContext('2d');
 
-    // Attach to container
-    containerEl.innerHTML = '';
-    containerEl.append(root);
+    // Assemble UI
+    row('Atlas', atlasSel);
 
-    // Save refs
-    S.root = root;
+    const two = document.createElement('div');
+    two.style.display = 'grid';
+    two.style.gridTemplateColumns = '1fr 1fr';
+    two.style.gap = '10px';
+    const wrapPrefix = document.createElement('div');
+    const wrapFrames = document.createElement('div');
+    const l1 = document.createElement('div'); l1.textContent = 'Prefix (z.B. deer_)'; l1.style.opacity='0.85'; l1.style.marginBottom='4px';
+    const l2 = document.createElement('div'); l2.textContent = 'Frames/Dir'; l2.style.opacity='0.85'; l2.style.marginBottom='4px';
+    wrapPrefix.appendChild(l1); wrapPrefix.appendChild(prefixIn);
+    wrapFrames.appendChild(l2); wrapFrames.appendChild(framesIn);
+    two.appendChild(wrapPrefix);
+    two.appendChild(wrapFrames);
+    root.appendChild(two);
 
-    // Events
-    S.selAtlas.addEventListener('change', () => {
-      S.atlasKey = S.selAtlas.value || '';
-      populateFrames(false);
-      drawOnce();
-    });
-    S.selFrame.addEventListener('change', () => {
-      S.frameKey = S.selFrame.value || '';
-      drawOnce();
-    });
-    S.selMode.addEventListener('change', () => {
-      S.mode = S.selMode.value;
-      drawOnce();
-    });
-    S.selPath.addEventListener('change', () => {
-      S.path = S.selPath.value;
-      rebuildPlan();
-      drawOnce();
-    });
-    S.selDirMode.addEventListener('change', () => {
-      S.dirMode = S.selDirMode.value;
-      drawOnce();
-    });
-    S.selDirLock.addEventListener('change', () => {
-      S.dirLock = S.selDirLock.value;
-      drawOnce();
-    });
+    row('Tiles/Dir', tilesIn);
+    root.appendChild(btnRow);
+    root.appendChild(info);
+    root.appendChild(toggles);
+    root.appendChild(status);
+    root.appendChild(canvas);
 
-    S.rngSpeed.addEventListener('input', () => {
-      S.pxPerSec = Number(S.rngSpeed.value || 100);
-      speedTxt.textContent = `${S.pxPerSec} px/s`;
-    });
-    S.rngFps.addEventListener('input', () => {
-      S.fps = Number(S.rngFps.value || 6);
-      fpsTxt.textContent = `${S.fps} fps`;
-    });
-    S.rngZoom.addEventListener('input', () => {
-      S.zoom = Number(S.rngZoom.value || 1);
-      zoomTxt.textContent = `Zoom ${fmt(S.zoom,2)}x`;
-      drawOnce();
-    });
-    S.rngPrevH.addEventListener('input', () => {
-      S.previewH = Number(S.rngPrevH.value || 320);
-      phTxt.textContent = `${S.previewH}px`;
-      syncCanvasSize();
-    });
+    // -----------------------------------------------------------------------
+    // Test-Loop
+    // -----------------------------------------------------------------------
+    let running = false;
+    let raf = 0;
 
-    S.btnStart.addEventListener('click', () => start());
-    S.btnStop.addEventListener('click', () => stop());
-    S.btnRefresh.addEventListener('click', () => {
-      retryAtlasDiscovery(2);
-      drawOnce();
-    });
+    // motion state
+    let dirIdx = 0;
+    let stepInDir = 0;
+    let frameIdx = 0;
+    let tAcc = 0;
+    let circlePhase = 0;
 
-    // Initial populate + sizing
-    populateAtlases(false);
-    retryAtlasDiscovery();
-    rebuildPlan();
-    syncCanvasSize();
+    // pseudo position in tiles (für Anzeige/Bewegung)
+    let tx = 0, ty = 0;
 
-    // ResizeObserver (wenn Tab-Größe / Orientation wechselt)
-    try {
-      const ro = new ResizeObserver(() => syncCanvasSize());
-      ro.observe(S.previewWrap);
-      ro.observe(containerEl);
-    } catch (_) {
-      // Falls ResizeObserver fehlt: window resize fallback
-      window.addEventListener('resize', () => syncCanvasSize(), { passive: true });
+    function setStatusOk(msg){
+      status.style.color = '#c8ffb0';
+      status.textContent = msg;
+    }
+    function setStatusWarn(msg){
+      status.style.color = '#ffd080';
+      status.textContent = msg;
+    }
+    function setStatusErr(msg){
+      status.style.color = '#ff8080';
+      status.textContent = msg;
     }
 
-    // Erste Zeichnung
-    drawOnce();
-  }
-
-  // --------------------------------------------------------------------------
-  // Inline Styles (klein + robust)
-  // --------------------------------------------------------------------------
-  function ctlStyleSelect() {
-    return {
-      width: '100%',
-      padding: '10px 10px',
-      borderRadius: '12px',
-      border: '1px solid rgba(255,255,255,0.10)',
-      background: 'rgba(255,255,255,0.06)',
-      color: '#eaeaea',
-      outline: 'none',
-      fontSize: '14px',
-    };
-  }
-
-  function ctlStyleRange() {
-    return {
-      width: '100%',
-    };
-  }
-
-  function ctlStyleButton(primary) {
-    return {
-      flex: '1 1 auto',
-      padding: '12px 12px',
-      borderRadius: '14px',
-      border: '1px solid rgba(255,255,255,0.10)',
-      background: primary ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)',
-      color: '#eaeaea',
-      cursor: 'pointer',
-      fontSize: '14px',
-    };
-  }
-
-  function footerPillStyle() {
-    return {
-      padding: '8px 10px',
-      borderRadius: '12px',
-      background: 'rgba(0,0,0,0.35)',
-      boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
-      fontSize: '13px',
-      maxWidth: '48%',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-    };
-  }
-
-  // --------------------------------------------------------------------------
-  // Registration (Projektstandard: window.registerInspectorTab)
-  // --------------------------------------------------------------------------
-  function doRegister() {
-    // Guard A: Nur registrieren, wenn Adapter vorhanden ist.
-    const reg = window.registerInspectorTab;
-    if (typeof reg !== 'function') {
-      // Fallback: später nochmal versuchen (wenn Inspector erst später lädt)
-      window.setTimeout(doRegister, 250);
-      return;
+    function stop(){
+      running = false;
+      if(raf) cancelAnimationFrame(raf);
+      raf = 0;
     }
 
-    reg({
-      id: TAB_ID,
-      title: TAB_TITLE,
-      // Inspector erwartet: (containerEl, api?) – wir nehmen nur containerEl
-      mount: (containerEl) => {
-        try {
-          mountSpriteTest(containerEl);
-        } catch (e) {
-          // harte Crashes vermeiden: Tab bleibt benutzbar
-          const msg = `[spritetest] Render crash: ${e?.message || e}`;
-          console.error(msg, e);
-          containerEl.innerHTML = '';
-          containerEl.append(el('pre', { style: {
-            whiteSpace:'pre-wrap',
-            color:'#ff6b6b',
-            padding:'10px',
-            fontFamily:'ui-monospace, Menlo, Monaco, Consolas, "Courier New", monospace',
-          }}, txt(msg)));
+    btnStop.onclick = ()=> stop();
+
+    btnStart.onclick = ()=>{
+      stop();
+      running = true;
+      dirIdx = 0;
+      stepInDir = 0;
+      frameIdx = 0;
+      tAcc = 0;
+      circlePhase = 0;
+      tx = 0; ty = 0;
+      loop(performance.now());
+    };
+
+    function loop(now){
+      if(!running) return;
+
+      const atlasName = atlasSel.value;
+      const prefix = prefixIn.value || '';
+      const framesPerDir = Math.max(1, Math.min(16, parseInt(framesIn.value||'8',10)));
+      const tilesPerDir  = Math.max(1, Math.min(20, parseInt(tilesIn.value||'5',10)));
+
+      const atlas = getAtlasByName(atlasName);
+      if(!isAtlasOk(atlas)){
+        setStatusErr(`✖ Atlas "${atlasName}" ist nicht ok/geladen.`);
+        clearCanvas(ctx, canvas.width, canvas.height);
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+
+      // Animationszeit: 8 FPS für Walk
+      const dt = 16.67;
+      tAcc += dt;
+
+      // Alle ~120ms nächster Frame
+      if(tAcc >= 120){
+        tAcc = 0;
+        frameIdx = (frameIdx + 1) % framesPerDir;
+      }
+
+      // Bewegung: alle ~350ms ein Tile "weiter"
+      // (im SpriteTest-Canvas ist das nur eine Demo)
+      if(!loop._moveAcc) loop._moveAcc = 0;
+      loop._moveAcc += dt;
+      if(loop._moveAcc >= 350){
+        loop._moveAcc = 0;
+
+        // erst jede Richtung 5 Tiles
+        if(circlePhase === 0){
+          const dir = DIRS[dirIdx];
+          stepInDir++;
+
+          // nur für Anzeige
+          if(dir.includes('N')) ty -= 1;
+          if(dir.includes('S')) ty += 1;
+          if(dir.includes('E')) tx += 1;
+          if(dir.includes('W')) tx -= 1;
+
+          if(stepInDir >= tilesPerDir){
+            stepInDir = 0;
+            dirIdx = (dirIdx + 1) % DIRS.length;
+            if(dirIdx === 0){
+              circlePhase = 1; // danach "Kreis"
+              tx = 0; ty = 0;
+            }
+          }
+        } else {
+          // Kreis: 16 steps auf einem "Octagon"
+          const ring = ['E','E','SE','SE','S','S','SW','SW','W','W','NW','NW','N','N','NE','NE'];
+          dirIdx = DIRS.indexOf(ring[(circlePhase-1) % ring.length]);
+          circlePhase++;
+          if(circlePhase > ring.length*3){
+            circlePhase = 1;
+          }
+
+          const dir = DIRS[dirIdx];
+          if(dir.includes('N')) ty -= 1;
+          if(dir.includes('S')) ty += 1;
+          if(dir.includes('E')) tx += 1;
+          if(dir.includes('W')) tx -= 1;
         }
-      },
-    });
+      }
 
-    // Force a (re)mount so the tab list is rebuilt if InspectorContent was mounted
-    // before this tab finished loading (iOS/Safari + cache timing edge cases).
-    try {
-      window.dispatchEvent(new CustomEvent('req:insp:content:mount'));
-    } catch (e) { /* ignore */ }
+      const dir = DIRS[dirIdx];
+
+      // Regel: Frame 0 = Idle → Wenn FrameIdx==0, ist das ok (steht), beim Laufen nutzt man i>=1.
+      // Im Test: wir nutzen 0..framesPerDir-1 (damit du alles durchsiehst).
+      const key = buildFrameName(prefix, dir, frameIdx);
+
+      const meta = getFrameMeta(atlas, key);
+      if(!meta){
+        setStatusWarn(`⚠ Frame fehlt: ${key}\nAtlas ok: ja | Prefix: "${prefix}" | dir=${dir} frame=${frameIdx}`);
+        clearCanvas(ctx, canvas.width, canvas.height);
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+
+      // --- Zeichnen ---
+      clearCanvas(ctx, canvas.width, canvas.height);
+
+      // Zeichnungsanker in der Mitte (Pivot-Punkt)
+      const cx = canvas.width * 0.5;
+      const cy = canvas.height * 0.70;
+
+      // 1) Sprite zeichnen (Asset-API)
+      if(window.Assets && typeof window.Assets.drawAtlasFrame === 'function'){
+        // drawAtlasFrame(atlasName, frameKey, x, y, opts)
+        // Annahme: (x,y) ist Pivot-Punkt (entspricht meta.pivot)
+        window.Assets.drawAtlasFrame(atlasName, key, cx, cy, { ctx });
+      } else {
+        // Notfall: Falls die API nicht existiert, wenigstens Status zeigen
+        setStatusErr('✖ Assets.drawAtlasFrame nicht gefunden.');
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+
+      // 2) Pivot/Box/Fußlinie überlagern
+      // TopLeft aus Pivot ableiten
+      const fw = (meta.frame && meta.frame.w) ? meta.frame.w : 128;
+      const fh = (meta.frame && meta.frame.h) ? meta.frame.h : 128;
+      const pv = meta.pivot || { x: fw/2, y: fh }; // fallback
+      const topLeftX = cx - pv.x;
+      const topLeftY = cy - pv.y;
+
+      if(chkFoot.box.checked){
+        // Fußlinie = Pivot-Y in Welt (cy)
+        drawFootLine(ctx, cy, canvas.width);
+      }
+      if(chkBox.box.checked){
+        drawBox(ctx, topLeftX, topLeftY, fw, fh);
+      }
+      if(chkPivot.box.checked){
+        drawCrosshair(ctx, cx, cy);
+      }
+
+      // Statustext
+      const ax = (pv.x / fw).toFixed(2);
+      const ay = (pv.y / fh).toFixed(2);
+      setStatusOk(
+        `✔ Atlas ok: ${atlasName}\n` +
+        `Frame: ${key}\n` +
+        `DIR=${dir} frame=${frameIdx}/${framesPerDir-1}  tilesPerDir=${tilesPerDir}\n` +
+        `Pivot(px): x=${pv.x}, y=${pv.y}  Anchor(norm): x=${ax}, y=${ay}\n` +
+        `BBox: w=${fw}, h=${fh} | DemoPos(tx,ty)=(${tx},${ty})`
+      );
+
+      raf = requestAnimationFrame(loop);
+    }
   }
 
-  // Sofort registrieren
-  doRegister();
+  // -------------------------------------------------------------------------
+  // Tab Mount
+  // -------------------------------------------------------------------------
+  function mount(){
+    const ok = registerTabSafe({
+      id: TAB_ID,
+      title: TAB_NAME,
+      icon: '🧪',
+      onShow: (el)=> renderUI(el)
+    });
+    if(!ok){
+      // Falls Inspector noch nicht existiert: später erneut versuchen
+      let tries = 0;
+      const t = setInterval(()=>{
+        tries++;
+        const ok2 = registerTabSafe({
+          id: TAB_ID,
+          title: TAB_NAME,
+          icon: '🧪',
+          onShow: (el)=> renderUI(el)
+        });
+        if(ok2 || tries > 50) clearInterval(t);
+      }, 200);
+    }
+  }
+
+  mount();
 })();
