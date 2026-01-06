@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
- * Version  : v25.12.19-continue-fix (3-Gate: user+assets+registry)
+ * Version  : v26.01.05-spritetest-preview (unverändert: 3-Gate user+assets+registry)
  *
  * Fix (2025-12-19):
  *   - "Weiterspielen" sendet req:game:continue (ui/ui-start.js),
@@ -20,7 +20,7 @@
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG, ...a);
 
   const state = {
-    version:'v25.12.19-continue-fix',
+    version:'v26.01.05-spritetest-preview',
     userReady:false,
     assetsReady:false,
     registryReady:false,
