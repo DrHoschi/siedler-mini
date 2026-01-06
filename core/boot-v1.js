@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
- * Version  : v26.01.06-builder-from-hq (3-Gate: user+assets+registry)
+ * Version  : v26.01.06-unitanimresolver-1 (3-Gate bleibt unverändert)
  *
  * Fix (2025-12-19):
  *   - "Weiterspielen" sendet req:game:continue (ui/ui-start.js),

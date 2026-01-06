@@ -444,6 +444,105 @@
       const idx = _getPrefIndex(atlasKey, atlas);
       return idx;
     },
+
+    /* ------------------------------------------------------------------------
+     * NEU: UnitAnimResolver-Hooks (Tiere 8×8 + Menschen 8×4 / Mixed States)
+     * ------------------------------------------------------------------------
+     * Ziel:
+     *  - Einheitliche Abfrage von Frame-Listen, egal ob:
+     *      - Tiere: 8 Richtungen × 8 Frames (z.B. boar_E_walk_0..7)
+     *      - Menschen: 8 Richtungen × 4 Frames (z.B. woodcutter_E_walk_0..3)
+     *  - Fehlende States (idle/work/carry) werden automatisch auf walk gemappt
+     *  - Diese Methoden sind READ-ONLY und ändern keine Logik im bestehenden Picker.
+     * --------------------------------------------------------------------- */
+
+    /**
+     * Gibt die verfügbare Frame-Liste für (action, dir) zurück.
+     * - action: "idle" | "walk" | "work" | "carry" | ...
+     * - dirTok: "N","NE","E","SE","S","SW","W","NW" (oder Scheme-Token)
+     *
+     * Returns: string[] (kann leer sein)
+     */
+    resolveFrameList(atlasKey, action, dirTok) {
+      const atlas = window.Assets?.getAtlas?.(atlasKey) || null;
+      if (!atlas) return [];
+
+      // Prefixed-Index (woodcutter_N_walk_0, boar_E_walk_7, ...)
+      const prefIndex = _getPrefIndex(atlasKey, atlas);
+      if (prefIndex) {
+        // Reuse der internen Logik (inkl. State-Fallback walk)
+        const list = (prefIndex.actions?.[action]?.[dirTok]
+          || (action !== "walk" ? prefIndex.actions?.walk?.[dirTok] : null)
+          || null);
+
+        if (list && list.length) return list.slice();
+
+        // Dir-Alias (falls anderes Scheme verwendet wurde)
+        const alt = DIR_ALIASES[dirTok];
+        if (alt) {
+          const list2 = (prefIndex.actions?.[action]?.[alt]
+            || (action !== "walk" ? prefIndex.actions?.walk?.[alt] : null)
+            || null);
+          if (list2 && list2.length) return list2.slice();
+        }
+      }
+
+      // Legacy / Grid: wir versuchen, Keys heuristisch zu finden (bestehende Logik)
+      // -> wir nehmen hier die gleiche Picker-Strategie: falls nichts da ist, leer.
+      //    (Legacy-Resolutions sind in deinem Projekt selten, aber bleiben kompatibel.)
+      return [];
+    },
+
+    /**
+     * Liefert Meta-Infos über den Atlas (falls prefixed erkannt).
+     * Returns: { scheme, prefix, actions: string[] } | null
+     */
+    resolveAtlasInfo(atlasKey) {
+      const atlas = window.Assets?.getAtlas?.(atlasKey) || null;
+      if (!atlas) return null;
+      const prefIndex = _getPrefIndex(atlasKey, atlas);
+      if (!prefIndex) return null;
+      return {
+        scheme: prefIndex.scheme,
+        prefix: prefIndex.prefix,
+        actions: Object.keys(prefIndex.actions || {}),
+      };
+    },
+
+    /**
+     * Gibt den aktuell verwendeten Frame-Index (0..n-1) zurück, passend zur
+     * internen Frame-Auswahl (FPS + nowMs).
+     * Returns: number
+     */
+    getFrameIndexForUnit(u, nowMs = performance.now()) {
+      const atlasKey = _getAtlasKeyForUnit(u);
+      if (!atlasKey) return 0;
+      const atlas = window.Assets?.getAtlas?.(atlasKey) || null;
+      if (!atlas) return 0;
+
+      const action = _getActionForUnit(u);
+      const dirTok = _getDirTokForUnit(u, atlasKey, atlas);
+
+      // Prefixed bevorzugt (Tiere/Menschen)
+      const prefIndex = _getPrefIndex(atlasKey, atlas);
+      if (prefIndex) {
+        // liste (inkl. State-Fallback walk)
+        let list = prefIndex.actions?.[action]?.[dirTok];
+        if (!list && action !== "walk") list = prefIndex.actions?.walk?.[dirTok];
+        if (!list || !list.length) {
+          const alt = DIR_ALIASES[dirTok];
+          if (alt) {
+            list = prefIndex.actions?.[action]?.[alt] || (action !== "walk" ? prefIndex.actions?.walk?.[alt] : null);
+          }
+        }
+        const frameCount = list && list.length ? list.length : 1;
+        const fps = ACTION_FPS[action] || 6;
+        return _calcFrameIndex(nowMs, fps, frameCount);
+      }
+
+      // Legacy: keine sichere Index-Ermittlung, wir bleiben konservativ
+      return 0;
+    },
   };
 
   window.UnitAnim = UnitAnim;
