@@ -857,22 +857,7 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
                   if (tgt8 && Number.isFinite(tgt8.x) && Number.isFinite(tgt8.y)) {
                     const dx8 = (tgt8.x - tx);
                     const dy8 = (tgt8.y - ty);
-
-                    // WICHTIG: Map-Units bewegen sich in TILE-Koordinaten, aber die Sprites sind
-                    // in SCREEN-Richtungen (wie SpriteTest) organisiert. Darum projizieren wir hier
-                    // TILE-Delta -> SCREEN-Delta (ISO), damit "Ost ist Ost" stimmt.
-                    //
-                    // Tiere hatten bereits konsistentes Mapping – bei den Menschen/Workern
-                    // fehlte diese Projektion, weshalb der Woodcutter oft auf "E" hängen blieb.
-                    let pdx = dx8;
-                    let pdy = dy8;
-                    // Nur für Nicht-Tiere (Worker/Carrier/Builder etc.) projizieren.
-                    if (u.type !== 'animal') {
-                      pdx = (dx8 - dy8);
-                      pdy = (dx8 + dy8);
-                    }
-
-                    u._dir8 = window.UnitAnim.dir8FromDelta(pdx, pdy);
+                    u._dir8 = window.UnitAnim.dir8FromDelta(dx8, dy8);
                   }
 
                   // Anim-State nur setzen, wenn nichts "stärkeres" vorgegeben wurde
@@ -881,8 +866,11 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
                     u.__animState = moving ? 'walk' : 'idle';
                   }
 
+                  // NOTE: UnitAnim.getFrameForUnit liefert in diesem Projekt
+                  // einen **Frame-Key als String** zurück (nicht {frame: ...}).
+                  // (Einige ältere Call-Sites erwarteten ein Objekt.)
                   const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-                  frameName = info?.frame || null;
+                  frameName = (typeof info === 'string') ? info : (info?.frame || null);
 
                   // Safety
                   if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
@@ -1314,8 +1302,10 @@ if (window.GameWorkArea) {
                 u.__animState = moving ? 'walk' : 'idle';
               }
 
+              // NOTE: UnitAnim.getFrameForUnit liefert in diesem Projekt
+              // einen **Frame-Key als String** zurück (nicht {frame: ...}).
               const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-              frameName = info?.frame || null;
+              frameName = (typeof info === 'string') ? info : (info?.frame || null);
 
               // Safety
               if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
