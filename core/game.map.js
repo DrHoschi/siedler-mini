@@ -935,9 +935,75 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
                 scale = desiredH / fr.h;
               }
 
+              // -----------------------------------------------------------------
+              // UNIT-MARKER (Tool/Carry) + Render-Order je Richtung
+              //
+              // Idee:
+              //  - Wenn eine Unit arbeitet (u.__animState === 'work') -> Tool anzeigen.
+              //  - Wenn eine Unit trägt (u.__animState === 'carry' ODER Task carry ODER
+              //    Builder carryPhase==1) -> Carry anzeigen.
+              //
+              // Wichtig:
+              //  - Marker liegen relativ zum Sprite-Pivot.
+              //  - Wir verwenden window.UnitMarkers (falls vorhanden).
+              //  - In N/NE/NW wird das Item "hinter" der Figur gerendert.
+              //
+              // Aktuell sind Attachments noch Debug/Platzhalter (kleiner Kreis).
+              // Später kann man hier echte Item-Frames (Atlas + frame) einhängen.
+              // -----------------------------------------------------------------
+
+              // Hilfsfunktion: zeichnet ein kleines Placeholder-Item (ohne Asset-Abhängigkeit)
+              function _drawAttachmentPlaceholder(wx0, wy0){
+                ctx.save();
+                ctx.fillStyle   = 'rgba(255,255,255,0.92)';
+                ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+                ctx.lineWidth   = 2;
+                ctx.beginPath();
+                ctx.arc(wx0, wy0, Math.max(3, ts * 0.06), 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+              }
+
+              // Bestimme, ob und welche Attachments wir zeigen
+              const action = String(u?.__animState || u?.task?.type || 'idle');
+              const isCarry = (action === 'carry') || (u?.task?.type === 'carry') || (u?.carryPhase === 1) || !!u?.carrying;
+              const isWork  = (action === 'work')  || (u?.task?.type === 'work');
+
+              // Wenn UnitMarkers fehlen -> keine Attachments (wir bleiben stabil)
+              const UM = window.UnitMarkers;
+              const canMarkers = !!UM && typeof UM.getMarkerWorldOffset === 'function' && fr;
+
+              // Berechne Offsets (Weltpixel) aus Marker + Scale
+              let toolOff  = null;
+              let carryOff = null;
+              if (canMarkers){
+                if (isWork)  toolOff  = UM.getMarkerWorldOffset(u, 'tool',  fr, scale);
+                if (isCarry) carryOff = UM.getMarkerWorldOffset(u, 'carry', fr, scale);
+              }
+
+              // Item hinter/vor der Figur – je Richtung
+              const dir8 = (toolOff?.dir8 || carryOff?.dir8 || u?._dir8 || u?._dir || 'S');
+              const drawBehind = !!UM && typeof UM.isAttachmentBehind === 'function'
+                ? UM.isAttachmentBehind(dir8)
+                : false;
+
+              // Draw-Order:
+              //  - behind: attachments -> unit
+              //  - front : unit -> attachments
+              if (drawBehind){
+                if (toolOff)  _drawAttachmentPlaceholder(wx + toolOff.dx,  wy + toolOff.dy);
+                if (carryOff) _drawAttachmentPlaceholder(wx + carryOff.dx, wy + carryOff.dy);
+              }
+
               const ok = frameName
                 ? Assets.drawAtlasFrame(ctx, atlasKey, frameName, wx, wy, { scale, align:'pivot' })
                 : false;
+
+              if (!drawBehind){
+                if (toolOff)  _drawAttachmentPlaceholder(wx + toolOff.dx,  wy + toolOff.dy);
+                if (carryOff) _drawAttachmentPlaceholder(wx + carryOff.dx, wy + carryOff.dy);
+              }
 
               if (!ok){
                 // Fallback: Punkt (nur wenn Sprite nicht gezeichnet werden konnte)
