@@ -644,7 +644,7 @@
   "meta": {
     "app": "chatgpt-spritebuilder",
     "version": "1.0",
-    "image": "woodcutter.png",
+    "image": "assets/charakter/woodcutter_sprite_atlas.png",
     "size": {
       "w": 1024,
       "h": 1024
