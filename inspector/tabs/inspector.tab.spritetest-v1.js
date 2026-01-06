@@ -1,6 +1,6 @@
 /* ============================================================================
  * inspector/tab/inspector.tab.spritetest-v1.js
- * v26.01.05-spritetest-final
+ * v26.01.05-spritetest-preview-mode
  * ----------------------------------------------------------------------------
  * Ziel:
  *  - Stabiler SpriteTest-Tab (ohne Render-Crashes)
@@ -56,12 +56,19 @@
     // Auswahl
     atlasKey: '',
     frameKey: '',
-    mode: 'single', // 'single' | 'walk'
-    path: 'line',   // 'line' | 'circle' | 'box'
-    dirMode: 'auto',// 'auto' | 'lock'
+
+    // Modus (NEU):
+    //  - mainMode='anim'   -> bestehender Movement/Anim-Viewer (Tiere/Units)
+    //  - mainMode='preview'-> NEU: Standbild + Marker für Gebäude/Deko
+    mainMode: 'anim',
+    animMode: 'single', // 'single' | 'walk' (bestehend)
+
+    // Pfad / Richtung (nur Anim-Mode)
+    path: 'line',    // 'line' | 'circle' | 'box'
+    dirMode: 'auto', // 'auto' | 'lock'
     dirLock: 'S',
 
-    // Animation / Test
+    // Animation / Test (nur Anim-Mode)
     pxPerSec: 100,
     fps: 6,
     isRunning: false,
@@ -69,6 +76,15 @@
     // Preview
     previewH: 320,
     zoom: 1.0,
+
+    // Marker (nur Preview-Mode)
+    markerType: 'door', // 'door' | 'chimney' | 'tool' | 'carry'
+    markers: {
+      // pro Typ genau EIN Marker (wir überschreiben beim Setzen)
+      // door: { dx, dy }, chimney: { dx, dy } ...
+    },
+    showMarkers: true,
+    snapMarkerToInteger: true, // Export rundet sowieso – hier fürs UI
 
     // Overlay toggles
     showPivot: true,
@@ -92,24 +108,45 @@
     // DOM refs
     root: null,
     msg: null,
+
+    // Auswahl-Controls
     selAtlas: null,
     selFrame: null,
-    selMode: null,
+
+    // Modus-Controls
+    selMainMode: null,
+    selAnimMode: null,
+
+    // Anim-Controls
     selPath: null,
     selDirMode: null,
     selDirLock: null,
     rngSpeed: null,
     rngFps: null,
+
+    // Preview-Controls
+    selMarkerType: null,
+    btnClearMarkers: null,
+    btnCopyJson: null,
+    taJson: null,
+
+    // Shared controls
     rngZoom: null,
     rngPrevH: null,
     btnStart: null,
     btnStop: null,
     btnRefresh: null,
+
+    // Canvas
     canvas: null,
     ctx: null,
     previewWrap: null,
     footerLeft: null,
     footerRight: null,
+
+    // UI-Gruppen (für show/hide je Modus)
+    uiAnimOnly: [],
+    uiPreviewOnly: [],
   };
 
   // --------------------------------------------------------------------------
@@ -493,36 +530,186 @@
     return { w, h, pivotX: px, pivotY: py, footY: fy };
   }
 
+  // --------------------------------------------------------------------------
+  // Preview-Anker & Koordinaten-Umrechnung (für Marker)
+  // --------------------------------------------------------------------------
+  function getPreviewAnchor() {
+    // Konsistent zum bisherigen Single-Preview: Pivot liegt optisch leicht unter Mitte.
+    const { w, h } = getViewWH();
+    return { x: w * 0.50, y: h * 0.62 };
+  }
+
+  function canvasToSpriteLocal(cx, cy, pivotX, pivotY, scale) {
+    return {
+      dx: (cx - pivotX) / (scale || 1),
+      dy: (cy - pivotY) / (scale || 1),
+    };
+  }
+
+  function spriteLocalToCanvas(dx, dy, pivotX, pivotY, scale) {
+    return {
+      x: pivotX + dx * (scale || 1),
+      y: pivotY + dy * (scale || 1),
+    };
+  }
+
+  function roundSmart(v) {
+    return (S.snapMarkerToInteger) ? Math.round(v) : v;
+  }
+
+  function setMarker(type, dx, dy) {
+    if (!type) return;
+    S.markers[type] = { dx: roundSmart(dx), dy: roundSmart(dy) };
+    syncExportJson();
+    drawOnce();
+  }
+
   function drawOnce() {
     clearCanvas();
+
+    // Grid kann in beiden Modi hilfreich sein (z.B. Marker grob ausrichten).
     drawGrid();
+
+    // Plan/Trail sind eigentlich Anim-Mode – im Preview lassen wir es optional drin,
+    // aber wir zeichnen es nur wenn Toggle aktiv ist.
     drawPlan();
     drawTrail();
 
-    // In single-mode zeichnen wir das aktuell selektierte Frame mittig.
-    if (S.mode === 'single' && S.atlasKey && S.frameKey && assetsCanDraw()) {
-      const { w, h } = getViewWH();
-      const x = w * 0.50;
-      const y = h * 0.62;
-
-      const frame = getFrame(S.atlasKey, S.frameKey);
-      const scale = S.zoom;
-
-      // Sprite
-      try {
-        window.Assets.drawAtlasFrame(S.ctx, S.atlasKey, S.frameKey, x, y, { scale });
-      } catch (e) {
-        setMsg('✖ drawAtlasFrame Fehler: ' + (e?.message || e));
-      }
-
-      drawBBox(frame, x, y, scale);
-      drawFoot(frame, x, y, scale);
-      drawPivot(x, y);
+    // Guard: Ohne Atlas/Frame oder Draw-Funktion gibt's nichts zu rendern.
+    if (!S.atlasKey || !S.frameKey || !assetsCanDraw()) {
+      if (S.footerLeft) S.footerLeft.textContent = '—';
+      if (S.footerRight) S.footerRight.textContent = `Atlas: ${S.atlasKey || '—'}`;
+      syncExportJson();
+      return;
     }
 
-    // Footer Labels
+    const frame = getFrame(S.atlasKey, S.frameKey);
+    const scale = S.zoom;
+
+    // Im Preview/Single zeichnen wir mittig (Pivot-Anker).
+    const a = getPreviewAnchor();
+    const x = a.x;
+    const y = a.y;
+
+    // Sprite
+    try {
+      window.Assets.drawAtlasFrame(S.ctx, S.atlasKey, S.frameKey, x, y, { scale });
+    } catch (e) {
+      setMsg('✖ drawAtlasFrame Fehler: ' + (e?.message || e));
+    }
+
+    // Overlays
+    drawBBox(frame, x, y, scale);
+    drawFoot(frame, x, y, scale);
+    drawPivot(x, y);
+
+    // Preview-Mode: Marker rendern + Export-JSON aktualisieren
+    if (S.mainMode === 'preview') {
+      drawMarkers(x, y, scale);
+      syncExportJson();
+      if (S.footerLeft) S.footerLeft.textContent = `Preview: ${Object.keys(S.markers||{}).length} Marker`;
+      if (S.footerRight) S.footerRight.textContent = `Atlas: ${S.atlasKey || '—'} | Frame: ${S.frameKey || '—'}`;
+      return;
+    }
+
+    // Anim-Mode (nicht laufend): wir zeigen Standbild (wie bisher "single")
     if (S.footerLeft) S.footerLeft.textContent = 'Frame 0 = Idle';
     if (S.footerRight) S.footerRight.textContent = `Atlas: ${S.atlasKey || '—'}`;
+    syncExportJson();
+  }
+
+
+  function clearMarkers() {
+    S.markers = {};
+    syncExportJson();
+    drawOnce();
+  }
+
+  function buildExportObject() {
+    const out = {
+      atlas: S.atlasKey || '',
+      frame: S.frameKey || '',
+      markers: {},
+    };
+    for (const [k, v] of Object.entries(S.markers || {})) {
+      if (!v) continue;
+      out.markers[k] = { x: Math.round(v.dx), y: Math.round(v.dy) };
+    }
+    return out;
+  }
+
+  function syncExportJson() {
+    if (!S.taJson) return;
+    // hübsches JSON, stabil kopierbar
+    const obj = buildExportObject();
+    S.taJson.value = JSON.stringify(obj, null, 2);
+  }
+
+  async function copyExportJson() {
+    if (!S.taJson) return;
+    const txt = S.taJson.value || '';
+    if (!txt) return;
+
+    // iOS/Safari: clipboard API ist nicht immer verfügbar -> Fallback.
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(txt);
+        setMsg('✅ JSON in Clipboard kopiert.');
+        return;
+      }
+    } catch (_) {}
+
+    try {
+      S.taJson.focus();
+      S.taJson.select();
+      document.execCommand('copy');
+      setMsg('✅ JSON in Clipboard kopiert.');
+    } catch (e) {
+      // Letzter Fallback: Prompt (User kann manuell kopieren)
+      try { window.prompt('JSON kopieren:', txt); } catch (_) {}
+      setMsg('ℹ️ JSON anzeigen (manuell kopieren).');
+    }
+  }
+
+  function drawMarkers(pivotX, pivotY, scale) {
+    if (!S.ctx || !S.showMarkers) return;
+    const ctx = S.ctx;
+
+    ctx.save();
+    ctx.lineWidth = 2;
+
+    for (const [type, m] of Object.entries(S.markers || {})) {
+      if (!m) continue;
+      const p = spriteLocalToCanvas(m.dx, m.dy, pivotX, pivotY, scale);
+
+      // Kreis + Kreuz
+      ctx.strokeStyle = '#ff5c8a';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(p.x - 10, p.y);
+      ctx.lineTo(p.x + 10, p.y);
+      ctx.moveTo(p.x, p.y - 10);
+      ctx.lineTo(p.x, p.y + 10);
+      ctx.stroke();
+
+      // Label
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      const label = `${type}: ${Math.round(m.dx)},${Math.round(m.dy)}`;
+      const pad = 6;
+      ctx.font = '12px ui-monospace, Menlo, Monaco, Consolas, monospace';
+      const tw = ctx.measureText(label).width;
+      const bx = p.x + 12;
+      const by = p.y - 18;
+      ctx.fillRect(bx - pad, by - 12, tw + pad * 2, 18);
+
+      ctx.fillStyle = '#ffd1dc';
+      ctx.fillText(label, bx, by + 1);
+    }
+
+    ctx.restore();
   }
 
   // --------------------------------------------------------------------------
@@ -595,7 +782,7 @@
     // - Für Walk: wir versuchen ..._<dir>_walk_<n> / ..._<dir>_<n>
     // - Fallback: frameKey aus Auswahl
     let frameKey = S.frameKey;
-    if (S.mode === 'walk' && S.atlasKey) {
+    if (S.mainMode === 'anim' && S.animMode === 'walk' && S.atlasKey) {
       const frames = listFrameKeys(S.atlasKey);
       // kleine heuristik: suche lauf-sequenz
       const base = frames.find(k => k.includes(`_${dir}_walk_`)) ? 'walk' : null;
@@ -633,7 +820,42 @@
     S.rafId = requestAnimationFrame(tick);
   }
 
+  
   // --------------------------------------------------------------------------
+  // UI-Logik: Modus umschalten (Anim vs Preview)
+  // --------------------------------------------------------------------------
+  function setDisabled(el, disabled, dim = true) {
+    if (!el) return;
+    el.disabled = !!disabled;
+    if (dim) el.style.opacity = disabled ? '0.45' : '1.0';
+  }
+
+  function updateModeUI() {
+    // Controls existieren erst nach mount – daher defensiv.
+    const isAnim = (S.mainMode === 'anim');
+
+    // Anim-Only Controls deaktivieren/aktivieren
+    setDisabled(S.selAnimMode, !isAnim);
+    setDisabled(S.selPath, !isAnim);
+    setDisabled(S.selDirMode, !isAnim);
+    setDisabled(S.selDirLock, !isAnim);
+    setDisabled(S.rngSpeed, !isAnim);
+    setDisabled(S.rngFps, !isAnim);
+
+    // Start/Stop nur in Anim sinnvoll
+    setDisabled(S.btnStart, !isAnim);
+    setDisabled(S.btnStop,  !isAnim);
+
+    // Preview-Only Controls
+    setDisabled(S.selMarkerType, isAnim);
+    setDisabled(S.btnClearMarkers, isAnim);
+    setDisabled(S.btnCopyJson, isAnim);
+    setDisabled(S.taJson, isAnim, false);
+
+    // In Preview: Plan/Trail sind verwirrend -> wir lassen Checkboxen sichtbar,
+    // aber der Loop läuft nicht. (Keine harte Deaktivierung nötig.)
+  }
+// --------------------------------------------------------------------------
   // Mount Tab
   // --------------------------------------------------------------------------
   function mountSpriteTest(containerEl) {
@@ -673,12 +895,21 @@
     S.selFrame = mkSelect();
     grid.append(S.selFrame);
 
-    // Mode
+    // Modus-Umschalter (NEU):
+    //  - Anim Mode (bestehend, unverändert): für Tiere/Units mit Pfad + Richtungen
+    //  - Preview Mode (NEU): für Gebäude/Deko (Standbild + Marker)
     grid.append(mkLabel('Modus'));
-    S.selMode = mkSelect();
-    S.selMode.append(el('option', { value:'single' }, txt('Single (Preview)')));
-    S.selMode.append(el('option', { value:'walk' }, txt('Walk (Pfad)')));
-    grid.append(S.selMode);
+    S.selMainMode = mkSelect();
+    S.selMainMode.append(el('option', { value:'anim' }, txt('Anim Mode (Units/Tiere)')));
+    S.selMainMode.append(el('option', { value:'preview' }, txt('Preview Mode (Gebäude/Deko)')));
+    grid.append(S.selMainMode);
+
+    // Anim-Untermodus (bestehendes Verhalten, nur UI-klarer benannt)
+    grid.append(mkLabel('Anim-Mode'));
+    S.selAnimMode = mkSelect();
+    S.selAnimMode.append(el('option', { value:'single' }, txt('Single (Stand)')));
+    S.selAnimMode.append(el('option', { value:'walk' }, txt('Walk (Pfad)')));
+    grid.append(S.selAnimMode);
 
     // Path
     grid.append(mkLabel('Pfad'));
@@ -699,6 +930,15 @@
     grid.append(mkLabel('Fix-Richtung'));
     S.selDirLock = mkSelect();
     DIR8.forEach(d => S.selDirLock.append(el('option', { value:d }, txt(d))));
+    // Marker-Typ (nur Preview Mode)
+    grid.append(mkLabel('Marker'));
+    S.selMarkerType = mkSelect();
+    S.selMarkerType.append(el('option', { value:'door' }, txt('Door / Entry')));
+    S.selMarkerType.append(el('option', { value:'chimney' }, txt('Chimney / Rauch')));
+    S.selMarkerType.append(el('option', { value:'tool' }, txt('Tool-Point')));
+    S.selMarkerType.append(el('option', { value:'carry' }, txt('Carry-Point')));
+    grid.append(S.selMarkerType);
+
     grid.append(S.selDirLock);
 
     // Speed
@@ -798,10 +1038,44 @@
     // Assemble
     root.append(grid);
     root.append(btnRow);
+    // Preview-Export UI (nur Preview Mode)
+    const exportWrap = el('div', { style: {
+      display:'flex',
+      flexDirection:'column',
+      gap:'8px',
+      padding:'10px',
+      borderRadius:'14px',
+      border:'1px solid rgba(255,255,255,0.10)',
+      background:'rgba(255,255,255,0.04)',
+    }});
+
+    const exportTop = el('div', { style:{ display:'flex', gap:'10px' }});
+    S.btnClearMarkers = el('button', { style: ctlStyleButton(false) }, txt('Marker löschen'));
+    S.btnCopyJson      = el('button', { style: ctlStyleButton(true)  }, txt('JSON kopieren'));
+    exportTop.append(S.btnClearMarkers, S.btnCopyJson);
+
+    S.taJson = el('textarea', { readonly:true, rows:'6', style: {
+      width:'100%',
+      resize:'none',
+      borderRadius:'12px',
+      border:'1px solid rgba(255,255,255,0.10)',
+      background:'rgba(0,0,0,0.20)',
+      color:'#eaeaea',
+      padding:'10px',
+      fontFamily:'inherit',
+      fontSize:'13px',
+      lineHeight:'1.25',
+    }});
+    exportWrap.append(exportTop, S.taJson);
+
     root.append(togRow);
     root.append(S.btnRefresh);
+    root.append(exportWrap);
     root.append(S.msg);
     root.append(S.previewWrap);
+
+    // UI-Gruppen merken (für show/hide)
+    S.uiPreviewOnly.push(exportWrap);
 
     // Attach to container
     containerEl.innerHTML = '';
@@ -820,8 +1094,20 @@
       S.frameKey = S.selFrame.value || '';
       drawOnce();
     });
-    S.selMode.addEventListener('change', () => {
-      S.mode = S.selMode.value;
+    S.selMainMode.addEventListener('change', () => {
+      S.mainMode = S.selMainMode.value || 'anim';
+
+      // Sicherheitsnetz: beim Wechsel in Preview stoppen wir Lauf-Loop sofort.
+      if (S.mainMode !== 'anim') stop();
+
+      // UI/Buttons konsistent halten
+      updateModeUI();
+      drawOnce();
+    });
+
+    S.selAnimMode.addEventListener('change', () => {
+      S.animMode = S.selAnimMode.value || 'single';
+      // Wenn wir nicht laufen, reicht ein Redraw
       drawOnce();
     });
     S.selPath.addEventListener('change', () => {
@@ -835,6 +1121,13 @@
     });
     S.selDirLock.addEventListener('change', () => {
       S.dirLock = S.selDirLock.value;
+      drawOnce();
+    });
+
+    S.selMarkerType.addEventListener('change', () => {
+      S.markerType = S.selMarkerType.value || 'door';
+      // Nur UI-Update
+      syncExportJson();
       drawOnce();
     });
 
@@ -857,18 +1150,60 @@
       syncCanvasSize();
     });
 
-    S.btnStart.addEventListener('click', () => start());
+    S.btnStart.addEventListener('click', () => {
+      if (S.mainMode !== 'anim') return;
+      start();
+    });
     S.btnStop.addEventListener('click', () => stop());
+
+    // Preview-Buttons
+    S.btnClearMarkers.addEventListener('click', () => {
+      if (S.mainMode !== 'preview') return;
+      clearMarkers();
+      setMsg('✅ Marker gelöscht.');
+    });
+    S.btnCopyJson.addEventListener('click', () => {
+      if (S.mainMode !== 'preview') return;
+      copyExportJson();
+    });
     S.btnRefresh.addEventListener('click', () => {
       retryAtlasDiscovery(2);
       drawOnce();
     });
+
+    // Canvas-Interaktion:
+    // - Anim Mode: keine speziellen Klicks (damit wir nix kaputt machen)
+    // - Preview Mode: Tap/Klick setzt Marker relativ zum Pivot
+    S.canvas.addEventListener('pointerdown', (ev) => {
+      if (S.mainMode !== 'preview') return;
+
+      const rect = S.canvas.getBoundingClientRect();
+      const cx = (ev.clientX - rect.left);
+      const cy = (ev.clientY - rect.top);
+
+      // Pivot-Anker (wie in drawOnce)
+      const a = getPreviewAnchor();
+      const pivotX = a.x;
+      const pivotY = a.y;
+
+      const local = canvasToSpriteLocal(cx, cy, pivotX, pivotY, S.zoom);
+      setMarker(S.markerType, local.dx, local.dy);
+      setMsg(`📍 Marker "${S.markerType}" gesetzt: ${Math.round(local.dx)}, ${Math.round(local.dy)}`);
+    }, { passive: true });
+
 
     // Initial populate + sizing
     populateAtlases(false);
     retryAtlasDiscovery();
     rebuildPlan();
     syncCanvasSize();
+
+    // Default-UI sync
+    if (S.selMainMode) S.selMainMode.value = S.mainMode;
+    if (S.selAnimMode) S.selAnimMode.value = S.animMode;
+    if (S.selMarkerType) S.selMarkerType.value = S.markerType;
+    updateModeUI();
+    syncExportJson();
 
     // ResizeObserver (wenn Tab-Größe / Orientation wechselt)
     try {
