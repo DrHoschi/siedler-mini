@@ -1012,7 +1012,13 @@ if (ai.mode === 'toWork'){
 
       // Worker-Loop (Holzfäller/Fischer/Steinmetz etc.)
       if (u.type === 'worker'){
-        _tickWorker(u, dt);
+        // Builder haben eine eigene, sehr einfache Baustellen-Logik.
+        // (Sie sollen NICHT automatisch in WorkAreas "arbeiten".)
+        if (u.kind === 'u.builder'){
+          _tickBuilder(u, dt);
+        } else {
+          _tickWorker(u, dt);
+        }
       }
     }
   }
@@ -1034,31 +1040,24 @@ if (ai.mode === 'toWork'){
     if (id !== 'b.hq') return;
 
     // ---------------------------------------------------------------------
-    // WICHTIG (v4.7+): Spawn-Position am HQ soll NICHT mehr "Mitte" sein,
+    // WICHTIG (v26.01.06): HQ-Spawnpunkt soll NICHT die Mitte sein,
     // sondern – wenn vorhanden – der Marker "entry" (oder alt: "door").
     //
-    // Hintergrund:
-    // - "entrances[]" sind Tile-Offets (Pathfinding/Erreichbarkeit)
-    // - "markers.entry" ist pixelgenau relativ zum Pivot (SpriteTest)
+    // - entrances[] sind Tile-Offets (Pathfinding/Erreichbarkeit)
+    // - markers.entry ist pixelgenau relativ zum Pivot (SpriteTest)
     //
-    // Wir berechnen hier eine Tile-Float Spawn-Position aus dem Marker,
-    // und nutzen sie für:
-    //   - HQ-Pos (Basis für Start-Carriers)
-    //   - Start-Builder (damit er an der Tür erscheint)
-    //
-    // Fallback:
-    //   1) markers.entry
-    //   2) markers.door (alt)
-    //   3) entrances[0] (Tile)
-    //   4) HQ-Mitte (alt)
+    // Wir merken diese Position als HQPos, damit ALLE Units (Carrier,
+    // Worker, Builder) konsistent am HQ-Eingang starten.
     // ---------------------------------------------------------------------
 
     const tileSize = (window.Game?.map?.tileSize) || 64;
 
     function getHQDef(){
-      const reg = window.Registry;
-      if (reg && typeof reg.getBuilding === 'function') return reg.getBuilding('b.hq');
-      if (reg && typeof reg.get === 'function') return reg.get('buildings', 'b.hq');
+      try{
+        const reg = window.Registry;
+        if (reg && typeof reg.getBuilding === 'function') return reg.getBuilding('b.hq');
+        if (reg && typeof reg.get === 'function') return reg.get('buildings', 'b.hq');
+      }catch(_e){}
       return null;
     }
 
@@ -1073,16 +1072,11 @@ if (ai.mode === 'toWork'){
 
       // Annahme (bewährt bei unseren Building-Sprites): Pivot liegt am
       // "Boden" unten mittig über dem Footprint.
-      // Falls später nötig, können wir hier *sehr klein* feinjustieren
-      // (z.B. -0.5 Tiles), aber erstmal bleibt es stabil.
       const pivotTx = bx + w / 2;
       const pivotTy = by + h;
 
       if (m && Number.isFinite(m.x) && Number.isFinite(m.y)) {
-        return {
-          tx: pivotTx + (m.x / tileSize),
-          ty: pivotTy + (m.y / tileSize)
-        };
+        return { tx: pivotTx + (m.x / tileSize), ty: pivotTy + (m.y / tileSize) };
       }
 
       // Fallback: entrances[0] (Tile)
@@ -1097,12 +1091,127 @@ if (ai.mode === 'toWork'){
 
     const spawnAt = calcSpawnAtFromMarkerOrEntrance(d);
     setHQPos(spawnAt);
-
-    // Start-Träger + 1 Builder am HQ-Entry
     spawnInitialCarriers(3);
-    try { spawn('u.builder', 1, { at: spawnAt }); } catch(e) {}
-
     _emitChanged('hq:placed');
+  });
+
+  // -------------------------------------------------------------------------
+  // CONSTRUCTION: Build-Phase startet (erst wenn ALLE Ressourcen geliefert)
+  //  - Builder sollen aus dem HQ kommen
+  //  - zur Baustelle laufen
+  //  - "arbeiten" (erstmal nur dort stehen/idle)
+  //  - wenn fertig: zurück zum HQ
+  // -------------------------------------------------------------------------
+
+  function _makeBuildUid(d){
+    return d?.uid || d?.buildingUid || (String(d?.id||'') + '@' + ((d?.x|0) + ',' + (d?.y|0)));
+  }
+
+  function _getHQSpawnPos(){
+    // HQPos ist bereits markerbasiert (siehe cb:build:place). Falls noch
+    // nicht gesetzt: fallback auf Mitte 0,0.
+    return _hqPos ? { tx:_hqPos.tx, ty:_hqPos.ty } : { tx:0, ty:0 };
+  }
+
+  function _assignBuilderToConstruction(u, d){
+    const uid = _makeBuildUid(d);
+    const cx  = (Number(d.x)|0) + (Number(d.w ?? 1) / 2);
+    const cy  = (Number(d.y)|0) + (Number(d.h ?? 1) / 2);
+
+    u._builderJob = {
+      uid,
+      id: d.id || d.buildingId || '',
+      site: { x: cx, y: cy },
+      phase: 'toSite'
+    };
+
+    // Home = HQ (damit Rückweg klar ist)
+    const hq = _getHQSpawnPos();
+    u.homeX = hq.tx;
+    u.homeY = hq.ty;
+  }
+
+  function _tickBuilder(u, dt){
+    const job = u._builderJob;
+    if (!job){
+      // Kein Job: locker am HQ stehen
+      if (_hqPos){
+        if (!u._idleTarget || Math.random() < 0.01){
+          u._idleTarget = _randomTargetNearHQ();
+        }
+        if (u._idleTarget) _moveTowards(u, u._idleTarget, dt);
+      }
+      return;
+    }
+
+    if (job.phase === 'toSite'){
+      u.task = { type:'walk', target:{ x: job.site.x, y: job.site.y } };
+      const arrived = _moveTowards(u, job.site, dt);
+      if (arrived){
+        u.task = null;
+        job.phase = 'working';
+        job.timer = 0;
+      }
+      return;
+    }
+
+    if (job.phase === 'working'){
+      // Erstmal nur "anwesen". Der eigentliche Baufortschritt läuft im
+      // Construction-Modul zeitbasiert. Später koppeln wir Progress an
+      // anwesende Builder.
+      u.task = null;
+      job.timer = (job.timer || 0) + dt;
+      return;
+    }
+
+    if (job.phase === 'toHQ'){
+      const hq = _getHQSpawnPos();
+      const tgt = { x: hq.tx, y: hq.ty };
+      u.task = { type:'walk', target:{ x: tgt.x, y: tgt.y } };
+      const arrived = _moveTowards(u, tgt, dt);
+      if (arrived){
+        u.task = null;
+        u._builderJob = null;
+      }
+      return;
+    }
+  }
+
+  // Builder bei Baustart anfordern
+  window.addEventListener('cb:build:construct:start', (ev)=>{
+    const d = ev?.detail || {};
+    const uid = _makeBuildUid(d);
+
+    // Schon Builder für diese Baustelle unterwegs?
+    if (_units.some(u => u.kind==='u.builder' && u._builderJob && u._builderJob.uid === uid)){
+      return;
+    }
+
+    // Falls noch kein Builder existiert, erzeugen wir 1–2 am HQ.
+    const existingFree = _units.filter(u => u.kind==='u.builder' && !u._builderJob);
+    const need = Math.max(0, 2 - existingFree.length);
+    if (need > 0){
+      try { spawn('u.builder', need, { at: _getHQSpawnPos() }); } catch(e) {}
+    }
+
+    // Zuweisen (max 2 Builder)
+    const pool = _units.filter(u => u.kind==='u.builder' && !u._builderJob);
+    for (let i=0; i<Math.min(2, pool.length); i++){
+      _assignBuilderToConstruction(pool[i], d);
+    }
+
+    _emitChanged('builder:construct:start');
+  });
+
+  // Wenn Gebäude fertig: Builder zurück zum HQ schicken
+  window.addEventListener('cb:build:complete', (ev)=>{
+    const d = ev?.detail || {};
+    const uid = _makeBuildUid(d);
+    for (const u of _units){
+      if (u.kind==='u.builder' && u._builderJob && u._builderJob.uid === uid){
+        u._builderJob.phase = 'toHQ';
+      }
+    }
   });
 
   // Gebäude-Finish → Worker automatisch spawnen (Holzfäller / Fischer / Steinmetz)
@@ -1125,21 +1234,16 @@ if (ai.mode === 'toWork'){
       return;
     }
 
-    // Worker spawnt am HQ-Entry (Marker bevorzugt),
+    // Worker spawnt am HQ-Eingang (Marker-basiert), nicht im Gebäude selbst,
     // damit wir den "läuft vom HQ zum Gebäude"-Flow sehen.
-    const hq = _findHQBuilding();
+    //
+    // HQPos wurde beim HQ-Placement bereits aus markers.entry (door fallback)
+    // berechnet. Falls HQ noch nicht existiert: Fallback Gebäude-Mitte.
     let sx = 0, sy = 0;
-    if (hq && _hqPos){
-      // _hqPos wird bei cb:build:place nun markerbasiert gesetzt
+    if (_hqPos){
       sx = _hqPos.tx;
       sy = _hqPos.ty;
-    } else if (hq){
-      // Fallback: entrances (Tile)
-      const ent = _getEntranceTileForBuilding(hq);
-      sx = (ent?.x ?? (hq.x|0)) + 0.5;
-      sy = (ent?.y ?? (hq.y|0)) + 0.5;
     } else {
-      // Letzter Fallback: Gebäude-Mitte
       const w = d.w ?? 1;
       const h = d.h ?? 1;
       sx = (d.x ?? 0) + w/2;

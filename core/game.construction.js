@@ -529,7 +529,33 @@ if (b.__sprite && window.Buildings?.setSpriteFrame) {
       b.status         = 'building';
       b.hasMaterial    = true;
       b.buildStage     = 1;   // Bild 1 sichtbar (Baustelle-Variante)
-      spawnBuilders(b);
+      // -----------------------------------------------------------------
+      // ✅ NEUE LOGIK (v26.01.06): Bauphase startet erst, wenn ALLE
+      // Ressourcen geliefert sind. Ab diesem Zeitpunkt sollen echte
+      // Bauarbeiter (Units) aus dem HQ kommen und zur Baustelle laufen.
+      //
+      // Wir feuern dafür ein Event, das game.units.js abonniert.
+      // Damit bleibt dieses Construction-Modul weiterhin daten-/state-
+      // getrieben (Phasen), aber ohne Dummy-Fallback-Punkte.
+      // -----------------------------------------------------------------
+      try{
+        window.dispatchEvent(new CustomEvent('cb:build:construct:start', {
+          detail:{
+            id : b.id,
+            uid: b.uid || null,
+            x  : b.x,
+            y  : b.y,
+            w  : b.w,
+            h  : b.h
+          }
+        }));
+      }catch(e){
+        WARN('cb:build:construct:start dispatch fehlgeschlagen', e);
+      }
+
+      // Alt: lokale Dummy-Bauarbeiter (Punkte). Wird bewusst nicht mehr
+      // gestartet, weil wir jetzt echte Builder-Units verwenden.
+      // spawnBuilders(b);
     }
 
     LOG('Material geliefert', {
