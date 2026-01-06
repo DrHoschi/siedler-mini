@@ -64,8 +64,8 @@
     offsetSteps: 0,
 
     /**
-     * Optional pro AtlasKey überschreiben (z.B. nur für woodcutter_atlas):
-     * perAtlas: { woodcutter_atlas: { isoProject:true, offsetSteps: 1 } }
+     * Optional pro AtlasKey überschreiben (z.B. nur für woodcutter_sprite_atlas):
+     * perAtlas: { woodcutter_sprite_atlas: { isoProject:true, offsetSteps: 1 } }
      */
     perAtlas: {},
   };
