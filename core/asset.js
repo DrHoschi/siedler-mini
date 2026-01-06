@@ -303,7 +303,7 @@
      */
     async loadAtlas(name, jsonUrlOrList, imageUrlOverride){
       // jsonUrlOrList kann string ODER Array sein (Candidate-Loading)
-      // Beispiel: [['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],'assets/characters/woodcutter.json']
+      // Beispiel: 'data/characters/woodcutter_sprite_atlas.json'
       const candidates = Array.isArray(jsonUrlOrList) ? jsonUrlOrList : [jsonUrlOrList];
 
       const entry = {
@@ -573,7 +573,7 @@ tasks.push(this.loadAtlas(
 
 // Characters / Units: Woodcutter
 tasks.push(this.loadAtlas(
-  'woodcutter_atlas',
+  'woodcutter_sprite_atlas',
   'data/characters/woodcutter_sprite_atlas.json',
   'assets/characters/woodcutter_sprite_atlas.png'
 ));
