@@ -111,43 +111,46 @@
    * - sonst task.target vs u.x/u.y
    */
   function _getDelta(u) {
-    // 1) Falls das Movement-System echte Velocity bereitstellt: nutzen
+    // 1) Wenn wir eine echte Positionsänderung seit dem letzten Tick kennen,
+    //    ist das der robusteste Indikator für die Laufrichtung – unabhängig davon,
+    //    ob u.task gerade gesetzt ist oder nicht (Render-/Tick-Reihenfolge!).
+    const ux = Number(u?.x ?? 0);
+    const uy = Number(u?.y ?? 0);
+
+    const px = Number.isFinite(u?.__animPrevX) ? Number(u.__animPrevX) : ux;
+    const py = Number.isFinite(u?.__animPrevY) ? Number(u.__animPrevY) : uy;
+
+    const mdx = ux - px;
+    const mdy = uy - py;
+
+    // Prev-Position für den nächsten Aufruf aktualisieren (immer!)
+    u.__animPrevX = ux;
+    u.__animPrevY = uy;
+
+    // Wenn wir uns wirklich bewegt haben: nutze Movement-Delta.
+    if (Math.abs(mdx) > 1e-4 || Math.abs(mdy) > 1e-4) {
+      return { dx: mdx, dy: mdy };
+    }
+
+    // 2) Falls vorhanden: Geschwindigkeit (manche Units haben vx/vy)
     const vx = Number(u?.vx || 0);
     const vy = Number(u?.vy || 0);
     if (Math.abs(vx) > 1e-6 || Math.abs(vy) > 1e-6) return { dx: vx, dy: vy };
 
-    // 2) Falls ein Ziel existiert (Task/Target): Richtung zum Ziel nutzen
-    const ux = Number(u?.x ?? 0);
-    const uy = Number(u?.y ?? 0);
+    // 3) Fallback: Zielpunkt aus Task/Target ableiten (zeigt in Richtung Ziel)
     const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? ux);
     const ty = Number(u?.task?.to?.y ?? u?.task?.target?.y ?? u?.targetY ?? u?.toY ?? uy);
 
-    let dx = tx - ux;
-    let dy = ty - uy;
-
-    // 3) Robust-Fallback:
-    // In manchen Projektständen werden Units bewegt, ohne dass (task.to/targetX) sauber gesetzt ist.
-    // Dann wäre dx/dy = 0 und die Richtung würde auf u.__lastDir "festfrieren" (typisch: immer E).
-    // Lösung: Delta aus der tatsächlichen Positionsänderung seit dem letzten Anim-Tick ableiten.
-    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) {
-      const px = Number(u?.__animPrevX);
-      const py = Number(u?.__animPrevY);
-      if (Number.isFinite(px) && Number.isFinite(py)) {
-        dx = ux - px;
-        dy = uy - py;
-      }
-    }
-
-    // Cache für nächsten Tick aktualisieren (immer!)
-    u.__animPrevX = ux;
-    u.__animPrevY = uy;
-
-    return { dx, dy };
-  }
+    return { dx: tx - ux, dy: ty - uy };
   }
 
   /**
    * Optional: TILE-Delta -> SCREEN-Delta (Isometric).
+   * Typischer ISO-Project:
+   *   sx = dx - dy
+   *   sy = dx + dy
+   */
+ (Isometric).
    * Typischer ISO-Project:
    *   sx = dx - dy
    *   sy = dx + dy
