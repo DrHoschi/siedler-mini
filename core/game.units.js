@@ -430,25 +430,48 @@ function spawnInitialCarriers(count){
     const dy   = target.y - u.y;
     const dist = Math.hypot(dx, dy);
 
-    // ------------------------------------------------------------
-    // ZENTRALER RICHTUNGS-FIX
-    // ------------------------------------------------------------
-    // Wichtig: Bei Humanoiden/Workern wurde frueher oft KEINE Richtung gesetzt.
-    // UnitAnim fiel dann auf den Default (bei euch haeufig "E") -> immer Ost.
-    // Wir setzen deshalb IMMER die Richtung aus dem echten Delta.
-    // (Tiere profitieren ebenfalls, ohne dass sich ihr Verhalten aendert.)
-    try{
-      window.UnitMovement?.updateDirFromDelta?.(u, dx, dy);
-    }catch(e){ /* silent */ }
+    // ---------------------------------------------------------------------
+    // ZENTRALER RICHTUNGS-/VELOCITY-FIX
+    // ---------------------------------------------------------------------
+    // Problem (v4.7a): Worker/Menschen (u.woodcutter etc.) hatten oft KEIN vx/vy
+    // und teilweise Task-Targets, die im Render-Timing nicht sauber greifen.
+    // UnitAnim bestimmt seine Richtung bevorzugt aus u.vx/u.vy. Wenn das fehlt,
+    // fällt es auf Defaults zurück (bei dir sichtbar: „immer Ost“).
+    //
+    // Lösung:
+    // - Bei JEDER Bewegung setzen wir u.vx/u.vy (tiles/sec) + optional u.dir.
+    // - Dadurch kann UnitAnim IMMER eine Richtung ableiten – unabhängig davon,
+    //   ob eine Unit Tier/Worker/Builder/Carrier ist.
+    //
+    // WICHTIG:
+    // - u.vx/u.vy sind rein für Animation gedacht (nicht Physik).
+    // - Auf „angekommen“ setzen wir vx/vy wieder auf 0.
+    // ---------------------------------------------------------------------
 
     if (!(dist > 0.0001)) {
+      // praktisch schon da → keine Bewegung
+      u.vx = 0; u.vy = 0;
       return true; // praktisch schon da
+    }
+
+    // Velocity für Animationsrichtung (tiles/sec)
+    // (SPEED_TILES_PER_SEC ist konstant, Richtung kommt aus dx/dy)
+    const vel = SPEED_TILES_PER_SEC;
+    u.vx = (dx / dist) * vel;
+    u.vy = (dy / dist) * vel;
+
+    // Optional (falls vorhanden): auch dir/_dir8 setzen, damit Debug/Tools
+    // und zukünftige Renderer/Marker dieselbe Quelle nutzen können.
+    if (window.UnitMovement?.updateDirFromDelta) {
+      window.UnitMovement.updateDirFromDelta(u, dx, dy);
     }
 
     const step = SPEED_TILES_PER_SEC * dt;
     if (step >= dist){
       u.x = target.x;
       u.y = target.y;
+      // Ziel erreicht → vx/vy wieder nullen
+      u.vx = 0; u.vy = 0;
       _maybeEmitUnitStep(u);
       return true;
     }
