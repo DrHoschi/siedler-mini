@@ -158,7 +158,19 @@
   <script src="core/asset.js?v=25.11.19c"></script>
  
   <!-- Neue, schlanke Registry – genau DIE brauchen wir -->
-  <script src="core/registry.js"></script> 
+  <script src="core/registry.js"></script>
+  <!-- UNIT: zentrale Richtungs-Definition (KANON) -->
+  <script src="core/unit.directions.js?v=26.01.06"></script>
+
+  <!-- UNIT: Movement-Helper (dir8FromDelta etc.) -->
+  <script src="core/unit.movement.js?v=26.01.06"></script>
+
+  <!-- UNIT: Anim-Resolver (Tiere + Menschen) -->
+  <script src="core/unit.anim.js?v=26.01.06"></script>
+
+  <!-- UNIT: Marker System (Tool/Carry) -->
+  <script src="core/unit.markers.js?v=26.01.06"></script>
+ 
     <!-- Patch F: EIN Regelwerk für Blocker/Walkability/Placement/AutoHQ -->
   <script src="core/game.rules.js?v=25.12.17"></script>
   <!-- Cache-Bust: wichtig, weil iOS/Safari diese Datei gern hart cached -->
@@ -174,16 +186,12 @@
   <script src="core/adfinder.js?v=1.2.0"></script>
   <script src="core/adfinder.registry-rules.js?v=25.12.17"></script>
 
-  <!-- NEU: Unit-Movement Helper (setzt dir/dir8 zentral; Fix fuer "immer Ost") -->
-  <script src="core/unit.movement.js"></script>
-
   <!-- NEU: Zentrales Units-System (muss VOR JobEngine + CarrierRuntime geladen werden) -->
   <script src="core/game.units.js"></script>
 
   <!-- Unit-Animation Helper (8 Richtungen + idle/walk/work/carry)
        Wird von core/game.map.js benutzt (wenn vorhanden). -->
-  <script src="core/unit.anim.js"></script>
-  <script src="core/unit.anim-resolver.js"></script>
+<script src="core/unit.anim-resolver.js"></script>
   <!-- Komfort für die Konsole: erlaubt auch `UnitAnim...` statt `window.UnitAnim...` -->
   <script>
     // NOTE: Nur für Debug/Dev (Safari Konsole auf iOS etc.)
