@@ -419,10 +419,10 @@
     "epoche": 1,
     "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/characters/woodcutter.png",
+    "sprite": "assets/characters/woodcutter_sprite_atlas.png",
     "aiProfile": "worker.lumberjack",
     "role": "produce.wood",
-    "atlasKey": "woodcutter_atlas",
+    "atlasKey": "woodcutter_sprite_atlas",
     "defaultFrame": "frame_0_0",
     "aliases": [
       "u.lumberjack",
