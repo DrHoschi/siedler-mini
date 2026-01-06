@@ -428,6 +428,15 @@ function spawnInitialCarriers(count){
 
     const dx   = target.x - u.x;
     const dy   = target.y - u.y;
+// Bewegungsrichtung (8-dir) bereits hier setzen (Tile-Delta).
+// Das ist die zuverlässigste Quelle für die Map-Animation, weil Worker
+// ohne vx/vy laufen und Targets im Render-Timing schwanken können.
+try{
+  if (window.UnitAnim && typeof window.UnitAnim.dir8FromDelta === 'function'){
+    u._dir8 = window.UnitAnim.dir8FromDelta(dx, dy); // EN Token ("N","NE","E",...)
+  }
+}catch(e){ /* ignore */ }
+
     const dist = Math.hypot(dx, dy);
 
     if (!(dist > 0.0001)) {
