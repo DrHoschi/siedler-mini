@@ -67,27 +67,7 @@
      * Optional pro AtlasKey überschreiben (z.B. nur für woodcutter_sprite_atlas):
      * perAtlas: { woodcutter_sprite_atlas: { isoProject:true, offsetSteps: 1 } }
      */
-    // ---------------------------------------------------------------------
-    // Per-Atlas Overrides (wichtig, weil nicht alle Atlanten dieselbe
-    // "Richtungs-Bedeutung" haben):
-    //
-    // - Tiere (deer/fox/boar/...) sind bei uns typischerweise nach
-    //   BILDSCHIRM-Richtung benannt → isoProject:true passt.
-    // - Der Woodcutter-Atlas wurde im SpriteTest korrekt ausgerichtet, aber
-    //   auf der Map liefen die Richtungen falsch. Das ist das klassische
-    //   Symptom, wenn ein Atlas bereits "tile/world"-Richtungen nutzt und wir
-    //   zusätzlich noch isoProject anwenden.
-    //
-    // Deshalb: für woodcutter_sprite_atlas isoProject deaktivieren.
-    // (Falls du später wieder einen screen-naming Atlas nutzt, stell hier
-    // isoProject:true ein oder nutze offsetSteps zum Fein-Tunen.)
-    // ---------------------------------------------------------------------
-    perAtlas: {
-      woodcutter_sprite_atlas: {
-        isoProject: false,
-        offsetSteps: 0,
-      },
-    },
+    perAtlas: {},
   };
 
   // ---------------------------------------------------------------------------
@@ -131,16 +111,39 @@
    * - sonst task.target vs u.x/u.y
    */
   function _getDelta(u) {
+    // 1) Falls das Movement-System echte Velocity bereitstellt: nutzen
     const vx = Number(u?.vx || 0);
     const vy = Number(u?.vy || 0);
     if (Math.abs(vx) > 1e-6 || Math.abs(vy) > 1e-6) return { dx: vx, dy: vy };
 
-    const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? u?.x ?? 0);
-    const ty = Number(u?.task?.to?.y ?? u?.task?.target?.y ?? u?.targetY ?? u?.toY ?? u?.y ?? 0);
+    // 2) Falls ein Ziel existiert (Task/Target): Richtung zum Ziel nutzen
     const ux = Number(u?.x ?? 0);
     const uy = Number(u?.y ?? 0);
+    const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? ux);
+    const ty = Number(u?.task?.to?.y ?? u?.task?.target?.y ?? u?.targetY ?? u?.toY ?? uy);
 
-    return { dx: tx - ux, dy: ty - uy };
+    let dx = tx - ux;
+    let dy = ty - uy;
+
+    // 3) Robust-Fallback:
+    // In manchen Projektständen werden Units bewegt, ohne dass (task.to/targetX) sauber gesetzt ist.
+    // Dann wäre dx/dy = 0 und die Richtung würde auf u.__lastDir "festfrieren" (typisch: immer E).
+    // Lösung: Delta aus der tatsächlichen Positionsänderung seit dem letzten Anim-Tick ableiten.
+    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) {
+      const px = Number(u?.__animPrevX);
+      const py = Number(u?.__animPrevY);
+      if (Number.isFinite(px) && Number.isFinite(py)) {
+        dx = ux - px;
+        dy = uy - py;
+      }
+    }
+
+    // Cache für nächsten Tick aktualisieren (immer!)
+    u.__animPrevX = ux;
+    u.__animPrevY = uy;
+
+    return { dx, dy };
+  }
   }
 
   /**
