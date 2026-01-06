@@ -75,10 +75,11 @@
         }
       },
       "markers": {
-        "entry": null,
-        "chimney": null,
-        "tool": null,
-        "carry": null
+        {
+                 "entry":   { "x": -72,  "y": -81 },
+                 "chimney": { "x": 79,   "y": -243 },
+                 "tool":    { "x": 143,  "y": -56 },
+                 "carry":   { "x": -146, "y": -76 }
       }
     },
     {
