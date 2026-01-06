@@ -1125,10 +1125,23 @@ if (ai.mode === 'toWork'){
 
     // Zusätzlich 1 Bauarbeiter am HQ.
     // NEU: Spawn-Punkt bevorzugt über HQ-Entry-Marker (entry/door),
-    //      sonst wie bisher via _hqPos (Zentrum) als Fallback.
+    //      sonst wie bisher via HQ-Zentrum als Fallback.
+    //
+    // WICHTIG: cb:build:place feuert in einigen Builds, bevor das Building-Objekt
+    //          bereits sicher in Game.buildings liegt. Deshalb NICHT _findHQBuilding()
+    //          verwenden, sondern ein "Pseudo-HQ" aus dem Event-Detail bauen.
     try {
-      const hq = _findHQBuilding();
-      const mp = hq ? _getSpawnPosFromEntryMarker(hq) : null;
+      const hx = (d.x ?? d.tx ?? 0) | 0;
+      const hy = (d.y ?? d.ty ?? 0) | 0;
+      const hw = (d.w ?? w  ?? 3) | 0;
+      const hh = (d.h ?? h  ?? 3) | 0;
+
+      const pseudoHQ = { id:'b.hq', x:hx, y:hy, w:hw, h:hh };
+
+      // Marker werden aus der Registry-Def gezogen (markers.entry / markers.door).
+      const mp = _getSpawnPosFromEntryMarker(pseudoHQ);
+
+      // Fallback: HQ-Zentrum (wie bisher)
       spawn('u.builder', 1, { at: (mp || _hqPos) });
     } catch(e) {}
     _emitChanged('hq:placed');
