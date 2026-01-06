@@ -769,88 +769,6 @@ function _getRegistryBuildingDef(buildingId){
   return null;
 }
 
-// -------------------------------------------------------------------------
-// MARKER-HELPERS (Gebäude) – door→entry Migration + Pixel→Tile Spawn-Position
-// -------------------------------------------------------------------------
-
-function _getMarkerPxFromAny(b, key){
-  if (!b) return null;
-
-  // 1) direkt am Objekt
-  const m1 = b.markers || b.marker || null;
-  if (m1 && typeof m1 === 'object' && m1[key] && typeof m1[key] === 'object'){
-    const x = Number(m1[key].x);
-    const y = Number(m1[key].y);
-    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
-  }
-
-  // 2) aus Registry
-  const def = _getRegistryBuildingDef(b.id || b.type || '');
-  const m2 = def?.markers || def?.marker || null;
-  if (m2 && typeof m2 === 'object' && m2[key] && typeof m2[key] === 'object'){
-    const x = Number(m2[key].x);
-    const y = Number(m2[key].y);
-    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
-  }
-
-  return null;
-}
-
-/**
- * Liefert den Entry-Marker (Pixel) für ein Gebäude.
- * Migration: entry bevorzugen, door als Fallback.
- */
-function _getEntryMarkerPx(b){
-  return _getMarkerPxFromAny(b, 'entry') || _getMarkerPxFromAny(b, 'door') || null;
-}
-
-/**
- * Bestimmt die Sprite-Skala eines Gebäudes so, wie es auch im Renderer passiert.
- * Hintergrund:
- * - Marker kommen aus SpriteTest in PIXEL relativ zum PIVOT.
- * - Beim Zeichnen wird der Atlas-Frame mit scale = bw/basePx skaliert.
- * - Deshalb müssen wir Marker-Offsets ebenfalls *scale rechnen.
- */
-function _getBuildingSpriteScale(b){
-  const Game = window.Game || {};
-  const ts = Number(Game.tileSize || 64);
-  const bw = Math.max(1, Number(b?.w ?? 1)) * ts;
-
-  // gleiche Logik wie game.map.js: basePx entweder aus __sprite.basePx oder Default
-  const base = Number(b?.__sprite?.basePx || 256);
-  if (!Number.isFinite(base) || base <= 0) return bw / 256;
-  return bw / base;
-}
-
-/**
- * Gibt eine Tile-Float Spawn-Position zurück, die dem Entry-Marker entspricht.
- * - Falls Marker fehlen → null
- *
- * Pivot/Fußpunkt des Gebäudes ist (wie beim Zeichnen):
- *   worldX = (b.x + b.w/2) * ts
- *   worldY = (b.y + b.h)   * ts
- */
-function _getSpawnPosFromEntryMarker(b){
-  const m = _getEntryMarkerPx(b);
-  if (!m) return null;
-
-  const Game = window.Game || {};
-  const ts = Number(Game.tileSize || 64);
-
-  const bw = Math.max(1, Number(b?.w ?? 1));
-  const bh = Math.max(1, Number(b?.h ?? 1));
-
-  const pivotTx = (Number(b?.x ?? 0) + bw/2);
-  const pivotTy = (Number(b?.y ?? 0) + bh);
-
-  const scale = _getBuildingSpriteScale(b);
-
-  const worldX = (pivotTx * ts) + (m.x * scale);
-  const worldY = (pivotTy * ts) + (m.y * scale);
-
-  return { tx: worldX / ts, ty: worldY / ts };
-}
-
 /**
  * Liefert die absolute Entrance-Tile (x/y) für ein Gebäude.
  * - bevorzugt b.entranceTx/entranceTy (falls schon gesetzt)
@@ -1115,35 +1033,75 @@ if (ai.mode === 'toWork'){
     const id = d.buildingId || d.id || '';
     if (id !== 'b.hq') return;
 
-    const w  = d.w ?? 3;
-    const h  = d.h ?? 3;
-    const tx = (d.x ?? d.tx ?? 0) + w / 2;
-    const ty = (d.y ?? d.ty ?? 0) + h / 2;
-
-    setHQPos({ tx, ty });
-    spawnInitialCarriers(3);
-
-    // Zusätzlich 1 Bauarbeiter am HQ.
-    // NEU: Spawn-Punkt bevorzugt über HQ-Entry-Marker (entry/door),
-    //      sonst wie bisher via HQ-Zentrum als Fallback.
+    // ---------------------------------------------------------------------
+    // WICHTIG (v4.7+): Spawn-Position am HQ soll NICHT mehr "Mitte" sein,
+    // sondern – wenn vorhanden – der Marker "entry" (oder alt: "door").
     //
-    // WICHTIG: cb:build:place feuert in einigen Builds, bevor das Building-Objekt
-    //          bereits sicher in Game.buildings liegt. Deshalb NICHT _findHQBuilding()
-    //          verwenden, sondern ein "Pseudo-HQ" aus dem Event-Detail bauen.
-    try {
-      const hx = (d.x ?? d.tx ?? 0) | 0;
-      const hy = (d.y ?? d.ty ?? 0) | 0;
-      const hw = (d.w ?? w  ?? 3) | 0;
-      const hh = (d.h ?? h  ?? 3) | 0;
+    // Hintergrund:
+    // - "entrances[]" sind Tile-Offets (Pathfinding/Erreichbarkeit)
+    // - "markers.entry" ist pixelgenau relativ zum Pivot (SpriteTest)
+    //
+    // Wir berechnen hier eine Tile-Float Spawn-Position aus dem Marker,
+    // und nutzen sie für:
+    //   - HQ-Pos (Basis für Start-Carriers)
+    //   - Start-Builder (damit er an der Tür erscheint)
+    //
+    // Fallback:
+    //   1) markers.entry
+    //   2) markers.door (alt)
+    //   3) entrances[0] (Tile)
+    //   4) HQ-Mitte (alt)
+    // ---------------------------------------------------------------------
 
-      const pseudoHQ = { id:'b.hq', x:hx, y:hy, w:hw, h:hh };
+    const tileSize = (window.Game?.map?.tileSize) || 64;
 
-      // Marker werden aus der Registry-Def gezogen (markers.entry / markers.door).
-      const mp = _getSpawnPosFromEntryMarker(pseudoHQ);
+    function getHQDef(){
+      const reg = window.Registry;
+      if (reg && typeof reg.getBuilding === 'function') return reg.getBuilding('b.hq');
+      if (reg && typeof reg.get === 'function') return reg.get('buildings', 'b.hq');
+      return null;
+    }
 
-      // Fallback: HQ-Zentrum (wie bisher)
-      spawn('u.builder', 1, { at: (mp || _hqPos) });
-    } catch(e) {}
+    function calcSpawnAtFromMarkerOrEntrance(detail){
+      const w = Number(detail.w ?? 3);
+      const h = Number(detail.h ?? 3);
+      const bx = Number(detail.x ?? detail.tx ?? 0);
+      const by = Number(detail.y ?? detail.ty ?? 0);
+
+      const def = getHQDef();
+      const m = def?.markers?.entry || def?.markers?.door || null;
+
+      // Annahme (bewährt bei unseren Building-Sprites): Pivot liegt am
+      // "Boden" unten mittig über dem Footprint.
+      // Falls später nötig, können wir hier *sehr klein* feinjustieren
+      // (z.B. -0.5 Tiles), aber erstmal bleibt es stabil.
+      const pivotTx = bx + w / 2;
+      const pivotTy = by + h;
+
+      if (m && Number.isFinite(m.x) && Number.isFinite(m.y)) {
+        return {
+          tx: pivotTx + (m.x / tileSize),
+          ty: pivotTy + (m.y / tileSize)
+        };
+      }
+
+      // Fallback: entrances[0] (Tile)
+      const ent0 = (def && Array.isArray(def.entrances) && def.entrances[0]) ? def.entrances[0] : null;
+      if (ent0 && Number.isFinite(ent0.dx) && Number.isFinite(ent0.dy)) {
+        return { tx: bx + ent0.dx + 0.5, ty: by + ent0.dy + 0.5 };
+      }
+
+      // Letzter Fallback: Mitte (alt)
+      return { tx: bx + w / 2, ty: by + h / 2 };
+    }
+
+    const spawnAt = calcSpawnAtFromMarkerOrEntrance(d);
+    setHQPos(spawnAt);
+
+    // Start-Träger + 1 Builder am HQ-Entry
+    spawnInitialCarriers(3);
+    try { spawn('u.builder', 1, { at: spawnAt }); } catch(e) {}
+
     _emitChanged('hq:placed');
   });
 
@@ -1167,30 +1125,28 @@ if (ai.mode === 'toWork'){
       return;
     }
 
-// Worker spawnt am HQ-Eingang (nicht im Gebäude selbst),
-// damit wir den "läuft vom HQ zum Gebäude"-Flow sehen.
-// NEU: Marker bevorzugen (entry/door), entrances als Fallback.
-const hq = _findHQBuilding();
-let sx = 0, sy = 0;
-if (hq){
-  const mp = _getSpawnPosFromEntryMarker(hq);
-  if (mp){
-    sx = mp.tx;
-    sy = mp.ty;
-  } else {
-    const ent = _getEntranceTileForBuilding(hq);
-    sx = (ent?.x ?? (hq.x|0)) + 0.5;
-    sy = (ent?.y ?? (hq.y|0)) + 0.5;
-  }
-} else {
-  // Fallback: Gebäude-Mitte
-  const w = d.w ?? 1;
-  const h = d.h ?? 1;
-  sx = (d.x ?? 0) + w/2;
-  sy = (d.y ?? 0) + h/2;
-}
+    // Worker spawnt am HQ-Entry (Marker bevorzugt),
+    // damit wir den "läuft vom HQ zum Gebäude"-Flow sehen.
+    const hq = _findHQBuilding();
+    let sx = 0, sy = 0;
+    if (hq && _hqPos){
+      // _hqPos wird bei cb:build:place nun markerbasiert gesetzt
+      sx = _hqPos.tx;
+      sy = _hqPos.ty;
+    } else if (hq){
+      // Fallback: entrances (Tile)
+      const ent = _getEntranceTileForBuilding(hq);
+      sx = (ent?.x ?? (hq.x|0)) + 0.5;
+      sy = (ent?.y ?? (hq.y|0)) + 0.5;
+    } else {
+      // Letzter Fallback: Gebäude-Mitte
+      const w = d.w ?? 1;
+      const h = d.h ?? 1;
+      sx = (d.x ?? 0) + w/2;
+      sy = (d.y ?? 0) + h/2;
+    }
 
-const spawned = spawn(workerUnitId, 1, { at:{ tx: sx, ty: sy } });
+    const spawned = spawn(workerUnitId, 1, { at:{ tx: sx, ty: sy } });
     const u = spawned && spawned[0];
     if (!u) return;
 
