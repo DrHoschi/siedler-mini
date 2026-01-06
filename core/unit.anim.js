@@ -111,46 +111,20 @@
    * - sonst task.target vs u.x/u.y
    */
   function _getDelta(u) {
-    // 1) Wenn wir eine echte Positionsänderung seit dem letzten Tick kennen,
-    //    ist das der robusteste Indikator für die Laufrichtung – unabhängig davon,
-    //    ob u.task gerade gesetzt ist oder nicht (Render-/Tick-Reihenfolge!).
-    const ux = Number(u?.x ?? 0);
-    const uy = Number(u?.y ?? 0);
-
-    const px = Number.isFinite(u?.__animPrevX) ? Number(u.__animPrevX) : ux;
-    const py = Number.isFinite(u?.__animPrevY) ? Number(u.__animPrevY) : uy;
-
-    const mdx = ux - px;
-    const mdy = uy - py;
-
-    // Prev-Position für den nächsten Aufruf aktualisieren (immer!)
-    u.__animPrevX = ux;
-    u.__animPrevY = uy;
-
-    // Wenn wir uns wirklich bewegt haben: nutze Movement-Delta.
-    if (Math.abs(mdx) > 1e-4 || Math.abs(mdy) > 1e-4) {
-      return { dx: mdx, dy: mdy };
-    }
-
-    // 2) Falls vorhanden: Geschwindigkeit (manche Units haben vx/vy)
     const vx = Number(u?.vx || 0);
     const vy = Number(u?.vy || 0);
     if (Math.abs(vx) > 1e-6 || Math.abs(vy) > 1e-6) return { dx: vx, dy: vy };
 
-    // 3) Fallback: Zielpunkt aus Task/Target ableiten (zeigt in Richtung Ziel)
-    const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? ux);
-    const ty = Number(u?.task?.to?.y ?? u?.task?.target?.y ?? u?.targetY ?? u?.toY ?? uy);
+    const tx = Number(u?.task?.to?.x ?? u?.task?.target?.x ?? u?.targetX ?? u?.toX ?? u?.x ?? 0);
+    const ty = Number(u?.task?.to?.y ?? u?.task?.target?.y ?? u?.targetY ?? u?.toY ?? u?.y ?? 0);
+    const ux = Number(u?.x ?? 0);
+    const uy = Number(u?.y ?? 0);
 
     return { dx: tx - ux, dy: ty - uy };
   }
 
   /**
    * Optional: TILE-Delta -> SCREEN-Delta (Isometric).
-   * Typischer ISO-Project:
-   *   sx = dx - dy
-   *   sy = dx + dy
-   */
- (Isometric).
    * Typischer ISO-Project:
    *   sx = dx - dy
    *   sy = dx + dy
@@ -183,6 +157,32 @@
     const per = TUNING.perAtlas?.[atlasKey] || {};
     const isoProject = (per.isoProject ?? TUNING.isoProject) === true;
     const offsetSteps = (per.offsetSteps ?? TUNING.offsetSteps) | 0;
+
+    // ---------------------------------------------------------------------
+    // PRIORITÄT 0: Wenn die Game-Loop bereits eine 8er-Richtung gesetzt hat
+    // (z.B. in core/game.map.js → u._dir8 = UnitAnim.dir8FromDelta(...)),
+    // dann nutzen wir diese DIREKT. Damit sind Menschen-Units robust, auch
+    // wenn vx/vy oder task.target im Render-Timing mal nicht sauber ist.
+    // ---------------------------------------------------------------------
+    const preDir = (u && (u._dir8 || u._dir || u.dir8 || u.dir)) ? (u._dir8 || u._dir || u.dir8 || u.dir) : null;
+    if (preDir) {
+      // Normalisiere auf String-Token
+      const tokRaw = preDir.toString().toUpperCase();
+      // schemeHint kann "de" oder "en" sein.
+      // - EN-Token:  N,NE,E,SE,S,SW,W,NW
+      // - DE-Token:  N,NO,O,SO,S,SW,W,NW
+      const scheme = schemeHint || "en";
+      let tok = tokRaw;
+      if (scheme === "de") {
+        // EN -> DE nur für E/NE/SE
+        if (tokRaw === "E" || tokRaw === "NE" || tokRaw === "SE") tok = DIR_ALIASES[tokRaw] || tokRaw;
+      } else {
+        // DE -> EN nur für O/NO/SO
+        if (tokRaw === "O" || tokRaw === "NO" || tokRaw === "SO") tok = DIR_ALIASES[tokRaw] || tokRaw;
+      }
+      u.__lastDir = tok;
+      return tok;
+    }
 
     let { dx, dy } = _getDelta(u);
     if (isoProject) {
