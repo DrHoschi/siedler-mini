@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-05T19:23:44.933Z",
+  "createdAt": "2026-01-06T16:53:32.183Z",
   "root": ".",
-  "count": 578,
+  "count": 582,
   "entries": [
     {
       "type": "dir",
@@ -397,8 +397,8 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/woodcutter_atlas.json",
-      "size": 11568
+      "path": "assets/characters/woodcutter_sprite_atlas.png",
+      "size": 558052
     },
     {
       "type": "file",
@@ -1511,12 +1511,12 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 25075
+      "size": 24991
     },
     {
       "type": "file",
       "path": "core/boot-v1.js",
-      "size": 3117
+      "size": 3120
     },
     {
       "type": "file",
@@ -1606,7 +1606,7 @@
     {
       "type": "file",
       "path": "core/game.construction.js",
-      "size": 22947
+      "size": 24028
     },
     {
       "type": "file",
@@ -1616,7 +1616,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 49874
+      "size": 53212
     },
     {
       "type": "file",
@@ -1671,7 +1671,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 36395
+      "size": 42187
     },
     {
       "type": "file",
@@ -1805,8 +1805,18 @@
     },
     {
       "type": "file",
+      "path": "core/unit.anim-resolver.js",
+      "size": 3891
+    },
+    {
+      "type": "file",
       "path": "core/unit.anim.js",
-      "size": 14823
+      "size": 18850
+    },
+    {
+      "type": "file",
+      "path": "core/unit.markers.js",
+      "size": 3070
     },
     {
       "type": "file",
@@ -1883,6 +1893,15 @@
     },
     {
       "type": "dir",
+      "path": "data/characters/"
+    },
+    {
+      "type": "file",
+      "path": "data/characters/woodcutter_sprite_atlas.json",
+      "size": 11626
+    },
+    {
+      "type": "dir",
       "path": "data/maps/"
     },
     {
@@ -1953,7 +1972,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 6275
+      "size": 7357
     },
     {
       "type": "file",
@@ -1983,7 +2002,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 13205
+      "size": 13226
     },
     {
       "type": "dir",
@@ -2144,7 +2163,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.spritetest-v1.js",
-      "size": 31567
+      "size": 42365
     },
     {
       "type": "file",
@@ -2784,22 +2803,22 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1361
+      "size": 1391
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 57996
+      "size": 57883
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22759
+      "size": 22696
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 18121
+      "size": 18173
     },
     {
       "type": "file",

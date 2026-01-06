@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 516
+Gesamt Dateien: 519
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/icons/icons_spritesheet_256.PNG
