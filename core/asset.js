@@ -574,8 +574,8 @@ tasks.push(this.loadAtlas(
 // Characters / Units: Woodcutter
 tasks.push(this.loadAtlas(
   'woodcutter_atlas',
-  ['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],
-  'assets/characters/woodcutter.png'
+  'data/characters/woodcutter_sprite_atlas.json',
+  'assets/characters/woodcutter_sprite_atlas.png'
 ));
 
 // Characters / Units: Fisherman
