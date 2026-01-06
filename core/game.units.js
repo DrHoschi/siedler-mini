@@ -430,48 +430,14 @@ function spawnInitialCarriers(count){
     const dy   = target.y - u.y;
     const dist = Math.hypot(dx, dy);
 
-    // ---------------------------------------------------------------------
-    // ZENTRALER RICHTUNGS-/VELOCITY-FIX
-    // ---------------------------------------------------------------------
-    // Problem (v4.7a): Worker/Menschen (u.woodcutter etc.) hatten oft KEIN vx/vy
-    // und teilweise Task-Targets, die im Render-Timing nicht sauber greifen.
-    // UnitAnim bestimmt seine Richtung bevorzugt aus u.vx/u.vy. Wenn das fehlt,
-    // fällt es auf Defaults zurück (bei dir sichtbar: „immer Ost“).
-    //
-    // Lösung:
-    // - Bei JEDER Bewegung setzen wir u.vx/u.vy (tiles/sec) + optional u.dir.
-    // - Dadurch kann UnitAnim IMMER eine Richtung ableiten – unabhängig davon,
-    //   ob eine Unit Tier/Worker/Builder/Carrier ist.
-    //
-    // WICHTIG:
-    // - u.vx/u.vy sind rein für Animation gedacht (nicht Physik).
-    // - Auf „angekommen“ setzen wir vx/vy wieder auf 0.
-    // ---------------------------------------------------------------------
-
     if (!(dist > 0.0001)) {
-      // praktisch schon da → keine Bewegung
-      u.vx = 0; u.vy = 0;
       return true; // praktisch schon da
-    }
-
-    // Velocity für Animationsrichtung (tiles/sec)
-    // (SPEED_TILES_PER_SEC ist konstant, Richtung kommt aus dx/dy)
-    const vel = SPEED_TILES_PER_SEC;
-    u.vx = (dx / dist) * vel;
-    u.vy = (dy / dist) * vel;
-
-    // Optional (falls vorhanden): auch dir/_dir8 setzen, damit Debug/Tools
-    // und zukünftige Renderer/Marker dieselbe Quelle nutzen können.
-    if (window.UnitMovement?.updateDirFromDelta) {
-      window.UnitMovement.updateDirFromDelta(u, dx, dy);
     }
 
     const step = SPEED_TILES_PER_SEC * dt;
     if (step >= dist){
       u.x = target.x;
       u.y = target.y;
-      // Ziel erreicht → vx/vy wieder nullen
-      u.vx = 0; u.vy = 0;
       _maybeEmitUnitStep(u);
       return true;
     }
@@ -1168,12 +1134,21 @@ if (ai.mode === 'toWork'){
   function _tickBuilder(u, dt){
     const job = u._builderJob;
     if (!job){
-      // Kein Job: locker am HQ stehen
+      // Kein Job: Builder soll "klar" am HQ bleiben (kein Random-Run mehr).
+      // -> damit sieht man sofort: Builder kommen aus dem HQ und warten dort.
       if (_hqPos){
-        if (!u._idleTarget || Math.random() < 0.01){
-          u._idleTarget = _randomTargetNearHQ();
+        const hq = _getHQSpawnPos();
+        const tgt = { x: hq.tx, y: hq.ty };
+        // Wenn er zu weit weg ist: zurück zum HQ-Entry.
+        const dx = (tgt.x - u.x);
+        const dy = (tgt.y - u.y);
+        const dist2 = dx*dx + dy*dy;
+        if (dist2 > 0.15*0.15){
+          u.task = { type:'walk', target:{ x: tgt.x, y: tgt.y } };
+          _moveTowards(u, tgt, dt);
+        } else {
+          u.task = null;
         }
-        if (u._idleTarget) _moveTowards(u, u._idleTarget, dt);
       }
       return;
     }
@@ -1190,11 +1165,24 @@ if (ai.mode === 'toWork'){
     }
 
     if (job.phase === 'working'){
-      // Erstmal nur "anwesen". Der eigentliche Baufortschritt läuft im
-      // Construction-Modul zeitbasiert. Später koppeln wir Progress an
-      // anwesende Builder.
-      u.task = null;
+      // Builder arbeitet sichtbar an der Baustelle:
+      //  - hält Position nahe der Baustelle (job.site)
+      //  - spielt "work" als Anim-State (Renderer/UnitAnim nutzt task.type)
+      //  - optionaler Rhythmus: work/idle, damit es lebendiger wirkt
+      const site = job.site || { x:u.x, y:u.y };
+      // leichte Korrektur: zurück an die Arbeitsposition, falls er weggedriftet ist
+      _moveTowards(u, site, dt);
+
       job.timer = (job.timer || 0) + dt;
+
+      // Rhythmus: 2.0s work, 0.6s idle (repeat)
+      const cycle = 2.6;
+      const t = job.timer % cycle;
+      if (t < 2.0){
+        u.task = { type:'work', target:{ x: site.x, y: site.y } };
+      } else {
+        u.task = null;
+      }
       return;
     }
 

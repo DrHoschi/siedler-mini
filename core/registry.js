@@ -181,6 +181,10 @@
     // Wenn der Server aus Versehen HTML liefert, fliegt hier ein SyntaxError
     return r.json();
   }
+  async function loadJSONOptional(url){
+    try { return await loadJSON(url); } catch(e){ return null; }
+  }
+
 
   function emitReady(){
     Registry.__ready = true;
@@ -309,18 +313,36 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Unit-Markerdaten (Tool/Carry etc.) – optional
+  // ---------------------------------------------------------------------------
+  function applyUnitMarkersPayload(payload){
+    // Erwartet: Object-Map { "u.woodcutter": { tool:{...}, carry:{...} }, ... }
+    if (!payload || typeof payload !== 'object') return;
+
+    // Wir speichern es doppelt:
+    //  - Registry.unitMarkers (direkt) für schnelle Nutzung
+    //  - state.data.unitMarkers  für strukturiertes Debugging/Inspector
+    state.data = state.data || {};
+    state.data.unitMarkers = payload;
+    Registry.unitMarkers = payload;
+  }
+
+
   /* =============================== [INIT] =================================== */
 
   async function init(){
     try {
-      const [buildingsJson, resourcesJson, unitsJson] = await Promise.all([
+      const [buildingsJson, resourcesJson, unitsJson, unitMarkersJson] = await Promise.all([
         loadJSON('data/buildings.json'),
         loadJSON('data/resources.json'),
-        loadJSON('data/units.json')
+        loadJSON('data/units.json'),
+        loadJSONOptional('data/unit_markers.json')
       ]);
       applyBuildingsPayload(buildingsJson);
       applyResourcesPayload(resourcesJson);
       applyUnitsPayload(unitsJson);
+      applyUnitMarkersPayload(unitMarkersJson);
       // Backward-Compat: direkte Maps (manche Module nutzen Registry.resources[id])
       Registry.resources = state.resourcesById;
       Registry.units     = state.unitsById;

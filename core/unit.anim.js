@@ -157,41 +157,6 @@
     const per = TUNING.perAtlas?.[atlasKey] || {};
     const isoProject = (per.isoProject ?? TUNING.isoProject) === true;
     const offsetSteps = (per.offsetSteps ?? TUNING.offsetSteps) | 0;
-// ---------------------------------------------------------------------
-// PRIORITÄT #1: Explizite Richtungs-Info vom Movement / Renderer
-//
-// Hintergrund:
-//  - Einige Unit-Typen (insb. Worker) setzen kein vx/vy, und Targets können
-//    im Render-Timing kurz "gleich" wirken (dx/dy≈0). Dann würde die Richtung
-//    einfrieren (oft auf 'E').
-//  - Game/Movement kann u._dir8 bereits als Token setzen ("N","NE",...).
-//
-// Regel:
-//  - Wenn u._dir8 vorhanden ist (String), verwenden wir das direkt und
-//    mappen es (falls nötig) in das gewünschte Scheme (EN/DE).
-// ---------------------------------------------------------------------
-const dir8 = u?._dir8;
-if (typeof dir8 === "string" && dir8.length) {
-  // in gewünschtes Scheme umrechnen (Alias-Map deckt EN<->DE ab)
-  const scheme = schemeHint || "en";
-  let tok = dir8;
-
-  if (scheme === "de" && (tok === "E" || tok === "NE" || tok === "SE")) tok = DIR_ALIASES[tok] || tok;
-  if (scheme === "en" && (tok === "O" || tok === "NO" || tok === "SO")) tok = DIR_ALIASES[tok] || tok;
-
-  // offsetSteps anwenden (nur, wenn Token im 8er-Kreis liegt)
-  const arr = (scheme === "de") ? DIR8_DE : DIR8_EN;
-  let idx = arr.indexOf(tok);
-  if (idx >= 0) {
-    idx = (idx + offsetSteps) % 8;
-    if (idx < 0) idx += 8;
-    tok = arr[idx];
-  }
-
-  u.__lastDir = tok;
-  return tok;
-}
-
 
     let { dx, dy } = _getDelta(u);
     if (isoProject) {

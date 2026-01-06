@@ -1,73 +1,73 @@
-/*
- * ============================================================
- * Neue Siedler – Unit Movement Helpers
- * File: core/unit.movement.js
- * Version: v4.7a-unitdir-central-2026-01-06
- * ------------------------------------------------------------
- * Ziel:
- *  - ZENTRALER, EINDEUTIGER Fix für "Unit läuft immer Richtung Ost".
- *  - Richtung (dir/dir8) wird IMMER im Movement gesetzt.
- *  - Animation liest NUR NOCH unit.dir (bzw. u._dir8 als Alias).
+/* ============================================================================
+ * Datei   : core/unit.movement.js
+ * Projekt : Neue Siedler – Unit Movement Helpers
+ * Version : v26.01.06-unitmovement-central-v2
  *
- * Hintergrund:
- *  - Tiere setzten ihre Richtung bereits zuverlässig.
- *  - Einige Humanoide/Worker bewegen sich (u.x/u.y ändern sich),
- *    aber es wurde bisher KEIN Richtungstoken gesetzt → Fallback in UnitAnim
- *    → Default wurde (bei euch) häufig "E".
+ * Zweck:
+ *   - Zentrale Helper für:
+ *       (1) 8-Richtungsberechnung aus Delta (dx,dy)
+ *       (2) Setzen von u.dir + u._dir8 konsistent
+ *       (3) "towards target" Helper
  *
- * Dieses Helper-Modul stellt eine einzige, zentrale Funktion bereit,
- * die überall im Movement aufgerufen werden kann.
- * ============================================================
- */
-
+ * WICHTIG:
+ *   - Standalone (keine Imports), robust wie unit.anim.js
+ *   - Nutzt UnitDirections (falls vorhanden) als kanonische Ordnung.
+ * ============================================================================ */
 (function(){
   'use strict';
 
-  /** Safe: returns "S" if nothing can be computed. */
-  function _dir8FromDelta(dx, dy){
-    const UA = window.UnitAnim;
-    if (UA && typeof UA.dir8FromDelta === 'function'){
-      return UA.dir8FromDelta(dx, dy);
-    }
+  // Fallback-Order, falls UnitDirections nicht geladen ist
+  const FALLBACK_ORDER = ["N","NE","E","SE","S","SW","W","NW"];
 
-    // Minimal-Fallback (sollte praktisch nie gebraucht werden)
-    const x = Number(dx) || 0;
-    const y = Number(dy) || 0;
-    if (Math.abs(x) < 1e-6 && Math.abs(y) < 1e-6) return 'S';
-    const ang = Math.atan2(y, x);
-    let deg = (ang * 180) / Math.PI;
-    if (deg < 0) deg += 360;
-    const idx = Math.round(deg / 45) % 8;
-    return (['E','SE','S','SW','W','NW','N','NE'][idx]) || 'S';
+  function _order(){
+    return (window.UnitDirections && Array.isArray(window.UnitDirections.order))
+      ? window.UnitDirections.order
+      : FALLBACK_ORDER;
   }
 
-  /**
-   * Setzt die Richtung auf der Unit.
-   * - dir wird IMMER im EN-Scheme gesetzt: "N","NE","E","SE","S","SW","W","NW".
-   * - Zusätzlich schreiben wir u._dir8 als Alias (manche Renderer/Debug nutzen das).
-   */
-  function updateDirFromDelta(u, dx, dy){
-    if (!u) return;
-    if (!(Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6)) return;
-    const dir = _dir8FromDelta(dx, dy);
-    u.dir = dir;
-    u._dir8 = dir; // Alias, damit alte Teile/Debug es sehen
+  // Klassischer 8-dir Resolver aus Screen-Space Delta.
+  // dx>0 => rechts (E), dy>0 => unten (S)
+  function dir8FromDelta(dx, dy){
+    dx = Number(dx)||0;
+    dy = Number(dy)||0;
+    if (dx === 0 && dy === 0) return "S";
+
+    // Winkel in Radiant: atan2(y,x)
+    const ang = Math.atan2(dy, dx); // -PI..PI
+    // Umrechnen in 0..2PI
+    const a = (ang + Math.PI*2) % (Math.PI*2);
+    // 8 Sektoren à 45°
+    const idx = Math.round(a / (Math.PI/4)) % 8;
+
+    // Unser Index 0 soll "E" sein, aber kanonisch ist Start bei "N".
+    // Wir mappen daher: idx(0=E,1=SE,2=S,3=SW,4=W,5=NW,6=N,7=NE)
+    // -> auf kanonische Ordnung ["N","NE","E","SE","S","SW","W","NW"]
+    const map = ["E","SE","S","SW","W","NW","N","NE"];
+    const tok = map[idx];
+
+    // Wenn UnitDirections existiert, stellen wir sicher, dass Token exakt daraus kommt
+    const ord = _order();
+    return ord.includes(tok) ? tok : tok;
   }
 
-  /**
-   * Convenience: Richtung aus (target - pos) ableiten.
-   * target: {x,y} in Tile- oder World-Koords (egal, solange gleiche Einheit wie u.x/u.y)
-   */
+  function updateDirFromDelta(u, dx, dy, opts){
+    if (!u) return "S";
+    const tok = dir8FromDelta(dx, dy);
+    u.dir = tok;
+    u._dir8 = tok; // historisch bei euch im Code genutzt
+    if (opts && opts.alsoDir) u._dir = tok;
+    return tok;
+  }
+
   function updateDirTowardsTarget(u, target){
-    if (!u || !target) return;
+    if (!u || !target) return "S";
     const dx = (target.x - u.x);
     const dy = (target.y - u.y);
-    updateDirFromDelta(u, dx, dy);
+    return updateDirFromDelta(u, dx, dy);
   }
 
-  // Global export (keine Module im Projekt)
   window.UnitMovement = {
-    dir8FromDelta: _dir8FromDelta,
+    dir8FromDelta,
     updateDirFromDelta,
     updateDirTowardsTarget
   };
