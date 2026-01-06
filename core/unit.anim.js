@@ -67,7 +67,27 @@
      * Optional pro AtlasKey überschreiben (z.B. nur für woodcutter_sprite_atlas):
      * perAtlas: { woodcutter_sprite_atlas: { isoProject:true, offsetSteps: 1 } }
      */
-    perAtlas: {},
+    // ---------------------------------------------------------------------
+    // Per-Atlas Overrides (wichtig, weil nicht alle Atlanten dieselbe
+    // "Richtungs-Bedeutung" haben):
+    //
+    // - Tiere (deer/fox/boar/...) sind bei uns typischerweise nach
+    //   BILDSCHIRM-Richtung benannt → isoProject:true passt.
+    // - Der Woodcutter-Atlas wurde im SpriteTest korrekt ausgerichtet, aber
+    //   auf der Map liefen die Richtungen falsch. Das ist das klassische
+    //   Symptom, wenn ein Atlas bereits "tile/world"-Richtungen nutzt und wir
+    //   zusätzlich noch isoProject anwenden.
+    //
+    // Deshalb: für woodcutter_sprite_atlas isoProject deaktivieren.
+    // (Falls du später wieder einen screen-naming Atlas nutzt, stell hier
+    // isoProject:true ein oder nutze offsetSteps zum Fein-Tunen.)
+    // ---------------------------------------------------------------------
+    perAtlas: {
+      woodcutter_sprite_atlas: {
+        isoProject: false,
+        offsetSteps: 0,
+      },
+    },
   };
 
   // ---------------------------------------------------------------------------
