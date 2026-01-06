@@ -73,6 +73,12 @@
           "live": "frame_0_1",
           "reserve": "frame_0_2"
         }
+      },
+      "markers": {
+        "entry": null,
+        "chimney": null,
+        "tool": null,
+        "carry": null
       }
     },
     {
@@ -117,6 +123,12 @@
           "live": "frame_0_1",
           "reserve": "frame_0_2"
         }
+      },
+      "markers": {
+        "entry": null,
+        "chimney": null,
+        "tool": null,
+        "carry": null
       }
     },
     {
@@ -165,6 +177,12 @@
           "live": "frame_0_1",
           "reserve": "frame_0_2"
         }
+      },
+      "markers": {
+        "entry": null,
+        "chimney": null,
+        "tool": null,
+        "carry": null
       }
     },
     {
@@ -209,6 +227,12 @@
           "live": "frame_0_1",
           "reserve": "frame_0_2"
         }
+      },
+      "markers": {
+        "entry": null,
+        "chimney": null,
+        "tool": null,
+        "carry": null
       }
     },
     {
@@ -251,6 +275,12 @@
           "live": "frame_0_1",
           "reserve": "frame_0_2"
         }
+      },
+      "markers": {
+        "entry": null,
+        "chimney": null,
+        "tool": null,
+        "carry": null
       }
     },
     {
@@ -303,6 +333,12 @@
         "shape": "circle",
         "radiusTiles": 8.0,
         "selectable": true
+      },
+      "markers": {
+        "entry": null,
+        "chimney": null,
+        "tool": null,
+        "carry": null
       }
     },
     {
@@ -345,6 +381,12 @@
           "live": "frame_0_1",
           "reserve": "frame_0_2"
         }
+      },
+      "markers": {
+        "entry": null,
+        "chimney": null,
+        "tool": null,
+        "carry": null
       }
     }
   ]
