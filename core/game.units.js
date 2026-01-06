@@ -769,6 +769,88 @@ function _getRegistryBuildingDef(buildingId){
   return null;
 }
 
+// -------------------------------------------------------------------------
+// MARKER-HELPERS (Gebäude) – door→entry Migration + Pixel→Tile Spawn-Position
+// -------------------------------------------------------------------------
+
+function _getMarkerPxFromAny(b, key){
+  if (!b) return null;
+
+  // 1) direkt am Objekt
+  const m1 = b.markers || b.marker || null;
+  if (m1 && typeof m1 === 'object' && m1[key] && typeof m1[key] === 'object'){
+    const x = Number(m1[key].x);
+    const y = Number(m1[key].y);
+    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+  }
+
+  // 2) aus Registry
+  const def = _getRegistryBuildingDef(b.id || b.type || '');
+  const m2 = def?.markers || def?.marker || null;
+  if (m2 && typeof m2 === 'object' && m2[key] && typeof m2[key] === 'object'){
+    const x = Number(m2[key].x);
+    const y = Number(m2[key].y);
+    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+  }
+
+  return null;
+}
+
+/**
+ * Liefert den Entry-Marker (Pixel) für ein Gebäude.
+ * Migration: entry bevorzugen, door als Fallback.
+ */
+function _getEntryMarkerPx(b){
+  return _getMarkerPxFromAny(b, 'entry') || _getMarkerPxFromAny(b, 'door') || null;
+}
+
+/**
+ * Bestimmt die Sprite-Skala eines Gebäudes so, wie es auch im Renderer passiert.
+ * Hintergrund:
+ * - Marker kommen aus SpriteTest in PIXEL relativ zum PIVOT.
+ * - Beim Zeichnen wird der Atlas-Frame mit scale = bw/basePx skaliert.
+ * - Deshalb müssen wir Marker-Offsets ebenfalls *scale rechnen.
+ */
+function _getBuildingSpriteScale(b){
+  const Game = window.Game || {};
+  const ts = Number(Game.tileSize || 64);
+  const bw = Math.max(1, Number(b?.w ?? 1)) * ts;
+
+  // gleiche Logik wie game.map.js: basePx entweder aus __sprite.basePx oder Default
+  const base = Number(b?.__sprite?.basePx || 256);
+  if (!Number.isFinite(base) || base <= 0) return bw / 256;
+  return bw / base;
+}
+
+/**
+ * Gibt eine Tile-Float Spawn-Position zurück, die dem Entry-Marker entspricht.
+ * - Falls Marker fehlen → null
+ *
+ * Pivot/Fußpunkt des Gebäudes ist (wie beim Zeichnen):
+ *   worldX = (b.x + b.w/2) * ts
+ *   worldY = (b.y + b.h)   * ts
+ */
+function _getSpawnPosFromEntryMarker(b){
+  const m = _getEntryMarkerPx(b);
+  if (!m) return null;
+
+  const Game = window.Game || {};
+  const ts = Number(Game.tileSize || 64);
+
+  const bw = Math.max(1, Number(b?.w ?? 1));
+  const bh = Math.max(1, Number(b?.h ?? 1));
+
+  const pivotTx = (Number(b?.x ?? 0) + bw/2);
+  const pivotTy = (Number(b?.y ?? 0) + bh);
+
+  const scale = _getBuildingSpriteScale(b);
+
+  const worldX = (pivotTx * ts) + (m.x * scale);
+  const worldY = (pivotTy * ts) + (m.y * scale);
+
+  return { tx: worldX / ts, ty: worldY / ts };
+}
+
 /**
  * Liefert die absolute Entrance-Tile (x/y) für ein Gebäude.
  * - bevorzugt b.entranceTx/entranceTy (falls schon gesetzt)
@@ -1040,8 +1122,15 @@ if (ai.mode === 'toWork'){
 
     setHQPos({ tx, ty });
     spawnInitialCarriers(3);
-    // Zusätzlich 1 Bauarbeiter am HQ (Baustellen-Phasen / später Job-Zuweisung)
-    try { spawn('u.builder', 1, { at: _hqPos }); } catch(e) {}
+
+    // Zusätzlich 1 Bauarbeiter am HQ.
+    // NEU: Spawn-Punkt bevorzugt über HQ-Entry-Marker (entry/door),
+    //      sonst wie bisher via _hqPos (Zentrum) als Fallback.
+    try {
+      const hq = _findHQBuilding();
+      const mp = hq ? _getSpawnPosFromEntryMarker(hq) : null;
+      spawn('u.builder', 1, { at: (mp || _hqPos) });
+    } catch(e) {}
     _emitChanged('hq:placed');
   });
 
@@ -1065,14 +1154,21 @@ if (ai.mode === 'toWork'){
       return;
     }
 
-    // Worker spawnt am HQ-Eingang (nicht im Gebäude selbst),
+// Worker spawnt am HQ-Eingang (nicht im Gebäude selbst),
 // damit wir den "läuft vom HQ zum Gebäude"-Flow sehen.
+// NEU: Marker bevorzugen (entry/door), entrances als Fallback.
 const hq = _findHQBuilding();
 let sx = 0, sy = 0;
 if (hq){
-  const ent = _getEntranceTileForBuilding(hq);
-  sx = (ent?.x ?? (hq.x|0)) + 0.5;
-  sy = (ent?.y ?? (hq.y|0)) + 0.5;
+  const mp = _getSpawnPosFromEntryMarker(hq);
+  if (mp){
+    sx = mp.tx;
+    sy = mp.ty;
+  } else {
+    const ent = _getEntranceTileForBuilding(hq);
+    sx = (ent?.x ?? (hq.x|0)) + 0.5;
+    sy = (ent?.y ?? (hq.y|0)) + 0.5;
+  }
 } else {
   // Fallback: Gebäude-Mitte
   const w = d.w ?? 1;
