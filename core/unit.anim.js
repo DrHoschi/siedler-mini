@@ -158,33 +158,27 @@
     const isoProject = (per.isoProject ?? TUNING.isoProject) === true;
     const offsetSteps = (per.offsetSteps ?? TUNING.offsetSteps) | 0;
 
-    // ---------------------------------------------------------------------
-    // PRIORITÄT 0: Wenn die Game-Loop bereits eine 8er-Richtung gesetzt hat
-    // (z.B. in core/game.map.js → u._dir8 = UnitAnim.dir8FromDelta(...)),
-    // dann nutzen wir diese DIREKT. Damit sind Menschen-Units robust, auch
-    // wenn vx/vy oder task.target im Render-Timing mal nicht sauber ist.
-    // ---------------------------------------------------------------------
-    const preDir = (u && (u._dir8 || u._dir || u.dir8 || u.dir)) ? (u._dir8 || u._dir || u.dir8 || u.dir) : null;
-    if (preDir) {
-      // Normalisiere auf String-Token
-      const tokRaw = preDir.toString().toUpperCase();
-      // schemeHint kann "de" oder "en" sein.
-      // - EN-Token:  N,NE,E,SE,S,SW,W,NW
-      // - DE-Token:  N,NO,O,SO,S,SW,W,NW
+    // 0) Wenn die Render-Pipeline bereits eine 8-dir Richtung liefert (u._dir8),
+    //    nutzen wir die als höchste Priorität. Das stabilisiert Worker/Menschen,
+    //    deren Movement nicht über vx/vy läuft (Timing-Problem: task.target kann im Render-Tick fehlen).
+    const dir8Tok = (typeof u?._dir8 === 'string') ? u._dir8 : null;
+    if (dir8Tok) {
+      // Token -> Index (EN/DE + Aliases)
+      const tokNorm = DIR_ALIASES[dir8Tok] || dir8Tok;
+      let idx0 = DIR8_EN.indexOf(tokNorm);
+      if (idx0 < 0) idx0 = DIR8_DE.indexOf(tokNorm);
+      if (idx0 < 0) idx0 = 4; // Default "S"
+
+      let idx = (idx0 + offsetSteps) % 8;
+      if (idx < 0) idx += 8;
+
       const scheme = schemeHint || "en";
-      let tok = tokRaw;
-      if (scheme === "de") {
-        // EN -> DE nur für E/NE/SE
-        if (tokRaw === "E" || tokRaw === "NE" || tokRaw === "SE") tok = DIR_ALIASES[tokRaw] || tokRaw;
-      } else {
-        // DE -> EN nur für O/NO/SO
-        if (tokRaw === "O" || tokRaw === "NO" || tokRaw === "SO") tok = DIR_ALIASES[tokRaw] || tokRaw;
-      }
+      const tok = scheme === "de" ? DIR8_DE[idx] : DIR8_EN[idx];
       u.__lastDir = tok;
       return tok;
     }
 
-    let { dx, dy } = _getDelta(u);
+let { dx, dy } = _getDelta(u);
     if (isoProject) {
       const p = _isoProjectDelta(dx, dy);
       dx = p.dx;
