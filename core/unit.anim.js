@@ -70,6 +70,18 @@
     perAtlas: {},
   };
 
+  /**
+   * Per-UNIT Richtungsoffset (Variante A):
+   * - Korrigiert einzelne Unit-Typen in 45°-Schritten, ohne Atlanten/PNGs anzufassen.
+   * - Negativ = gegen den Uhrzeigersinn, Positiv = im Uhrzeigersinn.
+   *
+   * Beispiel:
+   *  u.woodcutter wirkt auf der Map um 45° verdreht -> offsetSteps = -1
+   */
+  const UNIT_DIR_OFFSET_STEPS = {
+    "u.woodcutter": -1,
+  };
+
   // ---------------------------------------------------------------------------
   // Hilfsfunktionen (allgemein)
   // ---------------------------------------------------------------------------
@@ -156,7 +168,12 @@
   function _getDirTokenForUnit(u, atlasKey, schemeHint) {
     const per = TUNING.perAtlas?.[atlasKey] || {};
     const isoProject = (per.isoProject ?? TUNING.isoProject) === true;
-    const offsetSteps = (per.offsetSteps ?? TUNING.offsetSteps) | 0;
+    // Global/Atlas-Offset (z.B. ISO-Korrektur)
+    let offsetSteps = (per.offsetSteps ?? TUNING.offsetSteps) | 0;
+
+    // Per-UNIT Offset (Variante A) – z.B. u.woodcutter um 45° gegen den Uhrzeigersinn
+    const kind = _getUnitKind(u);
+    offsetSteps = (offsetSteps + (UNIT_DIR_OFFSET_STEPS[kind] | 0)) | 0;
 
     let { dx, dy } = _getDelta(u);
     if (isoProject) {
