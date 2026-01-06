@@ -428,16 +428,18 @@ function spawnInitialCarriers(count){
 
     const dx   = target.x - u.x;
     const dy   = target.y - u.y;
-// Bewegungsrichtung (8-dir) bereits hier setzen (Tile-Delta).
-// Das ist die zuverlässigste Quelle für die Map-Animation, weil Worker
-// ohne vx/vy laufen und Targets im Render-Timing schwanken können.
-try{
-  if (window.UnitAnim && typeof window.UnitAnim.dir8FromDelta === 'function'){
-    u._dir8 = window.UnitAnim.dir8FromDelta(dx, dy); // EN Token ("N","NE","E",...)
-  }
-}catch(e){ /* ignore */ }
-
     const dist = Math.hypot(dx, dy);
+
+    // ------------------------------------------------------------
+    // ZENTRALER RICHTUNGS-FIX
+    // ------------------------------------------------------------
+    // Wichtig: Bei Humanoiden/Workern wurde frueher oft KEINE Richtung gesetzt.
+    // UnitAnim fiel dann auf den Default (bei euch haeufig "E") -> immer Ost.
+    // Wir setzen deshalb IMMER die Richtung aus dem echten Delta.
+    // (Tiere profitieren ebenfalls, ohne dass sich ihr Verhalten aendert.)
+    try{
+      window.UnitMovement?.updateDirFromDelta?.(u, dx, dy);
+    }catch(e){ /* silent */ }
 
     if (!(dist > 0.0001)) {
       return true; // praktisch schon da
