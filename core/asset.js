@@ -579,8 +579,8 @@ try{
 // Characters / Units: Builder
 tasks.push(this.loadAtlas(
   'builder_atlas',
-  'assets/characters/builder_atlas.json',
-  'assets/characters/builder.png'
+  'data/characters/builder_sprite_atlas.json',
+  'assets/characters/builder_sprite_atlas.png'
 ));
 
 // Characters / Units: Woodcutter
