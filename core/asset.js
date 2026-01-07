@@ -303,7 +303,7 @@
      */
     async loadAtlas(name, jsonUrlOrList, imageUrlOverride){
       // jsonUrlOrList kann string ODER Array sein (Candidate-Loading)
-      // Beispiel: [['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],'assets/characters/woodcutter.json']
+      // Beispiel: 'data/characters/woodcutter_sprite_atlas.json'
       const candidates = Array.isArray(jsonUrlOrList) ? jsonUrlOrList : [jsonUrlOrList];
 
       const entry = {
@@ -410,12 +410,14 @@
 
       // ------------------------------------------------------------
       // HARDENING:
-      // Manche Atlas-Exporter liefern pivot/anchor nicht konsistent,
-      // oder wir haben Alt-Datenstände, bei denen pivotX/pivotY fehlen.
-      // Wenn dx/dy dadurch NaN werden, zeichnet Canvas nichts → Fallback-Punkt.
+      // In der Praxis tauchen immer wieder Atlanten auf, bei denen
+      // pivotX/pivotY (oder anchorX/anchorY) fehlen oder als NaN in den
+      // Frame-Objekten landen (z.B. durch Exporter, Trim-Flags, Meta-Fehler).
+      // Das führt dazu, dass ctx.drawImage mit NaN-Koordinaten aufgerufen wird
+      // → und wir landen im "Fallback-Punkt".
       //
-      // Daher: defensiv normalisieren.
-      // Default Pivot  = Bottom-Center (w/2, h)
+      // Lösung: Werte defensiv normalisieren.
+      // Default Pivot = Bottom-Center (w/2, h)
       // Default Anchor = (0.5, 1.0)
       // ------------------------------------------------------------
       const _finite = (v, d)=> (Number.isFinite(v) ? v : d);
@@ -526,14 +528,14 @@ try{
     // Animals (Hase/Kaninchen)
     tasks.push(this.loadAtlas(
       'rabbit_sprite_atlas',
-      'data/animals/rabbit_sprite_atlas.json',
+      'data/atlases/rabbit_sprite_atlas.json',
       'assets/animals/rabbit_sprite_atlas.png'
     ));
 
     // Animals (Wildschwein)
     tasks.push(this.loadAtlas(
       'boar_sprite_atlas',
-      'data/animals/boar_sprite_atlas.json',
+      'data/atlases/boar_sprite_atlas.json',
       'assets/animals/boar_sprite_atlas.png'
     ));
       tasks.push(this.loadAtlas(
@@ -587,11 +589,23 @@ tasks.push(this.loadAtlas(
   'assets/characters/builder.png'
 ));
 
+// Characters / Units: Builder (neues Repo-Schema: JSON in data/characters, PNG in assets/characters)
+tasks.push(this.loadAtlas(
+  'builder_sprite_atlas',
+  [
+    'data/characters/builder_sprite_atlas.json',
+    'assets/characters/builder_sprite_atlas.json' // optional fallback (falls du mal umziehst)
+  ],
+  'assets/characters/builder_sprite_atlas.png'
+));
+
+
+
 // Characters / Units: Woodcutter
 tasks.push(this.loadAtlas(
-  'woodcutter_atlas',
-  ['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],
-  'assets/characters/woodcutter.png'
+  'woodcutter_sprite_atlas',
+  'data/characters/woodcutter_sprite_atlas.json',
+  'assets/characters/woodcutter_sprite_atlas.png'
 ));
 
 // Characters / Units: Fisherman
