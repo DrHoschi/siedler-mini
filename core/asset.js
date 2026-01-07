@@ -303,7 +303,7 @@
      */
     async loadAtlas(name, jsonUrlOrList, imageUrlOverride){
       // jsonUrlOrList kann string ODER Array sein (Candidate-Loading)
-      // Beispiel: 'data/characters/woodcutter_sprite_atlas.json'
+      // Beispiel: [['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],'assets/characters/woodcutter.json']
       const candidates = Array.isArray(jsonUrlOrList) ? jsonUrlOrList : [jsonUrlOrList];
 
       const entry = {
@@ -510,14 +510,14 @@ try{
     // Animals (Hase/Kaninchen)
     tasks.push(this.loadAtlas(
       'rabbit_sprite_atlas',
-      'data/atlases/rabbit_sprite_atlas.json',
+      'data/animals/rabbit_sprite_atlas.json',
       'assets/animals/rabbit_sprite_atlas.png'
     ));
 
     // Animals (Wildschwein)
     tasks.push(this.loadAtlas(
       'boar_sprite_atlas',
-      'data/atlases/boar_sprite_atlas.json',
+      'data/animals/boar_sprite_atlas.json',
       'assets/animals/boar_sprite_atlas.png'
     ));
       tasks.push(this.loadAtlas(
@@ -571,23 +571,11 @@ tasks.push(this.loadAtlas(
   'assets/characters/builder.png'
 ));
 
-// Characters / Units: Builder (neues Repo-Schema: JSON in data/characters, PNG in assets/characters)
-tasks.push(this.loadAtlas(
-  'builder_sprite_atlas',
-  [
-    'data/characters/builder_sprite_atlas.json',
-    'assets/characters/builder_sprite_atlas.json' // optional fallback (falls du mal umziehst)
-  ],
-  'assets/characters/builder_sprite_atlas.png'
-));
-
-
-
 // Characters / Units: Woodcutter
 tasks.push(this.loadAtlas(
-  'woodcutter_sprite_atlas',
-  'data/characters/woodcutter_sprite_atlas.json',
-  'assets/characters/woodcutter_sprite_atlas.png'
+  'woodcutter_atlas',
+  ['assets/characters/woodcutter_atlas.json','assets/characters/woodcutter.json'],
+  'assets/characters/woodcutter.png'
 ));
 
 // Characters / Units: Fisherman
@@ -666,6 +654,19 @@ tasks.push(this.loadAtlas(
   'house_middle_building_atlas',
   'data/atlases/house-middle_atlas.json',
   'assets/buildings/house/house-middle-sprite.png'
+));
+
+
+// ------------------------------------------------------------
+// FX: Smoke (Schornstein-Rauch) – Loop-Atlas
+//  - JSON: data/atlases/fx_smoke_sprite_atlas.json
+//  - PNG : assets/fx/smoke/fx_smoke_sprite_atlas.png
+//  - Key : 'fx_smoke_sprite_atlas'
+// ------------------------------------------------------------
+tasks.push(this.loadAtlas(
+  'fx_smoke_sprite_atlas',
+  'data/atlases/fx_smoke_sprite_atlas.json',
+  'assets/fx/smoke/fx_smoke_sprite_atlas.png'
 ));
 
       await Promise.allSettled(tasks);

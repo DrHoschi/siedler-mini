@@ -898,7 +898,14 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
                   }
 
                   const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-                  frameName = info?.frame || null;
+
+                  // UnitAnim.getFrameForUnit() liefert in diesem Projekt einen STRING-FrameKey zurück.
+
+                  // (Ältere Zwischenstände hatten hier teils ein {frame:...}-Objekt erwartet – das führte dazu,
+
+                  // dass immer der Fallback gezeichnet wurde und Units "nur nach Osten" aussahen.)
+
+                  frameName = (typeof info === 'string') ? info : (info?.frame || null);
 
                   // Safety
                   if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
@@ -1331,7 +1338,14 @@ if (window.GameWorkArea) {
               }
 
               const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-              frameName = info?.frame || null;
+
+              // UnitAnim.getFrameForUnit() liefert in diesem Projekt einen STRING-FrameKey zurück.
+
+              // (Ältere Zwischenstände hatten hier teils ein {frame:...}-Objekt erwartet – das führte dazu,
+
+              // dass immer der Fallback gezeichnet wurde und Units "nur nach Osten" aussahen.)
+
+              frameName = (typeof info === 'string') ? info : (info?.frame || null);
 
               // Safety
               if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
