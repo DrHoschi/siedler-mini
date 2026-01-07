@@ -310,7 +310,8 @@
         name,
         jsonUrl: candidates[0] || '',
         jsonUrlTried: candidates.slice(),
-        imageUrl: imageUrlOverride || null,
+        imageUrl: (Array.isArray(imageUrlOverride) ? (imageUrlOverride[0]||null) : (imageUrlOverride || null)),
+        imageUrlTried: [],
         json: null,
         img: null,
         frames: null,
@@ -330,14 +331,54 @@
           const json = await fetchJson(jsonUrl);
           entry.json = json;
 
-          // Wichtig: meta.image kann abweichen → override gewinnt!
-          const imageUrl = imageUrlOverride
-            || json?.meta?.image
-            || (dirOf(jsonUrl) + `${name}.png`);
+          // Wichtig:
+          // - meta.image kann abweichen (relativ/absolut)
+          // - Override gewinnt – ABER: wir erlauben auch mehrere Kandidaten,
+          //   damit "assets/characters" UND "assets/charakter" (DE) funktionieren.
+          //
+          // imageUrlOverride darf string ODER Array sein.
+          const imageCandidates = [];
+          const pushUnique = (v)=>{
+            if(!v) return;
+            if(!imageCandidates.includes(v)) imageCandidates.push(v);
+          };
 
-          entry.imageUrl = imageUrl;
+          if (Array.isArray(imageUrlOverride)) {
+            imageUrlOverride.forEach(pushUnique);
+          } else {
+            pushUnique(imageUrlOverride);
+          }
 
-          const img = await loadImage(imageUrl);
+          // meta.image aus JSON (wenn vorhanden)
+          const metaImg = json?.meta?.image;
+          if (typeof metaImg === 'string' && metaImg.length){
+            const isAbs = /^(https?:)?\//.test(metaImg) || metaImg.startsWith('/');
+            pushUnique(isAbs ? metaImg : (dirOf(jsonUrl) + metaImg));
+          }
+
+          // Fallback: gleicher Ordner wie JSON + <name>.png
+          pushUnique(dirOf(jsonUrl) + `${name}.png`);
+
+          // Kandidaten nacheinander probieren (Safari 404 → reject)
+          let img = null;
+          let usedUrl = null;
+          entry.imageUrlTried = [];
+          for (const cand of imageCandidates){
+            entry.imageUrlTried.push(cand);
+            try{
+              img = await loadImage(cand);
+              usedUrl = cand;
+              break;
+            }catch(_e){
+              // weiter probieren
+            }
+          }
+
+          if (!img){
+            throw new Error(`Atlas-Image nicht ladbar. Tried: ${imageCandidates.join(', ')}`);
+          }
+
+          entry.imageUrl = usedUrl;
           entry.img = img;
 
           const norm = normalizeFrames(json);
@@ -576,7 +617,7 @@ tasks.push(this.loadAtlas(
   //  - Wenn wir hier fälschlich "assets/characters/…" erzwingen, lädt das PNG nicht
   //    und im Spiel sieht man nur den Fallback-Punkt.
   // -> Deshalb bevorzugen wir "assets/charakter".
-  'assets/charakters/builder_sprite_atlas.png'
+  ['assets/characters/builder_sprite_atlas.png','assets/charakter/builder_sprite_atlas.png']
 ));
 
 
@@ -586,7 +627,7 @@ tasks.push(this.loadAtlas(
   'woodcutter_sprite_atlas',
   'data/characters/woodcutter_sprite_atlas.json',
   // Siehe Builder: JSON meta.image zeigt i.d.R. auf "assets/charakter/..."
-  'assets/charakters/woodcutter_sprite_atlas.png'
+  ['assets/characters/woodcutter_sprite_atlas.png','assets/charakter/woodcutter_sprite_atlas.png']
 ));
 
 // Characters / Units: Fisherman
