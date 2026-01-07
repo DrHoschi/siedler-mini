@@ -321,8 +321,6 @@
       applyBuildingsPayload(buildingsJson);
       applyResourcesPayload(resourcesJson);
       applyUnitsPayload(unitsJson);
-      preloadUnitAtlases();
-
       // Backward-Compat: direkte Maps (manche Module nutzen Registry.resources[id])
       Registry.resources = state.resourcesById;
       Registry.units     = state.unitsById;
@@ -337,37 +335,3 @@
 
   init();
 })();
-  // ---------------------------------------------------------------------------
-  // Unit-Atlas Preload (wichtig für Mobile/Safari)
-  // ---------------------------------------------------------------------------
-  function preloadUnitAtlases(){
-    const Assets = window.Assets;
-    if (!Assets || typeof Assets.loadAtlas !== 'function') return;
-
-    // Unique atlasKeys aus Units sammeln
-    const keys = new Set();
-    for (const u of (state.unitsList || [])){
-      if (u && u.atlasKey) keys.add(String(u.atlasKey));
-    }
-
-    for (const atlasKey of keys){
-      // Wir nutzen Kandidaten-Pfade, weil du JSON unter data/characters
-      // und PNG unter assets/characters liegen hast.
-      const candidates = [
-        `data/characters/${atlasKey}.json`,
-        `data/atlases/${atlasKey}.json`,
-        `data/${atlasKey}.json`
-      ];
-
-      // Image override ist optional – wenn meta.image stimmt, reicht das.
-      // Aber für deine Repo-Struktur ist das hier sehr hilfreich.
-      const imgOverride = `assets/characters/${atlasKey}.png`;
-
-      // Fire-and-forget: loadAtlas ist robust und schreibt ok=false bei Fehlern.
-      Assets.loadAtlas(atlasKey, candidates, imgOverride).catch(err=>{
-        (window.CBLog?.warn || console.warn)(TAG, 'Unit-Atlas preload failed:', atlasKey, err?.message || err);
-      });
-    }
-  }
-
-

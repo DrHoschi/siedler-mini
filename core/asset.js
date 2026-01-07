@@ -520,18 +520,6 @@ try{
       'data/atlases/boar_sprite_atlas.json',
       'assets/animals/boar_sprite_atlas.png'
     ));
-
-      // ----------------------------------------------------------------
-      // FX: Smoke (Schornstein-Rauch) – optional
-      //  - User-Asset-Key: fx_smoke_sprite_atlas
-      //  - Wenn die Dateien noch nicht existieren, ist das OK:
-      //    loadAtlas setzt ok=false, das Spiel läuft weiter.
-      // ----------------------------------------------------------------
-      tasks.push(this.loadAtlas(
-        'fx_smoke_sprite_atlas',
-        'data/atlases/fx_smoke_sprite_atlas.json',
-        'assets/fx/smoke/fx_smoke_sprite_atlas.png'
-      ));
       tasks.push(this.loadAtlas(
         'deer_sprite_atlas',
         'data/atlases/deer_sprite_atlas.json',
@@ -579,9 +567,21 @@ try{
 // Characters / Units: Builder
 tasks.push(this.loadAtlas(
   'builder_atlas',
-  'data/characters/builder_sprite_atlas.json',
+  'assets/characters/builder_atlas.json',
+  'assets/characters/builder.png'
+));
+
+// Characters / Units: Builder (neues Repo-Schema: JSON in data/characters, PNG in assets/characters)
+tasks.push(this.loadAtlas(
+  'builder_sprite_atlas',
+  [
+    'data/characters/builder_sprite_atlas.json',
+    'assets/characters/builder_sprite_atlas.json' // optional fallback (falls du mal umziehst)
+  ],
   'assets/characters/builder_sprite_atlas.png'
 ));
+
+
 
 // Characters / Units: Woodcutter
 tasks.push(this.loadAtlas(
