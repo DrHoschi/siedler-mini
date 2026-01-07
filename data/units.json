@@ -10,7 +10,7 @@
     "role": "build",
     "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas.",
     "atlasKey": "builder_sprite_atlas",
-    "defaultFrame": "builder_N_walk_0"
+    "defaultFrame": "builder_E_walk_0"
   },
   {
     "id": "u.carrier",
