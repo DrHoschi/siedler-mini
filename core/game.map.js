@@ -844,10 +844,17 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
               def.sprite?.atlas ||
               null;
 
-            // finaler Atlas: erst Wunsch, dann Carrier, dann Punkt
+            // finaler Atlas: erst Wunsch, dann robuste Builder-Fallbacks,
+            // dann Carrier, dann Punkt
             let atlasKey = null;
-            if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) atlasKey = desiredAtlasKey;
-            else if (carrierOk) atlasKey = CARRIER_ATLAS;
+            if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) {
+              atlasKey = desiredAtlasKey;
+            } else if (hasAssets && kind === 'u.builder') {
+              // Builder: akzeptiere beide Key-Varianten (Repo kann beides haben)
+              if (Assets.getAtlas('builder_sprite_atlas')?.ok) atlasKey = 'builder_sprite_atlas';
+              else if (Assets.getAtlas('builder_atlas')?.ok) atlasKey = 'builder_atlas';
+            }
+            if (!atlasKey && carrierOk) atlasKey = CARRIER_ATLAS;
 
             // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
             const wx = tx * ts + ts/2;
@@ -898,14 +905,7 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
                   }
 
                   const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-
-                  // UnitAnim.getFrameForUnit() liefert in diesem Projekt einen STRING-FrameKey zurück.
-
-                  // (Ältere Zwischenstände hatten hier teils ein {frame:...}-Objekt erwartet – das führte dazu,
-
-                  // dass immer der Fallback gezeichnet wurde und Units "nur nach Osten" aussahen.)
-
-                  frameName = (typeof info === 'string') ? info : (info?.frame || null);
+                  frameName = info?.frame || null;
 
                   // Safety
                   if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
@@ -1284,10 +1284,26 @@ if (window.GameWorkArea) {
           def.sprite?.atlas ||
           null;
 
-        // finaler Atlas: erst Wunsch, dann Carrier, dann Punkt
+        // finaler Atlas: erst Wunsch, dann robuste Builder-Fallbacks,
+        // dann Carrier, dann Punkt.
+        //
+        // Hintergrund (war dein Fehlerbild):
+        // - u.builder war im Inspector sichtbar (Atlas vorhanden), im Spiel aber nur der Punkt.
+        // - Ursache war in der Praxis fast immer ein Key-/Pfad-Mismatch:
+        //   * units.json zeigt auf builder_sprite_atlas
+        //   * im Repo liegen aber nur builder_atlas.json + builder.png
+        //   -> Atlas ok=false => drawAtlasFrame schlägt fehl.
+        //
+        // Deshalb: wenn Unit=Builder und der Wunsch-Atlas nicht ok ist,
+        // probieren wir automatisch die bekannten Keys durch.
         let atlasKey = null;
-        if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) atlasKey = desiredAtlasKey;
-        else if (carrierOk) atlasKey = CARRIER_ATLAS;
+        if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) {
+          atlasKey = desiredAtlasKey;
+        } else if (hasAssets && kind === 'u.builder') {
+          if (Assets.getAtlas('builder_sprite_atlas')?.ok) atlasKey = 'builder_sprite_atlas';
+          else if (Assets.getAtlas('builder_atlas')?.ok) atlasKey = 'builder_atlas';
+        }
+        if (!atlasKey && carrierOk) atlasKey = CARRIER_ATLAS;
 
         // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
         const wx = tx * ts + ts/2;
@@ -1338,14 +1354,7 @@ if (window.GameWorkArea) {
               }
 
               const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-
-              // UnitAnim.getFrameForUnit() liefert in diesem Projekt einen STRING-FrameKey zurück.
-
-              // (Ältere Zwischenstände hatten hier teils ein {frame:...}-Objekt erwartet – das führte dazu,
-
-              // dass immer der Fallback gezeichnet wurde und Units "nur nach Osten" aussahen.)
-
-              frameName = (typeof info === 'string') ? info : (info?.frame || null);
+              frameName = info?.frame || null;
 
               // Safety
               if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
