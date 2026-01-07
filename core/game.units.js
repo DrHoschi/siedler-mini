@@ -430,7 +430,37 @@ function spawnInitialCarriers(count){
     const dy   = target.y - u.y;
     const dist = Math.hypot(dx, dy);
 
+    // ---------------------------------------------------------------------
+    // RICHTUNGS-/ANIMATIONS-FIX (v25.01.07)
+    // ---------------------------------------------------------------------
+    // Problem:
+    //   - UnitAnim bestimmt die Richtung bevorzugt aus u.vx/u.vy.
+    //   - Wenn vx/vy nie gesetzt werden, fällt die Richtung auf den
+    //     Task-Endpunkt zurück (u.task.to/targetX/...), was oft "immer Ost"
+    //     wirkt, obwohl die Unit auf dem Pfad kurvt.
+    // Lösung:
+    //   - Bei JEDER Bewegung setzen wir u.vx/u.vy (tiles/sec) anhand des
+    //     aktuellen Teil-Ziels (Waypoint).
+    //   - Bei "angekommen" setzen wir vx/vy wieder auf 0.
+    //   - Optional: falls UnitMovement.updateDirFromDelta existiert,
+    //     spiegeln wir die Richtung auch dort hin.
+    // ---------------------------------------------------------------------
+    if (u) {
+      if (dist > 0.0001) {
+        const vel = SPEED_TILES_PER_SEC; // tiles/sec
+        u.vx = (dx / dist) * vel;
+        u.vy = (dy / dist) * vel;
+        if (window.UnitMovement?.updateDirFromDelta) {
+          try { window.UnitMovement.updateDirFromDelta(u, dx, dy); } catch(_e) {}
+        }
+      } else {
+        u.vx = 0; u.vy = 0;
+      }
+    }
+
     if (!(dist > 0.0001)) {
+      // praktisch schon da → keine Bewegung
+      if (u) { u.vx = 0; u.vy = 0; }
       return true; // praktisch schon da
     }
 
@@ -438,6 +468,8 @@ function spawnInitialCarriers(count){
     if (step >= dist){
       u.x = target.x;
       u.y = target.y;
+      // angekommen → Velocity für Animation zurücksetzen
+      u.vx = 0; u.vy = 0;
       _maybeEmitUnitStep(u);
       return true;
     }
