@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-01-07T20:52:36.803Z",
+  "createdAt": "2026-01-07T22:45:15.901Z",
   "root": ".",
   "count": 585,
   "entries": [
@@ -1504,7 +1504,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 25570
+      "size": 26782
     },
     {
       "type": "file",
@@ -1911,7 +1911,7 @@
     {
       "type": "file",
       "path": "data/characters/builder_sprite_atlas.json",
-      "size": 11527
+      "size": 11528
     },
     {
       "type": "file",
@@ -2821,17 +2821,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1391
+      "size": 1361
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 58905
+      "size": 58525
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 23072
+      "size": 22940
     },
     {
       "type": "file",
