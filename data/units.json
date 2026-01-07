@@ -5,12 +5,12 @@
     "epoche": 1,
     "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/charakter/builder_sprite_atlas.png",
+    "sprite": "assets/characters/builder.png",
     "aiProfile": "worker.builder",
     "role": "build",
     "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas.",
-    "atlasKey": "builder_sprite_atlas",
-    "defaultFrame": "builder_E_walk_0"
+    "atlasKey": "builder_atlas",
+    "defaultFrame": "frame_0_0"
   },
   {
     "id": "u.carrier",
@@ -419,11 +419,11 @@
     "epoche": 1,
     "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/charakter/woodcutter_sprite_atlas.png",
+    "sprite": "assets/characters/woodcutter_sprite_atlas.png",
     "aiProfile": "worker.lumberjack",
     "role": "produce.wood",
     "atlasKey": "woodcutter_sprite_atlas",
-    "defaultFrame": "frame_0_0",
+    "defaultFrame": "woodcutter_E_walk_0",
     "aliases": [
       "u.lumberjack",
       "lumberjack",
