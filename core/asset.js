@@ -576,7 +576,7 @@ tasks.push(this.loadAtlas(
   //  - Wenn wir hier fälschlich "assets/characters/…" erzwingen, lädt das PNG nicht
   //    und im Spiel sieht man nur den Fallback-Punkt.
   // -> Deshalb bevorzugen wir "assets/charakter".
-  'assets/charakter/builder_sprite_atlas.png'
+  'assets/charakters/builder_sprite_atlas.png'
 ));
 
 
@@ -586,7 +586,7 @@ tasks.push(this.loadAtlas(
   'woodcutter_sprite_atlas',
   'data/characters/woodcutter_sprite_atlas.json',
   // Siehe Builder: JSON meta.image zeigt i.d.R. auf "assets/charakter/..."
-  'assets/charakter/woodcutter_sprite_atlas.png'
+  'assets/charakters/woodcutter_sprite_atlas.png'
 ));
 
 // Characters / Units: Fisherman
