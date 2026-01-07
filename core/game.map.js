@@ -385,14 +385,26 @@ function _fallbackBuildingFrameForKey(frameKey){
   // Units ermitteln (für Fallback-Punkte)
   // -------------------------------------------------------------------------
   function getUnitsForDraw(){
-    if (Array.isArray(window.Game?.units)) return window.Game.units;
-    // kompatibel zu neuen/alten Units-Systemen
-    if (Array.isArray(window.GameUnits?.list)) return window.GameUnits.list;
+    // WICHTIG:
+    // In manchen Projektständen existieren parallel:
+    //   - window.Game.units   (legacy / teilweise nur Snapshot)
+    //   - window.GameUnits.list (neues System, wird aktiv bewegt)
+    //
+    // Wenn wir hier das falsche Array priorisieren, sieht man:
+    //   - Units bewegen sich zwar (Logik), aber Rendering nutzt "stale" Units
+    //   - daraus folgt: Anim-Richtung bleibt oft auf einem Default (z.B. Ost)
+    //
+    // Deshalb: IMMER erst das neue System bevorzugen, dann erst legacy.
+    if (Array.isArray(window.GameUnits?.list) && window.GameUnits.list.length) return window.GameUnits.list;
+
     if (window.GameUnits && typeof window.GameUnits.getUnits === 'function') {
       const u = window.GameUnits.getUnits();
-      if (Array.isArray(u)) return u;
+      if (Array.isArray(u) && u.length) return u;
     }
-    if (Array.isArray(window.__units)) return window.__units;
+
+    if (Array.isArray(window.Game?.units) && window.Game.units.length) return window.Game.units;
+
+    if (Array.isArray(window.__units) && window.__units.length) return window.__units;
     return [];
   }
 
