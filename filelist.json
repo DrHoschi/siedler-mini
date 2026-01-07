@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-07T17:24:57.749Z",
+  "createdAt": "2026-01-07T20:52:36.803Z",
   "root": ".",
-  "count": 589,
+  "count": 585,
   "entries": [
     {
       "type": "dir",
@@ -392,18 +392,8 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/woodcutter.json",
-      "size": 11568
-    },
-    {
-      "type": "file",
       "path": "assets/characters/woodcutter.old.json",
       "size": 763
-    },
-    {
-      "type": "file",
-      "path": "assets/characters/woodcutter.png",
-      "size": 423416
     },
     {
       "type": "dir",
@@ -416,7 +406,7 @@
     {
       "type": "file",
       "path": "assets/fx/smoke/fx_smoke_sprite_atlas.png",
-      "size": 664865
+      "size": 679009
     },
     {
       "type": "dir",
@@ -1514,7 +1504,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 25353
+      "size": 25570
     },
     {
       "type": "file",
@@ -1624,7 +1614,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 54335
+      "size": 55053
     },
     {
       "type": "file",
@@ -2035,7 +2025,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 13252
+      "size": 13236
     },
     {
       "type": "dir",
@@ -2830,33 +2820,23 @@
     },
     {
       "type": "file",
-      "path": "asset.js",
-      "size": 25075
-    },
-    {
-      "type": "file",
       "path": "filelist-audit.txt",
       "size": 1391
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 58357
+      "size": 58905
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22872
+      "size": 23072
     },
     {
       "type": "file",
       "path": "index.html",
       "size": 18599
-    },
-    {
-      "type": "file",
-      "path": "map.animals.js",
-      "size": 17312
     },
     {
       "type": "file",

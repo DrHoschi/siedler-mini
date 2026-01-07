@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 524
+Gesamt Dateien: 520
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/icons/icons_spritesheet_256.PNG
@@ -28,12 +28,10 @@ Gesamt Dateien: 524
  - docs/digraph-Struktur
  - qa/Readme
  - ui/css/readme
- - asset.js
  - filelist-audit.txt
  - filelist.json
  - filelist.txt
  - index.html
- - map.animals.js
  - package.json
  - Projekt_Masterliste.md
  - README.md
