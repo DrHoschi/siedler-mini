@@ -605,6 +605,21 @@ function _fallbackBuildingFrameForKey(frameKey){
     // ---------------------------------------------------------------------
     const Assets = window.Assets;
 
+    // ---------------------------------------------------------------------
+    // FX: Smoke (Schornstein-Rauch)
+    //  - Wird NACH dem Gebäude gerendert (Overlay)
+    //  - Marker kommt aus Registry.def.markers.chimney
+    //  - Sichtbar nur, wenn das Gebäude "arbeitet" (außer HQ)
+    // ---------------------------------------------------------------------
+    function _tryDrawSmoke(pivotX, pivotY, scale){
+      try{
+        const FX = window.SmokeFX;
+        if (FX && typeof FX.draw === 'function') {
+          FX.draw(ctx, b, pivotX, pivotY, scale);
+        }
+      }catch(_e){ /* niemals crashen */ }
+    }
+
 // a) Direkter Atlas-Sprite am Building (b.__sprite) – bevorzugt
 if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFrame === 'function') {
   try{
@@ -632,7 +647,10 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
     const base = (spr.basePx || 256);
     const scale = bw / base;
 
-    Assets.drawAtlasFrame(ctx, spr.atlas, frame, bx + bw/2, by + bh, {
+    const pivotX = bx + bw/2;
+    const pivotY = by + bh;
+
+    Assets.drawAtlasFrame(ctx, spr.atlas, frame, pivotX, pivotY, {
       align: 'pivot',
       scale
     });
@@ -679,6 +697,9 @@ if (b && b.__sprite && b.__sprite.atlas && Assets && typeof Assets.drawAtlasFram
       ctx.restore();
     }
 
+    // Rauch ganz zum Schluss (oberste Ebene über dem Gebäude)
+    _tryDrawSmoke(pivotX, pivotY, scale);
+
     ctx.restore();
     return;
   }catch(e){
@@ -699,10 +720,16 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
       const base = 256;
       const scale = bw / base;
 
-      Assets.drawAtlasFrame(ctx, atlasKey, frame, bx + bw/2, by + bh, {
+      const pivotX = bx + bw/2;
+      const pivotY = by + bh;
+
+      Assets.drawAtlasFrame(ctx, atlasKey, frame, pivotX, pivotY, {
         align: 'pivot',
         scale
       });
+
+      // Rauch ggf. drüber zeichnen
+      _tryDrawSmoke(pivotX, pivotY, scale);
       return;
     }
   }catch(e){
@@ -721,6 +748,10 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
     if (isDrawableImage(img)){
       try{
         ctx.drawImage(img, bx, by, bw, bh);
+
+        // Auch im PNG-Fallback Rauch zeichnen (wenn Marker+Atlas existieren)
+        // Hinweis: Scale grob an Footprint gekoppelt (Base 256)
+        _tryDrawSmoke(bx + bw/2, by + bh, bw / 256);
         return;
       }catch(e){
         WARN('drawImage Gebäude-Fallback-Fehler:', id, e?.message || e);
@@ -866,11 +897,8 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
                     u.__animState = moving ? 'walk' : 'idle';
                   }
 
-                  // NOTE: UnitAnim.getFrameForUnit liefert in diesem Projekt
-                  // einen **Frame-Key als String** zurück (nicht {frame: ...}).
-                  // (Einige ältere Call-Sites erwarteten ein Objekt.)
                   const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-                  frameName = (typeof info === 'string') ? info : (info?.frame || null);
+                  frameName = info?.frame || null;
 
                   // Safety
                   if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
@@ -1302,10 +1330,8 @@ if (window.GameWorkArea) {
                 u.__animState = moving ? 'walk' : 'idle';
               }
 
-              // NOTE: UnitAnim.getFrameForUnit liefert in diesem Projekt
-              // einen **Frame-Key als String** zurück (nicht {frame: ...}).
               const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-              frameName = (typeof info === 'string') ? info : (info?.frame || null);
+              frameName = info?.frame || null;
 
               // Safety
               if (frameName && !(a.frames && a.frames[frameName])) frameName = null;

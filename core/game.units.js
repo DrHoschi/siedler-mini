@@ -910,6 +910,8 @@ if (ai.mode === 'toEntrance'){
   const target = ent ? { x: ent.x + 0.5, y: ent.y + 0.5 } : home;
 
   u.task = { type:'walk', target:{ x: target.x, y: target.y } };
+  // Anim-State: laufen
+  u.__animState = 'walk';
   const arrived = _moveTo(u, target, dt);
   if (arrived){
     u.task = null;
@@ -942,6 +944,7 @@ if (ai.mode === 'toEntrance'){
 
 if (ai.mode === 'inside'){
   // solange inside: unsichtbar
+  u.__animState = 'idle';
   const now = performance.now();
   if (u.hiddenUntil && now < u.hiddenUntil){
     u.hidden = true;
@@ -963,6 +966,8 @@ if (ai.mode === 'toWork'){
       }
 
       u.task = { type:'walk', target:{ x: ai.target.x, y: ai.target.y } };
+      // Anim-State: laufen
+      u.__animState = 'walk';
       const arrived = _moveTowards(u, ai.target, dt);
       if (arrived){
         u.task = null;
@@ -975,6 +980,8 @@ if (ai.mode === 'toWork'){
 
     if (ai.mode === 'work'){
       u.task = null;
+      // Anim-State: arbeiten (wichtig für Produktion + FX)
+      u.__animState = 'work';
       ai.timer -= dt;
       if (ai.timer <= 0){
         ai.mode = 'toHome';
@@ -984,6 +991,8 @@ if (ai.mode === 'toWork'){
 
     // toHome
     u.task = { type:'walk', target:{ x: home.x, y: home.y } };
+    // Anim-State: laufen
+    u.__animState = 'walk';
     const arrivedHome = _moveTowards(u, home, dt);
     if (arrivedHome){
       u.task = null;
@@ -1134,21 +1143,12 @@ if (ai.mode === 'toWork'){
   function _tickBuilder(u, dt){
     const job = u._builderJob;
     if (!job){
-      // Kein Job: Builder soll "klar" am HQ bleiben (kein Random-Run mehr).
-      // -> damit sieht man sofort: Builder kommen aus dem HQ und warten dort.
+      // Kein Job: locker am HQ stehen
       if (_hqPos){
-        const hq = _getHQSpawnPos();
-        const tgt = { x: hq.tx, y: hq.ty };
-        // Wenn er zu weit weg ist: zurück zum HQ-Entry.
-        const dx = (tgt.x - u.x);
-        const dy = (tgt.y - u.y);
-        const dist2 = dx*dx + dy*dy;
-        if (dist2 > 0.15*0.15){
-          u.task = { type:'walk', target:{ x: tgt.x, y: tgt.y } };
-          _moveTowards(u, tgt, dt);
-        } else {
-          u.task = null;
+        if (!u._idleTarget || Math.random() < 0.01){
+          u._idleTarget = _randomTargetNearHQ();
         }
+        if (u._idleTarget) _moveTowards(u, u._idleTarget, dt);
       }
       return;
     }
@@ -1165,24 +1165,11 @@ if (ai.mode === 'toWork'){
     }
 
     if (job.phase === 'working'){
-      // Builder arbeitet sichtbar an der Baustelle:
-      //  - hält Position nahe der Baustelle (job.site)
-      //  - spielt "work" als Anim-State (Renderer/UnitAnim nutzt task.type)
-      //  - optionaler Rhythmus: work/idle, damit es lebendiger wirkt
-      const site = job.site || { x:u.x, y:u.y };
-      // leichte Korrektur: zurück an die Arbeitsposition, falls er weggedriftet ist
-      _moveTowards(u, site, dt);
-
+      // Erstmal nur "anwesen". Der eigentliche Baufortschritt läuft im
+      // Construction-Modul zeitbasiert. Später koppeln wir Progress an
+      // anwesende Builder.
+      u.task = null;
       job.timer = (job.timer || 0) + dt;
-
-      // Rhythmus: 2.0s work, 0.6s idle (repeat)
-      const cycle = 2.6;
-      const t = job.timer % cycle;
-      if (t < 2.0){
-        u.task = { type:'work', target:{ x: site.x, y: site.y } };
-      } else {
-        u.task = null;
-      }
       return;
     }
 

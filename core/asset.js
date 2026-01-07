@@ -520,6 +520,18 @@ try{
       'data/atlases/boar_sprite_atlas.json',
       'assets/animals/boar_sprite_atlas.png'
     ));
+
+      // ----------------------------------------------------------------
+      // FX: Smoke (Schornstein-Rauch) – optional
+      //  - User-Asset-Key: fx_smoke_sprite_atlas
+      //  - Wenn die Dateien noch nicht existieren, ist das OK:
+      //    loadAtlas setzt ok=false, das Spiel läuft weiter.
+      // ----------------------------------------------------------------
+      tasks.push(this.loadAtlas(
+        'fx_smoke_sprite_atlas',
+        'data/atlases/fx_smoke_sprite_atlas.json',
+        'assets/fx/smoke/fx_smoke_sprite_atlas.png'
+      ));
       tasks.push(this.loadAtlas(
         'deer_sprite_atlas',
         'data/atlases/deer_sprite_atlas.json',
