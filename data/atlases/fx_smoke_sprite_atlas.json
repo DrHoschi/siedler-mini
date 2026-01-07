@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "smoke_v0_f0": { "frame": { "x": 0,   "y": 0,   "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v0_f1": { "frame": { "x": 256, "y": 0,   "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v0_f2": { "frame": { "x": 512, "y": 0,   "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v0_f3": { "frame": { "x": 768, "y": 0,   "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+
+    "smoke_v1_f0": { "frame": { "x": 0,   "y": 256, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v1_f1": { "frame": { "x": 256, "y": 256, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v1_f2": { "frame": { "x": 512, "y": 256, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v1_f3": { "frame": { "x": 768, "y": 256, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+
+    "smoke_v2_f0": { "frame": { "x": 0,   "y": 512, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v2_f1": { "frame": { "x": 256, "y": 512, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v2_f2": { "frame": { "x": 512, "y": 512, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v2_f3": { "frame": { "x": 768, "y": 512, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+
+    "smoke_v3_f0": { "frame": { "x": 0,   "y": 768, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v3_f1": { "frame": { "x": 256, "y": 768, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v3_f2": { "frame": { "x": 512, "y": 768, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } },
+    "smoke_v3_f3": { "frame": { "x": 768, "y": 768, "w": 256, "h": 256 }, "rotated": false, "trimmed": false, "spriteSourceSize": { "x": 0, "y": 0, "w": 256, "h": 256 }, "sourceSize": { "w": 256, "h": 256 } }
+  },
+  "meta": {
+    "app": "chatgpt-spritebuilder",
+    "version": "1.0",
+    "image": "assets/fx/smoke/fx_smoke_sprite_atlas.png",
+    "size": { "w": 1024, "h": 1024 },
+    "scale": "1",
+    "grid": { "cols": 4, "rows": 4, "cell": { "w": 256, "h": 256 } },
+    "variants": 4,
+    "frames_per_variant": 4,
+    "naming": "smoke_v{0..3}_f{0..3}",
+    "anchor": { "x": 128, "y": 256 }
+  }
+}
