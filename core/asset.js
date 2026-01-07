@@ -330,14 +330,40 @@
           const json = await fetchJson(jsonUrl);
           entry.json = json;
 
-          // Wichtig: meta.image kann abweichen → override gewinnt!
-          const imageUrl = imageUrlOverride
-            || json?.meta?.image
-            || (dirOf(jsonUrl) + `${name}.png`);
+          // -------------------------------------------------------------
+          // Bild laden (robust):
+          //  - imageUrlOverride kann STRING oder ARRAY sein.
+          //  - Falls Override nicht lädt (z.B. "assets/charakter" vs "assets/characters"),
+          //    probieren wir automatisch meta.image und einen heuristischen Fallback.
+          // -------------------------------------------------------------
+          const imageCandidates = [];
+          if (Array.isArray(imageUrlOverride)) {
+            for (const u of imageUrlOverride) if (u) imageCandidates.push(u);
+          } else if (typeof imageUrlOverride === 'string' && imageUrlOverride) {
+            imageCandidates.push(imageUrlOverride);
+          }
 
-          entry.imageUrl = imageUrl;
+          if (json?.meta?.image) imageCandidates.push(json.meta.image);
+          imageCandidates.push(dirOf(jsonUrl) + `${name}.png`);
 
-          const img = await loadImage(imageUrl);
+          // Duplikate entfernen (gleicher String)
+          const seen = new Set();
+          const uniq = imageCandidates.filter(u => (u && !seen.has(u) && (seen.add(u), true)));
+
+          let img = null;
+          let lastImgErr = null;
+          for (const imageUrl of uniq) {
+            try {
+              img = await loadImage(imageUrl);
+              entry.imageUrl = imageUrl;
+              break;
+            } catch (eImg) {
+              lastImgErr = eImg;
+            }
+          }
+          if (!img) {
+            throw lastImgErr || new Error('Atlas PNG konnte nicht geladen werden');
+          }
           entry.img = img;
 
           const norm = normalizeFrames(json);
@@ -408,24 +434,6 @@
       const fr = a.frames?.[frameName];
       if (!fr) return false;
 
-      // ------------------------------------------------------------
-      // HARDENING:
-      // In der Praxis tauchen immer wieder Atlanten auf, bei denen
-      // pivotX/pivotY (oder anchorX/anchorY) fehlen oder als NaN in den
-      // Frame-Objekten landen (z.B. durch Exporter, Trim-Flags, Meta-Fehler).
-      // Das führt dazu, dass ctx.drawImage mit NaN-Koordinaten aufgerufen wird
-      // → und wir landen im "Fallback-Punkt".
-      //
-      // Lösung: Werte defensiv normalisieren.
-      // Default Pivot = Bottom-Center (w/2, h)
-      // Default Anchor = (0.5, 1.0)
-      // ------------------------------------------------------------
-      const _finite = (v, d)=> (Number.isFinite(v) ? v : d);
-      const _pivotX  = _finite(fr.pivotX,  fr.w/2);
-      const _pivotY  = _finite(fr.pivotY,  fr.h);
-      const _anchorX = _finite(fr.anchorX, 0.5);
-      const _anchorY = _finite(fr.anchorY, 1.0);
-
       const scale = (typeof opts.scale === 'number') ? opts.scale : 1;
       const align = opts.align || (opts.useAnchor ? 'anchor' : 'pivot');
 
@@ -438,11 +446,11 @@
       let dy = worldY;
 
       if (align === 'anchor'){
-        dx = worldX - (_anchorX * dw);
-        dy = worldY - (_anchorY * dh);
+        dx = worldX - (fr.anchorX * dw);
+        dy = worldY - (fr.anchorY * dh);
       } else {
-        dx = worldX - (_pivotX * scale);
-        dy = worldY - (_pivotY * scale);
+        dx = worldX - (fr.pivotX * scale);
+        dy = worldY - (fr.pivotY * scale);
       }
 
       try{
@@ -596,7 +604,11 @@ tasks.push(this.loadAtlas(
     'data/characters/builder_sprite_atlas.json',
     'assets/characters/builder_sprite_atlas.json' // optional fallback (falls du mal umziehst)
   ],
-  'assets/characters/builder_sprite_atlas.png'
+  // PNG-Path candidates (EN/DE-Ordner): falls du mal zwischen "characters" und "charakter" wechselst.
+  [
+    'assets/characters/builder_sprite_atlas.png',
+    'assets/charakter/builder_sprite_atlas.png'
+  ]
 ));
 
 
@@ -605,7 +617,10 @@ tasks.push(this.loadAtlas(
 tasks.push(this.loadAtlas(
   'woodcutter_sprite_atlas',
   'data/characters/woodcutter_sprite_atlas.json',
-  'assets/characters/woodcutter_sprite_atlas.png'
+  [
+    'assets/characters/woodcutter_sprite_atlas.png',
+    'assets/charakter/woodcutter_sprite_atlas.png'
+  ]
 ));
 
 // Characters / Units: Fisherman
