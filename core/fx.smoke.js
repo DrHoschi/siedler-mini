@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/fx.smoke.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.07-fx-smoke-loop-v1
+ * Version : v26.01.07-fx-smoke-loop-v2
  *
  * Zweck:
  *   Rauch (Variante A) am Gebäude-Schornstein rendern – markerbasiert.
@@ -42,7 +42,7 @@
   const FRAMES_PER_VARIANT = 4;
 
   // Default-FPS: ruhig/siedler-like
-  const DEFAULT_FPS = 10;
+  const DEFAULT_FPS = 6; // langsamer (User-Feedback)
 
   // Wie lange Rauch "nachglühen" darf, falls der Worker-State kurz jittert.
   const ACTIVE_GRACE_MS = 600;
@@ -135,7 +135,11 @@
         if (_isPausedUnit(u)) continue;
         const hu = u.homeBuildingUid || u.homeUid || u.homeBuildingUidKey || null;
         if (String(hu) !== String(uid)) continue;
-        if (String(u.__animState || '') === 'work'){
+        // "Arbeitet" bedeutet hier: Worker gehört zum Gebäude und ist in einem aktiven Arbeitszyklus.
+        // Wichtig: Beim Lumberjack läuft der Worker zum Workpoint raus (AnimState='walk').
+        // Das Gebäude gilt trotzdem als aktiv → Rauch soll weiterlaufen.
+        const aiMode = String(u.__ai?.mode || u.ai?.mode || '');
+        if (String(u.__animState || '') === 'work' || aiMode === 'toWork' || aiMode === 'work' || aiMode === 'toHome'){
           _markActive(uid);
           return true;
         }
