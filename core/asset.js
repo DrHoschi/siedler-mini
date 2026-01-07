@@ -564,13 +564,6 @@ try{
         'assets/characters/carrier.png'
       ));
 
-// Characters / Units: Builder
-tasks.push(this.loadAtlas(
-  'builder_atlas',
-  'assets/characters/builder_atlas.json',
-  'assets/characters/builder.png'
-));
-
 // Characters / Units: Builder (neues Repo-Schema: JSON in data/characters, PNG in assets/characters)
 tasks.push(this.loadAtlas(
   'builder_sprite_atlas',
