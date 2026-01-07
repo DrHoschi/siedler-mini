@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-06T22:51:15.787Z",
+  "createdAt": "2026-01-07T17:24:57.749Z",
   "root": ".",
-  "count": 583,
+  "count": 589,
   "entries": [
     {
       "type": "dir",
@@ -292,18 +292,8 @@
     },
     {
       "type": "file",
-      "path": "assets/characters/builder_atlas.json",
-      "size": 5497
-    },
-    {
-      "type": "file",
-      "path": "assets/characters/builder.json",
-      "size": 743
-    },
-    {
-      "type": "file",
-      "path": "assets/characters/builder.png",
-      "size": 1380667
+      "path": "assets/characters/builder_sprite_atlas.png",
+      "size": 404780
     },
     {
       "type": "file",
@@ -414,6 +404,19 @@
       "type": "file",
       "path": "assets/characters/woodcutter.png",
       "size": 423416
+    },
+    {
+      "type": "dir",
+      "path": "assets/fx/"
+    },
+    {
+      "type": "dir",
+      "path": "assets/fx/smoke/"
+    },
+    {
+      "type": "file",
+      "path": "assets/fx/smoke/fx_smoke_sprite_atlas.png",
+      "size": 664865
     },
     {
       "type": "dir",
@@ -1511,7 +1514,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 24991
+      "size": 25353
     },
     {
       "type": "file",
@@ -1590,6 +1593,11 @@
     },
     {
       "type": "file",
+      "path": "core/fx.smoke.js",
+      "size": 7688
+    },
+    {
+      "type": "file",
       "path": "core/game.bootstrap.js",
       "size": 5481
     },
@@ -1616,7 +1624,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 53672
+      "size": 54335
     },
     {
       "type": "file",
@@ -1671,7 +1679,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 43794
+      "size": 42466
     },
     {
       "type": "file",
@@ -1811,7 +1819,12 @@
     {
       "type": "file",
       "path": "core/unit.anim.js",
-      "size": 20188
+      "size": 19466
+    },
+    {
+      "type": "file",
+      "path": "core/unit.directions.js",
+      "size": 1855
     },
     {
       "type": "file",
@@ -1821,7 +1834,7 @@
     {
       "type": "file",
       "path": "core/unit.movement.js",
-      "size": 2545
+      "size": 2406
     },
     {
       "type": "file",
@@ -1863,6 +1876,11 @@
     },
     {
       "type": "file",
+      "path": "data/atlases/fx_smoke_sprite_atlas.json",
+      "size": 3767
+    },
+    {
+      "type": "file",
       "path": "data/atlases/house-middle_atlas.json",
       "size": 1615
     },
@@ -1899,6 +1917,11 @@
     {
       "type": "dir",
       "path": "data/characters/"
+    },
+    {
+      "type": "file",
+      "path": "data/characters/builder_sprite_atlas.json",
+      "size": 11527
     },
     {
       "type": "file",
@@ -2006,8 +2029,13 @@
     },
     {
       "type": "file",
+      "path": "data/unit_markers.json",
+      "size": 1956
+    },
+    {
+      "type": "file",
       "path": "data/units.json",
-      "size": 13226
+      "size": 13252
     },
     {
       "type": "dir",
@@ -2813,17 +2841,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 58264
+      "size": 58357
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22841
+      "size": 22872
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 18306
+      "size": 18599
     },
     {
       "type": "file",
