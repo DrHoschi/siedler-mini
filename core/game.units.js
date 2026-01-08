@@ -423,7 +423,39 @@ function spawnInitialCarriers(count){
     }catch(e){ /* silent */ }
   }
 
+  // -------------------------------------------------------------------------
+  // MOVE-EVENTS (für glatte Trampelpfade / Debug)
+  //   - feuert bei echter Bewegung (pro Tick/Frame, wenn sich x/y geändert haben)
+  //   - Detail enthält from/to in TILE-Koordinaten (float, nicht gerundet)
+  //   - PathOverlay kann daraus 16px-Sampling entlang des Segments machen
+  // -------------------------------------------------------------------------
+  function _maybeEmitUnitMove(u, fromX, fromY){
+    try{
+      if (!u) return;
+      const toX = u.x, toY = u.y;
+      // Nur wenn sich wirklich etwas geändert hat (sonst Spam)
+      if (!Number.isFinite(fromX) || !Number.isFinite(fromY) || !Number.isFinite(toX) || !Number.isFinite(toY)) return;
+      const dx = toX - fromX, dy = toY - fromY;
+      if ((dx*dx + dy*dy) < 1e-8) return;
+
+      const detail = {
+        id  : u.id,
+        kind: u.kind,
+        type: u.type,
+        from: { x: fromX, y: fromY },
+        to  : { x: toX,   y: toY   }
+      };
+
+      // Wichtig: sowohl window als auch document, weil einige Module bei dir
+      // mal so, mal so lauschen.
+      window.dispatchEvent(new CustomEvent('cb:unit:move', { detail }));
+      try { document.dispatchEvent(new CustomEvent('cb:unit:move', { detail })); } catch {}
+    }catch(e){ /* silent */ }
+  }
+
+
   function _moveTowards(u, target, dt){
+    const prevX = u.x, prevY = u.y;
     if (!target) return false;
 
     const dx   = target.x - u.x;
@@ -470,6 +502,7 @@ function spawnInitialCarriers(count){
       u.y = target.y;
       // angekommen → Velocity für Animation zurücksetzen
       u.vx = 0; u.vy = 0;
+      _maybeEmitUnitMove(u, prevX, prevY);
       _maybeEmitUnitStep(u);
       return true;
     }
@@ -480,6 +513,7 @@ function spawnInitialCarriers(count){
     if (Number.isFinite(nx)) u.x = nx;
     if (Number.isFinite(ny)) u.y = ny;
 
+    _maybeEmitUnitMove(u, prevX, prevY);
     _maybeEmitUnitStep(u);
 
     return dist <= step;
@@ -921,41 +955,6 @@ function _findHQBuilding(){
       x: (Number.isFinite(u.homeX) ? u.homeX : (area.cx ?? 0)),
       y: (Number.isFinite(u.homeY) ? u.homeY : (area.cy ?? 0))
     };
-
-
-    // -------------------------------------------------------------------
-    // Pause-Logik:
-    // - Wenn das zugehörige Gebäude workPaused=true ist, soll der Worker in
-    //   seinem Haus "verschwinden" (hidden) und keine Arbeit/Wege machen.
-    // - Sobald Pause aufgehoben wird, kommt er wieder raus und macht normal weiter.
-    // -------------------------------------------------------------------
-    const _bldUid = u.homeBuildingUid || u.homeUid || null;
-    const _bld = (_bldUid && Array.isArray(window.Game?.buildings))
-      ? window.Game.buildings.find(bb => bb && (bb.uid === _bldUid))
-      : null;
-    const _paused = !!(_bld && _bld.workPaused);
-
-    if (_paused){
-      // Beim ersten Eintritt in Pause: State einfrieren
-      if (ai.mode !== 'pausedInside'){
-        ai.mode = 'pausedInside';
-        ai.target = null;
-        ai.timer = 0;
-      }
-      u.task = null;
-      u.__animState = 'idle';
-      u.hidden = true;          // "im Haus"
-      u.hiddenUntil = null;     // kein Timeout – bleibt drin bis weiter
-      return;
-    } else if (ai.mode === 'pausedInside'){
-      // Pause wurde beendet → wieder raus
-      u.hidden = false;
-      ai.mode = 'toWork';
-      ai.target = null;
-      // kleiner Delay, damit es nicht ruckelt (optional)
-      ai.timer = 0;
-      // weiter im normalen State-Machine-Flow
-    }
 
     // State Machine
     

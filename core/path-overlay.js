@@ -47,14 +47,7 @@
     // - Move-Segmente (cb:unit:move) sind die neue Hauptquelle (glatte Linie)
     // - Step-Fallback (cb:unit:step) optional, standardmäßig AUS um Zickzack zu vermeiden
     USE_MOVE_EVENTS_DEFAULT  : true,
-    USE_STEP_FALLBACK_DEFAULT: true,
-
-    // Stage B: Subtile-Sampling entlang Move-Segmente (in Pixeln)
-    // 16px ist dein Ziel: dicht genug für runde Trampelpfade.
-    SUBTILE_SAMPLE_PX: 16,
-    // Stamps werden dann NICHT mehr pro Tile (floor) gespeichert,
-    // sondern als Welt-Position (tile-koordinaten mit Dezimalstellen).
-    USE_SUBTILE_STAMPS_DEFAULT: true,
+    USE_STEP_FALLBACK_DEFAULT: false,
 
     // Darstellung
     MIN_VISIBLE: 0.02,
@@ -226,14 +219,6 @@
       // Debug/Stats
       this.stepCount = 0;
       this.lastStep = null;
-
-      // Stage B: Subtile-Stamps (Weltpositionen in Tile-Koordinaten)
-      // Format: { x, y, v, f, t }
-      //  - x/y: tile-koords (float)
-      //  - v  : Intensität (0..1)
-      //  - f  : frameIndex (0..frames-1) optional
-      //  - t  : timestamp (ms)
-      this.subStamps = [];
       this._dbgLoggedDraw = false;
 
       // Decay
@@ -244,7 +229,6 @@
 
       // Segment-Events vs Step-Events
       this.useMoveEvents  = !!CFG.USE_MOVE_EVENTS_DEFAULT;
-      this.useSubtileStamps = !!CFG.USE_SUBTILE_STAMPS_DEFAULT;
       this.useStepEvents  = !!CFG.USE_STEP_FALLBACK_DEFAULT;
       this._seenMoveEvent = false;
 
@@ -399,129 +383,30 @@
         : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
 
       // Segment in konstanten Abständen sampeln (runde Stempel, keine Rotation nötig)
-      // Stage B: entlang des Move-Segments in festen Pixel-Abständen sampeln
-      // - d.from / d.to sind Tile-Koordinaten (float)
-      // - wir speichern Subtile-Stamps (x/y als float), damit es NICHT mehr nach Tiles aussieht
-      const tilePx = this.tile || 64;
-      const stepPx = (CFG.SUBTILE_SAMPLE_PX || 16);
-      const stepTiles = stepPx / tilePx;
-
+      const step = 0.20; // Tiles
       const dx = x1 - x0, dy = y1 - y0;
       const dist = Math.hypot(dx, dy);
+      const n = Math.max(1, Math.ceil(dist / step));
 
-      // Sehr kurze Micro-Bewegungen ignorieren (sonst „Punktwolke“ im Stand)
-      if (!(dist > 0.0001)) return;
-
-      const n = Math.max(1, Math.ceil(dist / stepTiles));
-
-      // Duplikate vermeiden (wenn mehrere Samples sehr dicht sind)
-      let lastX = null, lastY = null;
-
-      // Frame wählen: leicht stabil je Unit, damit es nicht flackert
-      const sprOk = this.useSprites && this._sprReady && this._sprImg && this._sprFrames && this._sprFrames.length > 0;
-      const baseFrame = sprOk ? (hashStr(String(id)) % this._sprFrames.length) : 0;
+      // Duplikate vermeiden (wenn mehrere Samples im gleichen Tile landen)
+      let lastTx = null, lastTy = null;
 
       for (let i=0; i<=n; i++){
         const t = i / n;
         const x = x0 + dx * t;
         const y = y0 + dy * t;
-
-        if (lastX !== null){
-          const dd = Math.hypot(x - lastX, y - lastY);
-          if (dd < (stepTiles * 0.35)) continue;
-        }
-        lastX = x; lastY = y;
-
-        // NICHT auf/in Gebäuden stempeln (HQ bleibt sauber)
         const tx = Math.floor(x);
         const ty = Math.floor(y);
+
+        if (tx === lastTx && ty === lastTy) continue;
+        lastTx = tx; lastTy = ty;
+
+        // nicht auf/in Gebäuden stempeln (HQ-Spawn Problem)
         if (this._isInBuildingFootprint(tx, ty)) continue;
 
-        // Worker etwas stärker als Carrier, damit Arbeitswege sichtbarer sind
-        const v = Math.min(1, Math.max(0, amt));
-
-        if (this.useSubtileStamps){
-          this._addSubStamp(x, y, v, baseFrame);
-        }else{
-          // Fallback: altes Tile-System (nur wenn explizit gewünscht)
-          this._applyStepDetail({ id, kind, tx, ty, weight: v });
-        }
+        this._applyStepDetail({ id, kind, tx, ty, weight: amt });
       }
     }
-
-    // ----------------------------
-    // Stage B: Subtile-Stamps (Weltpositionen)
-    // ----------------------------
-
-    _addSubStamp(x, y, v, frameIdx){
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      if (!(v > 0)) return;
-
-      // Begrenzen, damit wir nicht unendlich wachsen (Mobile!)
-      const MAX = 6000; // genug für lange Wege, aber nicht „unendlich“
-      if (this.subStamps.length > MAX){
-        // älteste raus (FIFO)
-        this.subStamps.splice(0, Math.max(1, this.subStamps.length - MAX));
-      }
-
-      this.subStamps.push({
-        x, y,
-        v: Math.min(1, Math.max(0, v)),
-        f: (typeof frameIdx === 'number') ? frameIdx : 0,
-        t: Date.now()
-      });
-    }
-
-    _drawSubStamps(ctx, cam, bounds){
-      if (!this.subStamps || this.subStamps.length === 0) return;
-
-      const tile = this.tile || 64;
-
-      // Sichtfenster (in Tile-Koords) – nur nahe Stamps zeichnen
-      const minX = bounds.minX - 2, maxX = bounds.maxX + 2;
-      const minY = bounds.minY - 2, maxY = bounds.maxY + 2;
-
-      const sprOk = this.useSprites && this._sprReady && this._sprImg && this._sprFrames && this._sprFrames.length > 0;
-
-      // Scale: default 1.0, später über Inspector tunen
-      const scale = (typeof this.stampScale === 'number' && this.stampScale > 0) ? this.stampScale : 1.0;
-
-      for (let i=0; i<this.subStamps.length; i++){
-        const s = this.subStamps[i];
-        if (!s || !(s.v > CFG.MIN_VISIBLE)) continue;
-
-        if (s.x < minX || s.x > maxX || s.y < minY || s.y > maxY) continue;
-
-        const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, s.v);
-        ctx.globalAlpha = a;
-
-        // Weltposition → Pixel
-        const px = s.x * tile;
-        const py = s.y * tile;
-
-        if (sprOk){
-          const fi = (s.f | 0) % this._sprFrames.length;
-          const fr = this._sprFrames[fi];
-          if (fr){
-            // Center-Pivot: wir zeichnen mit Mittelpunkt auf px/py
-            const w = fr.w * scale;
-            const h = fr.h * scale;
-            const ox = (fr.px != null) ? fr.px * scale : (fr.w * 0.5) * scale;
-            const oy = (fr.py != null) ? fr.py * scale : (fr.h * 0.5) * scale;
-
-            ctx.drawImage(this._sprImg, fr.x, fr.y, fr.w, fr.h,
-                          px - ox, py - oy, w, h);
-          }
-        }else{
-          // Fallback: kleiner Punkt (damit man immer was sieht)
-          ctx.fillStyle = '#000';
-          ctx.fillRect(px - 2, py - 2, 4, 4);
-        }
-      }
-
-      ctx.globalAlpha = 1.0;
-    }
-
 
 
     _applyStepDetail(d){
@@ -748,12 +633,6 @@
 
       // STAMPS (Texturen / Fallback)
       if (this.showStamps){
-
-        // Stage B: Subtile-Stamps (dicht, entlang Move-Segmente)
-        if (this.useSubtileStamps){
-          this._drawSubStamps(ctx, cam, b);
-        }else{
-
         for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
           for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
             const cell = this._idx(tx, ty);
@@ -794,9 +673,7 @@
               ctx.translate(px + tile/2, py + tile/2);
               ctx.rotate(ang);
               ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
-                      }
-
-ctx.restore();
+              ctx.restore();
             } else if (img){
               ctx.save();
               ctx.translate(px + tile/2, py + tile/2);
@@ -849,21 +726,6 @@ ctx.restore();
         if (v <= 0) continue;
         const nv = v - step;
         this.map[i] = nv > 0 ? nv : 0;
-      }
-
-      // Stage B: Subtile-Stamps decayn + aussortieren
-      if (this.subStamps && this.subStamps.length){
-        const keep = [];
-        for (let i=0;i<this.subStamps.length;i++){
-          const s = this.subStamps[i];
-          if (!s) continue;
-          const nv = (s.v || 0) - step;
-          if (nv > CFG.MIN_VISIBLE){
-            s.v = nv;
-            keep.push(s);
-          }
-        }
-        this.subStamps = keep;
       }
     }
 
