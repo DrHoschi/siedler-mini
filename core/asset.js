@@ -330,40 +330,14 @@
           const json = await fetchJson(jsonUrl);
           entry.json = json;
 
-          // -------------------------------------------------------------
-          // Bild laden (robust):
-          //  - imageUrlOverride kann STRING oder ARRAY sein.
-          //  - Falls Override nicht lädt (z.B. "assets/charakter" vs "assets/characters"),
-          //    probieren wir automatisch meta.image und einen heuristischen Fallback.
-          // -------------------------------------------------------------
-          const imageCandidates = [];
-          if (Array.isArray(imageUrlOverride)) {
-            for (const u of imageUrlOverride) if (u) imageCandidates.push(u);
-          } else if (typeof imageUrlOverride === 'string' && imageUrlOverride) {
-            imageCandidates.push(imageUrlOverride);
-          }
+          // Wichtig: meta.image kann abweichen → override gewinnt!
+          const imageUrl = imageUrlOverride
+            || json?.meta?.image
+            || (dirOf(jsonUrl) + `${name}.png`);
 
-          if (json?.meta?.image) imageCandidates.push(json.meta.image);
-          imageCandidates.push(dirOf(jsonUrl) + `${name}.png`);
+          entry.imageUrl = imageUrl;
 
-          // Duplikate entfernen (gleicher String)
-          const seen = new Set();
-          const uniq = imageCandidates.filter(u => (u && !seen.has(u) && (seen.add(u), true)));
-
-          let img = null;
-          let lastImgErr = null;
-          for (const imageUrl of uniq) {
-            try {
-              img = await loadImage(imageUrl);
-              entry.imageUrl = imageUrl;
-              break;
-            } catch (eImg) {
-              lastImgErr = eImg;
-            }
-          }
-          if (!img) {
-            throw lastImgErr || new Error('Atlas PNG konnte nicht geladen werden');
-          }
+          const img = await loadImage(imageUrl);
           entry.img = img;
 
           const norm = normalizeFrames(json);
@@ -604,11 +578,7 @@ tasks.push(this.loadAtlas(
     'data/characters/builder_sprite_atlas.json',
     'assets/characters/builder_sprite_atlas.json' // optional fallback (falls du mal umziehst)
   ],
-  // PNG-Path candidates (EN/DE-Ordner): falls du mal zwischen "characters" und "charakter" wechselst.
-  [
-    'assets/characters/builder_sprite_atlas.png',
-    'assets/charakter/builder_sprite_atlas.png'
-  ]
+  'assets/characters/builder_sprite_atlas.png'
 ));
 
 
@@ -617,10 +587,7 @@ tasks.push(this.loadAtlas(
 tasks.push(this.loadAtlas(
   'woodcutter_sprite_atlas',
   'data/characters/woodcutter_sprite_atlas.json',
-  [
-    'assets/characters/woodcutter_sprite_atlas.png',
-    'assets/charakter/woodcutter_sprite_atlas.png'
-  ]
+  'assets/characters/woodcutter_sprite_atlas.png'
 ));
 
 // Characters / Units: Fisherman
@@ -701,7 +668,22 @@ tasks.push(this.loadAtlas(
   'assets/buildings/house/house-middle-sprite.png'
 ));
 
-      await Promise.allSettled(tasks);
+      
+
+// --------------------------------------------------------------------
+// FX: Smoke (Schornstein-Rauch) – wird von core/fx.smoke.js genutzt
+//  - AtlasKey: fx_smoke_sprite_atlas
+//  - JSON: data/atlases/fx_smoke_sprite_atlas.json
+//  - PNG:  assets/fx/smoke/fx_smoke_sprite_atlas.png
+// --------------------------------------------------------------------
+tasks.push(this.loadAtlas(
+  'fx_smoke_sprite_atlas',
+  'data/atlases/fx_smoke_sprite_atlas.json',
+  // imageOverride: wir geben den erwarteten Pfad an (meta.image ist ebenfalls ok)
+  'assets/fx/smoke/fx_smoke_sprite_atlas.png'
+));
+
+await Promise.allSettled(tasks);
 
       this.state.ready = true;
 
