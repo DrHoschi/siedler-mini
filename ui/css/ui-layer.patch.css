@@ -44,3 +44,18 @@ canvas#paths-overlay,
 canvas#units-overlay {
     pointer-events: none;   /* wichtig, sonst blockieren sie Klicks */
 }
+
+
+
+/* --------------------------------------------------------------------------
+ * Canvas Layer Reihenfolge (WICHTIG für Trampelpfade als UNDERLAY)
+ * Ziel:
+ *   - #game          : Map / Base (unten)
+ *   - #paths-overlay : Trampelpfade (über Map)
+ *   - #units-overlay : Units / Buildings (darüber)
+ *   - #overlay       : Debug/Inspector Overlays (ganz oben)
+ * -------------------------------------------------------------------------- */
+canvas#game { z-index: 1; }
+canvas#paths-overlay { z-index: 2; }
+canvas#units-overlay { z-index: 3; }
+canvas#overlay { z-index: 4; }
