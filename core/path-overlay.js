@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Trampelpfade (Stamps) + Heatmap
- * Version : v4.4.0-path-sprite-stamps (2025-12-16)
+ * Version : v4.4.1-path-stamps-subtile-16px (2025-12-16)
  *
  * Ziel (Endlich stabil, ohne "wir drehen uns im Kreis"):
  *   1) EIN Koordinatensystem: Wir zeichnen über OverlayHooks auf dem
@@ -36,7 +36,7 @@
   // -------------------------------------------------------------------------
 
   const CFG = {
-    VERSION: 'v4.4.0-path-sprite-stamps',
+    VERSION: 'v4.4.1-path-stamps-subtile-16px',
 
     // Default: sichtbar ab Spielstart (wie von dir gewünscht)
     DEFAULT_VISIBLE: true,
@@ -51,6 +51,9 @@
 
     // Darstellung
     MIN_VISIBLE: 0.02,
+
+    // Max Anzahl Sub-Tile Stamps (Ringbuffer)
+    STAMP_POINTS_MAX: 12000,
 
     // Heatmap Alpha (wir verwenden nur Alpha, Farbe bleibt neutral/schwarz)
     HEAT_ALPHA_MIN: 0.06,
@@ -84,10 +87,6 @@
 // Weighting
     WEIGHT_WORKER: 0.14,
     WEIGHT_CARRIER: 0.08,
-
-    // Stempel-Abstand entlang Move-Segmenten (in Pixeln).
-    //  - 16px entspricht bei tile=64 genau 1/4 Tile.
-    STAMP_SPACING_PX: 16,
   };
 
   // -------------------------------------------------------------------------
@@ -200,6 +199,12 @@
       // Data
       this.map = null; // Float32Array intensity
       this.dir = null; // Int8Array direction 0..7
+      this.frame = null; // Uint8Array sprite frame index (0..63), 255 = none
+
+      // Sub-Tile Stamps (NEU): Punkt-Stempel entlang Move-Segmenten (alle ~16px)
+      // - Weltkoordinaten in Pixeln (vor Cam-Transform)
+      // - Dadurch keine "Kachel-Quadrate" mehr, sondern eine echte Linie
+      this.stamps = [];
 
       // Unit last positions
       this._unitLast = new Map();
@@ -290,6 +295,30 @@
       if (!Number.isFinite(tx) || !Number.isFinite(ty)) return -1;
       if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return -1;
       return ty * this.cols + tx;
+    }
+
+    // ----------------------------
+    // STAMP BUFFER (Sub-Tile)
+    // ----------------------------
+    _pushStampPx(xPx, yPx, dir, v){
+      if (!Number.isFinite(xPx) || !Number.isFinite(yPx)) return;
+
+      const stamp = {
+        x: xPx,
+        y: yPx,
+        dir: (dir|0) & 7,
+        v: Math.max(0, Math.min(1, (v ?? 0))),
+        // pro Punkt zufälliges Frame (0..63) – bleibt stabil, weil wir es speichern
+        f: (Math.random() * 64) | 0,
+      };
+
+      this.stamps.push(stamp);
+
+      // Ringbuffer (Performance / Speicher)
+      const max = CFG.STAMP_POINTS_MAX || 12000;
+      if (this.stamps.length > max){
+        this.stamps.splice(0, this.stamps.length - max);
+      }
     }
 
     // ----------------------------
@@ -387,8 +416,9 @@
         : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
 
       // Segment in konstanten Abständen sampeln (runde Stempel, keine Rotation nötig)
-      const tile = this.tile || 64;
-      const step = (CFG.STAMP_SPACING_PX || 16) / tile; // Tiles (px->tile)
+      const stepPx = 16; // Wunsch: alle 16px stempeln
+      const tilePx = (this.tile || 64);
+      const step = Math.max(0.05, stepPx / tilePx); // -> Tiles
       const dx = x1 - x0, dy = y1 - y0;
       const dist = Math.hypot(dx, dy);
       const n = Math.max(1, Math.ceil(dist / step));
@@ -400,6 +430,10 @@
         const t = i / n;
         const x = x0 + dx * t;
         const y = y0 + dy * t;
+
+        // Sub-Tile Stamp: exakte Sample-Position (Weltpixel)
+        // Hinweis: die eigentliche Cam-Transform passiert später im draw() via ctx.setTransform(...)
+        this._pushStampPx(x * this.tile, y * this.tile, dir8FromDelta(dx, dy), amt);
         const tx = Math.floor(x);
         const ty = Math.floor(y);
 
@@ -638,27 +672,31 @@
 
       // STAMPS (Texturen / Fallback)
       if (this.showStamps){
-        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
-          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
-            const cell = this._idx(tx, ty);
-            if (cell < 0) continue;
-            const v = this.map[cell];
-            if (v < CFG.MIN_VISIBLE) continue;
 
-            // 1) NEU: SpriteSheet-Frames (organisch, zufällig pro Tile)
-            // 2) Fallback: Legacy-Texturen topdown_path0..9 (intensitätsbasiert)
-            const sprOk = this.useSprites && this._sprReady && this._sprImg && this.frame;
-            const frameIdx = sprOk ? this.frame[cell] : 255;
-            const idx = Math.min(9, Math.max(0, Math.floor(v * 9.999)));
-            const img = (!sprOk && this._texReady) ? this._tex[idx] : null;
+        // ------------------------------------------------------------
+        // NEU: Sub-Tile Stamp-Punkte (echte Linien entlang Move-Segmenten)
+        // ------------------------------------------------------------
+        const sprOk = !!(this._sprReady && this._sprImg && this._sprImg.complete && this._sprImg.naturalWidth > 0);
+        const cols  = CFG.SPRITE_COLS || 8;
+        const tpx   = CFG.SPRITE_TILE_PX || 128;
 
-            const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, v);
-            ctx.globalAlpha = a;
+        const size = tile; // wir zeichnen in Kachelgröße (z.B. 64x64) -> sauber in der Map
 
-            const px = tx*tile;
-            const py = ty*tile;
+        if (sprOk && this.stamps && this.stamps.length){
+          for (let i=0;i<this.stamps.length;i++){
+            const s = this.stamps[i];
+            if (!s) continue;
 
-            const dir = this.dir[cell] || 0;
+            const v = s.v || 0;
+            if (v <= MIN_VISIBLE) continue;
+
+            const x = s.x, y = s.y;
+
+            // Viewport-Cull (mit Rand)
+            if (x < b.px0 - size || x > b.px1 + size || y < b.py0 - size || y > b.py1 + size) continue;
+
+            const dir = (s.dir|0) & 7;
+
             const ang = (dir===0?0:
                          dir===1?Math.PI/4:
                          dir===2?Math.PI/2:
@@ -668,28 +706,85 @@
                          dir===6?-Math.PI/2:
                          -Math.PI/4);
 
-                        if (sprOk && frameIdx !== 255){
-              const cols = CFG.SPRITE_COLS || 8;
-              const tpx  = CFG.SPRITE_TILE_PX || 128;
-              const fi = frameIdx | 0;
-              const sx = (fi % cols) * tpx;
-              const sy = ((fi / cols) | 0) * tpx;
-              ctx.save();
-              ctx.translate(px + tile/2, py + tile/2);
-              ctx.rotate(ang);
-              ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
-              ctx.restore();
-            } else if (img){
-              ctx.save();
-              ctx.translate(px + tile/2, py + tile/2);
-              ctx.rotate(ang);
-              ctx.drawImage(img, -tile/2, -tile/2, tile, tile);
-              ctx.restore();
-            } else {
+            const fi = (s.f|0) & 63;
+            const sx = (fi % cols) * tpx;
+            const sy = ((fi / cols) | 0) * tpx;
 
-              // Fallback: kleines "Tritt"-Rect (damit man IMMER was sieht)
-              ctx.fillStyle = '#000';
-              ctx.fillRect(px + tile*0.25, py + tile*0.35, tile*0.5, tile*0.3);
+            // Alpha (dezent) – nicht „Blockig“
+            const a = Math.max(0.12, Math.min(0.55, v));
+
+            ctx.save();
+            ctx.globalAlpha = a;
+            ctx.translate(x, y);
+            ctx.rotate(ang);
+            ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -size/2, -size/2, size, size);
+            ctx.restore();
+          }
+
+        } else {
+          // ------------------------------------------------------------
+          // ALT: pro Kachel (Fallback) – kann „kachelartig“ wirken,
+          // bleibt aber als Safety drin, wenn noch keine Stamps existieren.
+          // ------------------------------------------------------------
+          for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
+            for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
+              const idx = this._idx(tx,ty);
+              const v = this.map[idx];
+              if (v <= MIN_VISIBLE) continue;
+
+              const px = tx*tile;
+              const py = ty*tile;
+
+              const dir = this.dir ? (this.dir[idx] & 7) : 0;
+
+              const ang = (dir===0?0:
+                           dir===1?Math.PI/4:
+                           dir===2?Math.PI/2:
+                           dir===3?3*Math.PI/4:
+                           dir===4?Math.PI:
+                           dir===5?-3*Math.PI/4:
+                           dir===6?-Math.PI/2:
+                           -Math.PI/4);
+
+              const frameIdx = this.frame ? this.frame[idx] : 255;
+
+              // Alpha (dezent)
+              const a = Math.max(0.10, Math.min(0.45, v));
+
+              if (sprOk && frameIdx !== 255){
+                const fi = frameIdx | 0;
+                const sx = (fi % cols) * tpx;
+                const sy = ((fi / cols) | 0) * tpx;
+                ctx.save();
+                ctx.globalAlpha = a;
+                ctx.translate(px + tile/2, py + tile/2);
+                ctx.rotate(ang);
+                ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
+                ctx.restore();
+              } else if (texOk && this._texImgs){
+                const ti = (frameIdx === 255) ? 0 : (frameIdx % this._texImgs.length);
+                const img = this._texImgs[ti];
+                if (img && img.complete){
+                  ctx.save();
+                  ctx.globalAlpha = a;
+                  ctx.translate(px + tile/2, py + tile/2);
+                  ctx.rotate(ang);
+                  ctx.drawImage(img, -tile/2, -tile/2, tile, tile);
+                  ctx.restore();
+                } else {
+                  ctx.save();
+                  ctx.globalAlpha = 0.25;
+                  ctx.fillStyle = '#000';
+                  ctx.fillRect(px, py, tile, tile);
+                  ctx.restore();
+                }
+              } else {
+                ctx.save();
+                ctx.globalAlpha = 0.25;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(px, py, tile, tile);
+                ctx.restore();
+              }
             }
           }
         }
@@ -731,6 +826,19 @@
         if (v <= 0) continue;
         const nv = v - step;
         this.map[i] = nv > 0 ? nv : 0;
+      }
+    
+      // Sub-Tile Stamp-Punkte ebenfalls ausfaden (visuelle Linie)
+      if (this.stamps && this.stamps.length){
+        // Wir nutzen denselben step wie die Map (vereinfachtes Fade)
+        for (let i=this.stamps.length-1;i>=0;i--){
+          const s = this.stamps[i];
+          if (!s) { this.stamps.splice(i,1); continue; }
+          s.v = (s.v || 0) - step;
+          if (s.v <= 0){
+            this.stamps.splice(i,1);
+          }
+        }
       }
     }
 
