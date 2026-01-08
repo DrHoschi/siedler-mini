@@ -34,6 +34,10 @@
       '  <button type="button" data-action="layer-on">Layer (Stamps) ON</button>',
       '  <button type="button" data-action="layer-off">Layer (Stamps) OFF</button>',
       '</div>',
+      '<div class="row" style="margin-top:8px;">',
+      '  <button type="button" data-action="sprite-on">Sprite Stamps ON</button>',
+      '  <button type="button" data-action="sprite-off">Sprite Stamps OFF</button>',
+      '</div>',
       '<div class="row" style="margin-top:10px;align-items:center;gap:8px;">',
       '  <label style="min-width:110px;opacity:.85">Decay Speed</label>',
       '  <input type="range" data-action="decay-speed" min="0" max="300" step="5" value="100" style="flex:1">',
@@ -44,7 +48,7 @@
       '  <button type="button" data-action="decay-unfreeze">Unfreeze</button>',
       '</div>',
       '<p style="opacity:.7;margin-top:8px">',
-      'Hinweis: Overlay = sichtbar/unsichtbar. Layer = Pfad-Stamps an/aus. Heatmap = Intensitätsfläche.',
+      'Hinweis: Overlay = sichtbar/unsichtbar. Layer = Stamps an/aus. Sprite Stamps = neue organische Brush-Sprites. Heatmap = Intensitätsfläche.',
       '</p>',
       '<pre data-action="paths-state" style="opacity:.75;margin-top:8px;white-space:pre-wrap"></pre>',
       '</div>'
@@ -70,6 +74,14 @@
 
     sectionEl.querySelector('[data-action="layer-off"]')
       .addEventListener('click', () => send('cb:path:layer:off'));
+
+    // NEU: Sprite-Stamps (organische Brush-Sprites)
+    sectionEl.querySelector('[data-action="sprite-on"]')
+      .addEventListener('click', () => send('cb:path:sprites:on'));
+
+    sectionEl.querySelector('[data-action="sprite-off"]')
+      .addEventListener('click', () => send('cb:path:sprites:off'));
+
 
     // Decay Speed Slider
     const sl = sectionEl.querySelector('[data-action="decay-speed"]');
