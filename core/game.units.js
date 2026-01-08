@@ -922,6 +922,41 @@ function _findHQBuilding(){
       y: (Number.isFinite(u.homeY) ? u.homeY : (area.cy ?? 0))
     };
 
+
+    // -------------------------------------------------------------------
+    // Pause-Logik:
+    // - Wenn das zugehörige Gebäude workPaused=true ist, soll der Worker in
+    //   seinem Haus "verschwinden" (hidden) und keine Arbeit/Wege machen.
+    // - Sobald Pause aufgehoben wird, kommt er wieder raus und macht normal weiter.
+    // -------------------------------------------------------------------
+    const _bldUid = u.homeBuildingUid || u.homeUid || null;
+    const _bld = (_bldUid && Array.isArray(window.Game?.buildings))
+      ? window.Game.buildings.find(bb => bb && (bb.uid === _bldUid))
+      : null;
+    const _paused = !!(_bld && _bld.workPaused);
+
+    if (_paused){
+      // Beim ersten Eintritt in Pause: State einfrieren
+      if (ai.mode !== 'pausedInside'){
+        ai.mode = 'pausedInside';
+        ai.target = null;
+        ai.timer = 0;
+      }
+      u.task = null;
+      u.__animState = 'idle';
+      u.hidden = true;          // "im Haus"
+      u.hiddenUntil = null;     // kein Timeout – bleibt drin bis weiter
+      return;
+    } else if (ai.mode === 'pausedInside'){
+      // Pause wurde beendet → wieder raus
+      u.hidden = false;
+      ai.mode = 'toWork';
+      ai.target = null;
+      // kleiner Delay, damit es nicht ruckelt (optional)
+      ai.timer = 0;
+      // weiter im normalen State-Machine-Flow
+    }
+
     // State Machine
     
 
@@ -936,25 +971,6 @@ if (ai.mode === 'toEntrance'){
   const bld = (bldUid && Array.isArray(window.Game?.buildings))
     ? window.Game.buildings.find(bb => bb && (bb.uid === bldUid))
     : null;
-
-
-    // ---------------------------------------------------------------------
-    // PAUSE (v26.01.08):
-    // Wenn das Gebäude pausiert ist, darf der Worker NICHT rauslaufen/arbeiten.
-    // Er bleibt im Home-State (idle), Smoke/Prod können darauf reagieren.
-    // ---------------------------------------------------------------------
-    const homePaused =
-      !!(bld && (bld.workPaused || bld.paused || bld.__workPaused || bld.__paused)) ||
-      !!(u.homeDetail && (u.homeDetail.workPaused || u.homeDetail.paused));
-
-    if (homePaused){
-      ai.mode = 'paused';
-      u.__animState = 'idle';
-      // Optional: Worker bleibt "im Gebäude" (unsichtbar), wenn er schon drin war.
-      // Wir ändern hier absichtlich NICHT u.hidden aggressiv, um keine Nebenwirkungen
-      // mit deiner Hide/Enter-Logik zu verursachen.
-      return;
-    }
 
   // Türtile bestimmen (Registry-Fallback inklusive)
   const ent = bld ? _getEntranceTileForBuilding(bld) : null;

@@ -340,6 +340,52 @@
     }
   };
 
+
+  // -------------------------------------------------------------------------
+  // Pause / Weiter: Produktions- und Worker-Pausierung pro Gebäude
+  // -------------------------------------------------------------------------
+  // UI sendet: req:building:setPaused  detail:{ uid|id, paused:true/false }
+  // Wir setzen den Flag direkt am Building-Objekt (source of truth) und senden
+  // ein Callback-Event, damit UI/FX/Worker reagieren können.
+  //
+  // WICHTIG:
+  // - Wir verwenden absichtlich "workPaused" (bool), weil wir später auch
+  //   "pausedReason" etc. ergänzen wollen (Lager voll, keine Inputs, etc.).
+  // - Diese Logik ist additiv und bricht bestehende Saves nicht.
+  // -------------------------------------------------------------------------
+  window.addEventListener('req:building:setPaused', (ev) => {
+    try{
+      const d = ev?.detail || {};
+      const uid = d.uid || d.buildingUid || d.buid || null;
+      const id  = d.id  || d.buildingId  || null;
+      const paused = !!d.paused;
+
+      const b = (uid && Buildings.list.find(x => x && x.uid === uid))
+             || (id  && Buildings.list.find(x => x && x.id  === id))
+             || null;
+
+      if (!b) {
+        LOG('pause:set - building not found', uid || id);
+        return;
+      }
+
+      const prev = !!b.workPaused;
+      b.workPaused = paused;
+      b.workPausedAt = performance.now();
+
+      if (prev !== paused) {
+        try{
+          window.dispatchEvent(new CustomEvent('cb:building:pause-changed', {
+            detail:{ uid:b.uid, id:b.id, paused }
+          }));
+        }catch(_e){}
+        LOG('pause:changed', b.id, paused ? 'PAUSED' : 'RUN');
+      }
+    }catch(e){
+      LOG('pause:set error', e?.message || e);
+    }
+  });
+
   // -------------------------------------------------------------------------
   // Export + Sync
   // -------------------------------------------------------------------------
