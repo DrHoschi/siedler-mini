@@ -937,6 +937,25 @@ if (ai.mode === 'toEntrance'){
     ? window.Game.buildings.find(bb => bb && (bb.uid === bldUid))
     : null;
 
+
+    // ---------------------------------------------------------------------
+    // PAUSE (v26.01.08):
+    // Wenn das Gebäude pausiert ist, darf der Worker NICHT rauslaufen/arbeiten.
+    // Er bleibt im Home-State (idle), Smoke/Prod können darauf reagieren.
+    // ---------------------------------------------------------------------
+    const homePaused =
+      !!(bld && (bld.workPaused || bld.paused || bld.__workPaused || bld.__paused)) ||
+      !!(u.homeDetail && (u.homeDetail.workPaused || u.homeDetail.paused));
+
+    if (homePaused){
+      ai.mode = 'paused';
+      u.__animState = 'idle';
+      // Optional: Worker bleibt "im Gebäude" (unsichtbar), wenn er schon drin war.
+      // Wir ändern hier absichtlich NICHT u.hidden aggressiv, um keine Nebenwirkungen
+      // mit deiner Hide/Enter-Logik zu verursachen.
+      return;
+    }
+
   // Türtile bestimmen (Registry-Fallback inklusive)
   const ent = bld ? _getEntranceTileForBuilding(bld) : null;
   const target = ent ? { x: ent.x + 0.5, y: ent.y + 0.5 } : home;

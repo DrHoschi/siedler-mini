@@ -66,12 +66,27 @@
   }
 
   function pop() {
-    const j = Queue.shift() || null;
-    if (j) LOG('Job ausgegeben', j);
-    return j;
+    // ---------------------------------------------------------------------
+    // PRIORITY FIX (v26.01.08):
+    // Baustellen-/Lieferjobs (alles was NICHT 'carry' ist) haben Vorrang.
+    // 'carry' Jobs stammen aus Produktion (Abholen → HQ) und dürfen die Queue
+    // nicht mehr verstopfen, sonst werden Baustellen nie beliefert.
+    // ---------------------------------------------------------------------
+    if (!Queue.length) return null;
+
+    // 1) Erstes NICHT-carry Job-Element bevorzugen (deliver/build/undefined)
+    for (let i = 0; i < Queue.length; i++) {
+      const t = Queue[i]?.type;
+      if (t !== 'carry') {
+        return Queue.splice(i, 1)[0] || null;
+      }
+    }
+
+    // 2) Fallback: carry wie bisher FIFO
+    return Queue.shift() || null;
   }
 
-  function hasJobs() {
+function hasJobs() {
     return Queue.length > 0;
   }
 

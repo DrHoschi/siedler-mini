@@ -53,6 +53,7 @@
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
   // Pro tick maximal so viele Job-Zuweisungen (verhindert "Job-Sturm" bei großen Queues)
+  const MAX_CARRY_ACTIVE = 1; // max. gleichzeitig laufende Produktions-Abholjobs ('carry')
   const MAX_ASSIGN_PER_TICK = 8;
 
   /* =========================
@@ -140,7 +141,32 @@
       const job = JE.pop();
       if (!job) break;
 
-      try {
+      // -------------------------------------------------------------------
+      // THROTTLE FIX (v26.01.08):
+      // Damit Baustellen IMMER "Luft" bekommen, begrenzen wir aktive carry-
+      // Jobs (Produktion → HQ). Sobald MAX_CARRY_ACTIVE erreicht ist,
+      // werden weitere carry-Jobs wieder hinten eingereiht.
+      // -------------------------------------------------------------------
+      if (job?.type === 'carry') {
+        try {
+          const units = (typeof GU.getUnits === 'function') ? GU.getUnits() : (GU.list || []);
+          const activeCarry = (units || []).filter(u =>
+            u && u.type === 'carrier' && u.task && (u.task.job?.type === 'carry')
+          ).length;
+
+          if (activeCarry >= MAX_CARRY_ACTIVE) {
+            // zurück ans Ende der Queue und hier abbrechen → Carrier bleiben frei
+            if (typeof window.JobEngine?.add === 'function') {
+              window.JobEngine.add(job);
+            }
+            break;
+          }
+        } catch (e) {
+          // wenn Debug schiefgeht: normal assignen (fail-open)
+        }
+      }
+
+try {
         GU.assignJob(job);
         LOG('Job → Carrier:', job);
         assigned++;
