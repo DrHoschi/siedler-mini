@@ -27,7 +27,7 @@
     enabled : true,     // global visible
     stamps  : true,     // draw circles
     decay   : true,     // fade out over time
-    decayPerSecond: 0.06, // intensity loss per second (0..1)
+    decayPerSecond: 0.015, // intensity loss per second (0..1)
 
     // Atlas / Frames
     atlasKey : 'path_sprite_atlas',
@@ -38,6 +38,9 @@
     // Stärke / Alpha
     maxAlpha: 0.65,
     minAlpha: 0.10,
+
+    // Stamp-Größe (1.0 = Original-Frame, <1 kleiner)
+    stampScale: 0.65,
 
     // Debug
     debugLogEveryNStamps: 0 // 0 = aus
@@ -149,7 +152,7 @@
       // align default in Assets = 'pivot' → nutzt fr.pivotX/pivotY
       A.drawAtlasFrame(ctx, CFG.atlasKey, frame, worldX, worldY, {
         align: 'pivot',
-        scale: 1
+        scale: CFG.stampScale
       });
 
       ctx.restore();
