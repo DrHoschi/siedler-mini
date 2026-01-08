@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-01-07T22:45:15.901Z",
+  "createdAt": "2026-01-08T11:04:53.261Z",
   "root": ".",
   "count": 585,
   "entries": [
@@ -1504,7 +1504,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 26782
+      "size": 25947
     },
     {
       "type": "file",
@@ -1584,7 +1584,7 @@
     {
       "type": "file",
       "path": "core/fx.smoke.js",
-      "size": 7688
+      "size": 9748
     },
     {
       "type": "file",
@@ -1614,7 +1614,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 55053
+      "size": 56374
     },
     {
       "type": "file",
@@ -1669,7 +1669,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 42466
+      "size": 43881
     },
     {
       "type": "file",
@@ -1809,7 +1809,7 @@
     {
       "type": "file",
       "path": "core/unit.anim.js",
-      "size": 19466
+      "size": 601
     },
     {
       "type": "file",
@@ -1990,7 +1990,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 7357
+      "size": 7682
     },
     {
       "type": "file",
