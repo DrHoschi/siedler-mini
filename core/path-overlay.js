@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
  * Projekt : Neue Siedler – Trampelpfade (Stamps) + Heatmap
- * Version : v4.3.0-segment-move-trail-decayctl (2025-12-16)
+ * Version : v4.4.0-path-sprite-stamps (2025-12-16)
  *
  * Ziel (Endlich stabil, ohne "wir drehen uns im Kreis"):
  *   1) EIN Koordinatensystem: Wir zeichnen über OverlayHooks auf dem
@@ -36,7 +36,7 @@
   // -------------------------------------------------------------------------
 
   const CFG = {
-    VERSION: 'v4.2.0-stable-overlayhooks',
+    VERSION: 'v4.4.0-path-sprite-stamps',
 
     // Default: sichtbar ab Spielstart (wie von dir gewünscht)
     DEFAULT_VISIBLE: true,
@@ -73,7 +73,15 @@
     TEX_BASE: 'assets/tex/path/',
     TEX_NAMES: Array.from({length:10}, (_,i)=>`topdown_path${i}`),
 
-    // Weighting
+    
+    // NEU: SpriteSheet für organische Trampelpfad-Stempel
+    SPRITE_SHEET_SRC: 'assets/tex/path/path_sprite_atlas.png',
+    SPRITE_TILE_PX   : 128,
+    SPRITE_COLS      : 8,
+    SPRITE_ROWS      : 8,
+    SPRITE_COUNT     : 64,
+    DEFAULT_SPRITES  : true,
+// Weighting
     WEIGHT_WORKER: 0.14,
     WEIGHT_CARRIER: 0.08,
   };
@@ -196,10 +204,17 @@
       this._preInitSteps = [];
       this._preInitMax = 2000;
 
-      // Texturen
+      // Texturen (Legacy: topdown_path0..9)
       this._tex = new Array(10).fill(null);
       this._texReady = false;
       this._texTried = false;
+
+      // NEU: SpriteSheet (path_sprite_atlas.png) + pro Cell zufälliger Frame
+      this.useSprites = !!CFG.DEFAULT_SPRITES;
+      this._sprImg = null;
+      this._sprReady = false;
+      this._sprTried = false;
+      this.frame = null; // Uint8Array: 0..63, 255 = unset
 
       // Debug/Stats
       this.stepCount = 0;
@@ -243,6 +258,8 @@
       if (!this.map || changed){
         this.map = new Float32Array(this.cols * this.rows);
         this.dir = new Int8Array(this.cols * this.rows);
+        this.frame = new Uint8Array(this.cols * this.rows);
+        this.frame.fill(255);
 
         // buffered Steps nachziehen
         if (this._preInitSteps.length){
@@ -433,6 +450,17 @@
       if (this._texTried) return;
       this._texTried = true;
 
+      // NEU: SpriteSheet einmalig versuchen (unabhängig von Legacy-Texturen)
+      if (!this._sprTried){
+        this._sprTried = true;
+        try{
+          const imgS = new Image();
+          imgS.onload = ()=>{ this._sprImg = imgS; this._sprReady = true; LOG('SpriteSheet ready ✓', CFG.SPRITE_SHEET_SRC); };
+          imgS.onerror = ()=>{ this._sprImg = null; this._sprReady = false; WARN('SpriteSheet load fail', CFG.SPRITE_SHEET_SRC); };
+          imgS.src = CFG.SPRITE_SHEET_SRC;
+        }catch(e){ this._sprImg=null; this._sprReady=false; }
+      }
+
       let loaded = 0;
       let done = 0;
 
@@ -532,6 +560,8 @@
         heatmap     : !!this.showHeatmap,
         decayPaused : !!this.decayPaused,
         decaySpeed  : Number(this.decaySpeedMult || 1),
+        sprites     : !!this.useSprites,
+        spritesReady: !!this._sprReady,
         decayPerSec : Number(this.decayPerSec || CFG.DECAY_PER_SEC_BASE || 0),
         useMoveEvents: !!this.useMoveEvents,
         useStepFallback: !!this.useStepEvents
@@ -610,8 +640,12 @@
             const v = this.map[cell];
             if (v < CFG.MIN_VISIBLE) continue;
 
+            // 1) NEU: SpriteSheet-Frames (organisch, zufällig pro Tile)
+            // 2) Fallback: Legacy-Texturen topdown_path0..9 (intensitätsbasiert)
+            const sprOk = this.useSprites && this._sprReady && this._sprImg && this.frame;
+            const frameIdx = sprOk ? this.frame[cell] : 255;
             const idx = Math.min(9, Math.max(0, Math.floor(v * 9.999)));
-            const img = this._texReady ? this._tex[idx] : null;
+            const img = (!sprOk && this._texReady) ? this._tex[idx] : null;
 
             const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, v);
             ctx.globalAlpha = a;
@@ -629,13 +663,25 @@
                          dir===6?-Math.PI/2:
                          -Math.PI/4);
 
-            if (img){
+                        if (sprOk && frameIdx !== 255){
+              const cols = CFG.SPRITE_COLS || 8;
+              const tpx  = CFG.SPRITE_TILE_PX || 128;
+              const fi = frameIdx | 0;
+              const sx = (fi % cols) * tpx;
+              const sy = ((fi / cols) | 0) * tpx;
+              ctx.save();
+              ctx.translate(px + tile/2, py + tile/2);
+              ctx.rotate(ang);
+              ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
+              ctx.restore();
+            } else if (img){
               ctx.save();
               ctx.translate(px + tile/2, py + tile/2);
               ctx.rotate(ang);
               ctx.drawImage(img, -tile/2, -tile/2, tile, tile);
               ctx.restore();
             } else {
+
               // Fallback: kleines "Tritt"-Rect (damit man IMMER was sieht)
               ctx.fillStyle = '#000';
               ctx.fillRect(px + tile*0.25, py + tile*0.35, tile*0.5, tile*0.3);
@@ -761,6 +807,7 @@
     setVisible: (v)=> inst.setVisible(v),
     setHeatmap: (v)=> inst.setHeatmap(v),
     setStamps : (v)=> inst.setStamps(v),
+    setSprites: (v)=>{ inst.useSprites = !!v; inst._emitState('sprites'); },
     // debug
     _inst: inst,
   };

@@ -683,6 +683,20 @@ tasks.push(this.loadAtlas(
   'assets/fx/smoke/fx_smoke_sprite_atlas.png'
 ));
 
+
+
+// --------------------------------------------------------------------
+// PATH: Trampelpfad-SpriteSheet (Stamps)
+//  - AtlasKey: path_sprite_atlas
+//  - JSON: data/atlases/path_sprite_atlas.json
+//  - PNG:  assets/tex/path/path_sprite_atlas.png
+// --------------------------------------------------------------------
+tasks.push(this.loadAtlas(
+  'path_sprite_atlas',
+  'data/atlases/path_sprite_atlas.json',
+  'assets/tex/path/path_sprite_atlas.png'
+));
+
 await Promise.allSettled(tasks);
 
       this.state.ready = true;
