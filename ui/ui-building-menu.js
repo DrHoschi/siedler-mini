@@ -1,295 +1,211 @@
 /* ============================================================================
- * Datei   : ui/ui-building-menu.js
- * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.08-menu-restore-pause-toggle
- * Zweck   :
- *   - Gebäude-Menü zuverlässig öffnen, wenn ein Gebäude gewählt wird
- *   - Robust gegen Event-Namens-Varianten (Legacy + neu)
- *   - Pause/Weiter Toggle bleibt erhalten (setzt workPaused am echten Building)
- *
- * WICHTIG (Bugfix):
- *   In einigen Patches ist das Menü "verschwunden", weil:
- *    - falsches Event / Detail-Shape ankam
- *    - oder #ui-root fehlte / Timing
- *    - oder ein früher JS-Fehler die Initialisierung abgebrochen hat
- *
- * Diese Version:
- *   - hängt sich an mehrere Events:
- *       cb:building:menu-open (core.input)
- *       cb:building:select / cb:building:selected (Legacy)
- *   - akzeptiert detail.building ODER detail selbst
- *   - erstellt Panel einmalig und zeigt es sicher an
- *   - Pause wird über ein Request-Event an die Core-Seite gegeben:
- *       req:building:setPaused  detail:{ id|uid, paused:true/false }
+ * ui/ui-building-menu.js
+ * v26.01.08-menu-visible-hotfix
+ * ----------------------------------------------------------------------------
+ * HOTFIX:
+ *  - Menü wurde geöffnet (Log vorhanden), war aber unsichtbar:
+ *      -> z-index / display / positioning / hidden-class mismatch
+ *  - Dieser Patch erzwingt Sichtbarkeit + hoher z-index.
+ *  - Robust gegen verschiedene Hidden-Klassen: hidden / is-hidden.
  * ========================================================================== */
-
 (function () {
   'use strict';
 
-  // ---------------------------------------------------------------------------
-  // 0) Guards / Logging
-  // ---------------------------------------------------------------------------
-  const LOG = window.CBLog || {
-    info: (...a)=>console.log('ℹ️', ...a),
-    warn: (...a)=>console.warn('⚠️', ...a),
-    ok:   (...a)=>console.log('✅', ...a),
-    error:(...a)=>console.error('❌', ...a),
-  };
+  const LOG = window.CBLog || { info:console.log, warn:console.warn, ok:console.log, error:console.error };
 
-  // Wenn Panel bereits existiert, NICHT doppelt initialisieren.
-  // (Aber: Wenn nur Flag gesetzt wurde, ohne Panel, lassen wir weiterlaufen.)
-  const EXISTING = document.getElementById('ui-building-menu');
-  if (EXISTING && EXISTING.__bm_bound__) {
-    return;
-  }
+  // Prevent double-bind
+  if (window.__UI_BUILDING_MENU_BOUND__) return;
+  window.__UI_BUILDING_MENU_BOUND__ = true;
 
-  // Root finden (Fallback auf body)
   const UI_ROOT = document.getElementById('ui-root') || document.body;
-  if (!UI_ROOT) {
-    LOG.warn('[ui-building] Kein UI-Root verfügbar – Menü deaktiviert.');
-    return;
-  }
 
-  // ---------------------------------------------------------------------------
-  // 1) State
-  // ---------------------------------------------------------------------------
-  let panel = EXISTING || null;
-  let current = null; // building detail (mind. {id, uid, x,y,w,h,...})
-
-  // ---------------------------------------------------------------------------
-  // 2) Helpers
-  // ---------------------------------------------------------------------------
-
-  function _normBuilding(d){
-    const detail = d || {};
-    // Akzeptiere: {building:{...}} oder direkt {...}
-    const b = detail.building || detail;
-    if (!b) return null;
-
-    // Normalisiere Felder (tileX/tileY vs x/y etc.)
-    const id  = b.id  || b.kind || b.buildingId || b.buildingKind || null;
-    const uid = b.uid || b.buildingUid || null;
-
-    const x = (Number.isFinite(b.tileX) ? b.tileX : (Number.isFinite(b.x) ? b.x : undefined));
-    const y = (Number.isFinite(b.tileY) ? b.tileY : (Number.isFinite(b.y) ? b.y : undefined));
-
-    const w = (Number.isFinite(b.w) ? b.w : (Number.isFinite(b.width) ? b.width : (Number.isFinite(b.size?.w) ? b.size.w : undefined)));
-    const h = (Number.isFinite(b.h) ? b.h : (Number.isFinite(b.height)? b.height: (Number.isFinite(b.size?.h) ? b.size.h : undefined)));
-
-    const out = Object.assign({}, b, { id, uid, x, y, w, h });
-    return out;
-  }
+  let panel = document.getElementById('ui-building-menu');
+  let current = null;
 
   function ensurePanel(){
     if (panel) return panel;
 
     panel = document.createElement('div');
     panel.id = 'ui-building-menu';
-    // Wir nutzen die CSS-Struktur aus ui-build-v14.css (Panel/hidden)
-    panel.className = 'ui-panel hidden';
-    panel.style.position = 'absolute'; // wie in deiner CSS
-    panel.__bm_bound__ = true;
 
-    // Header
+    // --- Force visibility layer ---
+    panel.style.position = 'fixed';
+    panel.style.left = '12px';
+    panel.style.top  = '72px';
+    panel.style.zIndex = '99999';
+    panel.style.pointerEvents = 'auto';
+    panel.style.display = 'block';
+
+    // basic fallback styling (falls CSS fehlt / überschrieben)
+    panel.style.minWidth = '240px';
+    panel.style.maxWidth = '320px';
+    panel.style.padding = '10px';
+    panel.style.borderRadius = '12px';
+    panel.style.background = 'rgba(245, 236, 219, 0.95)';
+    panel.style.border = '2px solid rgba(120,90,40,0.9)';
+    panel.style.boxShadow = '0 8px 20px rgba(0,0,0,0.25)';
+    panel.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Arial';
+
+    // Title row
     const header = document.createElement('div');
-    header.className = 'ui-panel__header';
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.justifyContent = 'space-between';
+    header.style.gap = '8px';
 
     const title = document.createElement('div');
     title.id = 'ui-building-title';
+    title.style.fontWeight = '700';
     title.textContent = 'Gebäude';
     header.appendChild(title);
 
     const close = document.createElement('button');
-    close.className = 'ui-btn ui-btn-close';
     close.textContent = '×';
+    close.style.width = '34px';
+    close.style.height = '34px';
+    close.style.borderRadius = '10px';
+    close.style.border = '1px solid rgba(120,90,40,0.8)';
+    close.style.background = 'rgba(255,255,255,0.8)';
+    close.style.fontSize = '22px';
     close.addEventListener('click', hide);
     header.appendChild(close);
 
-    // Subtitle
     const sub = document.createElement('div');
     sub.id = 'ui-building-subtitle';
-    sub.textContent = '';
-    sub.style.marginLeft = '6px';
-    header.appendChild(sub);
+    sub.style.fontSize = '12px';
+    sub.style.marginTop = '6px';
+    sub.style.opacity = '0.8';
 
-    // Body
     const body = document.createElement('div');
     body.id = 'ui-building-body';
+    body.style.marginTop = '8px';
+    body.style.fontSize = '13px';
+    body.innerHTML = `
+      <div><b>ID:</b> <span data-k="id">—</span></div>
+      <div><b>Status:</b> <span data-k="status">—</span></div>
+      <div><b>Kategorie:</b> <span data-k="category">—</span></div>
+      <div><b>Position:</b> <span data-k="pos">—</span></div>
+    `;
 
-    function row(label, key){
-      const r = document.createElement('div');
-      r.className = 'ui-building-info-row';
-      r.innerHTML = `<span>${label}</span><span data-k="${key}">—</span>`;
-      return r;
-    }
-    body.appendChild(row('ID', 'id'));
-    body.appendChild(row('Status', 'status'));
-    body.appendChild(row('Kategorie', 'category'));
-    body.appendChild(row('Position', 'pos'));
-
-    // Footer
     const footer = document.createElement('div');
     footer.id = 'ui-building-footer';
+    footer.style.display = 'flex';
+    footer.style.gap = '8px';
+    footer.style.marginTop = '10px';
 
     const btnWorkArea = document.createElement('button');
-    btnWorkArea.className = 'ui-btn ui-btn-primary';
-    btnWorkArea.textContent = 'Arbeitsbereich setzen';
+    btnWorkArea.textContent = 'Arbeitsbereich';
+    btnWorkArea.style.flex = '1';
+    btnWorkArea.style.padding = '8px 10px';
+    btnWorkArea.style.borderRadius = '10px';
+    btnWorkArea.style.border = '1px solid rgba(120,90,40,0.8)';
+    btnWorkArea.style.background = 'rgba(255,255,255,0.85)';
     btnWorkArea.addEventListener('click', (ev)=>{
       ev.preventDefault(); ev.stopPropagation();
       if (!current) return;
-      if (window.GameWorkArea?.beginSelection) {
-        window.GameWorkArea.beginSelection(current);
-      } else {
-        LOG.warn('[ui-building] GameWorkArea.beginSelection fehlt.');
-      }
+      window.GameWorkArea?.beginSelection?.(current);
       hide();
     });
-    footer.appendChild(btnWorkArea);
 
     const btnPause = document.createElement('button');
-    btnPause.className = 'ui-btn ui-btn-secondary';
     btnPause.id = 'ui-building-btn-pause';
     btnPause.textContent = 'Pause';
+    btnPause.style.flex = '1';
+    btnPause.style.padding = '8px 10px';
+    btnPause.style.borderRadius = '10px';
+    btnPause.style.border = '1px solid rgba(120,90,40,0.8)';
+    btnPause.style.background = 'rgba(255,255,255,0.85)';
     btnPause.addEventListener('click', (ev)=>{
       ev.preventDefault(); ev.stopPropagation();
       if (!current) return;
-
-      // Toggle
-      const pausedNow = !!current.workPaused;
-      const next = !pausedNow;
-
-      // UI sofort updaten
+      const next = !current.workPaused;
       current.workPaused = next;
-      _syncPauseButton(btnPause, next);
-      _syncSubtitle(next);
-
-      // Request an Core (setzt am echten Building)
-      try{
-        window.dispatchEvent(new CustomEvent('req:building:setPaused', {
-          detail: {
-            id: current.id || null,
-            uid: current.uid || null,
-            paused: next
-          }
-        }));
-      }catch(e){
-        LOG.error('[ui-building] req:building:setPaused dispatch failed', e);
-      }
+      syncPause(btnPause, next);
+      syncSubtitle(next);
+      window.dispatchEvent(new CustomEvent('req:building:setPaused', {
+        detail: { id: current.id||null, uid: current.uid||null, paused: next }
+      }));
     });
+
+    footer.appendChild(btnWorkArea);
     footer.appendChild(btnPause);
 
     panel.appendChild(header);
+    panel.appendChild(sub);
     panel.appendChild(body);
     panel.appendChild(footer);
 
     UI_ROOT.appendChild(panel);
 
-    // Klick außerhalb schließt
-    document.addEventListener('pointerdown', (ev)=>{
-      if (!panel) return;
-      if (panel.classList.contains('hidden')) return;
-      if (panel.contains(ev.target)) return;
-      hide();
-    }, { passive:true });
+    // Start hidden
+    hide();
 
     return panel;
   }
 
-  function _setField(k, val){
-    if (!panel) return;
-    const el = panel.querySelector(`[data-k="${k}"]`);
-    if (el) el.textContent = (val == null ? '—' : String(val));
+  function setField(k,v){
+    const el = panel?.querySelector(`[data-k="${k}"]`);
+    if (el) el.textContent = (v==null?'—':String(v));
   }
 
-  function _syncPauseButton(btn, paused){
+  function syncPause(btn, paused){
     if (!btn) return;
     btn.textContent = paused ? 'Weiter' : 'Pause';
-    btn.classList.toggle('is-paused', !!paused);
   }
 
-  function _syncSubtitle(paused){
+  function syncSubtitle(paused){
     const sub = panel?.querySelector('#ui-building-subtitle');
     if (!sub) return;
     sub.textContent = paused ? 'PAUSIERT' : '';
   }
 
-  function positionNearBuilding(b){
-    if (!panel) return;
-
-    // Fallback: oben links unter HUD
-    let left = 12;
-    let top  = 64;
-
-    // Wenn wir eine tileToScreen Funktion haben → daneben setzen
-    const cam = window.Camera || window.GameCamera || window.MapCamera || null;
-    if (cam && typeof cam.tileToScreen === 'function' && Number.isFinite(b?.x) && Number.isFinite(b?.y)) {
-      try{
-        const p = cam.tileToScreen(b.x, b.y);
-        left = Math.max(10, Math.round(p.x + 40));
-        top  = Math.max(10, Math.round(p.y - 40));
-      }catch(e){}
-    }
-
-    panel.style.left = left + 'px';
-    panel.style.top  = top + 'px';
-    panel.style.right = 'auto';
-  }
-
-  function show(buildingDetail){
-    const b = _normBuilding(buildingDetail);
-    if (!b || !b.id) {
-      LOG.warn('[ui-building] show() ohne gültiges Building', buildingDetail);
-      return;
-    }
-
+  function show(detail){
     ensurePanel();
-    current = b;
+    const b = detail?.building || detail;
+    if (!b) return;
 
-    // Title
-    const title = panel.querySelector('#ui-building-title');
-    if (title) title.textContent = b.title || b.name || b.label || b.id;
+    current = {
+      id: b.id || b.kind || null,
+      uid: b.uid || null,
+      x: b.x ?? b.tileX,
+      y: b.y ?? b.tileY,
+      w: b.w ?? 3,
+      h: b.h ?? 3,
+      status: b.status || 'done',
+      category: b.category || '—',
+      workPaused: !!b.workPaused
+    };
 
-    // Fields
-    _setField('id', b.id);
-    _setField('status', b.status || 'done');
-    _setField('category', b.category || '—');
+    panel.style.display = 'block';
+    panel.classList.remove('hidden','is-hidden');
 
-    const posText = `${(b.x ?? '?')}, ${(b.y ?? '?')} (${(b.w ?? 3)}×${(b.h ?? 3)})`;
-    _setField('pos', posText);
+    const t = panel.querySelector('#ui-building-title');
+    if (t) t.textContent = current.id || 'Gebäude';
 
-    // Pause-UI
-    const paused = !!b.workPaused;
-    const btnPause = panel.querySelector('#ui-building-btn-pause');
-    _syncPauseButton(btnPause, paused);
-    _syncSubtitle(paused);
+    setField('id', current.id);
+    setField('status', current.status);
+    setField('category', current.category);
+    setField('pos', `${current.x ?? '?'}, ${current.y ?? '?'} (${current.w}×${current.h})`);
 
-    positionNearBuilding(b);
+    const btn = panel.querySelector('#ui-building-btn-pause');
+    syncPause(btn, current.workPaused);
+    syncSubtitle(current.workPaused);
 
-    panel.classList.remove('hidden');
-    LOG.info('[ui-building] Menü geöffnet für', b.id);
+    LOG.info('[ui-building] Menü sichtbar (hotfix) für', current.id);
   }
 
   function hide(){
-    if (!panel) return;
+    ensurePanel();
+    panel.style.display = 'none';
     panel.classList.add('hidden');
     current = null;
   }
 
-  // ---------------------------------------------------------------------------
-  // 3) Event bindings (mehrere Varianten)
-  // ---------------------------------------------------------------------------
-  function bind(name){
-    window.addEventListener(name, (ev)=>{
-      const d = ev?.detail || {};
-      const b = d.building || d;
-      if (!b) return;
-      show(b);
-    });
-  }
+  // Listen to multiple possible events
+  ['cb:building:menu-open','cb:building:selected','cb:building:select'].forEach((name)=>{
+    window.addEventListener(name, (ev)=> show(ev.detail));
+  });
 
-  bind('cb:building:menu-open');   // aktuell (core.input)
-  bind('cb:building:selected');    // legacy
-  bind('cb:building:select');      // legacy/alt
-
-  LOG.ok('✅ [ui-building] Gebäude-Menü READY (robust, multi-event).');
+  ensurePanel();
+  LOG.ok('✅ [ui-building] Menu-visible-hotfix loaded');
 })();
