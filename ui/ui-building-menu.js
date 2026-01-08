@@ -119,6 +119,32 @@ if (window.__UI_BUILDING_MENU_READY__) {
       btnWork.addEventListener('click', onClickWorkArea);
       footer.appendChild(btnWork);
 
+      // Pause/Weiter --------------------------------------------------------
+      const btnPause = document.createElement('button');
+      btnPause.className = 'ui-button';
+      btnPause.textContent = 'Pause';
+      btnPause.addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        ev.preventDefault();
+        if (!currentBuilding) return;
+
+        // Toggle Flag direkt am Building-Objekt (Runtime-State)
+        const next = !currentBuilding.workPaused;
+        currentBuilding.workPaused = next;
+
+        // UI-Text aktualisieren
+        btnPause.textContent = next ? 'Weiter' : 'Pause';
+
+        // Event für Game/Production/FX (Smoke) – bewusst "cb" weil UI den Zustand setzt
+        try{
+          window.dispatchEvent(new CustomEvent('cb:building:pause-changed', {
+            detail: { uid: currentBuilding.uid, id: currentBuilding.id, kind: currentBuilding.kind, workPaused: next }
+          }));
+        }catch(e){}
+      });
+      footer.appendChild(btnPause);
+
+
       // Zusammenbauen
       panel.appendChild(header);
       panel.appendChild(body);
