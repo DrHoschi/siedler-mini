@@ -40,7 +40,7 @@
     minAlpha: 0.10,
 
     // Stamp-Größe (1.0 = Original-Frame, <1 kleiner)
-    stampScale: 0.65,
+    stampScale: 0.15,
 
     // Debug
     debugLogEveryNStamps: 0 // 0 = aus
