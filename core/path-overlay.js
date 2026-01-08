@@ -1,19 +1,30 @@
 /* ============================================================================
  * Datei   : core/path-overlay.js
- * Projekt : Neue Siedler – Trampelpfade (PathOverlay)
- * Version : v4.9.1-path-stamps-base (2026-01-08)
+ * Projekt : Neue Siedler – Trampelpfade (Stamps) + Heatmap
+ * Version : v4.4.0-path-sprite-stamps (2025-12-16)
  *
- * ZIEL DIESER STUFE (A):
- *   - Pfade wieder SICHTBAR machen (stabil)
- *   - Center-Pivot im Atlas wird genutzt (kein zusätzlicher Offset!)
- *   - NUR Stamps (Kreise) – KEIN altes Tile/Heatmap-System mehr
- *   - Quelle: cb:unit:step (Tile-Schritte)
+ * Ziel (Endlich stabil, ohne "wir drehen uns im Kreis"):
+ *   1) EIN Koordinatensystem: Wir zeichnen über OverlayHooks auf dem
+ *      bestehenden #overlay Canvas (Renderer synchronisiert Size/Scale).
+ *      → kein Versatz, kein "halber Weg", kein "zu wenig Zoom".
  *
- * NÄCHSTER SCHRITT (B):
- *   - Umstellung auf echte Move-Segmente + 16px Sampling entlang der Linie
+ *   2) Trampelpfade tracken IMMER (auch wenn Inspector noch aus ist).
+ *      Sichtbarkeit ist trotzdem schaltbar, aber Default = sichtbar.
+ *
+ *   3) Kein Global-Name-Konflikt mit pfglue:
+ *      - Trampelpfade nutzen window.PathOverlay (wie Inspector erwartet)
+ *      - pfglue darf window.PathOverlay NICHT überschreiben (siehe Patch pfglue)
+ *
+ *   4) Richtungsgebundene Stamps:
+ *      - wir merken pro Tile die letzte Bewegungsrichtung (dx/dy)
+ *      - Stamps werden per ctx.rotate(angle) gedreht
+ *
+ *   5) Texturen:
+ *      assets/tex/path/topdown_path0..9.png  (wir versuchen .png und .PNG)
+ *
+ * Struktur : IIFE → Konstanten → Helpers → Klasse → Wiring → Export
  * ========================================================================== */
-
-(function(){
+(() => {
   'use strict';
 
   const TAG  = '[path-overlay]';
@@ -21,266 +32,923 @@
   const WARN = (window.CBLog?.warn  || console.warn).bind(console, TAG);
 
   // -------------------------------------------------------------------------
-  // KONFIG (Stage A)
+  // KONSTANTEN
   // -------------------------------------------------------------------------
+
   const CFG = {
-    enabled : true,     // global visible
-    stamps  : true,     // draw circles
-    decay   : true,     // fade out over time
-    decayPerSecond: 0.015, // intensity loss per second (0..1)
+    VERSION: 'v4.4.0-path-sprite-stamps',
 
-    // Atlas / Frames
-    atlasKey : 'path_sprite_atlas',
-    // Wenn du lieber "path_00" etc willst, passe prefix an.
-    // Wir wählen pro Stamp random aus allen Frames im Atlas.
-    framePrefix: 'path_',
+    // Default: sichtbar ab Spielstart (wie von dir gewünscht)
+    DEFAULT_VISIBLE: true,
+    DEFAULT_STAMPS : true,
+    DEFAULT_HEATMAP: false,
 
-    // Stärke / Alpha
-    maxAlpha: 0.65,
-    minAlpha: 0.10,
+    // Event-Quelle
+    // - Move-Segmente (cb:unit:move) sind die neue Hauptquelle (glatte Linie)
+    // - Step-Fallback (cb:unit:step) optional, standardmäßig AUS um Zickzack zu vermeiden
+    USE_MOVE_EVENTS_DEFAULT  : true,
+    USE_STEP_FALLBACK_DEFAULT: true,
 
-    // Stamp-Größe (1.0 = Original-Frame, <1 kleiner)
-    stampScale: 0.15,
+    // Stage B: Subtile-Sampling entlang Move-Segmente (in Pixeln)
+    // 16px ist dein Ziel: dicht genug für runde Trampelpfade.
+    SUBTILE_SAMPLE_PX: 16,
+    // Stamps werden dann NICHT mehr pro Tile (floor) gespeichert,
+    // sondern als Welt-Position (tile-koordinaten mit Dezimalstellen).
+    USE_SUBTILE_STAMPS_DEFAULT: true,
 
-    // Debug
-    debugLogEveryNStamps: 0 // 0 = aus
+    // Darstellung
+    MIN_VISIBLE: 0.02,
+
+    // Heatmap Alpha (wir verwenden nur Alpha, Farbe bleibt neutral/schwarz)
+    HEAT_ALPHA_MIN: 0.06,
+    HEAT_ALPHA_MAX: 0.45,
+
+    // Stamp Alpha
+    STAMP_ALPHA_MIN: 0.10,
+    STAMP_ALPHA_MAX: 0.70,
+
+    // Decay (zeitbasiert + Inspector steuerbar)
+    // Hinweis: Wir decayen NICHT mehr in fixen "Steps", sondern per Sekunde.
+    DECAY_TICK_MS      : 250,
+    DECAY_PER_SEC_BASE : 0.0008, // 100% Speed: ~0.08 Intensität pro 100s
+
+    // Legacy-Fallback (wird nur genutzt, wenn DECAY_PER_SEC_BASE fehlt)
+    DECAY_INTERVAL_MS  : 500,
+    DECAY_STEP         : 0.01,
+
+    // Texturen
+    TEX_BASE: 'assets/tex/path/',
+    TEX_NAMES: Array.from({length:10}, (_,i)=>`topdown_path${i}`),
+
+    
+    // NEU: SpriteSheet für organische Trampelpfad-Stempel
+    SPRITE_SHEET_SRC: 'assets/tex/path/path_sprite_atlas.png',
+    SPRITE_TILE_PX   : 128,
+    SPRITE_COLS      : 8,
+    SPRITE_ROWS      : 8,
+    SPRITE_COUNT     : 64,
+    DEFAULT_SPRITES  : true,
+// Weighting
+    WEIGHT_WORKER: 0.14,
+    WEIGHT_CARRIER: 0.08,
   };
-
-  // -------------------------------------------------------------------------
-  // STATE
-  // -------------------------------------------------------------------------
-  // Wir speichern nur noch STAMPS in Welt/Tiles – KEIN Heatmap-Grid.
-  // Key: "tx,ty" -> { tx, ty, v }
-  const _stamps = new Map();
-
-  // Für throttled debug logging
-  let _stampCounter = 0;
-  let _lastDecayTs = performance.now();
 
   // -------------------------------------------------------------------------
   // HELPERS
   // -------------------------------------------------------------------------
-  function getTileSize(){
-    // Standard: 64 – wird bei dir dynamisch sein (z.B. 64 oder 128)
-    return (window.GameMap && typeof window.GameMap.tileSize === 'number')
-      ? window.GameMap.tileSize
-      : 64;
+
+  const clamp01 = (v)=> Math.max(0, Math.min(1, v));
+
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function isWorkerKind(kind){
+    return /woodcutter|stonecutter|fisher|worker/i.test(String(kind||''));
   }
 
-  function keyOf(tx, ty){ return String(tx) + ',' + String(ty); }
-
-  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-
-  function pickPathFrame(){
-    // Nutzt Assets.listFrames wenn verfügbar (robust, weil Atlas-JSON evtl. nicht geladen)
-    try{
-      const names = window.Assets?.listFrames?.(CFG.atlasKey, CFG.framePrefix) || [];
-      if (!names.length) return null;
-      return names[(Math.random() * names.length) | 0];
-    }catch(e){ return null; }
-  }
-
-  function stampAtTile(tx, ty, amount=1){
-    if (!CFG.enabled) return;
-    const k = keyOf(tx, ty);
-    const cur = _stamps.get(k);
-    if (cur){
-      cur.v = clamp(cur.v + amount, 0, 1);
-    } else {
-      _stamps.set(k, { tx, ty, v: clamp(amount, 0, 1) });
-    }
-
-    _stampCounter++;
-    if (CFG.debugLogEveryNStamps > 0 && (_stampCounter % CFG.debugLogEveryNStamps === 0)){
-      LOG('stamps:', _stamps.size, 'last:', tx, ty);
-    }
-  }
-
-  function decayTick(now){
-    if (!CFG.decay) return;
-    const dt = Math.max(0, (now - _lastDecayTs) / 1000);
-    _lastDecayTs = now;
-    if (dt <= 0) return;
-
-    const dec = CFG.decayPerSecond * dt;
-    if (dec <= 0) return;
-
-    for (const [k, s] of _stamps){
-      s.v -= dec;
-      if (s.v <= 0.001) _stamps.delete(k);
-    }
-  }
-
-  function applyWorldTransform(ctx, cam){
-    const zoom = cam?.zoom ?? 1;
-    const camX = cam?.x ?? 0;
-    const camY = cam?.y ?? 0;
-    ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
-  }
-
-  // -------------------------------------------------------------------------
-  // RENDER
-  // -------------------------------------------------------------------------
-  function draw(ctx, cam){
-    if (!CFG.enabled) return;
-    if (!CFG.stamps) return;
-    if (!ctx) return;
-
-    decayTick(performance.now());
-    applyWorldTransform(ctx, cam);
-
-    const tileSize = getTileSize();
-
-    // Wir zeichnen die Stamps im WORLD-SPACE (Pixel), aber pro Tile-Mitte.
-    // WICHTIG: Wir nutzen Assets.drawAtlasFrame mit PIVOT aus Atlas (center pivot).
-    // Deshalb: worldX/worldY = Mittelpunkt (tile center). KEIN zusätzlicher Offset!
-    const A = window.Assets;
-    if (!A || typeof A.drawAtlasFrame !== 'function') return;
-
-    for (const s of _stamps.values()){
-      const alpha = clamp(CFG.minAlpha + s.v * (CFG.maxAlpha - CFG.minAlpha), 0, 1);
-
-      const worldX = (s.tx + 0.5) * tileSize;
-      const worldY = (s.ty + 0.5) * tileSize;
-
-      const frame = pickPathFrame();
-      if (!frame) continue;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      // align default in Assets = 'pivot' → nutzt fr.pivotX/pivotY
-      A.drawAtlasFrame(ctx, CFG.atlasKey, frame, worldX, worldY, {
-        align: 'pivot',
-        scale: CFG.stampScale
-      });
-
-      ctx.restore();
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // EVENTS (Inspector + Gameplay)
-  // -------------------------------------------------------------------------
-  function onUnitStep(ev){
-    const d = ev?.detail;
-    if (!d) return;
-    const tx = d.tx;
-    const ty = d.ty;
-    if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
-    stampAtTile(tx, ty, 0.45);
-  }
-
-  function onToggleStamps(flag){
-    CFG.stamps = !!flag;
-    LOG('stamps:', CFG.stamps);
-  }
-
-  function onToggleOverlay(flag){
-    CFG.enabled = !!flag;
-    LOG('enabled:', CFG.enabled);
-  }
-
-  function onDecay(flag){
-    CFG.decay = !!flag;
-    LOG('decay:', CFG.decay);
-  }
-
-  function onDecaySpeed(v){
+  function safeInt(v, fallback){
     const n = Number(v);
-    if (!Number.isFinite(n)) return;
-    CFG.decayPerSecond = clamp(n, 0, 1);
-    LOG('decayPerSecond:', CFG.decayPerSecond);
+    return Number.isFinite(n) ? n : fallback;
   }
 
-  function clearAll(){
-    _stamps.clear();
-    LOG('clear');
+  function angleFromDelta(dx, dy){
+    // Canvas: x rechts, y nach unten. atan2(dy,dx) passt.
+    return Math.atan2(dy, dx);
   }
 
-  // -------------------------------------------------------------------------
-  // PUBLIC API (global)
-  // -------------------------------------------------------------------------
-  const API = {
-    version: 'v4.9.1-path-stamps-base',
-    cfg: CFG,
-
-    // state
-    get stampsCount(){ return _stamps.size; },
-
-    // controls
-    enable(flag=true){ onToggleOverlay(flag); },
-    setStamps(flag=true){ onToggleStamps(flag); },
-    setDecay(flag=true){ onDecay(flag); },
-    setDecaySpeed(v){ onDecaySpeed(v); },
-    clear(){ clearAll(); },
-
-    // draw hook
-    draw
-  };
-
-  window.PathOverlay = API;
-
-  // -------------------------------------------------------------------------
-  // HOOK IN OVERLAYHOOKS
-  // -------------------------------------------------------------------------
-  function register(){
-    if (!window.OverlayHooks || typeof window.OverlayHooks.register !== 'function') return false;
-    window.OverlayHooks.register('paths', draw);
-    window.OverlayHooks.enable?.('paths', true);
-    return true;
+  function dir8FromDelta(dx,dy){
+    // 0..7 Richtung. (E,SE,S,SW,W,NW,N,NE)
+    if (!dx && !dy) return 0;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if (ay > ax){
+      return dy > 0 ? 2 : 6; // S oder N
+    } else if (ax > ay){
+      return dx > 0 ? 0 : 4; // E oder W
+    } else {
+      // diagonal
+      if (dx > 0 && dy > 0) return 1; // SE
+      if (dx < 0 && dy > 0) return 3; // SW
+      if (dx < 0 && dy < 0) return 5; // NW
+      return 7; // NE
+    }
   }
 
-  (function waitForHooks(){
+  function ensureOverlayHooksReady(cb){
+    // OverlayHooks kann später geladen werden (in index.html steht path-overlay vor overlay-hooks).
+    // Wir versuchen sofort und dann kurz zu "pollen", bis es da ist.
     let tries = 0;
     const tick = ()=>{
-      if (register()) {
-        LOG('registered in OverlayHooks');
+      if (window.OverlayHooks && typeof window.OverlayHooks.register === 'function'){
+        cb();
         return;
       }
       tries++;
-      if (tries > 240) {
-        WARN('OverlayHooks nicht gefunden – Pfad-Overlay wird nicht gerendert.');
+      if (tries > 120) { // ~2s bei 16ms
+        WARN('OverlayHooks nicht gefunden – Pfad-Overlay kann nicht zeichnen.');
         return;
       }
-      setTimeout(tick, 16);
+      requestAnimationFrame(tick);
     };
     tick();
-  })();
+  }
+
+  function getMapState(){
+    // bevorzugt GameMap._state (stabil in deinem Projekt)
+    const s = window.GameMap?._state;
+    if (s && Number.isFinite(s.cols) && Number.isFinite(s.rows) && Number.isFinite(s.tileSize)){
+      return { cols:s.cols, rows:s.rows, tile:s.tileSize };
+    }
+    // Fallbacks
+    const cols = window.Game?.cols ?? window.Map?.cols;
+    const rows = window.Game?.rows ?? window.Map?.rows;
+    const tile = window.Game?.tileSize ?? window.Map?.tileSize;
+    if (Number.isFinite(cols) && Number.isFinite(rows) && Number.isFinite(tile)){
+      return { cols, rows, tile };
+    }
+    return null;
+  }
+
+  function getViewportTileBounds(cam, ctx, tile){
+    // sichtbarer Weltbereich in Pixeln
+    const w = ctx.canvas.width  / (cam.zoom || 1);
+    const h = ctx.canvas.height / (cam.zoom || 1);
+    const x0 = cam.x;
+    const y0 = cam.y;
+    const x1 = cam.x + w;
+    const y1 = cam.y + h;
+
+    // in Tiles
+    const tx0 = Math.max(0, Math.floor(x0 / tile) - 1);
+    const ty0 = Math.max(0, Math.floor(y0 / tile) - 1);
+    const tx1 = Math.floor(x1 / tile) + 1;
+    const ty1 = Math.floor(y1 / tile) + 1;
+    return { tx0, ty0, tx1, ty1 };
+  }
 
   // -------------------------------------------------------------------------
-  // GLOBAL EVENT WIRING
+  // KLASSE
   // -------------------------------------------------------------------------
-  window.addEventListener('cb:unit:step', onUnitStep);
 
-  // Inspector toggles (inspector.tab.paths-v1.js)
-  window.addEventListener('cb:path:stamps:on',  ()=>onToggleStamps(true));
-  window.addEventListener('cb:path:stamps:off', ()=>onToggleStamps(false));
+  class TrampleOverlay {
+    constructor(){
+      // Sichtbarkeit/Modi
+      this.visible = CFG.DEFAULT_VISIBLE;
+      this.showStamps = CFG.DEFAULT_STAMPS;
+      this.showHeatmap = CFG.DEFAULT_HEATMAP;
 
-  window.addEventListener('cb:path:overlay:on',  ()=>onToggleOverlay(true));
-  window.addEventListener('cb:path:overlay:off', ()=>onToggleOverlay(false));
+      // Grid
+      this.cols = 0;
+      this.rows = 0;
+      this.tile = 64;
 
-  // Heatmap Events existieren im Inspector – wir ignorieren sie bewusst,
-  // weil du das alte Tile-System entfernen willst.
-  window.addEventListener('cb:path:heatmap:on',  ()=>LOG('heatmap:on ignoriert (Tile-System entfernt)'));
-  window.addEventListener('cb:path:heatmap:off', ()=>LOG('heatmap:off ignoriert (Tile-System entfernt)'));
+      // Data
+      this.map = null; // Float32Array intensity
+      this.dir = null; // Int8Array direction 0..7
 
-  window.addEventListener('cb:path:decay:on',     ()=>onDecay(true));
-  window.addEventListener('cb:path:decay:off',    ()=>onDecay(false));
-  window.addEventListener('cb:path:decay:freeze', ()=>onDecay(false));
-  window.addEventListener('cb:path:decay:speed',  (ev)=>onDecaySpeed(ev?.detail?.speed ?? ev?.detail ?? ev));
+      // Unit last positions
+      this._unitLast = new Map();
 
-  window.addEventListener('cb:path:clear', clearAll);
+      // Steps buffer falls Map-Dims noch fehlen
+      this._preInitSteps = [];
+      this._preInitMax = 2000;
 
-  // State request (für Debug/Inspector)
-  window.addEventListener('cb:path:state', ()=>{
-    LOG('state:', {
-      enabled: CFG.enabled,
-      stamps: CFG.stamps,
-      decay: CFG.decay,
-      decayPerSecond: CFG.decayPerSecond,
-      stampsCount: _stamps.size
-    });
+      // Texturen (Legacy: topdown_path0..9)
+      this._tex = new Array(10).fill(null);
+      this._texReady = false;
+      this._texTried = false;
+
+      // NEU: SpriteSheet (path_sprite_atlas.png) + pro Cell zufälliger Frame
+      this.useSprites = !!CFG.DEFAULT_SPRITES;
+      this._sprImg = null;
+      this._sprReady = false;
+      this._sprTried = false;
+      this.frame = null; // Uint8Array: 0..63, 255 = unset
+
+      // Debug/Stats
+      this.stepCount = 0;
+      this.lastStep = null;
+
+      // Stage B: Subtile-Stamps (Weltpositionen in Tile-Koordinaten)
+      // Format: { x, y, v, f, t }
+      //  - x/y: tile-koords (float)
+      //  - v  : Intensität (0..1)
+      //  - f  : frameIndex (0..frames-1) optional
+      //  - t  : timestamp (ms)
+      this.subStamps = [];
+      this._dbgLoggedDraw = false;
+
+      // Decay
+      this._decayTimer = 0;
+      this.decayPaused    = false;
+      this.decaySpeedMult = 1.0; // 1.0 = 100%
+      this.decayPerSec    = CFG.DECAY_PER_SEC_BASE;
+
+      // Segment-Events vs Step-Events
+      this.useMoveEvents  = !!CFG.USE_MOVE_EVENTS_DEFAULT;
+      this.useSubtileStamps = !!CFG.USE_SUBTILE_STAMPS_DEFAULT;
+      this.useStepEvents  = !!CFG.USE_STEP_FALLBACK_DEFAULT;
+      this._seenMoveEvent = false;
+
+      // Buffer für Move-Segmente (falls Map spät initialisiert)
+      this._preInitMoves = [];
+      this._preInitMovesMax = 1000;
+
+      // OverlayHooks layer name
+      this._layerName = 'trample-paths';
+      this._layerRegistered = false;
+    }
+
+    // ----------------------------
+    // INIT / GRID
+    // ----------------------------
+
+    ensureGrid(){
+      const ms = getMapState();
+      if (!ms) return false;
+
+      const changed = (ms.cols !== this.cols) || (ms.rows !== this.rows) || (ms.tile !== this.tile);
+
+      this.cols = ms.cols;
+      this.rows = ms.rows;
+      this.tile = ms.tile;
+
+      if (!this.map || changed){
+        this.map = new Float32Array(this.cols * this.rows);
+        this.dir = new Int8Array(this.cols * this.rows);
+        this.frame = new Uint8Array(this.cols * this.rows);
+        this.frame.fill(255);
+
+        // buffered Steps nachziehen
+        if (this._preInitSteps.length){
+          const steps = this._preInitSteps.slice();
+          this._preInitSteps.length = 0;
+          for (const d of steps){
+            this._applyStepDetail(d);
+          }
+        }
+
+        // buffered Move-Segmente nachziehen
+        if (this._preInitMoves.length){
+          const moves = this._preInitMoves.slice();
+          this._preInitMoves.length = 0;
+          for (const d of moves){
+            this._applyMoveDetail(d);
+          }
+        }
+      }
+      return true;
+    }
+
+    _idx(tx,ty){
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) return -1;
+      if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return -1;
+      return ty * this.cols + tx;
+    }
+
+    // ----------------------------
+    // TRACKING
+    // ----------------------------
+
+    onUnitStep(ev){
+      // Wenn wir Move-Segmente nutzen, sind Tile-Steps nur noch Fallback.
+      if (this.useMoveEvents && !this.useStepEvents) return;
+      const d = ev?.detail || {};
+      // tx/ty Pflicht
+      const tx = Number.isFinite(d.tx) ? d.tx : null;
+      const ty = Number.isFinite(d.ty) ? d.ty : null;
+      if (tx === null || ty === null) return;
+
+      // Wenn Grid noch nicht da ist: puffern
+      if (!this.ensureGrid()){
+        this._preInitSteps.push({ ...d, tx, ty, t: Date.now() });
+        if (this._preInitSteps.length > this._preInitMax) this._preInitSteps.shift();
+        return;
+      }
+
+      this._applyStepDetail({ ...d, tx, ty });
+    }
+
+    // ----------------------------
+    // MOVE-SEGMENT EVENTS (cb:unit:move)
+    //  - Hauptquelle für glatte Trampelpfade (Linie statt Treppe)
+    //  - Detail: {from:{x,y}, to:{x,y}, id, kind, type, weight?, idle?}
+    // ----------------------------
+
+    onUnitMove(ev){
+      if (!this.useMoveEvents) return;
+
+      const d = ev?.detail || {};
+      if (d.idle === true) return;
+
+      const from = d.from, to = d.to;
+      const x0 = Number(from?.x), y0 = Number(from?.y);
+      const x1 = Number(to?.x),   y1 = Number(to?.y);
+      if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)) return;
+
+      // Micro-Jitter killen
+      const dist = Math.hypot(x1 - x0, y1 - y0);
+      if (dist < 0.20) return;
+
+      // Wenn Grid noch nicht da ist: puffern
+      if (!this.ensureGrid()){
+        this._preInitMoves.push({ ...d, t: Date.now() });
+        if (this._preInitMoves.length > this._preInitMovesMax) this._preInitMoves.shift();
+        return;
+      }
+
+      this._seenMoveEvent = true;
+      this._applyMoveDetail(d);
+    }
+
+    _getBuildingsArray(){
+      // möglichst kompatibel mit deinem Projekt (verschiedene Versionen/Monoliths)
+      const g = window.Game;
+      if (!g) return [];
+      try{
+        const a = (typeof g.getBuildings === 'function') ? g.getBuildings() : (g.buildings || []);
+        if (Array.isArray(a)) return a;
+        if (a && typeof a.list === 'function') return a.list();
+      }catch(_e){}
+      return [];
+    }
+
+    _isInBuildingFootprint(tx, ty){
+      // HQ/Buildings nicht "dreckig" stempeln – weder beim Spawn noch beim Deliver-Reinlaufen
+      const arr = this._getBuildingsArray();
+      for (const b of arr){
+        if (!b) continue;
+        const bx = (b.x ?? b.tx ?? 0) | 0;
+        const by = (b.y ?? b.ty ?? 0) | 0;
+        const bw = Math.max(1, (b.w ?? b.width ?? 1) | 0);
+        const bh = Math.max(1, (b.h ?? b.height ?? 1) | 0);
+        if (tx >= bx && tx < bx + bw && ty >= by && ty < by + bh) return true;
+      }
+      return false;
+    }
+
+    _applyMoveDetail(d){
+      const from = d.from, to = d.to;
+      const x0 = Number(from?.x), y0 = Number(from?.y);
+      const x1 = Number(to?.x),   y1 = Number(to?.y);
+
+      const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
+      const kind = String(d.kind || d.type || '');
+      const isW = isWorkerKind(kind);
+
+      const amt = (typeof d.weight === 'number')
+        ? d.weight
+        : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
+
+      // Segment in konstanten Abständen sampeln (runde Stempel, keine Rotation nötig)
+      // Stage B: entlang des Move-Segments in festen Pixel-Abständen sampeln
+      // - d.from / d.to sind Tile-Koordinaten (float)
+      // - wir speichern Subtile-Stamps (x/y als float), damit es NICHT mehr nach Tiles aussieht
+      const tilePx = this.tile || 64;
+      const stepPx = (CFG.SUBTILE_SAMPLE_PX || 16);
+      const stepTiles = stepPx / tilePx;
+
+      const dx = x1 - x0, dy = y1 - y0;
+      const dist = Math.hypot(dx, dy);
+
+      // Sehr kurze Micro-Bewegungen ignorieren (sonst „Punktwolke“ im Stand)
+      if (!(dist > 0.0001)) return;
+
+      const n = Math.max(1, Math.ceil(dist / stepTiles));
+
+      // Duplikate vermeiden (wenn mehrere Samples sehr dicht sind)
+      let lastX = null, lastY = null;
+
+      // Frame wählen: leicht stabil je Unit, damit es nicht flackert
+      const sprOk = this.useSprites && this._sprReady && this._sprImg && this._sprFrames && this._sprFrames.length > 0;
+      const baseFrame = sprOk ? (hashStr(String(id)) % this._sprFrames.length) : 0;
+
+      for (let i=0; i<=n; i++){
+        const t = i / n;
+        const x = x0 + dx * t;
+        const y = y0 + dy * t;
+
+        if (lastX !== null){
+          const dd = Math.hypot(x - lastX, y - lastY);
+          if (dd < (stepTiles * 0.35)) continue;
+        }
+        lastX = x; lastY = y;
+
+        // NICHT auf/in Gebäuden stempeln (HQ bleibt sauber)
+        const tx = Math.floor(x);
+        const ty = Math.floor(y);
+        if (this._isInBuildingFootprint(tx, ty)) continue;
+
+        // Worker etwas stärker als Carrier, damit Arbeitswege sichtbarer sind
+        const v = Math.min(1, Math.max(0, amt));
+
+        if (this.useSubtileStamps){
+          this._addSubStamp(x, y, v, baseFrame);
+        }else{
+          // Fallback: altes Tile-System (nur wenn explizit gewünscht)
+          this._applyStepDetail({ id, kind, tx, ty, weight: v });
+        }
+      }
+    }
+
+    // ----------------------------
+    // Stage B: Subtile-Stamps (Weltpositionen)
+    // ----------------------------
+
+    _addSubStamp(x, y, v, frameIdx){
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      if (!(v > 0)) return;
+
+      // Begrenzen, damit wir nicht unendlich wachsen (Mobile!)
+      const MAX = 6000; // genug für lange Wege, aber nicht „unendlich“
+      if (this.subStamps.length > MAX){
+        // älteste raus (FIFO)
+        this.subStamps.splice(0, Math.max(1, this.subStamps.length - MAX));
+      }
+
+      this.subStamps.push({
+        x, y,
+        v: Math.min(1, Math.max(0, v)),
+        f: (typeof frameIdx === 'number') ? frameIdx : 0,
+        t: Date.now()
+      });
+    }
+
+    _drawSubStamps(ctx, cam, bounds){
+      if (!this.subStamps || this.subStamps.length === 0) return;
+
+      const tile = this.tile || 64;
+
+      // Sichtfenster (in Tile-Koords) – nur nahe Stamps zeichnen
+      const minX = bounds.minX - 2, maxX = bounds.maxX + 2;
+      const minY = bounds.minY - 2, maxY = bounds.maxY + 2;
+
+      const sprOk = this.useSprites && this._sprReady && this._sprImg && this._sprFrames && this._sprFrames.length > 0;
+
+      // Scale: default 1.0, später über Inspector tunen
+      const scale = (typeof this.stampScale === 'number' && this.stampScale > 0) ? this.stampScale : 1.0;
+
+      for (let i=0; i<this.subStamps.length; i++){
+        const s = this.subStamps[i];
+        if (!s || !(s.v > CFG.MIN_VISIBLE)) continue;
+
+        if (s.x < minX || s.x > maxX || s.y < minY || s.y > maxY) continue;
+
+        const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, s.v);
+        ctx.globalAlpha = a;
+
+        // Weltposition → Pixel
+        const px = s.x * tile;
+        const py = s.y * tile;
+
+        if (sprOk){
+          const fi = (s.f | 0) % this._sprFrames.length;
+          const fr = this._sprFrames[fi];
+          if (fr){
+            // Center-Pivot: wir zeichnen mit Mittelpunkt auf px/py
+            const w = fr.w * scale;
+            const h = fr.h * scale;
+            const ox = (fr.px != null) ? fr.px * scale : (fr.w * 0.5) * scale;
+            const oy = (fr.py != null) ? fr.py * scale : (fr.h * 0.5) * scale;
+
+            ctx.drawImage(this._sprImg, fr.x, fr.y, fr.w, fr.h,
+                          px - ox, py - oy, w, h);
+          }
+        }else{
+          // Fallback: kleiner Punkt (damit man immer was sieht)
+          ctx.fillStyle = '#000';
+          ctx.fillRect(px - 2, py - 2, 4, 4);
+        }
+      }
+
+      ctx.globalAlpha = 1.0;
+    }
+
+
+
+    _applyStepDetail(d){
+      const tx = d.tx, ty = d.ty;
+
+      // NICHT auf/in Gebäuden stempeln (HQ bleibt sauber)
+      if (this._isInBuildingFootprint(tx, ty)) return;
+
+      const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
+      const last = this._unitLast.get(id);
+
+      let dx = 0, dy = 0;
+      if (last){
+        dx = tx - last.tx;
+        dy = ty - last.ty;
+      }
+      this._unitLast.set(id, { tx, ty });
+
+      this.stepCount++;
+      this.lastStep = { id, tx, ty, dx, dy, t: Date.now() };
+
+      const kind = String(d.kind || d.type || '');
+      const isW = isWorkerKind(kind);
+
+      const amt = (typeof d.weight === 'number')
+        ? d.weight
+        : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
+
+      const cell = this._idx(tx, ty);
+      if (cell < 0) return;
+
+      this.map[cell] = clamp01((this.map[cell] || 0) + amt);
+      this.dir[cell] = dir8FromDelta(dx, dy);
+    }
+
+    // ----------------------------
+    // TEXTURE LOADING
+    // ----------------------------
+
+    _tryLoadTextures(){
+      if (this._texTried) return;
+      this._texTried = true;
+
+      // NEU: SpriteSheet einmalig versuchen (unabhängig von Legacy-Texturen)
+      if (!this._sprTried){
+        this._sprTried = true;
+        try{
+          const imgS = new Image();
+          imgS.onload = ()=>{ this._sprImg = imgS; this._sprReady = true; LOG('SpriteSheet ready ✓', CFG.SPRITE_SHEET_SRC); };
+          imgS.onerror = ()=>{ this._sprImg = null; this._sprReady = false; WARN('SpriteSheet load fail', CFG.SPRITE_SHEET_SRC); };
+          imgS.src = CFG.SPRITE_SHEET_SRC;
+        }catch(e){ this._sprImg=null; this._sprReady=false; }
+      }
+
+      let loaded = 0;
+      let done = 0;
+
+      const finalize = ()=>{
+        done++;
+        if (done >= 10){
+          this._texReady = (loaded > 0);
+          LOG('Textures ready:', this._texReady, `(loaded ${loaded}/10)`);
+        }
+      };
+
+      for (let i=0;i<10;i++){
+        const base = CFG.TEX_BASE + CFG.TEX_NAMES[i];
+        const img = new Image();
+
+        // Wir versuchen zuerst .png, dann .PNG (falls du noch am Umbenennen bist)
+        const tryUrls = [base + '.png', base + '.PNG'];
+        let urlIdx = 0;
+
+        const tryNext = ()=>{
+          if (urlIdx >= tryUrls.length){
+            this._tex[i] = null;
+            finalize();
+            return;
+          }
+          img.src = tryUrls[urlIdx++];
+        };
+
+        img.onload = ()=>{
+          this._tex[i] = img;
+          loaded++;
+          finalize();
+        };
+        img.onerror = ()=>{
+          // nächster Versuch (PNG groß) oder endgültig fail
+          tryNext();
+        };
+
+        tryNext();
+      }
+    }
+
+    // ----------------------------
+    // TOGGLES (Inspector)
+    // ----------------------------
+
+    setVisible(flag){
+      this.visible = !!flag;
+      // overlay canvas wird pro frame cleared, daher muss der layer aktiv bleiben;
+      // wir steuern die Sichtbarkeit im draw().
+    }
+
+    setHeatmap(flag){ this.showHeatmap = !!flag; this._emitState('heatmap'); }
+    setStamps(flag){ this.showStamps = !!flag; this._emitState('stamps'); }
+
+    // ----------------------------
+    // INSPECTOR-API (Decay + State)
+    // ----------------------------
+    setDecaySpeed(mult){
+      // mult: 0.0 .. 3.0 (0..300%)
+      const v = Number(mult);
+      if (!Number.isFinite(v)) return;
+      this.decaySpeedMult = Math.max(0, Math.min(3, v));
+      this._emitState('decay:speed');
+    }
+
+    setDecayPerSec(perSec){
+      const v = Number(perSec);
+      if (!Number.isFinite(v)) return;
+      this.decayPerSec = Math.max(0, v);
+      this._emitState('decay:persec');
+    }
+
+    setDecayPaused(flag){
+      this.decayPaused = !!flag;
+      this._emitState('decay:paused');
+    }
+
+    toggleDecayPaused(){
+      this.setDecayPaused(!this.decayPaused);
+    }
+
+    setUseStepFallback(flag){
+      this.useStepEvents = !!flag;
+      this._emitState('events:stepFallback');
+    }
+
+    setUseMoveEvents(flag){
+      this.useMoveEvents = !!flag;
+      this._emitState('events:move');
+    }
+
+    getState(){
+      return {
+        visible     : !!this.visible,
+        stamps      : !!this.showStamps,
+        heatmap     : !!this.showHeatmap,
+        decayPaused : !!this.decayPaused,
+        decaySpeed  : Number(this.decaySpeedMult || 1),
+        sprites     : !!this.useSprites,
+        spritesReady: !!this._sprReady,
+        decayPerSec : Number(this.decayPerSec || CFG.DECAY_PER_SEC_BASE || 0),
+        useMoveEvents: !!this.useMoveEvents,
+        useStepFallback: !!this.useStepEvents
+      };
+    }
+
+    _emitState(reason){
+      try{
+        window.dispatchEvent(new CustomEvent('cb:path:state', { detail: { reason, state: this.getState() } }));
+      }catch(_e){}
+    }
+
+
+    // ----------------------------
+    // DRAW (OverlayHooks Layer)
+    // ----------------------------
+
+    draw(ctx, cam){
+      // Wenn nicht sichtbar -> nichts zeichnen
+      if (!this.visible) return;
+      if (!this.showHeatmap && !this.showStamps) return;
+
+      // Grid sicherstellen (wenn Map spät initialisiert)
+      if (!this.ensureGrid()) return;
+
+      // DBG (einmalig): Canvas + Cam + Grid + Flags (hilft gegen Cache/Koordinaten-Rätsel)
+      if (!this._dbgLoggedDraw){
+        this._dbgLoggedDraw = true;
+        try{
+          LOG('DBG draw:',
+              'canvas=', (ctx?.canvas?.width||0) + 'x' + (ctx?.canvas?.height||0),
+              'cam=', { x: cam?.x, y: cam?.y, zoom: cam?.zoom },
+              'grid=', this.cols + 'x' + this.rows, 'tile=', this.tile,
+              'visible=', this.visible, 'stamps=', this.showStamps, 'heatmap=', this.showHeatmap);
+        }catch(_){/* noop */}
+      }
+
+      // Texturen bei Bedarf laden (lazy)
+      if (!this._texTried) this._tryLoadTextures();
+
+      const tile = this.tile;
+
+      // Viewport -> Tile Bounds
+      const b = getViewportTileBounds(cam, ctx, tile);
+
+      ctx.save();
+
+      // Welt → Screen (exakt wie deine Map)
+      const z = cam.zoom || 1;
+      ctx.setTransform(z, 0, 0, z, -cam.x * z, -cam.y * z);
+
+      // HEATMAP (neutral: schwarz mit Alpha)
+      if (this.showHeatmap){
+        // Wir verwenden globalAlpha + schwarze FillRects, damit es "unaufdringlich" ist.
+        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
+          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
+            const cell = this._idx(tx, ty);
+            if (cell < 0) continue;
+            const v = this.map[cell];
+            if (v < CFG.MIN_VISIBLE) continue;
+
+            const a = lerp(CFG.HEAT_ALPHA_MIN, CFG.HEAT_ALPHA_MAX, v);
+            ctx.globalAlpha = a;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(tx*tile, ty*tile, tile, tile);
+          }
+        }
+      }
+
+      // STAMPS (Texturen / Fallback)
+      if (this.showStamps){
+
+        // Stage B: Subtile-Stamps (dicht, entlang Move-Segmente)
+        if (this.useSubtileStamps){
+          this._drawSubStamps(ctx, cam, b);
+        }else{
+
+        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
+          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
+            const cell = this._idx(tx, ty);
+            if (cell < 0) continue;
+            const v = this.map[cell];
+            if (v < CFG.MIN_VISIBLE) continue;
+
+            // 1) NEU: SpriteSheet-Frames (organisch, zufällig pro Tile)
+            // 2) Fallback: Legacy-Texturen topdown_path0..9 (intensitätsbasiert)
+            const sprOk = this.useSprites && this._sprReady && this._sprImg && this.frame;
+            const frameIdx = sprOk ? this.frame[cell] : 255;
+            const idx = Math.min(9, Math.max(0, Math.floor(v * 9.999)));
+            const img = (!sprOk && this._texReady) ? this._tex[idx] : null;
+
+            const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, v);
+            ctx.globalAlpha = a;
+
+            const px = tx*tile;
+            const py = ty*tile;
+
+            const dir = this.dir[cell] || 0;
+            const ang = (dir===0?0:
+                         dir===1?Math.PI/4:
+                         dir===2?Math.PI/2:
+                         dir===3?3*Math.PI/4:
+                         dir===4?Math.PI:
+                         dir===5?-3*Math.PI/4:
+                         dir===6?-Math.PI/2:
+                         -Math.PI/4);
+
+                        if (sprOk && frameIdx !== 255){
+              const cols = CFG.SPRITE_COLS || 8;
+              const tpx  = CFG.SPRITE_TILE_PX || 128;
+              const fi = frameIdx | 0;
+              const sx = (fi % cols) * tpx;
+              const sy = ((fi / cols) | 0) * tpx;
+              ctx.save();
+              ctx.translate(px + tile/2, py + tile/2);
+              ctx.rotate(ang);
+              ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
+                      }
+
+ctx.restore();
+            } else if (img){
+              ctx.save();
+              ctx.translate(px + tile/2, py + tile/2);
+              ctx.rotate(ang);
+              ctx.drawImage(img, -tile/2, -tile/2, tile, tile);
+              ctx.restore();
+            } else {
+
+              // Fallback: kleines "Tritt"-Rect (damit man IMMER was sieht)
+              ctx.fillStyle = '#000';
+              ctx.fillRect(px + tile*0.25, py + tile*0.35, tile*0.5, tile*0.3);
+            }
+          }
+        }
+      }
+
+      ctx.restore();
+
+      // Decay (zeitbasiert)
+      this._tickDecay();
+    }
+
+    _tickDecay(){
+      const now = (performance && typeof performance.now === 'function') ? performance.now() : Date.now();
+      if (!this._decayTimer) this._decayTimer = now;
+
+      const tickMs = CFG.DECAY_TICK_MS || CFG.DECAY_INTERVAL_MS || 250;
+      const dtMs = now - this._decayTimer;
+      if (dtMs < tickMs) return;
+
+      this._decayTimer = now;
+
+      // nur decayn, wenn wir überhaupt Daten haben
+      if (!this.map) return;
+
+      if (this.decayPaused) return;
+
+      // Basis (per Sekunde) * Speed-Multiplier
+      const basePerSec = (typeof this.decayPerSec === 'number' && this.decayPerSec >= 0)
+        ? this.decayPerSec
+        : (CFG.DECAY_PER_SEC_BASE || (CFG.DECAY_STEP / ((CFG.DECAY_INTERVAL_MS||500)/1000)));
+
+      const perSec = basePerSec * (this.decaySpeedMult || 1.0);
+      const step = perSec * (dtMs / 1000);
+
+      if (!(step > 0)) return;
+
+      for (let i=0;i<this.map.length;i++){
+        const v = this.map[i];
+        if (v <= 0) continue;
+        const nv = v - step;
+        this.map[i] = nv > 0 ? nv : 0;
+      }
+
+      // Stage B: Subtile-Stamps decayn + aussortieren
+      if (this.subStamps && this.subStamps.length){
+        const keep = [];
+        for (let i=0;i<this.subStamps.length;i++){
+          const s = this.subStamps[i];
+          if (!s) continue;
+          const nv = (s.v || 0) - step;
+          if (nv > CFG.MIN_VISIBLE){
+            s.v = nv;
+            keep.push(s);
+          }
+        }
+        this.subStamps = keep;
+      }
+    }
+
+    // ----------------------------
+    // REGISTER LAYER
+    // ----------------------------
+
+    registerLayer(){
+      if (this._layerRegistered) return;
+      ensureOverlayHooksReady(()=>{
+        try{
+          LOG('mode=overlay-hooks');
+          window.OverlayHooks.register(this._layerName, (ctx, cam)=> this.draw(ctx, cam));
+          window.OverlayHooks.enable(this._layerName, true); // aktiv
+          this._layerRegistered = true;
+          LOG('registered layer:', this._layerName, 'visible=', this.visible);
+        }catch(e){
+          WARN('konnte OverlayHooks layer nicht registrieren:', e);
+        }
+      });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // SINGLETON + WIRING
+  // -------------------------------------------------------------------------
+
+  const inst = new TrampleOverlay();
+
+  // 1) Immer registrieren (damit ab Start sichtbar)
+  inst.registerLayer();
+
+  // 2) Unit Steps immer tracken
+  window.addEventListener('cb:unit:step', (e)=>{ try{ inst.onUnitStep(e); }catch(err){ WARN('onUnitStep err', err); } });
+  window.addEventListener('cb:unit:move', (e)=>{ try{ inst.onUnitMove(e); }catch(err){ WARN('onUnitMove err', err); } });
+
+  // 3) Toggle-Events (Inspector)
+  //    Decay-Control: Speed (0..3) + Freeze
+  window.addEventListener('cb:path:decay:speed', (e)=>{
+    const d = e?.detail || {};
+    const v = (d.mult ?? d.speed ?? d.value);
+    inst.setDecaySpeed(Number(v));
+  });
+  window.addEventListener('cb:path:decay:freeze', (e)=>{
+    const d = e?.detail || {};
+    if (typeof d.paused === 'boolean') inst.setDecayPaused(d.paused);
+    else inst.toggleDecayPaused();
   });
 
+  //    Overlay = Sichtbarkeit (und Stamps automatisch an, damit man wirklich etwas sieht)
+  window.addEventListener('cb:path:overlay:on',  ()=>{ inst.setVisible(true);  inst.setStamps(true); });
+  window.addEventListener('cb:path:overlay:off', ()=>{ inst.setVisible(false); });
+
+  // Alias: "Layer" in deinem Sprachgebrauch = Stamps
+  window.addEventListener('cb:path:layer:on',    ()=>{ inst.setVisible(true); inst.setStamps(true); });
+  window.addEventListener('cb:path:layer:off',   ()=>{ inst.setStamps(false); });
+
+  // Heatmap toggles
+  window.addEventListener('cb:path:heatmap:on',  ()=> inst.setHeatmap(true));
+  window.addEventListener('cb:path:heatmap:off', ()=> inst.setHeatmap(false));
+
+  // Optional separate Stamps toggle (wenn du Buttons dafür willst)
+  window.addEventListener('cb:path:stamps:on',   ()=>{ inst.setVisible(true); inst.setStamps(true); });
+  window.addEventListener('cb:path:stamps:off',  ()=> inst.setStamps(false));
+
+  // 4) Extra: sobald game start/registry ready: grid sicherstellen
+  const kick = ()=>{ try{ inst.ensureGrid(); }catch(_){} };
+  window.addEventListener('cb:game:start', kick);
+  window.addEventListener('cb:registry:ready', kick);
+  window.addEventListener('cb:game:initialized', kick);
+
+  // -------------------------------------------------------------------------
+  // GLOBAL EXPORT (für Debug/Inspector)
+  // -------------------------------------------------------------------------
+
+  window.PathOverlay = {
+    version: CFG.VERSION,
+    // API
+    setVisible: (v)=> inst.setVisible(v),
+    setHeatmap: (v)=> inst.setHeatmap(v),
+    setStamps : (v)=> inst.setStamps(v),
+    setSprites: (v)=>{ inst.useSprites = !!v; inst._emitState('sprites'); },
+    // debug
+    _inst: inst,
+  };
+
+  LOG('loaded', CFG.VERSION, 'defaultVisible=', CFG.DEFAULT_VISIBLE);
 })();
