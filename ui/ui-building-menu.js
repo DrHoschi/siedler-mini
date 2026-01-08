@@ -57,24 +57,40 @@ if (window.__UI_BUILDING_MENU_READY__) {
 
       panel = document.createElement('div');
       panel.id = 'ui-building-menu';
-      panel.className = 'ui-building-menu ui-card';
+      panel.className = 'ui-panel ui-building-menu';
 
       // Header --------------------------------------------------------------
       const header = document.createElement('div');
-      header.className = 'ui-building-menu-header';
+      header.id = 'ui-building-header';
+      header.className = 'ui-building-header';
+
+      const titleWrap = document.createElement('div');
+      titleWrap.className = 'ui-building-titlewrap';
 
       const title = document.createElement('div');
+      title.id = 'ui-building-title';
       title.className = 'ui-building-menu-title';
-      header.appendChild(title);
+      titleWrap.appendChild(title);
+
+      const subtitle = document.createElement('div');
+      subtitle.id = 'ui-building-subtitle';
+      subtitle.className = 'ui-building-menu-subtitle';
+      titleWrap.appendChild(subtitle);
+
+      header.appendChild(titleWrap);
 
       const btnClose = document.createElement('button');
-      btnClose.className = 'ui-button ui-button-close';
+      btnClose.className = 'ui-building-close';
       btnClose.textContent = '×';
+      btnClose.setAttribute('aria-label', 'Schließen');
       btnClose.addEventListener('click', hidePanel);
       header.appendChild(btnClose);
 
-      // Body ----------------------------------------------------------------
-      const body = document.createElement('div');
+      panel.appendChild(header);
+
+      // Body --------------------------------------------------------------
+const body = document.createElement('div');
+      body.id = 'ui-building-body';
       body.className = 'ui-building-menu-body';
 
       // Zeile: ID
@@ -87,7 +103,7 @@ if (window.__UI_BUILDING_MENU_READY__) {
 
       // Zeile: Status
       const rowStatus = document.createElement('div');
-      rowStatus.className = 'ui-building-row';
+      rowStatus.className = 'ui-building-info-row';
       rowStatus.innerHTML =
         '<span class="ui-label">Status</span>' +
         '<span class="ui-value" data-field="status"></span>';
@@ -95,7 +111,7 @@ if (window.__UI_BUILDING_MENU_READY__) {
 
       // Zeile: Kategorie
       const rowCat = document.createElement('div');
-      rowCat.className = 'ui-building-row';
+      rowCat.className = 'ui-building-info-row';
       rowCat.innerHTML =
         '<span class="ui-label">Kategorie</span>' +
         '<span class="ui-value" data-field="category"></span>';
@@ -103,7 +119,7 @@ if (window.__UI_BUILDING_MENU_READY__) {
 
       // Zeile: Position
       const rowPos = document.createElement('div');
-      rowPos.className = 'ui-building-row';
+      rowPos.className = 'ui-building-info-row';
       rowPos.innerHTML =
         '<span class="ui-label">Position</span>' +
         '<span class="ui-value" data-field="pos"></span>';
@@ -111,39 +127,28 @@ if (window.__UI_BUILDING_MENU_READY__) {
 
       // Button-Leiste -------------------------------------------------------
       const footer = document.createElement('div');
+      footer.id = 'ui-building-footer';
       footer.className = 'ui-building-menu-footer';
 
-      const btnWork = document.createElement('button');
+            const btnPause = document.createElement('button');
+      btnPause.className = 'ui-button ghost';
+      btnPause.textContent = 'Pause';
+      btnPause.addEventListener('click', () => {
+        if (!currentBuilding) return;
+        // Toggle
+        currentBuilding.workPaused = !currentBuilding.workPaused;
+        // UI sofort aktualisieren
+        fillPanel(currentBuilding);
+        // Event für Smoke/AI/Inspector
+        try{ window.CB?.emit?.('cb:building:pause-changed', { uid: currentBuilding.uid, paused: !!currentBuilding.workPaused }); }catch(e){}
+      });
+      footer.appendChild(btnPause);
+
+const btnWork = document.createElement('button');
       btnWork.className = 'ui-button primary';
       btnWork.textContent = 'Arbeitsbereich setzen';
       btnWork.addEventListener('click', onClickWorkArea);
       footer.appendChild(btnWork);
-
-      // Pause/Weiter --------------------------------------------------------
-      const btnPause = document.createElement('button');
-      btnPause.className = 'ui-button';
-      btnPause.textContent = 'Pause';
-      btnPause.addEventListener('click', (ev)=>{
-        ev.stopPropagation();
-        ev.preventDefault();
-        if (!currentBuilding) return;
-
-        // Toggle Flag direkt am Building-Objekt (Runtime-State)
-        const next = !currentBuilding.workPaused;
-        currentBuilding.workPaused = next;
-
-        // UI-Text aktualisieren
-        btnPause.textContent = next ? 'Weiter' : 'Pause';
-
-        // Event für Game/Production/FX (Smoke) – bewusst "cb" weil UI den Zustand setzt
-        try{
-          window.dispatchEvent(new CustomEvent('cb:building:pause-changed', {
-            detail: { uid: currentBuilding.uid, id: currentBuilding.id, kind: currentBuilding.kind, workPaused: next }
-          }));
-        }catch(e){}
-      });
-      footer.appendChild(btnPause);
-
 
       // Zusammenbauen
       panel.appendChild(header);
