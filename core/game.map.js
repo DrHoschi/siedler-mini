@@ -385,26 +385,14 @@ function _fallbackBuildingFrameForKey(frameKey){
   // Units ermitteln (für Fallback-Punkte)
   // -------------------------------------------------------------------------
   function getUnitsForDraw(){
-    // WICHTIG:
-    // In manchen Projektständen existieren parallel:
-    //   - window.Game.units   (legacy / teilweise nur Snapshot)
-    //   - window.GameUnits.list (neues System, wird aktiv bewegt)
-    //
-    // Wenn wir hier das falsche Array priorisieren, sieht man:
-    //   - Units bewegen sich zwar (Logik), aber Rendering nutzt "stale" Units
-    //   - daraus folgt: Anim-Richtung bleibt oft auf einem Default (z.B. Ost)
-    //
-    // Deshalb: IMMER erst das neue System bevorzugen, dann erst legacy.
-    if (Array.isArray(window.GameUnits?.list) && window.GameUnits.list.length) return window.GameUnits.list;
-
+    if (Array.isArray(window.Game?.units)) return window.Game.units;
+    // kompatibel zu neuen/alten Units-Systemen
+    if (Array.isArray(window.GameUnits?.list)) return window.GameUnits.list;
     if (window.GameUnits && typeof window.GameUnits.getUnits === 'function') {
       const u = window.GameUnits.getUnits();
-      if (Array.isArray(u) && u.length) return u;
+      if (Array.isArray(u)) return u;
     }
-
-    if (Array.isArray(window.Game?.units) && window.Game.units.length) return window.Game.units;
-
-    if (Array.isArray(window.__units) && window.__units.length) return window.__units;
+    if (Array.isArray(window.__units)) return window.__units;
     return [];
   }
 
@@ -856,17 +844,10 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
               def.sprite?.atlas ||
               null;
 
-            // finaler Atlas: erst Wunsch, dann robuste Builder-Fallbacks,
-            // dann Carrier, dann Punkt
+            // finaler Atlas: erst Wunsch, dann Carrier, dann Punkt
             let atlasKey = null;
-            if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) {
-              atlasKey = desiredAtlasKey;
-            } else if (hasAssets && kind === 'u.builder') {
-              // Builder: akzeptiere beide Key-Varianten (Repo kann beides haben)
-              if (Assets.getAtlas('builder_sprite_atlas')?.ok) atlasKey = 'builder_sprite_atlas';
-              else if (Assets.getAtlas('builder_atlas')?.ok) atlasKey = 'builder_atlas';
-            }
-            if (!atlasKey && carrierOk) atlasKey = CARRIER_ATLAS;
+            if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) atlasKey = desiredAtlasKey;
+            else if (carrierOk) atlasKey = CARRIER_ATLAS;
 
             // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
             const wx = tx * ts + ts/2;
@@ -916,8 +897,16 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
                     u.__animState = moving ? 'walk' : 'idle';
                   }
 
-                  const info = window.UnitAnim.getFrameForUnit(u, (tNow * 1000));
-                  frameName = info?.frame || null;
+                  // WICHTIG:
+                  // UnitAnim.getFrameForUnit(...) liefert in diesem Projekt direkt einen STRING (frameKey)
+                  // und KEIN Objekt {frame:...}. Wenn wir fälschlich info.frame lesen, ist frameName immer null,
+                  // wodurch unten def.defaultFrame greift (meist "..._E_...") → Symptom: "läuft immer Osten".
+                  //
+                  // Außerdem erzwingen wir hier, dass UnitAnim den gleichen AtlasKey nutzt wie der Renderer.
+                  // (In gemischten Projektständen kann Registry.getUnit(...) für UnitAnim einen anderen Atlas
+                  // liefern als _getUnitDef(...) im Renderer.)
+                  u.__atlasKey = atlasKey;
+                  frameName = window.UnitAnim.getFrameForUnit(u, (tNow * 1000)) || null;
 
                   // Safety
                   if (frameName && !(a.frames && a.frames[frameName])) frameName = null;
@@ -1296,26 +1285,10 @@ if (window.GameWorkArea) {
           def.sprite?.atlas ||
           null;
 
-        // finaler Atlas: erst Wunsch, dann robuste Builder-Fallbacks,
-        // dann Carrier, dann Punkt.
-        //
-        // Hintergrund (war dein Fehlerbild):
-        // - u.builder war im Inspector sichtbar (Atlas vorhanden), im Spiel aber nur der Punkt.
-        // - Ursache war in der Praxis fast immer ein Key-/Pfad-Mismatch:
-        //   * units.json zeigt auf builder_sprite_atlas
-        //   * im Repo liegen aber nur builder_atlas.json + builder.png
-        //   -> Atlas ok=false => drawAtlasFrame schlägt fehl.
-        //
-        // Deshalb: wenn Unit=Builder und der Wunsch-Atlas nicht ok ist,
-        // probieren wir automatisch die bekannten Keys durch.
+        // finaler Atlas: erst Wunsch, dann Carrier, dann Punkt
         let atlasKey = null;
-        if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) {
-          atlasKey = desiredAtlasKey;
-        } else if (hasAssets && kind === 'u.builder') {
-          if (Assets.getAtlas('builder_sprite_atlas')?.ok) atlasKey = 'builder_sprite_atlas';
-          else if (Assets.getAtlas('builder_atlas')?.ok) atlasKey = 'builder_atlas';
-        }
-        if (!atlasKey && carrierOk) atlasKey = CARRIER_ATLAS;
+        if (hasAssets && desiredAtlasKey && Assets.getAtlas(desiredAtlasKey)?.ok) atlasKey = desiredAtlasKey;
+        else if (carrierOk) atlasKey = CARRIER_ATLAS;
 
         // Weltkoordinaten: X = tile-center, Y = tile-bottom (Fußpunkt)
         const wx = tx * ts + ts/2;

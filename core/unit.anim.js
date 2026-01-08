@@ -107,6 +107,20 @@
   /** AtlasKey aus Registry lesen (fallbacks bleiben drin). */
   function _getAtlasKeyForUnit(u) {
     const kind = _getUnitKind(u);
+
+    // ---------------------------------------------------------------------
+    // PRIORITÄT 1: Direkter Override am Unit-Objekt
+    // ---------------------------------------------------------------------
+    // In gemischten Projektständen kann es vorkommen, dass:
+    //  - der Renderer (game.map.js) einen AtlasKey nutzt, der *nicht* identisch
+    //    ist mit dem Registry-Eintrag, den UnitAnim hier liest.
+    //  - dann liefert getFrameForUnit() null, obwohl der Atlas im Renderer ok ist.
+    // Lösung:
+    //  - Wenn der Renderer u.__atlasKey setzt, respektieren wir das hier.
+    //  - Zusätzlich erlauben wir u.atlasKey als direkten Wert (falls Units das tragen).
+    const direct = u?.__atlasKey || u?.atlasKey || u?.spriteAtlasKey || null;
+    if (direct) return String(direct);
+
     const reg = window.Registry?.getUnit?.(kind) || window.Registry?.units?.[kind] || null;
     return reg?.atlasKey || "carrier_atlas";
   }
