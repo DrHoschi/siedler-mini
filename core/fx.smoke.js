@@ -47,11 +47,15 @@
   // Wie lange Rauch "nachglühen" darf, falls der Worker-State kurz jittert.
   const ACTIVE_GRACE_MS = 600;
 
+  // Wie lange Rauch nach "Pause" noch auslaufen darf (User-Wunsch)
+  const PAUSE_FADE_MS = 900;
+
   // --------------------------------------------------------------------------
   // STATE
   // --------------------------------------------------------------------------
   const _variantByBuildingUid = new Map();   // uid -> 0..3
   const _activeUntilByUid     = new Map();   // uid -> performance.now()+ms
+  const _pausedUntilByUid     = new Map();   // uid -> performance.now()+ms (Pause-Fade)
 
   // --------------------------------------------------------------------------
   // HELFER
@@ -80,8 +84,31 @@
   function _isBuildingAllowedToSmoke(b){
     // HQ-Ausnahme bleibt bestehen
     if (_isHQ(b)) return true;
-    if (_isBuildingWorkPaused(b)) return false;
+
+    const uid = b?.uid || b?.bId || null;
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+    // Pause-Logik mit „Auslaufen“: Rauch soll nicht abrupt stoppen,
+    // sondern nach kurzer Zeit ausfaden (User-Wunsch).
+    if (_isBuildingWorkPaused(b)){
+      if (uid){
+        const until = _pausedUntilByUid.get(String(uid));
+        if (!until){
+          _pausedUntilByUid.set(String(uid), now + PAUSE_FADE_MS);
+          return true; // noch kurz weiter rauchen
+        }
+        if (now < until) return true; // noch in Fade-Zeit
+        return false; // Fade-Zeit vorbei → Rauch aus
+      }
+      return false;
+    }else{
+      // nicht pausiert → Fade-Deadline resetten
+      if (uid) _pausedUntilByUid.delete(String(uid));
+    }
+
+    // Blockiert (z.B. Lager voll) → Rauch aus (optional später ebenfalls fade)
     if (_isBuildingWorkBlocked(b)) return false;
+
     return true;
   }
 
