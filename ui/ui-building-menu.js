@@ -135,12 +135,39 @@ const body = document.createElement('div');
       btnPause.textContent = 'Pause';
       btnPause.addEventListener('click', () => {
         if (!currentBuilding) return;
-        // Toggle
+
+        // ------------------------------------------------------------------
+        // WICHTIG: currentBuilding ist NUR das "Detail"-Objekt aus core.input
+        // (Kopie), NICHT die echte Building-Instanz im Spiel.
+        // Darum schicken wir einen Request ans Spiel, damit dort der echte
+        // Building-State (workPaused) gesetzt wird.
+        // ------------------------------------------------------------------
+
+        const uid = currentBuilding.uid;
+        if (!uid) {
+          console.warn('[ui-building] Pause: building ohne uid – kann nicht pausieren', currentBuilding);
+          return;
+        }
+
+        // Lokale UI-Optimistik: Toggle in Detail, damit Button/Anzeige sofort reagiert
         currentBuilding.workPaused = !currentBuilding.workPaused;
+
         // UI sofort aktualisieren
         fillPanel(currentBuilding);
-        // Event für Smoke/AI/Inspector
-        try{ window.CB?.emit?.('cb:building:pause-changed', { uid: currentBuilding.uid, paused: !!currentBuilding.workPaused }); }catch(e){}
+
+        // 1) Request: Game soll den echten State setzen
+        try{
+          window.dispatchEvent(new CustomEvent('req:building:setPaused', {
+            detail:{ uid, paused: !!currentBuilding.workPaused }
+          }));
+        }catch(e){}
+
+        // 2) Callback-Event (für Smoke/Inspector etc.)
+        try{
+          window.dispatchEvent(new CustomEvent('cb:building:pause-changed', {
+            detail:{ uid, paused: !!currentBuilding.workPaused }
+          }));
+        }catch(e){}
       });
       footer.appendChild(btnPause);
 
