@@ -1462,6 +1462,60 @@ if (window.GameWorkArea) {
 
   }
 
+
+  // -------------------------------------------------------------------------
+  // BUILDING-PAUSE (UI → GAME)
+  // -------------------------------------------------------------------------
+  // Das UI (ui-building-menu.js) sendet:
+  //   req:building:setPaused { uid, paused }
+  // Wir setzen dann den echten State am Building-Objekt in Game.buildings,
+  // damit Produktion/Smoke/AI auf dieselbe Quelle zugreifen können.
+  //
+  // Hinweis: core.input liefert beim Klick nur ein "Detail"-Objekt (Kopie).
+  // Ohne diese Brücke würde Pause optisch im Menü togglen, aber im Spiel NICHT.
+  // -------------------------------------------------------------------------
+  (function bindBuildingPause(){
+    function getBuildings(){
+      const G = window.Game || null;
+      if (Array.isArray(G?.buildings)) return G.buildings;
+      if (Array.isArray(window.GameBuildings?.list)) return window.GameBuildings.list;
+      if (Array.isArray(window.Buildings?.list)) return window.Buildings.list;
+      return [];
+    }
+    function findByUid(uid){
+      const list = getBuildings();
+      const suid = String(uid);
+      for (let i=0;i<list.length;i++){
+        const b=list[i];
+        if (!b) continue;
+        if (String(b.uid||b.buildingUid||b.id||'')===suid) return b;
+      }
+      return null;
+    }
+
+    window.addEventListener('req:building:setPaused', (ev)=>{
+      const d = ev?.detail || {};
+      const uid = d.uid;
+      if (!uid) return;
+      const b = findByUid(uid);
+      if (!b) {
+        console.warn('[GameMap] req:building:setPaused: building nicht gefunden', uid);
+        return;
+      }
+      // Canonical flag
+      b.workPaused = !!d.paused;
+      b.__workPaused = b.workPaused;
+
+      // Event weiterreichen (für Smoke/Inspector etc.)
+      try{
+        window.dispatchEvent(new CustomEvent('cb:building:pause-changed', {
+          detail:{ uid: b.uid || uid, paused: !!b.workPaused }
+        }));
+      }catch(e){}
+    });
+  })();
+
+
   // -------------------------------------------------------------------------
   // EXPORT
   // -------------------------------------------------------------------------

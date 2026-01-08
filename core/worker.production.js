@@ -182,6 +182,43 @@
     worker.__prodCooldownUntil = nowMs + COOLDOWN_MS;
   }
 
+
+  // ---------------------------------------------------------------------------
+  // PAUSE-STATE (Building Menü)
+  // ---------------------------------------------------------------------------
+  // Das UI setzt Pause über req:building:setPaused → GameMap setzt workPaused am
+  // echten Building in Game.buildings. WorkerProduction cached Gebäude-Daten aus
+  // cb:build:complete, daher schauen wir hier zusätzlich in die LIVE-Liste.
+  function isBuildingPaused(buildingOrUid){
+    const uid = (typeof buildingOrUid === 'string' || typeof buildingOrUid === 'number')
+      ? buildingOrUid
+      : (buildingOrUid?.uid || buildingOrUid?.buildingUid || buildingOrUid?.bUid || buildingOrUid?.homeUid);
+
+    if (!uid) return false;
+
+    // 1) Direkt am Objekt (falls schon synchronisiert)
+    if (typeof buildingOrUid === 'object' && buildingOrUid){
+      if (buildingOrUid.workPaused || buildingOrUid.__workPaused || buildingOrUid.paused || buildingOrUid.__paused) return true;
+    }
+
+    // 2) Live-Quelle: window.Game.buildings
+    const G = window.Game || null;
+    const list = Array.isArray(G?.buildings) ? G.buildings
+      : Array.isArray(window.GameBuildings?.list) ? window.GameBuildings.list
+      : Array.isArray(window.Buildings?.list) ? window.Buildings.list
+      : null;
+
+    if (!list) return false;
+    const suid = String(uid);
+    for (let i=0;i<list.length;i++){
+      const b = list[i];
+      if (!b) continue;
+      if (String(b.uid||b.buildingUid||b.id||'') === suid){
+        return !!(b.workPaused || b.__workPaused || b.paused || b.__paused);
+      }
+    }
+    return false;
+  }
   function produceOnce(worker, building, item) {
     if (!item || !building) return;
 
@@ -235,6 +272,12 @@
           const b = resolveHomeBuilding(w);
           const item = findItemForBuildingKind(b?.kind || b?.id || w?.homeKind || '');
           if (b && item) {
+            // Pause: Gebäude produziert nicht, solange es pausiert ist.
+            if (isBuildingPaused(b)) {
+              // Work-Cycle nicht als produziert markieren, damit nach Resume
+              // sauber weitergearbeitet wird.
+              continue;
+            }
             produceOnce(w, b, item);
             w.__workProducedThisCycle = true;
             markCooldown(w, now);
