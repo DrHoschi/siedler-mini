@@ -125,10 +125,10 @@
         }
       },
       "markers": {
-        "entry":   { "x": -72,  "y": -81 },
-       "chimney": { "x": 79,   "y": -243 },
-       "tool":    { "x": 143,  "y": -56 },
-       "carry":   { "x": -146, "y": -76 }
+        "entry":   { "x": -76,  "y": -69 },
+       "chimney": { "x": 64,   "y": -280 },
+       "tool":    { "x": -153,  "y": -51 },
+       "carry":   { "x": 127, "y": -45 }
       }
     },
     {
@@ -179,10 +179,10 @@
         }
       },
       "markers": {
-        "entry": null,
-        "chimney": null,
-        "tool": null,
-        "carry": null
+        "entry":   { "x": -75,  "y": -83 },
+       "chimney": { "x": 67,   "y": -285 },
+       "tool":    { "x": -153,  "y": -51 },
+       "carry":   { "x": 44, "y": -33 }
       }
     },
     {
@@ -229,10 +229,10 @@
         }
       },
       "markers": {
-        "entry": null,
-        "chimney": null,
-        "tool": null,
-        "carry": null
+        "entry":   { "x": -37,  "y": -100 },
+       "chimney": { "x": 62,   "y": -300 },
+       "tool":    { "x": -132,  "y": -152 },
+       "carry":   { "x": -140, "y": -50 }
       }
     },
     {
@@ -277,10 +277,10 @@
         }
       },
       "markers": {
-        "entry": null,
-        "chimney": null,
-        "tool": null,
-        "carry": null
+        "entry":   { "x": -32,  "y": -92 },
+       "chimney": { "x": 62,   "y": -305 },
+       "tool":    { "x": -147,  "y": -90 },
+       "carry":   { "x": 115, "y": -63 }
       }
     },
     {
@@ -335,10 +335,10 @@
         "selectable": true
       },
       "markers": {
-        "entry":   { "x": -92,  "y": -63 },
-       "chimney": { "x": 75,   "y": -300 },
-       "tool":    { "x": 82,  "y": -52 },
-       "carry":   { "x": -133, "y": -27 }
+        "entry":   { "x": -90,  "y": -62 },
+       "chimney": { "x": 72,   "y": -301 },
+       "tool":    { "x": 95,  "y": -72 },
+       "carry":   { "x": 140, "y": -23 }
       }
     },
     {
@@ -383,10 +383,10 @@
         }
       },
       "markers": {
-        "entry": null,
-        "chimney": null,
-        "tool": null,
-        "carry": null
+        "entry":   { "x": -62,  "y": -80 },
+       "chimney": { "x": 67,   "y": -295 },
+       "tool":    { "x": -147,  "y": -90 },
+       "carry":   { "x": 115, "y": -63 }
       }
     }
   ]
