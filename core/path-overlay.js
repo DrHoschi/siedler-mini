@@ -84,6 +84,10 @@
 // Weighting
     WEIGHT_WORKER: 0.14,
     WEIGHT_CARRIER: 0.08,
+
+    // Stempel-Abstand entlang Move-Segmenten (in Pixeln).
+    //  - 16px entspricht bei tile=64 genau 1/4 Tile.
+    STAMP_SPACING_PX: 16,
   };
 
   // -------------------------------------------------------------------------
@@ -371,9 +375,8 @@
 
     _applyMoveDetail(d){
       const from = d.from, to = d.to;
-      const x0t = Number(from?.x), y0t = Number(from?.y);
-      const x1t = Number(to?.x),   y1t = Number(to?.y);
-      if (!Number.isFinite(x0t) || !Number.isFinite(y0t) || !Number.isFinite(x1t) || !Number.isFinite(y1t)) return;
+      const x0 = Number(from?.x), y0 = Number(from?.y);
+      const x1 = Number(to?.x),   y1 = Number(to?.y);
 
       const id = (d.id ?? d.unitId ?? d.uid ?? 'unit');
       const kind = String(d.kind || d.type || '');
@@ -383,68 +386,30 @@
         ? d.weight
         : (isW ? CFG.WEIGHT_WORKER : CFG.WEIGHT_CARRIER);
 
-      // ---------------------------------------------------------------
-      // NEU: Entlang des Move-Segments in Pixel-Abständen stempeln
-      //  - Ziel: saubere Linie statt "Tile-Treppen"
-      //  - Default: alle 16px (bei tile=64 entspricht das 1/4 Tile)
-      // ---------------------------------------------------------------
+      // Segment in konstanten Abständen sampeln (runde Stempel, keine Rotation nötig)
       const tile = this.tile || 64;
-      const x0 = x0t * tile + tile * 0.5;
-      const y0 = y0t * tile + tile * 0.5;
-      const x1 = x1t * tile + tile * 0.5;
-      const y1 = y1t * tile + tile * 0.5;
-
+      const step = (CFG.STAMP_SPACING_PX || 16) / tile; // Tiles (px->tile)
       const dx = x1 - x0, dy = y1 - y0;
-      const distPx = Math.hypot(dx, dy);
-      if (distPx <= 0.001) return;
+      const dist = Math.hypot(dx, dy);
+      const n = Math.max(1, Math.ceil(dist / step));
 
-      const stepPx = CFG.STAMP_SPACING_PX || 16;
-      const n = Math.max(1, Math.ceil(distPx / stepPx));
+      // Duplikate vermeiden (wenn mehrere Samples im gleichen Tile landen)
+      let lastTx = null, lastTy = null;
 
-      // Richtung für dir8 aus Delta in Tile-Koordinaten (nicht Pixel!)
-      const dirTok = dir8FromDelta(x1t - x0t, y1t - y0t);
-
-      // Duplikate minimieren: pro Segment nicht 100x denselben Cell pushen
-      let lastCell = -1;
-
-      for (let i = 0; i <= n; i++){
+      for (let i=0; i<=n; i++){
         const t = i / n;
-        const wx = x0 + dx * t;
-        const wy = y0 + dy * t;
+        const x = x0 + dx * t;
+        const y = y0 + dy * t;
+        const tx = Math.floor(x);
+        const ty = Math.floor(y);
 
-        const tx = Math.floor(wx / tile);
-        const ty = Math.floor(wy / tile);
+        if (tx === lastTx && ty === lastTy) continue;
+        lastTx = tx; lastTy = ty;
 
-        // nicht auf/in Gebäuden stempeln (HQ/Footprints bleiben sauber)
+        // nicht auf/in Gebäuden stempeln (HQ-Spawn Problem)
         if (this._isInBuildingFootprint(tx, ty)) continue;
 
-        const cell = this._idx(tx, ty);
-        if (cell < 0) continue;
-
-        // Intensität/Dir auf der Zelle erhöhen
-        this.map[cell] = clamp01((this.map[cell] || 0) + amt);
-        this.dir[cell] = dirTok;
-
-        // Frame pro Zelle einmalig festlegen (0..63)
-        if (this.frame && this.frame[cell] === 255){
-          this.frame[cell] = (Math.random() * 64) | 0;
-        }
-
-        // Sprite-Stamps (glatte Linie): Point pro Sample speichern
-        if (this.useSprites){
-          if (!this._stamps) this._stamps = [];
-          if (cell !== lastCell || (i === 0) || (i === n)){
-            this._stamps.push({ x: wx, y: wy, cell, dir: dirTok });
-            lastCell = cell;
-          }
-        }else{
-          lastCell = cell;
-        }
-      }
-
-      // Limit, damit es nicht unendlich wächst
-      if (this._stamps && this._stamps.length > (CFG.MAX_STAMPS || 50000)){
-        this._stamps.splice(0, this._stamps.length - (CFG.MAX_STAMPS || 50000));
+        this._applyStepDetail({ id, kind, tx, ty, weight: amt });
       }
     }
 
@@ -480,23 +445,6 @@
 
       this.map[cell] = clamp01((this.map[cell] || 0) + amt);
       this.dir[cell] = dir8FromDelta(dx, dy);
-
-      // Sprite-Atlas: Frame pro Zelle einmalig wählen (0..63)
-      if (this.frame && this.frame[cell] === 255){
-        this.frame[cell] = (Math.random() * 64) | 0;
-      }
-
-      // Wenn wir nur Step-Events haben, erzeugen wir trotzdem Stamps (mit Tile-Center)
-      if (this.useSprites){
-        const tile = this.tile || 64;
-        const wx = (tx + 0.5) * tile;
-        const wy = (ty + 0.5) * tile;
-        if (!this._stamps) this._stamps = [];
-        this._stamps.push({ x: wx, y: wy, cell, dir: this.dir[cell] });
-        if (this._stamps.length > (CFG.MAX_STAMPS || 50000)){
-          this._stamps.splice(0, this._stamps.length - (CFG.MAX_STAMPS || 50000));
-        }
-      }
     }
 
     // ----------------------------
@@ -507,32 +455,15 @@
       if (this._texTried) return;
       this._texTried = true;
 
-      // NEU: SpriteSheet/Atlas einmalig versuchen (unabhängig von Legacy-Texturen)
-      // Bevorzugt: Assets-Atlas (inkl. JSON Frames + Pivot)
+      // NEU: SpriteSheet einmalig versuchen (unabhängig von Legacy-Texturen)
       if (!this._sprTried){
         this._sprTried = true;
-
-        // 1) Versuch: über core/asset.js Atlas-Registry
         try{
-          const key = CFG.PATH_ATLAS_KEY || 'path_sprite_atlas';
-          const a = window.Assets?.getAtlas?.(key);
-          if (a && a.img && a.frames){
-            this._sprAtlas = a;
-            this._sprImg   = a.img;
-            this._sprReady = true;
-            LOG('SpriteAtlas ready ✓', key);
-          }
-        }catch(_e){/*noop*/}
-
-        // 2) Fallback: direktes Image-Load (PNG) – funktioniert ohne Atlas
-        if (!this._sprReady){
-          try{
-            const imgS = new Image();
-            imgS.onload = ()=>{ this._sprImg = imgS; this._sprReady = true; LOG('SpriteSheet ready ✓', CFG.SPRITE_SHEET_SRC); };
-            imgS.onerror = ()=>{ this._sprImg = null; this._sprReady = false; WARN('SpriteSheet load fail', CFG.SPRITE_SHEET_SRC); };
-            imgS.src = CFG.SPRITE_SHEET_SRC;
-          }catch(e){ this._sprImg=null; this._sprReady=false; }
-        }
+          const imgS = new Image();
+          imgS.onload = ()=>{ this._sprImg = imgS; this._sprReady = true; LOG('SpriteSheet ready ✓', CFG.SPRITE_SHEET_SRC); };
+          imgS.onerror = ()=>{ this._sprImg = null; this._sprReady = false; WARN('SpriteSheet load fail', CFG.SPRITE_SHEET_SRC); };
+          imgS.src = CFG.SPRITE_SHEET_SRC;
+        }catch(e){ this._sprImg=null; this._sprReady=false; }
       }
 
       let loaded = 0;
@@ -654,161 +585,120 @@
     // ----------------------------
 
     draw(ctx, cam){
-
-      if (!ctx) return;
+      // Wenn nicht sichtbar -> nichts zeichnen
       if (!this.visible) return;
+      if (!this.showHeatmap && !this.showStamps) return;
+
+      // Grid sicherstellen (wenn Map spät initialisiert)
       if (!this.ensureGrid()) return;
 
-      // Texture/Atlas loading trigger
-      this._tryLoadTextures();
-
-      const ms = getMapState();
-      const tile = ms?.tile || this.tile || 64;
-
-      // Camera state
-      const zoom = cam?.zoom || 1;
-      const camX = cam?.x || 0;
-      const camY = cam?.y || 0;
-
-      const canvas = ctx.canvas;
-      const viewW = canvas.width / zoom;
-      const viewH = canvas.height / zoom;
-
-      // Sichtbarer Tile-Range
-      const minTx = Math.max(0, Math.floor(camX / tile) - 2);
-      const minTy = Math.max(0, Math.floor(camY / tile) - 2);
-      const maxTx = Math.min(this.cols - 1, Math.ceil((camX + viewW) / tile) + 2);
-      const maxTy = Math.min(this.rows - 1, Math.ceil((camY + viewH) / tile) + 2);
-
-      // ----------------------------
-      // 1) HEATMAP (optional)
-      // ----------------------------
-      if (this.showHeatmap){
-        ctx.save();
-        ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
-
-        for (let ty = minTy; ty <= maxTy; ty++){
-          for (let tx = minTx; tx <= maxTx; tx++){
-            const cell = this._idx(tx, ty);
-            if (cell < 0) continue;
-            const v = this.map[cell] || 0;
-            if (v <= CFG.MIN_VISIBLE) continue;
-
-            ctx.globalAlpha = Math.min(0.55, 0.12 + v * 0.6);
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(tx * tile, ty * tile, tile, tile);
-          }
-        }
-
-        ctx.restore();
-      }
-
-      // ----------------------------
-      // 2) STAMPS (Sprites bevorzugt)
-      //    - NEU: über Punktliste entlang der Move-Segmente (alle 16px)
-      // ----------------------------
-      const sprOk = this.useSprites && this._sprReady && this._sprImg && this.frame;
-
-      if (sprOk){
-        // World-Viewport bounds (in px)
-        const vx0 = camX - tile * 2;
-        const vy0 = camY - tile * 2;
-        const vx1 = camX + viewW + tile * 2;
-        const vy1 = camY + viewH + tile * 2;
-
-        const atlas = this._sprAtlas;
-        const hasAtlasFrames = !!(atlas && atlas.frames);
-
-        const baseTilePx = (CFG.PATH_ATLAS_TILE_PX || 128);
-        const scale = tile / baseTilePx;
-
-        ctx.save();
-        ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
-
-        const stamps = this._stamps || [];
-        for (let i = 0; i < stamps.length; i++){
-          const s = stamps[i];
-          if (!s) continue;
-          const wx = s.x, wy = s.y;
-          if (wx < vx0 || wy < vy0 || wx > vx1 || wy > vy1) continue;
-
-          const cell = s.cell;
-          if (cell == null || cell < 0 || cell >= this.map.length) continue;
-
-          const v = this.map[cell] || 0;
-          if (v <= CFG.MIN_VISIBLE) continue;
-
-          // Alpha über Intensität
-          ctx.globalAlpha = Math.min(1, 0.18 + v * 0.9);
-
-          // FrameName
-          const idx = (this.frame[cell] != null) ? this.frame[cell] : 255;
-          if (idx === 255) continue;
-
-          const name = 'path_' + String(idx).padStart(2, '0');
-
-          // Rotation aus dir8
-          const rot = dir8ToAngleRad(s.dir != null ? s.dir : this.dir[cell]);
-
-          ctx.save();
-          ctx.translate(wx, wy);
-          ctx.rotate(rot);
-
-          if (hasAtlasFrames){
-            const fr = atlas.frames[name];
-            if (fr){
-              // Pivot: wir verwenden die im Atlas eingetragenen Pivot-Werte (center)
-              const px = (fr.pivotX != null ? fr.pivotX : fr.w * 0.5) * scale;
-              const py = (fr.pivotY != null ? fr.pivotY : fr.h * 0.5) * scale;
-
-              ctx.drawImage(
-                this._sprImg,
-                fr.x, fr.y, fr.w, fr.h,
-                -px, -py, fr.w * scale, fr.h * scale
-              );
-            }
-          }else{
-            // Fallback ohne Atlas: 8x8 Sheet (128px tiles)
-            const tpx = baseTilePx;
-            const col = idx % 8;
-            const row = (idx / 8) | 0;
-            const sx = col * tpx;
-            const sy = row * tpx;
-            ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
-          }
-
-          ctx.restore();
-        }
-
-        ctx.restore();
-      }else if (this.showLayer){
-        // ----------------------------
-        // 3) Legacy Layer (ohne Sprites)
-        // ----------------------------
-        ctx.save();
-        ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
-
-        for (let ty = minTy; ty <= maxTy; ty++){
-          for (let tx = minTx; tx <= maxTx; tx++){
-            const cell = this._idx(tx, ty);
-            if (cell < 0) continue;
-            const v = this.map[cell] || 0;
-            if (v <= CFG.MIN_VISIBLE) continue;
-
-            ctx.globalAlpha = Math.min(0.8, 0.15 + v * 0.8);
-            ctx.fillStyle = 'rgba(80,60,20,1)';
-            ctx.fillRect(tx * tile, ty * tile, tile, tile);
-          }
-        }
-
-        ctx.restore();
-      }
-
-      // Debug: einmalig loggen, ob Sprite/Atlas ready ist
+      // DBG (einmalig): Canvas + Cam + Grid + Flags (hilft gegen Cache/Koordinaten-Rätsel)
       if (!this._dbgLoggedDraw){
         this._dbgLoggedDraw = true;
-        LOG('draw: sprites=', !!this.useSprites, 'sprReady=', !!this._sprReady, 'atlas=', !!this._sprAtlas);
+        try{
+          LOG('DBG draw:',
+              'canvas=', (ctx?.canvas?.width||0) + 'x' + (ctx?.canvas?.height||0),
+              'cam=', { x: cam?.x, y: cam?.y, zoom: cam?.zoom },
+              'grid=', this.cols + 'x' + this.rows, 'tile=', this.tile,
+              'visible=', this.visible, 'stamps=', this.showStamps, 'heatmap=', this.showHeatmap);
+        }catch(_){/* noop */}
       }
+
+      // Texturen bei Bedarf laden (lazy)
+      if (!this._texTried) this._tryLoadTextures();
+
+      const tile = this.tile;
+
+      // Viewport -> Tile Bounds
+      const b = getViewportTileBounds(cam, ctx, tile);
+
+      ctx.save();
+
+      // Welt → Screen (exakt wie deine Map)
+      const z = cam.zoom || 1;
+      ctx.setTransform(z, 0, 0, z, -cam.x * z, -cam.y * z);
+
+      // HEATMAP (neutral: schwarz mit Alpha)
+      if (this.showHeatmap){
+        // Wir verwenden globalAlpha + schwarze FillRects, damit es "unaufdringlich" ist.
+        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
+          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
+            const cell = this._idx(tx, ty);
+            if (cell < 0) continue;
+            const v = this.map[cell];
+            if (v < CFG.MIN_VISIBLE) continue;
+
+            const a = lerp(CFG.HEAT_ALPHA_MIN, CFG.HEAT_ALPHA_MAX, v);
+            ctx.globalAlpha = a;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(tx*tile, ty*tile, tile, tile);
+          }
+        }
+      }
+
+      // STAMPS (Texturen / Fallback)
+      if (this.showStamps){
+        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
+          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
+            const cell = this._idx(tx, ty);
+            if (cell < 0) continue;
+            const v = this.map[cell];
+            if (v < CFG.MIN_VISIBLE) continue;
+
+            // 1) NEU: SpriteSheet-Frames (organisch, zufällig pro Tile)
+            // 2) Fallback: Legacy-Texturen topdown_path0..9 (intensitätsbasiert)
+            const sprOk = this.useSprites && this._sprReady && this._sprImg && this.frame;
+            const frameIdx = sprOk ? this.frame[cell] : 255;
+            const idx = Math.min(9, Math.max(0, Math.floor(v * 9.999)));
+            const img = (!sprOk && this._texReady) ? this._tex[idx] : null;
+
+            const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, v);
+            ctx.globalAlpha = a;
+
+            const px = tx*tile;
+            const py = ty*tile;
+
+            const dir = this.dir[cell] || 0;
+            const ang = (dir===0?0:
+                         dir===1?Math.PI/4:
+                         dir===2?Math.PI/2:
+                         dir===3?3*Math.PI/4:
+                         dir===4?Math.PI:
+                         dir===5?-3*Math.PI/4:
+                         dir===6?-Math.PI/2:
+                         -Math.PI/4);
+
+                        if (sprOk && frameIdx !== 255){
+              const cols = CFG.SPRITE_COLS || 8;
+              const tpx  = CFG.SPRITE_TILE_PX || 128;
+              const fi = frameIdx | 0;
+              const sx = (fi % cols) * tpx;
+              const sy = ((fi / cols) | 0) * tpx;
+              ctx.save();
+              ctx.translate(px + tile/2, py + tile/2);
+              ctx.rotate(ang);
+              ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
+              ctx.restore();
+            } else if (img){
+              ctx.save();
+              ctx.translate(px + tile/2, py + tile/2);
+              ctx.rotate(ang);
+              ctx.drawImage(img, -tile/2, -tile/2, tile, tile);
+              ctx.restore();
+            } else {
+
+              // Fallback: kleines "Tritt"-Rect (damit man IMMER was sieht)
+              ctx.fillStyle = '#000';
+              ctx.fillRect(px + tile*0.25, py + tile*0.35, tile*0.5, tile*0.3);
+            }
+          }
+        }
+      }
+
+      ctx.restore();
+
+      // Decay (zeitbasiert)
+      this._tickDecay();
     }
 
     _tickDecay(){
@@ -841,24 +731,6 @@
         if (v <= 0) continue;
         const nv = v - step;
         this.map[i] = nv > 0 ? nv : 0;
-      }
-
-      // Stamps aufräumen: wenn Intensität am zugehörigen Tile weg ist, brauchen wir den Punkt nicht mehr.
-      // (läuft nur gelegentlich, damit es günstig bleibt)
-      if (this._stamps && this._stamps.length){
-        this._pruneAcc = (this._pruneAcc || 0) + dtMs;
-        if (this._pruneAcc >= 750){
-          this._pruneAcc = 0;
-          const keep = [];
-          for (let i=0;i<this._stamps.length;i++){
-            const s = this._stamps[i];
-            if (!s) continue;
-            const c = s.cell|0;
-            if (c < 0 || c >= this.map.length) continue;
-            if ((this.map[c] || 0) > CFG.MIN_VISIBLE) keep.push(s);
-          }
-          this._stamps = keep;
-        }
       }
     }
 
