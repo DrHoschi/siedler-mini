@@ -1037,13 +1037,70 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
 
               let ok = false;
               if (frameName){
-                ok = Assets.drawAtlasFrame(ctx, atlasKey, frameName, wx, wy, { scale, align:'pivot' });
+                // Feet-Anchor: Fußpunkt = Tile-Bottom-Center (wx/wy).
+                // Wenn das Unit-Def `render.anchor === 'feet'` gesetzt hat, zeichnen wir
+                // das Frame so, dass die Sprite-Unterkante mittig auf wx/wy sitzt.
+                if (def?.render?.anchor === 'feet') {
+                  const fr2 = a?.frames?.[frameName];
+                  if (fr2 && a?.img) {
+                    const dw2 = fr2.w * scale;
+                    const dh2 = fr2.h * scale;
+                    const dx2 = wx - (dw2 / 2);
+                    const dy2 = wy - dh2;
+                    try{
+                      ctx.drawImage(a.img, fr2.x, fr2.y, fr2.w, fr2.h, dx2, dy2, dw2, dh2);
+                      ok = true;
+                    }catch(e){
+                      ok = false;
+                    }
+                  } else {
+                    ok = false;
+                  }
+                } else {
+                  ok = Assets.drawAtlasFrame(ctx, atlasKey, frameName, wx, wy, { scale, align:'pivot' });
+                }
                 // Falls ein bestimmter Richtungs-Frame fehlt (z.B. Builder hat nur E),
                 // versuchen wir als pragmatischen Fallback _E_ statt komplett Punkt zu zeichnen.
                 if (!ok && (u?.kind === 'u.builder' || u?.kind === 'u.woodcutter')){
                   const eFrame = String(frameName).replace(/_(NE|NW|SE|SW|N|S|E|W)_/,'_E_');
                   if (eFrame && eFrame !== frameName){
-                    ok = Assets.drawAtlasFrame(ctx, atlasKey, eFrame, wx, wy, { scale, align:'pivot' });
+                    if (def?.render?.anchor === 'feet') {
+                      const fr3 = a?.frames?.[eFrame];
+                      if (fr3 && a?.img) {
+                        const dw3 = fr3.w * scale;
+                        const dh3 = fr3.h * scale;
+                        const dx3 = wx - (dw3 / 2);
+                        const dy3 = wy - dh3;
+                        try{
+                          ctx.drawImage(a.img, fr3.x, fr3.y, fr3.w, fr3.h, dx3, dy3, dw3, dh3);
+                          ok = true;
+                        }catch(e){
+                          ok = false;
+                        }
+                      } else {
+                        ok = false;
+                      }
+                    } else {
+                      if (def?.render?.anchor === 'feet') {
+                      const fr3 = a?.frames?.[eFrame];
+                      if (fr3 && a?.img) {
+                        const dw3 = fr3.w * scale;
+                        const dh3 = fr3.h * scale;
+                        const dx3 = wx - (dw3 / 2);
+                        const dy3 = wy - dh3;
+                        try{
+                          ctx.drawImage(a.img, fr3.x, fr3.y, fr3.w, fr3.h, dx3, dy3, dw3, dh3);
+                          ok = true;
+                        }catch(e){
+                          ok = false;
+                        }
+                      } else {
+                        ok = false;
+                      }
+                    } else {
+                      ok = Assets.drawAtlasFrame(ctx, atlasKey, eFrame, wx, wy, { scale, align:'pivot' });
+                    }
+                    }
                   }
                 }
               }
@@ -1461,60 +1518,6 @@ if (window.GameWorkArea) {
     }
 
   }
-
-
-  // -------------------------------------------------------------------------
-  // BUILDING-PAUSE (UI → GAME)
-  // -------------------------------------------------------------------------
-  // Das UI (ui-building-menu.js) sendet:
-  //   req:building:setPaused { uid, paused }
-  // Wir setzen dann den echten State am Building-Objekt in Game.buildings,
-  // damit Produktion/Smoke/AI auf dieselbe Quelle zugreifen können.
-  //
-  // Hinweis: core.input liefert beim Klick nur ein "Detail"-Objekt (Kopie).
-  // Ohne diese Brücke würde Pause optisch im Menü togglen, aber im Spiel NICHT.
-  // -------------------------------------------------------------------------
-  (function bindBuildingPause(){
-    function getBuildings(){
-      const G = window.Game || null;
-      if (Array.isArray(G?.buildings)) return G.buildings;
-      if (Array.isArray(window.GameBuildings?.list)) return window.GameBuildings.list;
-      if (Array.isArray(window.Buildings?.list)) return window.Buildings.list;
-      return [];
-    }
-    function findByUid(uid){
-      const list = getBuildings();
-      const suid = String(uid);
-      for (let i=0;i<list.length;i++){
-        const b=list[i];
-        if (!b) continue;
-        if (String(b.uid||b.buildingUid||b.id||'')===suid) return b;
-      }
-      return null;
-    }
-
-    window.addEventListener('req:building:setPaused', (ev)=>{
-      const d = ev?.detail || {};
-      const uid = d.uid;
-      if (!uid) return;
-      const b = findByUid(uid);
-      if (!b) {
-        console.warn('[GameMap] req:building:setPaused: building nicht gefunden', uid);
-        return;
-      }
-      // Canonical flag
-      b.workPaused = !!d.paused;
-      b.__workPaused = b.workPaused;
-
-      // Event weiterreichen (für Smoke/Inspector etc.)
-      try{
-        window.dispatchEvent(new CustomEvent('cb:building:pause-changed', {
-          detail:{ uid: b.uid || uid, paused: !!b.workPaused }
-        }));
-      }catch(e){}
-    });
-  })();
-
 
   // -------------------------------------------------------------------------
   // EXPORT
