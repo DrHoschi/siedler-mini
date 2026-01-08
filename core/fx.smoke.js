@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/fx.smoke.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v26.01.07-fx-smoke-loop-v2
+ * Version : v26.01.08-fx-smoke-active-by-assignment
  *
  * Zweck:
  *   Rauch (Variante A) am Gebäude-Schornstein rendern – markerbasiert.
@@ -64,6 +64,27 @@
   function _isPausedUnit(u){
     return !!(u?.paused || u?.__paused || u?.task?.paused || u?.__pause);
   }
+  function _isBuildingWorkPaused(b){
+    // Menü/Inspector können später diese Flags setzen.
+    return !!(b?.workPaused || b?.__workPaused || b?.paused || b?.__paused);
+  }
+
+  function _isBuildingWorkBlocked(b){
+    // „Kann nicht arbeiten“: Lager voll / fehlende Inputs / explizite Blockade.
+    // Wir prüfen mehrere mögliche Felder, damit es auch mit künftigen Menü-States passt.
+    const br = b?.blockedReason || b?.__blockedReason || b?.blockReason || b?.__blockReason;
+    if (br) return true;
+    return !!(b?.storageFull || b?.__storageFull || b?.workBlocked || b?.__workBlocked || b?.blocked || b?.__blocked || b?.canWork === false || b?.__canWork === false);
+  }
+
+  function _isBuildingAllowedToSmoke(b){
+    // HQ-Ausnahme bleibt bestehen
+    if (_isHQ(b)) return true;
+    if (_isBuildingWorkPaused(b)) return false;
+    if (_isBuildingWorkBlocked(b)) return false;
+    return true;
+  }
+
 
   function _stableHashToInt(str){
     // Sehr einfache, stabile Hash (deterministisch) – genügt für Variant-Choice.
@@ -139,9 +160,34 @@
         // Wichtig: Beim Lumberjack läuft der Worker zum Workpoint raus (AnimState='walk').
         // Das Gebäude gilt trotzdem als aktiv → Rauch soll weiterlaufen.
         const aiMode = String(u.__ai?.mode || u.ai?.mode || '');
-        if (String(u.__animState || '') === 'work' || aiMode === 'toWork' || aiMode === 'work' || aiMode === 'toHome'){
-          _markActive(uid);
-          return true;
+        const animState = String(u.__animState || u.animState || '');
+
+        // NEU (User-Wunsch):
+        // Rauch soll NICHT davon abhängen, ob der Worker gerade im Gebäude ist.
+        // Sobald ein Worker dem Gebäude zugeordnet ist (homeUid) und nicht pausiert ist,
+        // gilt das Gebäude als "aktiv", solange es nicht explizit blockiert/pausiert ist.
+        //
+        // Trotzdem: wir lassen die Grace-Window bestehen und versuchen zuerst
+        // „echte Arbeitszustände“ zu erkennen (für spätere Feinlogik).
+        const isClearlyWorking =
+          (animState === 'work') ||
+          (aiMode === 'work') ||
+          (aiMode === 'toWork') ||
+          (aiMode === 'toHome') ||
+          (aiMode === 'walkToWork') ||
+          (aiMode === 'walkToHome') ||
+          (aiMode === 'harvest') ||
+          (aiMode === 'chop') ||
+          (aiMode === 'gather');
+
+        const fallbackAssigned = true;
+
+        if (isClearlyWorking || fallbackAssigned){
+          // Gate: nur wenn das Gebäude grundsätzlich arbeiten darf
+          if (_isBuildingAllowedToSmoke(b)){
+            _markActive(uid);
+            return true;
+          }
         }
       }
     }catch(e){
@@ -183,6 +229,8 @@
       if (!marker) return false;
 
       // Working-Gate
+      // NEU: Rauch nur wenn Gebäude nicht pausiert / nicht blockiert (Lager voll etc.)
+      if (!_isBuildingAllowedToSmoke(b)) return false;
       if (!_isBuildingWorking(b)) return false;
 
       const variant = _pickVariantForBuilding(b);
