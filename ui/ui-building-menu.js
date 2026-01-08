@@ -46,6 +46,20 @@ if (window.__UI_BUILDING_MENU_READY__) {
 
     // aktuell geöffnetes Gebäude
     let currentBuilding = null;
+    let btnPauseEl = null;
+
+    // -----------------------------------------------------------------------
+    // Helper: Live-Building aus der zentralen Game-Liste holen
+    // (wichtig: buildingDetail aus Event ist oft nur ein Snapshot)
+    // -----------------------------------------------------------------------
+    function getLiveBuilding (detail){
+      const uid = detail?.uid || detail?.buildingUid || detail?.homeBuildingUid || null;
+      const id  = detail?.id  || null;
+      const list = window.Game?.buildings;
+      if (!Array.isArray(list)) return null;
+      return (uid && list.find(b => b && b.uid === uid)) || (id && list.find(b => b && b.id === id)) || null;
+    }
+
     let panel = null;
 
     // -----------------------------------------------------------------------
@@ -57,40 +71,24 @@ if (window.__UI_BUILDING_MENU_READY__) {
 
       panel = document.createElement('div');
       panel.id = 'ui-building-menu';
-      panel.className = 'ui-panel ui-building-menu';
+      panel.className = 'ui-building-menu ui-card';
 
       // Header --------------------------------------------------------------
       const header = document.createElement('div');
-      header.id = 'ui-building-header';
-      header.className = 'ui-building-header';
-
-      const titleWrap = document.createElement('div');
-      titleWrap.className = 'ui-building-titlewrap';
+      header.className = 'ui-building-menu-header';
 
       const title = document.createElement('div');
-      title.id = 'ui-building-title';
       title.className = 'ui-building-menu-title';
-      titleWrap.appendChild(title);
-
-      const subtitle = document.createElement('div');
-      subtitle.id = 'ui-building-subtitle';
-      subtitle.className = 'ui-building-menu-subtitle';
-      titleWrap.appendChild(subtitle);
-
-      header.appendChild(titleWrap);
+      header.appendChild(title);
 
       const btnClose = document.createElement('button');
-      btnClose.className = 'ui-building-close';
+      btnClose.className = 'ui-button ui-button-close';
       btnClose.textContent = '×';
-      btnClose.setAttribute('aria-label', 'Schließen');
       btnClose.addEventListener('click', hidePanel);
       header.appendChild(btnClose);
 
-      panel.appendChild(header);
-
-      // Body --------------------------------------------------------------
-const body = document.createElement('div');
-      body.id = 'ui-building-body';
+      // Body ----------------------------------------------------------------
+      const body = document.createElement('div');
       body.className = 'ui-building-menu-body';
 
       // Zeile: ID
@@ -103,7 +101,7 @@ const body = document.createElement('div');
 
       // Zeile: Status
       const rowStatus = document.createElement('div');
-      rowStatus.className = 'ui-building-info-row';
+      rowStatus.className = 'ui-building-row';
       rowStatus.innerHTML =
         '<span class="ui-label">Status</span>' +
         '<span class="ui-value" data-field="status"></span>';
@@ -111,7 +109,7 @@ const body = document.createElement('div');
 
       // Zeile: Kategorie
       const rowCat = document.createElement('div');
-      rowCat.className = 'ui-building-info-row';
+      rowCat.className = 'ui-building-row';
       rowCat.innerHTML =
         '<span class="ui-label">Kategorie</span>' +
         '<span class="ui-value" data-field="category"></span>';
@@ -119,7 +117,7 @@ const body = document.createElement('div');
 
       // Zeile: Position
       const rowPos = document.createElement('div');
-      rowPos.className = 'ui-building-info-row';
+      rowPos.className = 'ui-building-row';
       rowPos.innerHTML =
         '<span class="ui-label">Position</span>' +
         '<span class="ui-value" data-field="pos"></span>';
@@ -127,54 +125,31 @@ const body = document.createElement('div');
 
       // Button-Leiste -------------------------------------------------------
       const footer = document.createElement('div');
-      footer.id = 'ui-building-footer';
       footer.className = 'ui-building-menu-footer';
 
-            const btnPause = document.createElement('button');
-      btnPause.className = 'ui-button ghost';
-      btnPause.textContent = 'Pause';
-      btnPause.addEventListener('click', () => {
-        if (!currentBuilding) return;
-
-        // ------------------------------------------------------------------
-        // WICHTIG: currentBuilding ist NUR das "Detail"-Objekt aus core.input
-        // (Kopie), NICHT die echte Building-Instanz im Spiel.
-        // Darum schicken wir einen Request ans Spiel, damit dort der echte
-        // Building-State (workPaused) gesetzt wird.
-        // ------------------------------------------------------------------
-
-        const uid = currentBuilding.uid;
-        if (!uid) {
-          console.warn('[ui-building] Pause: building ohne uid – kann nicht pausieren', currentBuilding);
-          return;
-        }
-
-        // Lokale UI-Optimistik: Toggle in Detail, damit Button/Anzeige sofort reagiert
-        currentBuilding.workPaused = !currentBuilding.workPaused;
-
-        // UI sofort aktualisieren
-        fillPanel(currentBuilding);
-
-        // 1) Request: Game soll den echten State setzen
-        try{
-          window.dispatchEvent(new CustomEvent('req:building:setPaused', {
-            detail:{ uid, paused: !!currentBuilding.workPaused }
-          }));
-        }catch(e){}
-
-        // 2) Callback-Event (für Smoke/Inspector etc.)
-        try{
-          window.dispatchEvent(new CustomEvent('cb:building:pause-changed', {
-            detail:{ uid, paused: !!currentBuilding.workPaused }
-          }));
-        }catch(e){}
-      });
-      footer.appendChild(btnPause);
-
-const btnWork = document.createElement('button');
+      const btnWork = document.createElement('button');
       btnWork.className = 'ui-button primary';
       btnWork.textContent = 'Arbeitsbereich setzen';
       btnWork.addEventListener('click', onClickWorkArea);
+
+      // Pause/Weiter (Produktion + Worker im Gebäude anhalten)
+      const btnPause = document.createElement('button');
+      btnPause.className = 'ui-button';
+      btnPause.textContent = 'Pause';
+      btnPause.addEventListener('click', () => {
+        const live = getLiveBuilding(currentBuilding) || currentBuilding;
+        const uid = live?.uid || currentBuilding?.uid;
+        const pausedNow = !!live?.workPaused;
+        const next = !pausedNow;
+        try{
+          window.dispatchEvent(new CustomEvent('req:building:setPaused', { detail:{ uid, paused: next } }));
+        }catch(e){}
+        // UI sofort aktualisieren (auch wenn Core-Event später kommt)
+        if (btnPauseEl) btnPauseEl.textContent = next ? 'Weiter' : 'Pause';
+      });
+      btnPauseEl = btnPause;
+      footer.appendChild(btnPause);
+
       footer.appendChild(btnWork);
 
       // Zusammenbauen
@@ -225,6 +200,11 @@ const btnWork = document.createElement('button');
         posField.textContent = `${x}, ${y} (${size})`;
       }
     }
+
+
+      // Pause-Button Text aus Live-State ableiten
+      const live = getLiveBuilding(b) || b;
+      if (btnPauseEl) btnPauseEl.textContent = live?.workPaused ? 'Weiter' : 'Pause';
 
     function positionPanel(buildingDetail) {
       if (!panel) createPanel();
@@ -321,6 +301,18 @@ const btnWork = document.createElement('button');
       }
 
       showPanel(building);
+    });
+
+    // Wenn Pause-Status im Core geändert wird, Menü-Button live aktualisieren
+    window.addEventListener('cb:building:pause-changed', (ev) => {
+      try{
+        const d = ev?.detail || {};
+        const uid = d.uid || null;
+        const live = getLiveBuilding(currentBuilding) || currentBuilding;
+        if (!live) return;
+        if (uid && live.uid && uid !== live.uid) return;
+        if (btnPauseEl) btnPauseEl.textContent = d.paused ? 'Weiter' : 'Pause';
+      }catch(e){}
     });
 
     LOG.ok('✅ [ui-building] Gebäude-Menü bereit.');
