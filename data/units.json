@@ -10,7 +10,10 @@
     "role": "build",
     "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas.",
     "atlasKey": "builder_sprite_atlas",
-    "defaultFrame": "builder_S_walk_0"
+    "defaultFrame": "builder_E_walk_0",
+    "render": {
+      "anchor": "feet"
+    }
   },
   {
     "id": "u.carrier",
@@ -429,7 +432,10 @@
       "lumberjack",
       "u.woodcutter",
       "woodcutter"
-    ]
+    ],
+    "render": {
+      "anchor": "feet"
+    }
   },
   {
     "id": "u.baker",
