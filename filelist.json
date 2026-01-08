@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-08T11:04:53.261Z",
+  "createdAt": "2026-01-08T15:03:55.933Z",
   "root": ".",
-  "count": 585,
+  "count": 586,
   "entries": [
     {
       "type": "dir",
@@ -1034,6 +1034,11 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/path/path_sprite_atlas.png",
+      "size": 586595
+    },
+    {
+      "type": "file",
       "path": "assets/tex/path/readme",
       "size": 136
     },
@@ -1529,7 +1534,7 @@
     {
       "type": "file",
       "path": "core/carrier.runtime.js",
-      "size": 6612
+      "size": 7790
     },
     {
       "type": "file",
@@ -1584,7 +1589,7 @@
     {
       "type": "file",
       "path": "core/fx.smoke.js",
-      "size": 9748
+      "size": 10774
     },
     {
       "type": "file",
@@ -1599,7 +1604,7 @@
     {
       "type": "file",
       "path": "core/game.buildings.js",
-      "size": 10776
+      "size": 12511
     },
     {
       "type": "file",
@@ -1614,7 +1619,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 56374
+      "size": 58338
     },
     {
       "type": "file",
@@ -1669,7 +1674,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 43881
+      "size": 45235
     },
     {
       "type": "file",
@@ -1694,7 +1699,7 @@
     {
       "type": "file",
       "path": "core/job.engine.js",
-      "size": 9328
+      "size": 10007
     },
     {
       "type": "file",
@@ -1809,7 +1814,7 @@
     {
       "type": "file",
       "path": "core/unit.anim.js",
-      "size": 601
+      "size": 19576
     },
     {
       "type": "file",
@@ -1834,7 +1839,7 @@
     {
       "type": "file",
       "path": "core/worker.production.js",
-      "size": 10341
+      "size": 12226
     },
     {
       "type": "dir",
@@ -2025,7 +2030,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 13236
+      "size": 13250
     },
     {
       "type": "dir",
@@ -2651,7 +2656,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build-v14.css",
-      "size": 10082
+      "size": 11341
     },
     {
       "type": "file",
@@ -2751,7 +2756,7 @@
     {
       "type": "file",
       "path": "ui/ui-building-menu.js",
-      "size": 9728
+      "size": 9875
     },
     {
       "type": "file",
@@ -2826,17 +2831,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 58525
+      "size": 58523
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22940
+      "size": 22938
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 18599
+      "size": 18623
     },
     {
       "type": "file",
