@@ -9,8 +9,8 @@
     "aiProfile": "worker.builder",
     "role": "build",
     "notes": "Baut Baustellen/Upgrades; Tool später aus Werkzeug-Atlas.",
-    "atlasKey": "builder_atlas",
-    "defaultFrame": "frame_0_0"
+    "atlasKey": "builder_sprite_atlas",
+    "defaultFrame": "builder_S_walk_0"
   },
   {
     "id": "u.carrier",
