@@ -51,7 +51,7 @@
       MODERN: {
         alpha: 0.58,
         stampScaleBase: 0.32,
-        samplePx: 16,
+        samplePx: 160,
         decayPerSecondBase: 0.010,
         softnessBase: 1.10,
       }
