@@ -1,4 +1,4 @@
-// v26.01.09-paths-stageB-worldlayer
+// v26.01.09-paths-stageB-worldlayer + v26.01.09-paths-presets+inspector
 // -----------------------------------------------------------------------------
 // PATH OVERLAY (Trampelpfade)
 // Ziel (für Alex / Siedler-Mini):
@@ -30,12 +30,49 @@
 
     // Sichtbarkeit / Style
     enabled: true,
+
+    // ---------------------------------------------------------------------
+    // PRESETS (Trampelpfad-Stil)
+    // ---------------------------------------------------------------------
+    // Hinweis zur Interpretation:
+    // - stampScale ist der Scale-Faktor, der an Assets.drawAtlasFrame übergeben wird.
+    // - "Pfadbreite" im Spielgefühl erreichst du primär über stampScale.
+    // - Wir trennen: Preset-Base-Werte + ein Width-Multiplier (Slider im Inspector).
+    presets: {
+      // Schmaler, dezenter (Siedler 1/2 Style)
+      CLASSIC: {
+        alpha: 0.52,
+        stampScaleBase: 0.42,
+        samplePx: 18,
+        decayPerSecondBase: 0.010,
+      },
+      // Etwas breiter, sichtbarer (Siedler 3 Style)  ✅ vom Nutzer gewünscht
+      MODERN: {
+        alpha: 0.58,
+        stampScaleBase: 0.52,
+        samplePx: 16,
+        decayPerSecondBase: 0.010,
+      }
+    },
+
+    // Default
+    preset: 'MODERN',
+
+    // Slider (Inspector): multipliziert stampScaleBase
+    // 1.0 = Preset-Base, 0.7 = schmaler, 1.3 = breiter
+    widthMult: 1.00,
+
+    // Decay-Speed-Multiplier (Inspector)
+    // 1.0 = Preset-Base
+    decaySpeedMult: 1.00,
+
+    // Initialwerte (werden im Konstruktor aus Preset berechnet)
     alpha: 0.55,                       // Sichtbarkeit (0..1)
-    stampScale: 0.60,                  // kleiner als vorher
-    decayPerSecond: 0.010,             // langsam verschwinden (je kleiner, desto langsamer)
+    stampScale: 0.60,                  // effektive Scale (PresetBase * widthMult)
+    decayPerSecond: 0.010,             // effektiv (PresetBase * decaySpeedMult)
     maxStamps: 6000,                   // Ringbuffer
 
-    // Sampling: 16px entlang Move-Segmenten
+    // Sampling: 16px entlang Move-Segmenten (wird durch Preset gesetzt)
     samplePx: 16,                      // gewünschter Pixel-Abstand
     minDistPx: 8,                      // Untergrenze (falls sehr langsam)
 
@@ -74,10 +111,25 @@
   // ---------------------------------------------------------------------------
   class PathOverlay {
     constructor(){
+      // -------------------------------------------------------------------
+      // Runtime-Zustand
+      // -------------------------------------------------------------------
       this.enabled = CFG.enabled;
+      this.debug = false;
+
+      // Preset/Slider-Parameter (Inspector)
+      this.preset = CFG.preset;
+      this.widthMult = CFG.widthMult;
+      this.decaySpeedMult = CFG.decaySpeedMult;
+      this.decayPaused = false;
+
+      // Effektive Werte (werden aus Preset + Multis berechnet)
       this.alpha = CFG.alpha;
       this.stampScale = CFG.stampScale;
       this.decayPerSecond = CFG.decayPerSecond;
+
+      // Preset initial anwenden (setzt auch CFG.samplePx etc.)
+      this._applyPreset(this.preset);
       this.debug = false;
 
       // Stamps: {xPx, yPx, bornSec, frame}
@@ -89,6 +141,36 @@
 
       // Events
       this._bindEvents();
+    }
+
+    // ---------------------------------------------------------------------
+    // PRESET / TUNING
+    // ---------------------------------------------------------------------
+    _applyPreset(name){
+      const key = String(name || '').toUpperCase();
+      const p = CFG.presets[key] || CFG.presets.MODERN;
+
+      // Preset-Basiswerte merken
+      this.preset = (CFG.presets[key] ? key : 'MODERN');
+      this._presetAlphaBase = p.alpha;
+      this._presetScaleBase = p.stampScaleBase;
+      this._presetDecayBase = p.decayPerSecondBase;
+
+      // Sampling ist Teil des Presets
+      CFG.samplePx = p.samplePx;
+
+      // Effektive Werte neu berechnen
+      this._recomputeEffective();
+    }
+
+    _recomputeEffective(){
+      const w = clamp(Number(this.widthMult) || 1, 0.25, 2.0);
+      const d = clamp(Number(this.decaySpeedMult) || 1, 0.0, 5.0);
+
+      // Effektive Werte
+      this.alpha = clamp(this._presetAlphaBase ?? CFG.alpha, 0, 1);
+      this.stampScale = clamp((this._presetScaleBase ?? CFG.stampScale) * w, 0.10, 2.50);
+      this.decayPerSecond = clamp((this._presetDecayBase ?? CFG.decayPerSecond) * d, 0.0, 1.0);
     }
 
     // -------------------------------------------------------------------------
@@ -230,7 +312,7 @@
 
       const alpha = this.alpha;
       const scale = this.stampScale;
-      const decay = this.decayPerSecond;
+      const decay = this.decayPaused ? 0 : this.decayPerSecond;
 
       // Zeichnen + Decay
       // Wir filtern in-place (einfach, performant genug für jetzt).
@@ -309,17 +391,68 @@
 
   // Mini-API für Konsole/Inspector
   window.PathOverlay = {
-    setEnabled(v){ inst.enabled = !!v; },
-    setDebug(v){ inst.debug = !!v; },
+    // -------------------------------------------------------------------
+    // [A] Grundfunktionen (Console + Inspector)
+    // -------------------------------------------------------------------
+    setEnabled(v){ inst.enabled = !!v; try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
+    setDebug(v){ inst.debug = !!v; try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
     clear(){ inst._stamps = []; },
+
     // Hook für Renderer
     drawOnMainCanvas(ctx){ inst.drawOnMainCanvas(ctx); },
+
+    // -------------------------------------------------------------------
+    // [B] Presets + Slider (neues Pfad-System)
+    // -------------------------------------------------------------------
+    /** Preset setzen: 'CLASSIC' | 'MODERN' */
+    setPreset(name){ inst._applyPreset(name); try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
+
+    /** Pfadbreite (Inspector-Slider): multiplier auf Preset-Base */
+    setWidthMult(mult){ inst.widthMult = Number(mult) || 1; inst._recomputeEffective(); try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
+
+    /** Absoluter Scale (für harte Debug-Tests) */
+    setStampScale(scale){ inst.stampScale = Number(scale) || inst.stampScale; },
+
+    // Decay
+    setDecayPaused(v){ inst.decayPaused = !!v; try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
+    /** 1.0 = Preset-Base, 0 = kein Decay */
+    setDecaySpeed(mult){ inst.decaySpeedMult = Number(mult) || 0; inst._recomputeEffective(); try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
+    /** direkt perSec (für harte Debug-Tests) */
+    setDecayPerSec(perSec){ inst.decayPerSecond = Math.max(0, Number(perSec) || 0); },
+
+    // Zustand abrufen (Inspector kann damit syncen)
+    getState(){
+      return {
+        enabled: !!inst.enabled,
+        debug: !!inst.debug,
+        preset: inst.preset,
+        widthMult: inst.widthMult,
+        stampScale: inst.stampScale,
+        alpha: inst.alpha,
+        samplePx: CFG.samplePx,
+        decayPaused: !!inst.decayPaused,
+        decaySpeedMult: inst.decaySpeedMult,
+        decayPerSecond: inst.decayPerSecond,
+        stamps: inst._stamps.length,
+      };
+    },
+
+    // -------------------------------------------------------------------
+    // [C] Backward-Compat für alte Inspector-Bridge (damit nichts kaputt geht)
+    // -------------------------------------------------------------------
+    toggle(v){ inst.enabled = (v==null ? !inst.enabled : !!v); },
+    setVisible(v){ inst.enabled = !!v; },
+    setStamps(v){ inst.enabled = !!v; },
+    setHeatmap(_v){ /* im neuen System nicht verwendet */ },
+
+    // Tune (legacy)
     tune(obj){
       if (!obj) return;
       if (obj.alpha != null) inst.alpha = obj.alpha;
       if (obj.stampScale != null) inst.stampScale = obj.stampScale;
       if (obj.decayPerSecond != null) inst.decayPerSecond = obj.decayPerSecond;
     },
+
     _inst: inst,
   };
 
