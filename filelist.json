@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-01-09T11:35:20.301Z",
+  "createdAt": "2026-01-09T21:35:10.801Z",
   "root": ".",
   "count": 590,
   "entries": [
@@ -1619,7 +1619,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 58834
+      "size": 59513
     },
     {
       "type": "file",
@@ -1749,7 +1749,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 11042
+      "size": 19430
     },
     {
       "type": "file",
@@ -2186,7 +2186,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.paths-v1.js",
-      "size": 13811
+      "size": 16149
     },
     {
       "type": "file",
@@ -2240,7 +2240,7 @@
     {
       "type": "file",
       "path": "inspector/inspector.bridges.js",
-      "size": 9037
+      "size": 10340
     },
     {
       "type": "file",
@@ -2851,12 +2851,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 58638
+      "size": 59080
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22991
+      "size": 23185
     },
     {
       "type": "file",
