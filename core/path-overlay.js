@@ -47,7 +47,7 @@
     // - Move-Segmente (cb:unit:move) sind die neue Hauptquelle (glatte Linie)
     // - Step-Fallback (cb:unit:step) optional, standardmäßig AUS um Zickzack zu vermeiden
     USE_MOVE_EVENTS_DEFAULT  : true,
-    USE_STEP_FALLBACK_DEFAULT: false,
+    USE_STEP_FALLBACK_DEFAULT: true,
 
     // Darstellung
     MIN_VISIBLE: 0.02,
@@ -239,6 +239,14 @@
       // OverlayHooks layer name
       this._layerName = 'trample-paths';
       this._layerRegistered = false;
+    // --- Subtile-Stamps (Stage B): echte Punkt-Stempel entlang der Move-Segmente ---
+    // Wir zeichnen NICHT mehr als 1x pro Tile, sondern legen kleine Stamps (Brush) in Welt-Koordinaten ab.
+    // Diese Stamps werden mit Alpha-Decay langsam ausgeblendet.
+    this._stamps = [];
+    this._stampSpacingPx = 16;   // Wunsch: alle ~16px entlang der Bewegung
+    this._stampScale     = 0.75; // kleiner als 1 Tile, aber sichtbar
+    this._stampAlphaMin  = 0.18;
+    this._stampAlphaMax  = 0.45;
     }
 
     // ----------------------------
@@ -292,31 +300,27 @@
     // TRACKING
     // ----------------------------
 
-    onUnitStep(ev){
-      // Wenn wir Move-Segmente nutzen, sind Tile-Steps nur noch Fallback.
-      if (this.useMoveEvents && !this.useStepEvents) return;
-      const d = ev?.detail || {};
-      // tx/ty Pflicht
-      const tx = Number.isFinite(d.tx) ? d.tx : null;
-      const ty = Number.isFinite(d.ty) ? d.ty : null;
-      if (tx === null || ty === null) return;
+  onUnitStep(ev){
+    // Stage B: Sampling direkt aus Unit-Movement (prevX/prevY -> x/y)
+    // Diese Events kommen aus core/game.units.js: Bus.emit('cb:unit:step', { prevX, prevY, x, y, ... })
+    if (!this.enabled || !this.showStamps) return;
+    const d = ev?.detail || ev || {};
 
-      // Wenn Grid noch nicht da ist: puffern
-      if (!this.ensureGrid()){
-        this._preInitSteps.push({ ...d, tx, ty, t: Date.now() });
-        if (this._preInitSteps.length > this._preInitMax) this._preInitSteps.shift();
-        return;
-      }
+    // Koordinaten sind in TILE-Einheiten (float). Falls nur tx/ty da sind, fallback auf Tile (grob).
+    const x  = (typeof d.x  === 'number') ? d.x  : (typeof d.tx === 'number' ? d.tx : null);
+    const y  = (typeof d.y  === 'number') ? d.y  : (typeof d.ty === 'number' ? d.ty : null);
+    const px = (typeof d.prevX === 'number') ? d.prevX : (typeof d.prevTx === 'number' ? d.prevTx : null);
+    const py = (typeof d.prevY === 'number') ? d.prevY : (typeof d.prevTy === 'number' ? d.prevTy : null);
 
-      this._applyStepDetail({ ...d, tx, ty });
+    // Wenn wir keinen echten Segment-Start haben, legen wir wenigstens 1 Stamp am aktuellen Ort.
+    if (x == null || y == null) return;
+    if (px == null || py == null) {
+      this._addStamp(x, y);
+      return;
     }
 
-    // ----------------------------
-    // MOVE-SEGMENT EVENTS (cb:unit:move)
-    //  - Hauptquelle für glatte Trampelpfade (Linie statt Treppe)
-    //  - Detail: {from:{x,y}, to:{x,y}, id, kind, type, weight?, idle?}
-    // ----------------------------
-
+    this._stampSegment(px, py, x, y);
+  }
     onUnitMove(ev){
       if (!this.useMoveEvents) return;
 
@@ -338,6 +342,39 @@
         if (this._preInitMoves.length > this._preInitMovesMax) this._preInitMoves.shift();
         return;
       }
+
+  // ------------------------------------------------------------
+  // Stage B Helpers: Subtile-Stamps entlang echter Move-Segmente
+  // ------------------------------------------------------------
+  _addStamp(tx, ty){
+    // tx/ty in TILE-Koordinaten (float)
+    this._stampAlphaMax  = 0.45;
+    const frameIdx = Math.floor(Math.random() * 64); // path_00..path_63
+    this._stamps.push({ x: tx, y: ty, a, frameIdx });
+  }
+
+  _stampSegment(tx0, ty0, tx1, ty1){
+    const tileSize = this._tileSize || 64;
+    const dx = tx1 - tx0;
+    const dy = ty1 - ty0;
+    const distTiles = Math.hypot(dx, dy);
+    if (distTiles <= 0) {
+      this._addStamp(tx1, ty1);
+      return;
+    }
+    const distPx = distTiles * tileSize;
+    const stepPx = this._stampSpacingPx;
+    const n = Math.max(1, Math.floor(distPx / stepPx));
+
+    // Stempel in gleichmäßigen Abständen (≈16px) entlang des Segments
+    for (let i = 1; i <= n; i++) {
+      const t = (i * stepPx) / distPx; // 0..1
+      const tt = (t > 1) ? 1 : t;
+      const sx = tx0 + dx * tt;
+      const sy = ty0 + dy * tt;
+      this._addStamp(sx, sy);
+    }
+  }
 
       this._seenMoveEvent = true;
       this._applyMoveDetail(d);
@@ -632,63 +669,32 @@
       }
 
       // STAMPS (Texturen / Fallback)
-      if (this.showStamps){
-        for (let ty=b.ty0; ty<=b.ty1 && ty<this.rows; ty++){
-          for (let tx=b.tx0; tx<=b.tx1 && tx<this.cols; tx++){
-            const cell = this._idx(tx, ty);
-            if (cell < 0) continue;
-            const v = this.map[cell];
-            if (v < CFG.MIN_VISIBLE) continue;
+    if (this.showStamps){
+      // Stage B: echte Stamps (sub-tile) zeichnen – NICHT mehr als 1x pro Tile.
+      const stamps = this._stamps || [];
+    this._stampScale     = 0.75; // kleiner als 1 Tile, aber sichtbar
+      if (stamps.length){
+        for (let i=0;i<stamps.length;i++){
+          const s = stamps[i];
+          const px = s.x * tile;
+          const py = s.y * tile;
+          // Grobe View-Frustum Culling
+          if (px < x0 - tpx || px > x1 + tpx || py < y0 - tpx || py > y1 + tpx) continue;
 
-            // 1) NEU: SpriteSheet-Frames (organisch, zufällig pro Tile)
-            // 2) Fallback: Legacy-Texturen topdown_path0..9 (intensitätsbasiert)
-            const sprOk = this.useSprites && this._sprReady && this._sprImg && this.frame;
-            const frameIdx = sprOk ? this.frame[cell] : 255;
-            const idx = Math.min(9, Math.max(0, Math.floor(v * 9.999)));
-            const img = (!sprOk && this._texReady) ? this._tex[idx] : null;
+          const frameIdx = (s.frameIdx|0) & 63;
+          const col = frameIdx % cols;
+          const row = Math.floor(frameIdx / cols);
+          const sx = col * tpx;
+          const sy = row * tpx;
 
-            const a = lerp(CFG.STAMP_ALPHA_MIN, CFG.STAMP_ALPHA_MAX, v);
-            ctx.globalAlpha = a;
-
-            const px = tx*tile;
-            const py = ty*tile;
-
-            const dir = this.dir[cell] || 0;
-            const ang = (dir===0?0:
-                         dir===1?Math.PI/4:
-                         dir===2?Math.PI/2:
-                         dir===3?3*Math.PI/4:
-                         dir===4?Math.PI:
-                         dir===5?-3*Math.PI/4:
-                         dir===6?-Math.PI/2:
-                         -Math.PI/4);
-
-                        if (sprOk && frameIdx !== 255){
-              const cols = CFG.SPRITE_COLS || 8;
-              const tpx  = CFG.SPRITE_TILE_PX || 128;
-              const fi = frameIdx | 0;
-              const sx = (fi % cols) * tpx;
-              const sy = ((fi / cols) | 0) * tpx;
-              ctx.save();
-              ctx.translate(px + tile/2, py + tile/2);
-              ctx.rotate(ang);
-              ctx.drawImage(this._sprImg, sx, sy, tpx, tpx, -tile/2, -tile/2, tile, tile);
-              ctx.restore();
-            } else if (img){
-              ctx.save();
-              ctx.translate(px + tile/2, py + tile/2);
-              ctx.rotate(ang);
-              ctx.drawImage(img, -tile/2, -tile/2, tile, tile);
-              ctx.restore();
-            } else {
-
-              // Fallback: kleines "Tritt"-Rect (damit man IMMER was sieht)
-              ctx.fillStyle = '#000';
-              ctx.fillRect(px + tile*0.25, py + tile*0.35, tile*0.5, tile*0.3);
-            }
-          }
+          ctx.globalAlpha = Math.max(0, Math.min(1, s.a));
+          ctx.drawImage(this._sprImg, sx, sy, tpx, tpx,
+            px - (tpx*scale)/2, py - (tpx*scale)/2,
+            tpx*scale, tpx*scale);
         }
+        ctx.globalAlpha = 1;
       }
+    }
 
       ctx.restore();
 
@@ -727,6 +733,16 @@
         const nv = v - step;
         this.map[i] = nv > 0 ? nv : 0;
       }
+    // --- Subtile-Stamps decay (Stage B) ---
+    if (this._stamps && this._stamps.length) {
+      const dtS = dtMs / 1000;
+      const dec = CFG.DECAY_PER_SECOND * dtS;
+      for (let i = this._stamps.length - 1; i >= 0; i--) {
+        const s = this._stamps[i];
+        s.a -= dec;
+        if (s.a <= 0) this._stamps.splice(i, 1);
+      }
+    }
     }
 
     // ----------------------------
