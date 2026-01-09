@@ -45,6 +45,7 @@
         stampScaleBase: 0.42,
         samplePx: 18,
         decayPerSecondBase: 0.010,
+        softnessBase: 0.90,
       },
       // Etwas breiter, sichtbarer (Siedler 3 Style)  ✅ vom Nutzer gewünscht
       MODERN: {
@@ -52,6 +53,7 @@
         stampScaleBase: 0.52,
         samplePx: 16,
         decayPerSecondBase: 0.010,
+        softnessBase: 1.10,
       }
     },
 
@@ -65,6 +67,9 @@
     // Decay-Speed-Multiplier (Inspector)
     // 1.0 = Preset-Base
     decaySpeedMult: 1.00,
+
+    // Slider (Inspector): Kanten-Weichheit (\"Softness\"). 1.0 = Preset-Default
+    softnessMult: 1.0,
 
     // Initialwerte (werden im Konstruktor aus Preset berechnet)
     alpha: 0.55,                       // Sichtbarkeit (0..1)
@@ -121,6 +126,7 @@
       this.preset = CFG.preset;
       this.widthMult = CFG.widthMult;
       this.decaySpeedMult = CFG.decaySpeedMult;
+      this.softnessMult = CFG.softnessMult;
       this.decayPaused = false;
 
       // Effektive Werte (werden aus Preset + Multis berechnet)
@@ -155,6 +161,8 @@
       this._presetAlphaBase = p.alpha;
       this._presetScaleBase = p.stampScaleBase;
       this._presetDecayBase = p.decayPerSecondBase;
+      this._presetSoftBase = p.softnessBase ?? 1.0;
+        softnessBase: 1.10,
 
       // Sampling ist Teil des Presets
       CFG.samplePx = p.samplePx;
@@ -325,7 +333,12 @@
         const a = clamp(1 - age * decay, 0, 1);
         if (a <= 0.01) continue;
 
-        ctx.globalAlpha = alpha * a;
+        const baseA = alpha * a;
+        // Softness: 1.0 = Preset-Default. >1 = weicher (leichter "Halo"), <1 = knackiger.
+        const soft = (this.softness != null) ? this.softness : 1.0;
+        const halo = clamp((soft - 0.8) / 1.2, 0, 1);
+
+        ctx.globalAlpha = baseA;
 
         // -------------------------------------------------------------------
         // GUARD #1: Atlas muss wirklich geladen sein (sonst keine drawImage-Calls)
@@ -360,7 +373,16 @@
         // opts: {scale} wird in Assets.drawAtlasFrame beruecksichtigt.
         // WICHTIG: Aufruf ueber A.drawAtlasFrame(...), damit "this" stimmt.
         try{
-          A.drawAtlasFrame(ctx, CFG.atlasKey, s.frame, s.xPx, s.yPx, {
+                  // Soft-Halo-Pass: zeichnet einen leicht groesseren, transparenteren Stempel unter dem Hauptstempel.
+        // Effekt: Kanten wirken "weicher" (Siedler-3-Feeling), ohne echten Blur (performant).
+        if (halo > 0.001){
+          ctx.globalAlpha = baseA * (0.22 * halo);
+          const haloScale = scale * (1.12 + 0.22 * halo);
+          A.drawAtlasFrame(ctx, CFG.atlasKey, s.frame, s.xPx, s.yPx, { scale: haloScale });
+          ctx.globalAlpha = baseA;
+        }
+
+A.drawAtlasFrame(ctx, CFG.atlasKey, s.frame, s.xPx, s.yPx, {
             scale,
             // Wichtig: Center-Pivot (Atlas) -> kein zusaetzlicher Offset noetig
           });
@@ -410,6 +432,11 @@
     /** Pfadbreite (Inspector-Slider): multiplier auf Preset-Base */
     setWidthMult(mult){ inst.widthMult = Number(mult) || 1; inst._recomputeEffective(); try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
 
+    /** Weichheit-Multiplier: 1.0 = Preset-Default, >1 = weicher */
+    setSoftnessMult(mult){ inst.softnessMult = Number(mult) || 1; inst._recomputeEffective(); try{ window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay.getState() })); }catch(_){/*noop*/} },
+    /** Alias fuer Konsole (lesbarer) */
+    setSoftness(v){ window.PathOverlay.setSoftnessMult(v); },
+
     /** Absoluter Scale (für harte Debug-Tests) */
     setStampScale(scale){ inst.stampScale = Number(scale) || inst.stampScale; },
 
@@ -429,6 +456,8 @@
         widthMult: inst.widthMult,
         stampScale: inst.stampScale,
         alpha: inst.alpha,
+        softnessMult: inst.softnessMult,
+        softness: inst.softness,
         samplePx: CFG.samplePx,
         decayPaused: !!inst.decayPaused,
         decaySpeedMult: inst.decaySpeedMult,
