@@ -62,7 +62,7 @@
 
     // Slider (Inspector): multipliziert stampScaleBase
     // 1.0 = Preset-Base, 0.7 = schmaler, 1.3 = breiter
-    widthMult: 1.00,
+    widthMult: 0.30,
 
     // Decay-Speed-Multiplier (Inspector)
     // 1.0 = Preset-Base
@@ -78,7 +78,7 @@
     maxStamps: 6000,                   // Ringbuffer
 
     // Sampling: 16px entlang Move-Segmenten (wird durch Preset gesetzt)
-    samplePx: 16,                      // gewünschter Pixel-Abstand
+    samplePx: 160,                      // gewünschter Pixel-Abstand
     minDistPx: 8,                      // Untergrenze (falls sehr langsam)
 
     // Layer
