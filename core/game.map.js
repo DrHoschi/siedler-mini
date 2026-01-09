@@ -1179,6 +1179,22 @@ if (b && Assets && typeof Assets.getAtlas === 'function' && typeof Assets.drawAt
     }
 
     // ---------------------------------------------------------------------
+    // PATH OVERLAY (Trampelpfade) – WORLD-Layer
+    //  - Muss NACH Terrain aber VOR Ressourcen/Deko/Gebäuden kommen,
+    //    damit die Pfade unter "Objekten" liegen.
+    //  - Wird in WORLD-Koordinaten gezeichnet und nutzt die bereits gesetzte
+    //    Kamera-Transform (ctx.setTransform(...)).
+    // ---------------------------------------------------------------------
+    try {
+      const P = window.PathOverlayInstance;
+      if (P && typeof P.drawOnMainCanvas === 'function') {
+        P.drawOnMainCanvas(ctx);
+      }
+    } catch (e) {
+      WARN('PathOverlay draw Fehler:', e);
+    }
+
+    // ---------------------------------------------------------------------
         // -----------------------------------------------------------
     // GLOBAL Y-SORT: Ressourcen + Deko + Gebäude + Units in EINEM Lauf
     // -----------------------------------------------------------

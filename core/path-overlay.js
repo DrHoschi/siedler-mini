@@ -1,11 +1,12 @@
-// v26.01.09-paths-stageB-visible
+// v26.01.09-paths-stageB-worldlayer
 // -----------------------------------------------------------------------------
 // PATH OVERLAY (Trampelpfade)
 // Ziel (für Alex / Siedler-Mini):
 // - Stempeln entlang der tatsächlichen Unit-Bewegung (prevX/prevY -> x/y)
 // - Sub-Tile Sampling ~16px (bei tileSize=64 => 0.25 Tiles)
-// - Zeichnen als eigenes Canvas (#paths-overlay), IMMER sichtbar (kein CSS-Depend)
-// - Unter Units: z-index 2 (Map = 1, Units = 3) - wir setzen Style direkt am Canvas
+// - Zeichnen als WORLD-Layer direkt auf dem Haupt-Canvas (GameMap.render)
+//   → dadurch scrollt es korrekt mit der Kamera und liegt UNTER Gebäuden/Bäumen,
+//     aber ÜBER dem Terrain.
 // - Pivot der Frames ist im Atlas auf Mitte gesetzt (128px => 64/64), wir zeichnen centered.
 //
 // WICHTIG:
@@ -83,14 +84,8 @@
       this._stamps = [];
       this._lastT = nowSec();
 
-      // Canvas
-      this._canvas = null;
-      this._ctx = null;
-
       // Für "letzte Position pro Unit"
       this._unitLast = new Map(); // unit.id -> {xPx,yPx}
-
-      this._ensureCanvas();
 
       // Events
       this._bindEvents();
@@ -129,56 +124,10 @@
         this.enabled = !this.enabled;
       });
 
-      // Resize
-      window.addEventListener('resize', () => this._ensureCanvas(true));
-    }
-
-    // -------------------------------------------------------------------------
-    // CANVAS
-    // -------------------------------------------------------------------------
-    _ensureCanvas(force=false){
-      const host = document.getElementById('game') || document.querySelector('canvas');
-      if (!host) return;
-
-      if (!this._canvas){
-        const c = document.createElement('canvas');
-        c.id = 'paths-overlay';
-        c.style.position = 'absolute';
-        c.style.left = '0';
-        c.style.top = '0';
-        c.style.pointerEvents = 'none';
-        c.style.zIndex = String(CFG.zIndex);
-
-        // IMPORTANT: wir hängen es an den selben Parent wie #game,
-        // damit absolute Position korrekt ist.
-        const parent = host.parentElement || document.body;
-        parent.style.position = parent.style.position || 'relative';
-        parent.appendChild(c);
-
-        this._canvas = c;
-        this._ctx = c.getContext('2d');
-      }
-
-      // Größe/Position synchronisieren
-      const rect = host.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-
-      // Canvas im CSS exakt über #game legen
-      this._canvas.style.width = rect.width + 'px';
-      this._canvas.style.height = rect.height + 'px';
-      this._canvas.style.left = (host.offsetLeft || 0) + 'px';
-      this._canvas.style.top  = (host.offsetTop || 0) + 'px';
-
-      const w = Math.max(1, Math.round(rect.width * dpr));
-      const h = Math.max(1, Math.round(rect.height * dpr));
-
-      if (force || this._canvas.width !== w || this._canvas.height !== h){
-        this._canvas.width = w;
-        this._canvas.height = h;
-
-        // Zeichenskalierung auf DPR
-        this._ctx.setTransform(dpr,0,0,dpr,0,0);
-      }
+      // NOTE:
+      //   Wir zeichnen NICHT mehr in ein eigenes Canvas, sondern in GameMap.render
+      //   direkt auf das Haupt-Canvas (World-Space). Daher brauchen wir hier
+      //   keinerlei Resize-/Canvas-Sync-Logik mehr.
     }
 
     // -------------------------------------------------------------------------
@@ -241,20 +190,21 @@
     // -------------------------------------------------------------------------
     // DRAW
     // -------------------------------------------------------------------------
-    draw(){
+    /**
+     * Zeichnet die Pfade in WORLD-Koordinaten.
+     *
+     * Erwartung:
+     *   - Der aufrufende Renderer (GameMap.render) hat bereits die Kamera-
+     *     Transform gesetzt: ctx.setTransform(zoom,0,0,zoom,-camX*zoom,-camY*zoom)
+     *   - (xPx,yPx) sind WORLD-Pixel (tile*tileSize)
+     */
+    drawOnMainCanvas(ctx){
       if (!this.enabled) return;
-
-      this._ensureCanvas();
-
-      const ctx = this._ctx;
       if (!ctx) return;
 
       const t = nowSec();
       const dt = Math.min(0.25, Math.max(0, t - this._lastT));
       this._lastT = t;
-
-      // Clear
-      ctx.clearRect(0,0, this._canvas.width, this._canvas.height);
 
       // Nichts zu zeichnen
       if (!this._stamps.length) return;
@@ -272,7 +222,7 @@
         if (this.debug){
           ctx.fillStyle = 'rgba(255,0,0,0.8)';
           for (const s of this._stamps){
-            ctx.fillRect(s.xPx-1, s.yPx-1, 3, 3);
+            ctx.fillRect(s.xPx-2, s.yPx-2, 4, 4);
           }
         }
         return;
@@ -324,7 +274,7 @@
           continue;
         }
 
-        // Center-Pivot im Atlas -> wir zeichnen direkt an (xPx,yPx)
+        // Center-Pivot im Atlas -> wir zeichnen direkt an (xPx,yPx) in WORLD.
         // opts: {scale} wird in Assets.drawAtlasFrame beruecksichtigt.
         // WICHTIG: Aufruf ueber A.drawAtlasFrame(...), damit "this" stimmt.
         try{
@@ -362,6 +312,8 @@
     setEnabled(v){ inst.enabled = !!v; },
     setDebug(v){ inst.debug = !!v; },
     clear(){ inst._stamps = []; },
+    // Hook für Renderer
+    drawOnMainCanvas(ctx){ inst.drawOnMainCanvas(ctx); },
     tune(obj){
       if (!obj) return;
       if (obj.alpha != null) inst.alpha = obj.alpha;
@@ -371,11 +323,10 @@
     _inst: inst,
   };
 
-  // Draw-Loop (unabhängig von OverlayHooks, damit Safari/Underlay-Probleme egal sind)
-  function loop(){
-    try{ inst.draw(); }catch(e){ /* ignore */ }
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
+  // WICHTIG:
+  //   Kein eigener requestAnimationFrame-Loop mehr!
+  //   Das Rendering passiert im Haupt-Renderer (GameMap.render),
+  //   damit die Pfade korrekt in WORLD-Space mit Kamera transformiert
+  //   werden und vor Ressourcen/Deko/Gebäuden gerendert werden können.
 
 })();
