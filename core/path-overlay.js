@@ -101,14 +101,27 @@
     // -------------------------------------------------------------------------
     _bindEvents(){
       // Unit-Bewegung (kommt aus core/game.units.js)
+      // WICHTIG: In deinem Projekt existieren zwei Event-Formate:
+      //   A) cb:unit:move  detail: { id, kind, type, from:{x,y}, to:{x,y} }
+      //   B) cb:unit:step  detail: { id, kind, type, tx,ty, prevTx,prevTy, x,y }
+      // Der alte Listener erwartete fälschlich d.unit + d.prevX/d.prevY → dadurch wurden NIE Stamps erzeugt.
+      window.addEventListener('cb:unit:move', (ev) => {
+        if (!this.enabled) return;
+        const d = ev && ev.detail;
+        if (!d || !d.from || !d.to) return;
+        // from/to sind TILE-Koordinaten (float)
+        this.onUnitMove({ id: d.id }, d.from.x, d.from.y, d.to.x, d.to.y);
+      });
+
       window.addEventListener('cb:unit:step', (ev) => {
         if (!this.enabled) return;
         const d = ev && ev.detail;
-        if (!d || !d.unit) return;
-
-        // Wir stempeln nur für Worker/Carrier/Builder etc.
-        // Du kannst hier später filtern (nur Carrier, nur Workers ...).
-        this.onUnitMove(d.unit, d.prevX, d.prevY, d.x, d.y);
+        if (!d) return;
+        // step liefert x/y (float) + prevTx/prevTy (int). Wir rekonstruieren prevX/prevY als Tile-Float.
+        const prevX = (Number.isFinite(d.prevTx) ? (d.prevTx + 0.5) : d.x);
+        const prevY = (Number.isFinite(d.prevTy) ? (d.prevTy + 0.5) : d.y);
+        if (!Number.isFinite(d.x) || !Number.isFinite(d.y)) return;
+        this.onUnitMove({ id: d.id }, prevX, prevY, d.x, d.y);
       });
 
       // Optional: harte Toggle-Events (falls du später per Inspector steuern willst)
