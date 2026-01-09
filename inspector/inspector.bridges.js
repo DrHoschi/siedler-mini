@@ -16,12 +16,13 @@
   /* ------------------------------------------------------------------ */
   /* [A] Pfad-Overlay Durchleitung                                      */
   /* ------------------------------------------------------------------ */
-  const on      = () => window.PathOverlay?.toggle?.(true);
-  const off     = () => window.PathOverlay?.toggle?.(false);
+  // Neues Pfad-System (World-Layer) – kompatibel zu alten Events
+  const on      = () => window.PathOverlay?.setEnabled?.(true) ?? window.PathOverlay?.toggle?.(true);
+  const off     = () => window.PathOverlay?.setEnabled?.(false) ?? window.PathOverlay?.toggle?.(false);
   const heatOn  = () => window.PathOverlay?.setHeatmap?.(true);
   const heatOff = () => window.PathOverlay?.setHeatmap?.(false);
-  const layerOn = () => { window.PathOverlay?.setVisible?.(true); window.PathOverlay?.setStamps?.(true); };
-  const layerOff = () => window.PathOverlay?.setStamps?.(false);
+  const layerOn = () => { window.PathOverlay?.setEnabled?.(true) ?? window.PathOverlay?.setVisible?.(true); };
+  const layerOff = () => { window.PathOverlay?.setEnabled?.(false) ?? window.PathOverlay?.setStamps?.(false); };
   // Decay (Trampelpfade ausblenden lassen) – Inspector Slider + Freeze
   const decayOn   = () => window.PathOverlay?.setDecayPaused?.(false);
   const decayOff  = () => window.PathOverlay?.setDecayPaused?.(true);
@@ -49,6 +50,22 @@
   window.addEventListener('cb:path:decay:off',    decayOff);
   window.addEventListener('cb:path:decay:freeze', decayFreeze);
   window.addEventListener('cb:path:decay:speed',  decaySpeed);
+
+  // ------------------------------------------------------------------
+  // [A2] Neue Controls: Debug / Preset / Pfadbreite
+  // ------------------------------------------------------------------
+  window.addEventListener('cb:path:debug:on',  () => window.PathOverlay?.setDebug?.(true));
+  window.addEventListener('cb:path:debug:off', () => window.PathOverlay?.setDebug?.(false));
+
+  window.addEventListener('cb:path:preset', (e)=>{
+    const p = e?.detail?.preset;
+    window.PathOverlay?.setPreset?.(p);
+  });
+  window.addEventListener('cb:path:width', (e)=>{
+    const d = e?.detail || {};
+    const mult = (d.widthMult != null) ? d.widthMult : (d.mult != null ? d.mult : (d.percent != null ? Number(d.percent)/100 : null));
+    if (mult != null) window.PathOverlay?.setWidthMult?.(mult);
+  });
 
   /* ------------------------------------------------------------------ */
   /* [B] Ressourcen-Snapshot                                            */
