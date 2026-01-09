@@ -66,6 +66,12 @@
     const mult = (d.widthMult != null) ? d.widthMult : (d.mult != null ? d.mult : (d.percent != null ? Number(d.percent)/100 : null));
     if (mult != null) window.PathOverlay?.setWidthMult?.(mult);
   });
+  window.addEventListener('cb:path:softness', (e)=>{
+    const d = e?.detail || {};
+    const mult = (d.softnessMult != null) ? d.softnessMult : (d.mult != null ? d.mult : (d.percent != null ? Number(d.percent)/100 : null));
+    if (mult != null) window.PathOverlay?.setSoftnessMult?.(mult);
+  });
+
 
   /* ------------------------------------------------------------------ */
   /* [B] Ressourcen-Snapshot                                            */
