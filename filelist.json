@@ -1,7 +1,7 @@
 {
-  "createdAt": "2026-01-08T15:03:55.933Z",
+  "createdAt": "2026-01-09T11:35:20.301Z",
   "root": ".",
-  "count": 586,
+  "count": 590,
   "entries": [
     {
       "type": "dir",
@@ -406,7 +406,7 @@
     {
       "type": "file",
       "path": "assets/fx/smoke/fx_smoke_sprite_atlas.png",
-      "size": 679009
+      "size": 677661
     },
     {
       "type": "dir",
@@ -1509,7 +1509,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 25947
+      "size": 26405
     },
     {
       "type": "file",
@@ -1619,7 +1619,7 @@
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 58338
+      "size": 58834
     },
     {
       "type": "file",
@@ -1674,7 +1674,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 45235
+      "size": 45321
     },
     {
       "type": "file",
@@ -1749,7 +1749,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 24988
+      "size": 11042
     },
     {
       "type": "file",
@@ -1901,6 +1901,16 @@
     },
     {
       "type": "file",
+      "path": "data/atlases/path_sprite_atlas_centerpivot.json",
+      "size": 26085
+    },
+    {
+      "type": "file",
+      "path": "data/atlases/path_sprite_atlas.json",
+      "size": 26085
+    },
+    {
+      "type": "file",
       "path": "data/atlases/quarry-sprite_atlas.json",
       "size": 1610
     },
@@ -2030,7 +2040,7 @@
     {
       "type": "file",
       "path": "data/units.json",
-      "size": 13250
+      "size": 13341
     },
     {
       "type": "dir",
@@ -2176,7 +2186,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.paths-v1.js",
-      "size": 13226
+      "size": 13811
     },
     {
       "type": "file",
@@ -2231,6 +2241,16 @@
       "type": "file",
       "path": "inspector/inspector.bridges.js",
       "size": 9037
+    },
+    {
+      "type": "file",
+      "path": "inspector/inspector.tab.editor-v1.js",
+      "size": 947
+    },
+    {
+      "type": "file",
+      "path": "inspector/inspector.tab.units-v1.js",
+      "size": 7069
     },
     {
       "type": "file",
@@ -2686,7 +2706,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-layer.patch.css",
-      "size": 1379
+      "size": 1958
     },
     {
       "type": "file",
@@ -2831,17 +2851,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 58523
+      "size": 58638
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 22938
+      "size": 22991
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 18623
+      "size": 18703
     },
     {
       "type": "file",
