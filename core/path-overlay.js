@@ -42,15 +42,15 @@
       // Schmaler, dezenter (Siedler 1/2 Style)
       CLASSIC: {
         alpha: 0.52,
-        stampScaleBase: 0.42,
-        samplePx: 18,
+        stampScaleBase: 0.20,
+        samplePx: 38,
         decayPerSecondBase: 0.010,
-        softnessBase: 0.90,
+        softnessBase: 1.90,
       },
       // Etwas breiter, sichtbarer (Siedler 3 Style)  ✅ vom Nutzer gewünscht
       MODERN: {
         alpha: 0.58,
-        stampScaleBase: 0.52,
+        stampScaleBase: 0.32,
         samplePx: 16,
         decayPerSecondBase: 0.010,
         softnessBase: 1.10,
