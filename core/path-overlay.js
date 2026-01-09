@@ -259,9 +259,15 @@
       // Nichts zu zeichnen
       if (!this._stamps.length) return;
 
-      // Atlas muss geladen sein
-      const drawAtlas = window.Assets && window.Assets.drawAtlasFrame;
-      if (!drawAtlas){
+      // Atlas-API muss vorhanden sein
+      // WICHTIG (Safari/iOS + JS-Details):
+      //   Assets.drawAtlasFrame ist eine Methode, die intern "this" nutzt.
+      //   Wenn man sie in eine Variable kopiert (const f = Assets.drawAtlasFrame)
+      //   und danach f(...) aufruft, ist "this" UNDEFINED -> TypeError.
+      //   Deshalb rufen wir später IMMER über window.Assets.drawAtlasFrame(...) auf.
+      const A = window.Assets;
+      const hasAtlasApi = A && typeof A.getAtlas === 'function' && typeof A.drawAtlasFrame === 'function';
+      if (!hasAtlasApi){
         // Fallback: Debug-Punkte (zeigt ob Stamps überhaupt entstehen)
         if (this.debug){
           ctx.fillStyle = 'rgba(255,0,0,0.8)';
@@ -289,13 +295,42 @@
 
         ctx.globalAlpha = alpha * a;
 
+        // -------------------------------------------------------------------
+        // GUARD #1: Atlas muss wirklich geladen sein (sonst keine drawImage-Calls)
+        // -------------------------------------------------------------------
+        const atlas = A.getAtlas(CFG.atlasKey);
+        if (!atlas || !atlas.ok || !atlas.img){
+          if (this.debug){
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = 'rgba(255,0,0,0.9)';
+            // etwas groesser, damit du es sofort siehst
+            ctx.fillRect(s.xPx-2, s.yPx-2, 4, 4);
+          }
+          out.push(s);
+          continue;
+        }
+
+        // -------------------------------------------------------------------
+        // GUARD #2: Frame muss existieren (sonst koennen wir nicht stempeln)
+        // -------------------------------------------------------------------
+        const fr = atlas.frames && atlas.frames[s.frame];
+        if (!fr){
+          if (this.debug){
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = 'rgba(255,0,0,0.9)';
+            ctx.fillRect(s.xPx-2, s.yPx-2, 4, 4);
+          }
+          out.push(s);
+          continue;
+        }
+
         // Center-Pivot im Atlas -> wir zeichnen direkt an (xPx,yPx)
-        // opts: {scale, anchorX/anchorY} werden in Assets.drawAtlasFrame berücksichtigt,
-        // falls dein Assets-System das so macht. Falls nicht, trotzdem sichtbar.
+        // opts: {scale} wird in Assets.drawAtlasFrame beruecksichtigt.
+        // WICHTIG: Aufruf ueber A.drawAtlasFrame(...), damit "this" stimmt.
         try{
-          drawAtlas(ctx, CFG.atlasKey, s.frame, s.xPx, s.yPx, {
+          A.drawAtlasFrame(ctx, CFG.atlasKey, s.frame, s.xPx, s.yPx, {
             scale,
-            // Wichtig: Center-Pivot (Atlas) -> kein zusätzlicher Offset nötig
+            // Wichtig: Center-Pivot (Atlas) -> kein zusaetzlicher Offset noetig
           });
         }catch(e){
           // not fatal
