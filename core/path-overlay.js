@@ -74,7 +74,7 @@
     preset: 'MODERN',
 
     // Slider (Inspector): multipliziert stampScaleBase
-    widthMult: 1.00,
+    widthMult: 0.50,
 
     // Decay-Speed-Multiplier (Inspector)
     decaySpeedMult: 1.00,
@@ -86,7 +86,7 @@
     maxStamps: 7000,
 
     // Sampling-Limits
-    minDistPx: 8,
+    minDistPx: 16,
 
     // ---------------------------------------------------------------------
     // USAGE / WEAR
