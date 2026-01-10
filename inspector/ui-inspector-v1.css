@@ -119,3 +119,61 @@ body.is-inspector #inspector-fab{
 #inspector [data-panel="logs"] .insp-btn:hover {
   background: #35353a;
 }
+
+/* =========================
+   Inspector – Pfade Tab Style
+   ========================= */
+
+.insp-pad h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insp-pad .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.insp-pad .row label {
+  min-width: 80px;
+  opacity: .85;
+}
+
+.insp-pad button {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.25);
+  color: rgba(255,255,255,.92);
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.insp-pad button:active {
+  transform: translateY(1px);
+}
+
+.insp-pad button[data-on="1"] {
+  border-color: rgba(255,255,255,.35);
+  background: rgba(255,255,255,.12);
+}
+
+.insp-pad input[type="range"] {
+  flex: 1;
+  min-width: 160px;
+  accent-color: rgba(255,255,255,.75);
+}
+
+.insp-pad pre {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.25);
+  padding: 8px;
+  border-radius: 10px;
+  max-height: 160px;
+  overflow: auto;
+}
