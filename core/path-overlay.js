@@ -248,6 +248,13 @@
       // Wear: Sparse Map (nur Tiles, die überhaupt betreten wurden)
       this._wear = new Map(); // key = idx (ty*cols+tx) -> wear 0..1
 
+      // Live-Debug (für Inspector Statuszeile)
+      this._lastTx = 0;
+      this._lastTy = 0;
+      this._lastTerrain = 'DEFAULT';
+      this._lastWear = 0;
+      this._lastStage = 0;
+
       // Stamps: Ringbuffer für visuelles Decay (wird zusätzlich zu Wear genutzt)
       // stamp = { xPx, yPx, bornSec, frame, terrain }
       this._stamps = [];
@@ -257,6 +264,9 @@
 
       // Timing
       this._lastT = nowSec();
+
+      // State-Emit Throttle (verhindert Spam bei vielen Stamps pro Frame)
+      this._lastEmitSec = 0;
 
       // Events
       this._bindEvents();
@@ -471,6 +481,13 @@
       // Stage/Row aus Wear
       const stage = this._wearToStage(wear1);
 
+      // Live-Status für Inspector (letzter Stamp)
+      this._lastTx = tx;
+      this._lastTy = ty;
+      this._lastTerrain = terrain;
+      this._lastWear = wear1;
+      this._lastStage = stage;
+
       // Col/Variation deterministisch (pro Tile), aber Stage-abhängig leicht anders
       const h = hash2(tx + stage*97, ty + stage*57);
       const col = (h % CFG.atlasCols) | 0;
@@ -489,6 +506,13 @@
       // Ringbuffer
       const over = this._stamps.length - CFG.maxStamps;
       if (over > 0) this._stamps.splice(0, over);
+
+      // State event throttled (für Live-Status)
+      const t = nowSec();
+      if ((t - this._lastEmitSec) >= 0.2) {
+        this._lastEmitSec = t;
+        this._emitState();
+      }
     }
 
     // ---------------------------------------------------------------------
@@ -616,9 +640,45 @@
     // ---------------------------------------------------------------------
     // STATE / EVENTS (für Inspector)
     // ---------------------------------------------------------------------
+    _makeState(){
+      return {
+        enabled: !!this.enabled,
+        debug: !!this.debug,
+
+        preset: this.preset,
+        widthMult: this.widthMult,
+        stampScale: this.stampScale,
+        alpha: this.alpha,
+
+        softnessMult: this.softnessMult,
+        softness: this.softness,
+
+        samplePx: this.samplePx,
+
+        decayPaused: !!this.decayPaused,
+        decaySpeedMult: this.decaySpeedMult,
+        decayPerSecond: this.decayPerSecond,
+
+        epochLockEnabled: !!this.epochLockEnabled,
+        epoch: this.epoch,
+        epochMaxStage: this.epochMaxStage,
+        maxStageEffective: this._getEffectiveMaxStage(),
+
+        stamps: this._stamps.length,
+        wearTiles: this._wear.size,
+
+        // Live-Info (letzter Stamp)
+        lastTx: this._lastTx,
+        lastTy: this._lastTy,
+        lastTerrain: this._lastTerrain,
+        lastWear: this._lastWear,
+        lastStage: this._lastStage,
+      };
+    }
+
     _emitState(){
       try{
-        window.dispatchEvent(new CustomEvent('cb:path:state', { detail: window.PathOverlay?.getState?.() || null }));
+        window.dispatchEvent(new CustomEvent('cb:path:state', { detail: this._makeState() }));
       }catch(_){/*noop*/}
     }
   }
@@ -654,34 +714,7 @@
     setEpoch(n){ inst.epoch = clamp(parseInt(n,10)||1, 1, 99); inst.epochMaxStage = inst._computeEpochMaxStage(); inst._emitState(); },
 
     // State
-    getState(){
-      return {
-        enabled: !!inst.enabled,
-        debug: !!inst.debug,
-
-        preset: inst.preset,
-        widthMult: inst.widthMult,
-        stampScale: inst.stampScale,
-        alpha: inst.alpha,
-
-        softnessMult: inst.softnessMult,
-        softness: inst.softness,
-
-        samplePx: inst.samplePx,
-
-        decayPaused: !!inst.decayPaused,
-        decaySpeedMult: inst.decaySpeedMult,
-        decayPerSecond: inst.decayPerSecond,
-
-        epochLockEnabled: !!inst.epochLockEnabled,
-        epoch: inst.epoch,
-        epochMaxStage: inst.epochMaxStage,
-        maxStageEffective: inst._getEffectiveMaxStage(),
-
-        stamps: inst._stamps.length,
-        wearTiles: inst._wear.size,
-      };
-    },
+    getState(){ return inst._makeState(); },
 
     // Backward-Compat
     toggle(v){ inst.enabled = (v==null ? !inst.enabled : !!v); inst._emitState(); },
