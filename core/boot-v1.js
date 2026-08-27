@@ -1,14 +1,12 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
- * Version  : v26.01.06-unitanimresolver-1 (3-Gate bleibt unverändert)
- *
- * Fix (2025-12-19):
- *   - "Weiterspielen" sendet req:game:continue (ui/ui-start.js),
- *     aber Boot hörte bisher NUR auf req:game:start.
- *     Ergebnis: Continue-Klick hat NICHTS ausgelöst → Panel bleibt offen.
+ * Projekt  : Neue Siedler
+ * Version  : v26.08.27-sa04-continue-gate
+ * Zweck    : 3-Gate-Boot + SA-04 echter Continue-Gate mit SaveGame V2.
  *
  * Startet  : cb:game:start ⇐ (req:game:start ODER req:game:continue)
  *                      + cb:assets-ready + cb:registry:ready
+ * Continue : zusätzlich nur nach gültigem SaveGameV2.prepareContinue().
  * ========================================================================== */
 (function(){
   'use strict';
@@ -20,61 +18,113 @@
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG, ...a);
 
   const state = {
-    version:'v25.12.19-continue-fix',
+    version:'v26.08.27-sa04-continue-gate',
     userReady:false,
     assetsReady:false,
     registryReady:false,
+    saveV2Ready:false,
+    continuePrepared:false,
     started:false,
-    mode:null,              // 'new' | 'continue'
+    mode:null
   };
+  window.BootState = state;
   INFO('BootManager initialisiert', state.version);
+
+  function emit(name,detail={}){
+    try{ dispatchEvent(new CustomEvent(name,{detail})); }catch(_){}
+  }
 
   function maybeStart(){
     if (state.started) return;
-    if (!state.userReady || !state.assetsReady || !state.registryReady) {
+
+    const continueBlocked = state.mode === 'continue' && (!state.saveV2Ready || !state.continuePrepared);
+    if (!state.userReady || !state.assetsReady || !state.registryReady || continueBlocked) {
       const miss=[];
       if (!state.userReady)     miss.push('userReady');
       if (!state.assetsReady)   miss.push('assetsReady');
       if (!state.registryReady) miss.push('registryReady');
+      if (state.mode === 'continue' && !state.saveV2Ready) miss.push('saveV2Ready');
+      if (state.mode === 'continue' && state.saveV2Ready && !state.continuePrepared) miss.push('continuePrepared');
       WARN('Start blockiert → fehlend:', miss.length===1?miss[0]:JSON.stringify(miss));
       return;
     }
+
     state.started = true;
-    dispatchEvent(new CustomEvent('cb:game:start', { detail:{ mode: state.mode || 'new' } }));
-    INFO('cb:game:start emittiert');
+    emit('cb:game:start', { mode: state.mode || 'new' });
+    INFO('cb:game:start emittiert', state.mode || 'new');
   }
 
-  // ------------------------------------------------------------
-  // User-Gate: Start ODER Continue
-  // ------------------------------------------------------------
+  function prepareContinue(){
+    if (!state.saveV2Ready || !window.SaveGameV2) return false;
+    const result = window.SaveGameV2.prepareContinue({slot:'autosave'});
+    if (!result?.ok){
+      state.continuePrepared=false;
+      state.userReady=false;
+      state.mode=null;
+      WARN('Continue nicht möglich:', result?.message || 'kein Savegame');
+      emit('cb:game:continue:blocked',{reason:'no-valid-save-v2', message:result?.message || 'Kein gültiger Spielstand'});
+      return false;
+    }
+    state.continuePrepared=true;
+    INFO('Continue-Snapshot vorbereitet ✓');
+    return true;
+  }
+
   function onUserRequest(mode){
-    // Mehrfachklick ist ok, wir starten trotzdem nur 1× (state.started Guard)
+    if (state.started) return;
     state.userReady = true;
-    state.mode = mode || state.mode || 'new';
+    state.mode = mode || 'new';
     INFO('UserReady ✓ via', state.mode);
+
+    if (state.mode === 'continue' && state.saveV2Ready){
+      if (!prepareContinue()) return;
+    }
     maybeStart();
 
-    // UX/Debug: Wenn Assets lange brauchen, sehen wir wenigstens warum.
-    // (Keine harte Abbruch-Logik – nur Warnung.)
     setTimeout(()=>{
       if (state.started) return;
       if (!state.assetsReady)   WARN('Warte noch auf assetsReady …');
       if (!state.registryReady) WARN('Warte noch auf registryReady …');
+      if (state.mode === 'continue' && !state.saveV2Ready) WARN('Warte noch auf SaveGame V2 …');
     }, 1500);
   }
 
   addEventListener('req:game:start',    ()=> onUserRequest('new'));
   addEventListener('req:game:continue', ()=> onUserRequest('continue'));
 
-  // Assets einmalig
-  addEventListener('cb:assets-ready', (e)=>{ if (state.assetsReady) return;
-    state.assetsReady = true; INFO('Assets bereit ✓', e?.detail||{});
+  addEventListener('cb:assets-ready', (e)=>{
+    if (state.assetsReady) return;
+    state.assetsReady = true;
+    INFO('Assets bereit ✓', e?.detail||{});
     maybeStart();
   }, { once:true });
 
-  // Registry einmalig
-  addEventListener('cb:registry:ready', (e)=>{ if (state.registryReady) return;
-    state.registryReady = true; INFO('Registry bereit ✓', e?.detail||{});
+  addEventListener('cb:registry:ready', (e)=>{
+    if (state.registryReady) return;
+    state.registryReady = true;
+    INFO('Registry bereit ✓', e?.detail||{});
     maybeStart();
   }, { once:true });
+
+  // SaveGame V2 wird additiv geladen, ohne index.html für SA-04 groß umzubauen.
+  addEventListener('cb:savegame:v2:ready', (e)=>{
+    state.saveV2Ready=true;
+    INFO('SaveGame V2 bereit ✓', e?.detail||{});
+    if (state.userReady && state.mode === 'continue'){
+      if (!prepareContinue()) return;
+    }
+    maybeStart();
+  }, { once:true });
+
+  (function loadSaveGameV2(){
+    if (window.SaveGameV2){
+      state.saveV2Ready=true;
+      return;
+    }
+    const s=document.createElement('script');
+    s.src='core/savegame-v2.js?v=26.08.27-sa04-1';
+    s.async=false;
+    s.onerror=()=>WARN('SaveGame V2 konnte nicht geladen werden');
+    (document.head||document.documentElement).appendChild(s);
+  })();
 })();
