@@ -1,11 +1,11 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
  * Projekt  : Neue Siedler
- * Version  : v26.08.27-sa04-continue-gate
- * Zweck    : 3-Gate-Boot + SA-04 echter Continue-Gate mit SaveGame V2.
+ * Version  : v26.08.27-sa04-continue-gate2
+ * Zweck    : 3-Gate-Boot + SA-04 SaveGame-V2-Gate.
  *
  * Startet  : cb:game:start ⇐ (req:game:start ODER req:game:continue)
- *                      + cb:assets-ready + cb:registry:ready
+ *                      + cb:assets-ready + cb:registry:ready + SaveGameV2 ready
  * Continue : zusätzlich nur nach gültigem SaveGameV2.prepareContinue().
  * ========================================================================== */
 (function(){
@@ -18,7 +18,7 @@
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG, ...a);
 
   const state = {
-    version:'v26.08.27-sa04-continue-gate',
+    version:'v26.08.27-sa04-continue-gate2',
     userReady:false,
     assetsReady:false,
     registryReady:false,
@@ -37,13 +37,13 @@
   function maybeStart(){
     if (state.started) return;
 
-    const continueBlocked = state.mode === 'continue' && (!state.saveV2Ready || !state.continuePrepared);
-    if (!state.userReady || !state.assetsReady || !state.registryReady || continueBlocked) {
+    const continueBlocked = state.mode === 'continue' && !state.continuePrepared;
+    if (!state.userReady || !state.assetsReady || !state.registryReady || !state.saveV2Ready || continueBlocked) {
       const miss=[];
       if (!state.userReady)     miss.push('userReady');
       if (!state.assetsReady)   miss.push('assetsReady');
       if (!state.registryReady) miss.push('registryReady');
-      if (state.mode === 'continue' && !state.saveV2Ready) miss.push('saveV2Ready');
+      if (!state.saveV2Ready)   miss.push('saveV2Ready');
       if (state.mode === 'continue' && state.saveV2Ready && !state.continuePrepared) miss.push('continuePrepared');
       WARN('Start blockiert → fehlend:', miss.length===1?miss[0]:JSON.stringify(miss));
       return;
@@ -85,7 +85,7 @@
       if (state.started) return;
       if (!state.assetsReady)   WARN('Warte noch auf assetsReady …');
       if (!state.registryReady) WARN('Warte noch auf registryReady …');
-      if (state.mode === 'continue' && !state.saveV2Ready) WARN('Warte noch auf SaveGame V2 …');
+      if (!state.saveV2Ready)   WARN('Warte noch auf SaveGame V2 …');
     }, 1500);
   }
 
@@ -106,7 +106,6 @@
     maybeStart();
   }, { once:true });
 
-  // SaveGame V2 wird additiv geladen, ohne index.html für SA-04 groß umzubauen.
   addEventListener('cb:savegame:v2:ready', (e)=>{
     state.saveV2Ready=true;
     INFO('SaveGame V2 bereit ✓', e?.detail||{});
@@ -116,15 +115,16 @@
     maybeStart();
   }, { once:true });
 
-  (function loadSaveGameV2(){
-    if (window.SaveGameV2){
-      state.saveV2Ready=true;
-      return;
-    }
+  function appendScript(src){
     const s=document.createElement('script');
-    s.src='core/savegame-v2.js?v=26.08.27-sa04-1';
+    s.src=src;
     s.async=false;
-    s.onerror=()=>WARN('SaveGame V2 konnte nicht geladen werden');
+    s.onerror=()=>WARN('Modul konnte nicht geladen werden:',src);
     (document.head||document.documentElement).appendChild(s);
-  })();
+    return s;
+  }
+
+  // UID-Guard zuerst registrieren; SaveGame V2 emittiert den Restore-Hook später.
+  appendScript('core/savegame-v2-uid-guard.js?v=26.08.27-sa04-1');
+  appendScript('core/savegame-v2.js?v=26.08.27-sa04-2');
 })();
