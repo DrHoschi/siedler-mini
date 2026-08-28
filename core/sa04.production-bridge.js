@@ -3,6 +3,7 @@
  * - rehydrates finished production buildings after Continue
  * - routes stockable production output exclusively through BuildingStock
  * - prevents legacy duplicate resource credit + duplicate carry jobs
+ * - suppresses obsolete type:'build' jobs created by cb:build:complete replay
  * ========================================================================== */
 (function(){
   'use strict';
@@ -98,6 +99,31 @@
     }
     LOG('Production rehydrated',count);
   }
+
+  // The old JobEngine generates three type:'build' wood jobs for EVERY
+  // cb:build:complete. Those are not construction-delivery jobs and must never
+  // run during a restore replay. Wrap pop after all other SA-04 wrappers exist.
+  function wrapLegacyBuildFilter(){
+    const eng=window.JobEngine;
+    if(!eng || eng.__sa04LegacyBuildFiltered || typeof eng.pop!=='function') return false;
+    const rawPop=eng.pop.bind(eng);
+    eng.pop=function(){
+      for(let i=0;i<100;i++){
+        const job=rawPop();
+        if(!job) return null;
+        if(String(job.type)==='build'){
+          LOG('Legacy build job verworfen',job.id);
+          continue;
+        }
+        return job;
+      }
+      return null;
+    };
+    eng.__sa04LegacyBuildFiltered=true;
+    LOG('Legacy type:build Filter aktiv');
+    return true;
+  }
+  const filterTimer=setInterval(()=>{ if(wrapLegacyBuildFilter()) clearInterval(filterTimer); },100);
 
   window.addEventListener('cb:savegame:v2:continue-restored',()=>{
     // Let current restore dispatch finish first; production modules are already loaded.
