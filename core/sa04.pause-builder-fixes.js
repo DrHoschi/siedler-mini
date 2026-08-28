@@ -1,7 +1,8 @@
 /* ============================================================================
  * SA-04 Pause + Builder Recovery
- * - paused local production visuals stay at/in the production building
- * - paused quarry cycle is frozen (no hidden production)
+ * - paused quarry worker returns to entry and disappears there
+ * - paused local quarry cycle is frozen (no hidden production)
+ * - pause state is appended to SaveGame V2 buildings and survives Continue
  * - fully supplied construction sites recover missing builder assignments
  * - builders approach the entrance tile instead of the building center
  * ========================================================================== */
@@ -11,6 +12,8 @@
   const TAG='[sa04-pause-builder]';
   const LOG=(...a)=>(window.CBLog?.ok||console.log)(TAG,...a);
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG,...a);
+  const SAVE_KEY='siedler.save.v2.autosave';
+  const RETURN_MS=1400;
 
   function list(){
     return Array.isArray(window.Game?.buildings) ? window.Game.buildings : [];
@@ -54,12 +57,66 @@
   }
 
   // ------------------------------------------------------------------------
-  // Pause: quarry owns its own visual worker and its own production timer.
-  // Freezing only central production is not enough; keep this local state still.
+  // SaveGame V2 sanitizes buildings and currently omits workPaused.
+  // Append the fachlicher Pause-State after every V2 save, keyed by stable UID.
+  // Restore already clones unknown building fields, so workPaused comes back.
   // ------------------------------------------------------------------------
+  window.addEventListener('cb:savegame:v2:saved',()=>{
+    try{
+      const raw=localStorage.getItem(SAVE_KEY);
+      if(!raw) return;
+      const snap=JSON.parse(raw);
+      if(!Array.isArray(snap.buildings)) return;
+      const live=new Map(list().filter(Boolean).map(b=>[String(b.uid||''),b]));
+      for(const sb of snap.buildings){
+        const b=live.get(String(sb?.uid||''));
+        if(!b) continue;
+        sb.workPaused=!!b.workPaused;
+      }
+      localStorage.setItem(SAVE_KEY,JSON.stringify(snap));
+      LOG('Pause-State gespeichert');
+    }catch(e){ WARN('Pause-State Save fehlgeschlagen',e); }
+  });
+
+  // ------------------------------------------------------------------------
+  // Pause: quarry owns its own visual worker and its own production timer.
+  // On pause, current worker finishes ONLY the route back to the entry, then
+  // disappears. Production cycle stays frozen until resume.
+  // ------------------------------------------------------------------------
+  function currentWorkerPos(field){
+    const w=field?.worker;
+    if(!w) return null;
+    const t=Math.max(0,Math.min(1,Number(w.tNorm)||0));
+    return {
+      x:(Number(w.fromTx)||0)+((Number(w.toTx)||0)-(Number(w.fromTx)||0))*t,
+      y:(Number(w.fromTy)||0)+((Number(w.toTy)||0)-(Number(w.fromTy)||0))*t
+    };
+  }
+
+  function beginReturn(field,b){
+    const ent=entrance(b);
+    if(!ent) return;
+    const cur=currentWorkerPos(field) || {
+      x:(Number(field?.cx)||((Number(b.x)||0)+(Number(b.w)||1)/2)),
+      y:(Number(field?.cy)||((Number(b.y)||0)+(Number(b.h)||1)/2))
+    };
+    field.worker={
+      tMs:0,
+      fromTx:cur.x,
+      fromTy:cur.y,
+      toTx:ent.x,
+      toTy:ent.y,
+      tNorm:0,
+      __sa04ReturnToEntry:true
+    };
+    field.__sa04ReturnStartedAt=performance.now ? performance.now() : Date.now();
+    LOG('Steinmetz läuft zum Entry zurück',b.uid);
+  }
+
   function guardStonePause(){
     const fields=window.ProductionStone?.fields;
     if(!(fields instanceof Map)) return;
+    const now=performance.now ? performance.now() : Date.now();
 
     for(const [uid,field] of fields.entries()){
       const b=byUid(uid);
@@ -68,14 +125,34 @@
       if(paused(b)){
         if(field.__sa04PauseCycle == null){
           field.__sa04PauseCycle=Number(field.cycleMs)||0;
-          LOG('Steinbruch-Worker pausiert',uid);
+          beginReturn(field,b);
         }
-        field.cycleMs=field.__sa04PauseCycle;
-        // Visueller Steinmetz bleibt im Gebäude; außerhalb wird nichts gezeichnet.
-        field.worker=null;
+
+        // Hard-freeze cycle; game.production.stone may add dt between guard ticks.
+        field.cycleMs=Number(field.__sa04PauseCycle)||0;
+
+        const w=field.worker;
+        if(w?.__sa04ReturnToEntry){
+          const start=Number(field.__sa04ReturnStartedAt)||now;
+          const t=Math.max(0,Math.min(1,(now-start)/RETURN_MS));
+          w.tNorm=t;
+          w.tMs=t*2800; // keeps legacy renderer/tick compatible
+          if(t>=1){
+            field.worker=null;
+            field.__sa04WorkerInside=true;
+            LOG('Steinmetz am Entry → im Gebäude',uid);
+          }
+        } else if(field.__sa04WorkerInside){
+          field.worker=null;
+        } else if(!w){
+          field.__sa04WorkerInside=true;
+        }
       } else if(field.__sa04PauseCycle != null){
         field.cycleMs=Number(field.__sa04PauseCycle)||0;
         delete field.__sa04PauseCycle;
+        delete field.__sa04ReturnStartedAt;
+        delete field.__sa04WorkerInside;
+        if(field.worker?.__sa04ReturnToEntry) field.worker=null;
         LOG('Steinbruch-Worker freigegeben',uid);
       }
     }
@@ -117,8 +194,6 @@
       if(b.status==='done' || Number(b.buildStage)>=3 || Number(b.buildPhase)>=2) continue;
       if(!allMaterial(b)) continue;
 
-      // A fully supplied site must be in the waiting-for-builder state even if
-      // an older event was missed.
       if(!b.__waitingForRealBuilders && Number(b.buildPhase)===0){
         b.__waitingForRealBuilders=true;
         b.status='waiting-builders';
@@ -146,7 +221,7 @@
   setInterval(()=>{
     try{ guardStonePause(); }catch(e){ WARN('Pause-Guard',e); }
     try{ guardBuilders(); }catch(e){ WARN('Builder-Guard',e); }
-  },100);
+  },50);
 
   LOG('bereit');
 })();
