@@ -1,8 +1,8 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
  * Projekt  : Neue Siedler
- * Version  : v26.08.27-sa04-continue-gate2
- * Zweck    : 3-Gate-Boot + SA-04 SaveGame-V2-Gate.
+ * Version  : v26.08.28-sa04-continue-gate3
+ * Zweck    : 3-Gate-Boot + SA-04 SaveGame-V2-Gate + Runtime-Guards.
  *
  * Startet  : cb:game:start ⇐ (req:game:start ODER req:game:continue)
  *                      + cb:assets-ready + cb:registry:ready + SaveGameV2 ready
@@ -18,7 +18,7 @@
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG, ...a);
 
   const state = {
-    version:'v26.08.27-sa04-continue-gate2',
+    version:'v26.08.28-sa04-continue-gate3',
     userReady:false,
     assetsReady:false,
     registryReady:false,
@@ -124,7 +124,9 @@
     return s;
   }
 
-  // UID-Guard zuerst registrieren; SaveGame V2 emittiert den Restore-Hook später.
+  // Guards müssen VOR SaveGame V2 registriert sein, damit Restore-/Save-Events
+  // sicher abgefangen werden. Sie warten intern auf die später geladenen Systeme.
+  appendScript('core/sa04.runtime-guards.js?v=26.08.28-sa04-1');
   appendScript('core/savegame-v2-uid-guard.js?v=26.08.27-sa04-1');
   appendScript('core/savegame-v2.js?v=26.08.27-sa04-2');
 })();
