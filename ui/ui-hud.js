@@ -1,27 +1,18 @@
 /* =============================================================================
  * Datei   : ui/ui-hud.js
  * Projekt : Neue Siedler
- * Version : v25.11.17-ultra-final
+ * Version : v26.08.28-sa04-resource-sync
  *
  * Zweck:
  *   HUD (Ressourcenleiste) vollständig erzeugen + aktualisieren.
  *   Alle HUD-DIVs werden HIER erzeugt – nichts im Build-Menü!
  *
- * Struktur pro Ressource (automatisch erzeugt):
- *
- *   <div class="hud__cell" data-res="wood">
- *     <div class="hud__title">Holz</div>
- *     <div class="hud__icon-wrap">
- *       <img class="hud__icon" src="assets/icons/resources/wood.png" alt="Holz">
- *     </div>
- *     <div class="hud__value">0</div>
- *   </div>
- *
- * Styling:
- *   kommt NUR aus ui-hud.css (Holzrahmen, Position, Scroll, Layout)
+ * SA-04:
+ *   - initiale Werte aus window.RegistryValues übernehmen
+ *   - cb:res:snapshot verarbeiten, damit Continue-Restore sichtbar wird
  *
  * Ereignisse:
- *   Lauscht : cb:game:start, cb:registry:ready, cb:res:change
+ *   Lauscht : cb:game:start, cb:registry:ready, cb:res:change, cb:res:snapshot
  *   Sendet  : cb:hud-ready
  * =============================================================================
  */
@@ -30,37 +21,35 @@
     root.UIHUD = factory();
 })(typeof window !== "undefined" ? window : this, function(){
 
-/* ---------------------------------------------------------------------------
- * Logging
- * ------------------------------------------------------------------------ */
 const TAG  = "[hud]";
 const log  = (m)=> (window.CBLog?.info  || console.info)(`${TAG} ${m}`);
 const ok   = (m)=> (window.CBLog?.ok    || console.log )( `${TAG} ${m}` );
 const warn = (m)=> (window.CBLog?.warn  || console.warn)(`${TAG} ${m}`);
 
-/* ---------------------------------------------------------------------------
- * Hilfsfunktionen
- * ------------------------------------------------------------------------ */
 const $ = (s,ctx=document)=> ctx.querySelector(s);
 const el = (tag,cls)=>{ const n=document.createElement(tag); if(cls) n.className=cls; return n; };
 
 let INIT_DONE = false;
+let HOST = null;
 
-/* ---------------------------------------------------------------------------
- * Default-Ressourcen (nur Epoche 1)
- * ------------------------------------------------------------------------ */
+function getResourceValue(id){
+    try{
+        const v = Number(window.RegistryValues?.[id]);
+        return Number.isFinite(v) ? v : 0;
+    } catch {
+        return 0;
+    }
+}
+
 function defaultResources(){
     return [
-        { id:'wood',  label:'Holz',    icon:'assets/icons/resources/wood.png',  value:0 },
-        { id:'stone', label:'Stein',   icon:'assets/icons/resources/stone.png', value:0 },
-        { id:'food',  label:'Nahrung', icon:'assets/icons/resources/food.png',  value:0 },
-        { id:'gold',  label:'Gold',    icon:'assets/icons/resources/gold.png',  value:0 }
+        { id:'wood',  label:'Holz',    icon:'assets/icons/resources/wood.png',  value:getResourceValue('wood') },
+        { id:'stone', label:'Stein',   icon:'assets/icons/resources/stone.png', value:getResourceValue('stone') },
+        { id:'food',  label:'Nahrung', icon:'assets/icons/resources/food.png',  value:getResourceValue('food') },
+        { id:'gold',  label:'Gold',    icon:'assets/icons/resources/gold.png',  value:getResourceValue('gold') }
     ];
 }
 
-/* ---------------------------------------------------------------------------
- * Registry lesen (falls vorhanden)
- * ------------------------------------------------------------------------ */
 function fromRegistry(){
     try{
         if (!window.Registry || typeof Registry.list !== "function") return null;
@@ -71,16 +60,13 @@ function fromRegistry(){
             id:    String(r.id || "").trim(),
             label: String(r.label || r.id || "").trim(),
             icon:  r.icon || `assets/icons/resources/${r.id}.png`,
-            value: 0
+            value: getResourceValue(String(r.id || "").trim())
         }));
     } catch {
         return null;
     }
 }
 
-/* ---------------------------------------------------------------------------
- * HUD Zellen rendern
- * ------------------------------------------------------------------------ */
 function render(host, model){
     host.innerHTML = "";
 
@@ -88,32 +74,25 @@ function render(host, model){
         const cell = el("div","hud__cell");
         cell.dataset.res = r.id;
 
-        // Titel
         const title = el("div","hud__title");
         title.textContent = r.label;
 
-        // Icon
         const wrap = el("div","hud__icon-wrap");
         const img  = el("img","hud__icon");
         img.src = r.icon;
         img.alt = r.label;
         wrap.appendChild(img);
 
-        // Wert
         const val = el("div","hud__value");
         val.textContent = String(r.value ?? 0);
 
-        // Zusammenfügen
         cell.append(title, wrap, val);
         host.appendChild(cell);
     });
 }
 
-/* ---------------------------------------------------------------------------
- * Einzel-Update (Wert ändern)
- * ------------------------------------------------------------------------ */
 function patch(host, id, deltaOrAbs){
-    const cell = host.querySelector(`.hud__cell[data-res="${id}"]`);
+    const cell = host?.querySelector(`.hud__cell[data-res="${id}"]`);
     if (!cell) return;
 
     const valEl = cell.querySelector(".hud__value");
@@ -127,23 +106,28 @@ function patch(host, id, deltaOrAbs){
                 : oldV;
 
     valEl.textContent = String(newV);
-
-    // highlight
     cell.classList.add("is-updated");
     setTimeout(()=> cell.classList.remove("is-updated"), 300);
 }
 
-/* ---------------------------------------------------------------------------
- * Initialisierung
- * ------------------------------------------------------------------------ */
+function applySnapshot(resources){
+    if (!HOST || !resources || typeof resources !== 'object') return;
+    for (const [id, raw] of Object.entries(resources)){
+        const value = Number(raw);
+        if (!Number.isFinite(value)) continue;
+        patch(HOST, id, {value});
+    }
+}
+
 function init(){
     if (INIT_DONE){
-        ok("HUD schon aktiv – init() übersprungen");
+        // Auch bei erneutem Lifecycle-Event aktuellen Store synchronisieren.
+        applySnapshot(window.RegistryValues || {});
+        ok("HUD schon aktiv – Werte synchronisiert");
         return;
     }
     INIT_DONE = true;
 
-    // Container suchen oder anlegen
     let host = $("#hud-root");
     if (!host){
         host = el("div","hud");
@@ -152,14 +136,14 @@ function init(){
     } else {
         host.classList.add("hud");
     }
+    HOST = host;
 
-    // Reihenfolge bestimmen
     const model = fromRegistry() || defaultResources();
-
-    // Erste Zeichnung
     render(host, model);
 
-    // Resource-Änderungen
+    // Sicherstellen, dass bereits vor HUD-Init restaurierte Werte sichtbar werden.
+    applySnapshot(window.RegistryValues || {});
+
     window.addEventListener("cb:res:change", ev=>{
         const d = ev.detail;
         if (!d?.res) return;
@@ -168,32 +152,23 @@ function init(){
         else patch(host, d.res, d.delta ?? 0);
     });
 
+    window.addEventListener("cb:res:snapshot", ev=>{
+        const resources = ev?.detail?.resources || window.RegistryValues || {};
+        applySnapshot(resources);
+    });
+
     ok("bereit");
     window.dispatchEvent(new CustomEvent("cb:hud-ready",{ detail:{ ok:true } }));
 }
 
-/* ---------------------------------------------------------------------------
- * Public API
- * ------------------------------------------------------------------------ */
-return { init };
+return { init, applySnapshot };
 
 });
 
-/* ---------------------------------------------------------------------------
- * Lifecycle Events – HUD aufbauen
- * ------------------------------------------------------------------------ */
 window.addEventListener("cb:game:start",    ()=> window.UIHUD?.init(), {passive:true});
 window.addEventListener("cb:registry:ready",()=> window.UIHUD?.init(), {passive:true});
-// Zusätzlich früh starten, sobald das UI bereit ist. In einigen Fällen kann
-// cb:game:start ausbleiben (z. B. bei Pause oder fehlenden Ready-Events),
-// wodurch das HUD nie aufgebaut wird. Durch diese Ergänzung wird das HUD
-// beim UI-Aufbau einmal initialisiert.
-window.addEventListener("cb:ui-ready",    ()=> window.UIHUD?.init(), {passive:true});
+window.addEventListener("cb:ui-ready",      ()=> window.UIHUD?.init(), {passive:true});
 
-// Prüft beim Laden, ob das UI oder die Registry bereits bereit sind und
-// initialisiert das HUD sofort. Dies verhindert, dass die HUD-Leiste
-// unsichtbar bleibt, wenn die entsprechenden Events bereits vor dem Laden
-// dieses Skripts ausgelöst wurden.
 try {
   const uiReady  = !!window.__UI_READY_EMITTED__;
   const regReady = (window.Registry?.isReady?.() || window.Registry?.__ready);
