@@ -129,7 +129,7 @@
   appendScript('core/sa04.runtime-guards.js?v=26.08.28-sa04-1');
   appendScript('core/sa04.production-bridge.js?v=26.08.28-sa04-2');
   appendScript('core/sa04.pause-builder-fixes.js?v=26.08.28-sa04-2');
-  appendScript('core/sa04.worker-pause-hunter.js?v=26.08.28-sa04-1');
+  appendScript('core/sa04.worker-pause-hunter.js?v=26.08.28-sa04-3');
   appendScript('core/savegame-v2-uid-guard.js?v=26.08.27-sa04-1');
   appendScript('core/savegame-v2.js?v=26.08.27-sa04-2');
 })();
