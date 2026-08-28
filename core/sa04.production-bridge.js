@@ -4,6 +4,7 @@
  * - routes stockable production output exclusively through BuildingStock
  * - prevents legacy duplicate resource credit + duplicate carry jobs
  * - suppresses obsolete type:'build' jobs created by cb:build:complete replay
+ * - blocks production output while the live building is paused
  * ========================================================================== */
 (function(){
   'use strict';
@@ -32,6 +33,10 @@
     };
   }
 
+  function isPaused(b){
+    return !!(b && (b.workPaused || b.__workPaused || b.paused || b.__paused));
+  }
+
   function isStockable(kind){
     const BS=window.BuildingStock;
     if (BS && typeof BS.isKindStockable==='function'){
@@ -40,11 +45,20 @@
     return STOCKABLE.has(String(kind||''));
   }
 
-  // Capture listener: target-capture runs before the older non-capture listeners.
-  // For stockable producers we stop the legacy paths and route exactly once.
+  // Capture listener: for every production output resolve the live building first.
+  // Paused buildings must not create stock/resources/jobs through any legacy path.
   window.addEventListener('cb:prod:output',(ev)=>{
     const d=ev?.detail || {};
     const kind=String(d.kind || d.buildingKind || d.id || '');
+    const uid=d.bId || d.uid || null;
+    const b=getBuilding(uid,kind,d);
+
+    if (b && isPaused(b)){
+      ev.stopImmediatePropagation();
+      LOG('Output unterdrückt: Gebäude pausiert',{uid:b.uid,kind});
+      return;
+    }
+
     if (!isStockable(kind)) return;
 
     const BS=window.BuildingStock;
@@ -52,8 +66,6 @@
 
     const item=String(d.item || d.res || d.resource || '').replace(/^res\./,'');
     const qty=Math.max(1,Number(d.qty)||1);
-    const uid=d.bId || d.uid || null;
-    const b=getBuilding(uid,kind,d);
     if (!b || !item) return;
 
     try{
@@ -79,6 +91,7 @@
       dropTx:b.dropTx,
       dropTy:b.dropTy,
       status:b.status,
+      workPaused:!!b.workPaused,
       restore:true,
       __sa04ProductionRehydrate:true
     };
@@ -126,7 +139,6 @@
   const filterTimer=setInterval(()=>{ if(wrapLegacyBuildFilter()) clearInterval(filterTimer); },100);
 
   window.addEventListener('cb:savegame:v2:continue-restored',()=>{
-    // Let current restore dispatch finish first; production modules are already loaded.
     queueMicrotask(rehydrateProduction);
   });
 
