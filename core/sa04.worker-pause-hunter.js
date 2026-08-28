@@ -1,7 +1,8 @@
 /* ============================================================================
  * SA-04 Worker Pause + Hunter Worker
+ * Version: v26.08.28-sa04-worker3
  * - one pause rule for real GameUnits production workers
- * - paused workers return to building entrance and stay hidden inside
+ * - paused workers return deterministically to building entrance and stay hidden
  * - resume releases them back into the normal worker loop
  * - adds missing visible hunter worker for b.hunter
  * - rehydrates hunter runtime after Continue
@@ -11,6 +12,9 @@
   const TAG='[sa04-worker]';
   const LOG=(...a)=>(window.CBLog?.ok||console.log)(TAG,...a);
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG,...a);
+  const PAUSE_SPEED_TILES_PER_SEC=0.8;
+  const CONTROL_DT_SEC=0.1;
+  const ARRIVE_EPS=0.07;
 
   function buildings(){
     return Array.isArray(window.Game?.buildings) ? window.Game.buildings : [];
@@ -52,6 +56,40 @@
     return ['b.lumberjack','b.quarry','b.fisher','b.hunter'].includes(String(b.id||b.type||''));
   }
 
+  function stepToEntry(u,b){
+    const e=entrance(b);
+    if(!e) return false;
+    const ux=Number(u.x)||0, uy=Number(u.y)||0;
+    const dx=e.x-ux, dy=e.y-uy;
+    const dist=Math.hypot(dx,dy);
+
+    if(dist<=ARRIVE_EPS){
+      u.x=e.x; u.y=e.y;
+      return true;
+    }
+
+    const step=PAUSE_SPEED_TILES_PER_SEC*CONTROL_DT_SEC;
+    const k=Math.min(1,step/Math.max(dist,0.0001));
+    u.x=ux+dx*k;
+    u.y=uy+dy*k;
+    u.hidden=false;
+    u.__animState='walk';
+    u.task={type:'walk',target:{x:e.x,y:e.y},__sa04PauseReturn:true};
+    return false;
+  }
+
+  function holdInside(u){
+    const ai=u._ai || (u._ai={});
+    ai.mode='sa04PauseInside';
+    ai.timer=3600;
+    ai.target=null;
+    u.hidden=true;
+    u.hiddenUntil=Number.MAX_SAFE_INTEGER;
+    u.task=null;
+    u._nav=null;
+    u.__animState='idle';
+  }
+
   function controlPausedWorkers(){
     const units=window.GameUnits?.getUnits?.() || [];
     for(const u of units){
@@ -64,7 +102,7 @@
       if(p){
         if(!u.__sa04PauseHeld){
           u.__sa04PauseHeld=true;
-          ai.mode='toEntrance';
+          ai.mode='sa04PauseReturn';
           ai.target=null;
           ai.timer=0;
           u.hidden=false;
@@ -74,33 +112,31 @@
           LOG('Worker kehrt wegen Pause zum Entry zurück',{worker:u.kind,building:b.uid||b.id});
         }
 
-        // Sobald der bestehende GameUnits-Loop die Eingangskachel erreicht hat,
-        // setzt er mode=inside + hidden=true. Dann halten wir ihn dort dauerhaft.
-        if(ai.mode==='inside' || u.hidden){
-          ai.mode='inside';
-          ai.timer=3600;
-          ai.target=null;
-          u.hidden=true;
-          u.hiddenUntil=Number.MAX_SAFE_INTEGER;
-          u.task=null;
-          u._nav=null;
-          u.__animState='idle';
-        }else if(ai.mode!=='toEntrance'){
-          // Fremde Worker-Transition während Pause wieder auf Entry zwingen.
-          ai.mode='toEntrance';
-          ai.target=null;
-          u.task=null;
-          u._nav=null;
+        // Nicht mehr auf die Legacy-toEntrance-Logik verlassen. Während Pause
+        // bewegen wir die fachliche Worker-Position selbst bis exakt zum Entry.
+        if(ai.mode==='sa04PauseInside'){
+          holdInside(u);
+          continue;
+        }
+        ai.mode='sa04PauseReturn';
+        ai.target=null;
+        u._nav=null;
+        if(stepToEntry(u,b)){
+          holdInside(u);
+          LOG('Worker im pausierten Gebäude angekommen',{worker:u.kind,building:b.uid||b.id});
         }
       }else if(u.__sa04PauseHeld){
         delete u.__sa04PauseHeld;
         u.hidden=false;
         u.hiddenUntil=0;
+        // Der bestehende GameUnits-Loop versteht inside und wechselt mit timer=0
+        // beim nächsten Tick sauber auf toWork.
         ai.mode='inside';
         ai.timer=0;
         ai.target=null;
         u.task=null;
         u._nav=null;
+        u.__animState='idle';
         LOG('Worker nach Pause freigegeben',{worker:u.kind,building:b.uid||b.id});
       }
     }
@@ -143,7 +179,6 @@
     if(!b || String(b.id||b.type)!=='b.hunter') return;
     if(!(b.status==='done' || Number(b.buildStage)>=3)) return;
     try{
-      // Hunter production module is event-driven like the other production modules.
       window.dispatchEvent(new CustomEvent('cb:build:complete',{detail:{
         id:'b.hunter',kind:'b.hunter',buildingId:'b.hunter',uid:b.uid,buildingUid:b.uid,
         x:b.x,y:b.y,w:b.w,h:b.h,entrances:Array.isArray(b.entrances)?b.entrances:[],
@@ -175,5 +210,5 @@
   },100);
 
   window.SA04WorkerControl={controlPausedWorkers,ensureHunterWorker};
-  LOG('bereit');
+  LOG('bereit v26.08.28-sa04-worker3');
 })();
