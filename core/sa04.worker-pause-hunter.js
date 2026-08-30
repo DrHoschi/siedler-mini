@@ -1,6 +1,6 @@
 /* ============================================================================
  * SA-04 Worker Pause + Hunter Worker
- * Version: v26.08.28-sa04-worker3
+ * Version: v26.08.30-sa04-worker4
  * - one pause rule for real GameUnits production workers
  * - paused workers return deterministically to building entrance and stay hidden
  * - resume releases them back into the normal worker loop
@@ -62,14 +62,18 @@
     const ux=Number(u.x)||0, uy=Number(u.y)||0;
     const dx=e.x-ux, dy=e.y-uy;
     const dist=Math.hypot(dx,dy);
+    const step=PAUSE_SPEED_TILES_PER_SEC*CONTROL_DT_SEC;
 
-    if(dist<=ARRIVE_EPS){
+    // Important: arrival and hide must happen in the SAME control tick. The
+    // previous code placed the worker exactly on the entry but returned false;
+    // the legacy worker loop could then move him away again before the next
+    // 100 ms tick. This was especially visible with the hunter.
+    if(dist<=Math.max(ARRIVE_EPS,step)){
       u.x=e.x; u.y=e.y;
       return true;
     }
 
-    const step=PAUSE_SPEED_TILES_PER_SEC*CONTROL_DT_SEC;
-    const k=Math.min(1,step/Math.max(dist,0.0001));
+    const k=step/Math.max(dist,0.0001);
     u.x=ux+dx*k;
     u.y=uy+dy*k;
     u.hidden=false;
@@ -112,8 +116,6 @@
           LOG('Worker kehrt wegen Pause zum Entry zurück',{worker:u.kind,building:b.uid||b.id});
         }
 
-        // Nicht mehr auf die Legacy-toEntrance-Logik verlassen. Während Pause
-        // bewegen wir die fachliche Worker-Position selbst bis exakt zum Entry.
         if(ai.mode==='sa04PauseInside'){
           holdInside(u);
           continue;
@@ -129,8 +131,6 @@
         delete u.__sa04PauseHeld;
         u.hidden=false;
         u.hiddenUntil=0;
-        // Der bestehende GameUnits-Loop versteht inside und wechselt mit timer=0
-        // beim nächsten Tick sauber auf toWork.
         ai.mode='inside';
         ai.timer=0;
         ai.target=null;
@@ -210,5 +210,5 @@
   },100);
 
   window.SA04WorkerControl={controlPausedWorkers,ensureHunterWorker};
-  LOG('bereit v26.08.28-sa04-worker3');
+  LOG('bereit v26.08.30-sa04-worker4');
 })();
