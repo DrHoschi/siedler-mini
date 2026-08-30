@@ -13,7 +13,9 @@
   const LOG=(...a)=>(window.CBLog?.ok||console.log)(TAG,...a);
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG,...a);
 
-  const STOCKABLE = new Set(['b.lumberjack','b.quarry','b.fisher']);
+  // SA-04: hunter is a physical producer too. Meat/pelt must first remain at
+  // the hut and only become HQ resources after a carrier has delivered them.
+  const STOCKABLE = new Set(['b.lumberjack','b.quarry','b.fisher','b.hunter']);
 
   function getBuilding(uid, kind, d){
     const list=window.Game?.buildings || window.Buildings?.list || [];
@@ -38,11 +40,15 @@
   }
 
   function isStockable(kind){
+    const k=String(kind||'');
+    // SA-04 local list deliberately overrides the older BuildingStock
+    // whitelist, which predates the hunter building.
+    if (STOCKABLE.has(k)) return true;
     const BS=window.BuildingStock;
     if (BS && typeof BS.isKindStockable==='function'){
-      try { return !!BS.isKindStockable(kind); } catch(_) {}
+      try { return !!BS.isKindStockable(k); } catch(_) {}
     }
-    return STOCKABLE.has(String(kind||''));
+    return false;
   }
 
   // Capture listener: for every production output resolve the live building first.
@@ -113,9 +119,6 @@
     LOG('Production rehydrated',count);
   }
 
-  // The old JobEngine generates three type:'build' wood jobs for EVERY
-  // cb:build:complete. Those are not construction-delivery jobs and must never
-  // run during a restore replay. Wrap pop after all other SA-04 wrappers exist.
   function wrapLegacyBuildFilter(){
     const eng=window.JobEngine;
     if(!eng || eng.__sa04LegacyBuildFiltered || typeof eng.pop!=='function') return false;
@@ -143,5 +146,5 @@
   });
 
   window.SA04ProductionBridge={rehydrateProduction};
-  LOG('bereit');
+  LOG('bereit v26.08.30-hunter-stock');
 })();
