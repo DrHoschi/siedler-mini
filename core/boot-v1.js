@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
  * Projekt  : Neue Siedler
- * Version  : v26.08.31-sa04-continue-gate10
+ * Version  : v26.08.31-sa04-continue-gate11
  * Zweck    : 3-Gate-Boot + SA-04 SaveGame-V2-Gate + Runtime-/Production-Guards.
  *
  * Startet  : cb:game:start ⇐ (req:game:start ODER req:game:continue)
@@ -18,7 +18,7 @@
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG, ...a);
 
   const state = {
-    version:'v26.08.31-sa04-continue-gate10',
+    version:'v26.08.31-sa04-continue-gate11',
     userReady:false,
     assetsReady:false,
     registryReady:false,
@@ -133,6 +133,7 @@
   appendScript('core/sa04.hunter-production-fix.js?v=26.08.31-sa04-hunter-prod1');
   appendScript('core/sa04.hunter-entry-fix.js?v=26.08.31-sa04-hunter-entry1');
   appendScript('core/sa04.resource-piles.js?v=26.08.31-sa04-piles2');
+  appendScript('core/sa04.stock-persistence.js?v=26.08.31-sa04-stock-save1');
   appendScript('core/savegame-v2-uid-guard.js?v=26.08.27-sa04-1');
   appendScript('core/savegame-v2.js?v=26.08.27-sa04-2');
 })();
