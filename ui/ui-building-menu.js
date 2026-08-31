@@ -1,9 +1,10 @@
 /* ============================================================================
  * ui/ui-building-menu.js
- * v26.08.31-sa04-menu3
- * - readable compact building panel
- * - Lager instead of long stock wording
- * - item sprite icons beside physical stock values
+ * v26.08.31-sa04-menu4
+ * - compact readable building panel
+ * - production Lager always shows expected resource icons, including zero
+ * - HQ Lager shows central resource inventory
+ * - item sprite icons beside values
  * - deliberate tap guard and automatic outside close
  * ========================================================================== */
 (function () {
@@ -24,6 +25,13 @@
     meat:{label:'Fleisch',x:384,y:384},
     pelt:{label:'Fell',x:0,y:256}
   };
+  const DEFAULT_PRODUCES={
+    'b.lumberjack':['wood'],
+    'b.quarry':['stone'],
+    'b.fisher':['fish'],
+    'b.hunter':['meat','pelt']
+  };
+  const HQ_ORDER=['wood','stone','fish','meat','pelt'];
 
   let panel = document.getElementById('ui-building-menu');
   let current = null;
@@ -47,6 +55,22 @@
       if (hit) return hit;
     }
     return null;
+  }
+
+  function getBuildingDef(id){
+    try{
+      return window.Registry?.getBuilding?.(id)
+        || window.Registry?.get?.('buildings',id)
+        || null;
+    }catch(_e){ return null; }
+  }
+
+  function expectedResourceIds(id){
+    if(id==='b.hq') return HQ_ORDER.slice();
+    const def=getBuildingDef(id);
+    const p=Array.isArray(def?.produces)?def.produces:[];
+    const ids=p.map(x=>String(x?.id||x?.res||'').replace(/^res\./,'')).filter(Boolean);
+    return ids.length?ids:(DEFAULT_PRODUCES[id]||[]).slice();
   }
 
   function ensurePanel(){
@@ -92,7 +116,7 @@
       <div><b>Status:</b> <span data-k="status">—</span></div>
       <div><b>Kategorie:</b> <span data-k="category">—</span></div>
       <div><b>Position:</b> <span data-k="pos">—</span></div>
-      <div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(120,90,40,.35)">
+      <div data-row="stock" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(120,90,40,.35)">
         <b>Lager:</b> <span data-k="stock"></span>
       </div>`;
 
@@ -131,16 +155,35 @@
     if(el) el.textContent=(v==null?'—':String(v));
   }
 
-  function readStock(uid){
-    if(!uid) return [];
+  function stockMap(uid){
+    const out=new Map();
+    if(!uid) return out;
     try{
       const row=(window.BuildingStock?.snapshot?.()||[]).find(r=>r&&String(r.bUid)===String(uid));
-      if(!row) return [];
-      return Object.entries(row).filter(([k,v])=>k!=='bUid'&&Number(v)>0).map(([id,v])=>({id,value:Number(v)||0}));
-    }catch(_e){return [];}
+      if(!row) return out;
+      for(const [k,v] of Object.entries(row)){
+        if(k==='bUid') continue;
+        out.set(String(k),Math.max(0,Number(v)||0));
+      }
+    }catch(_e){}
+    return out;
   }
 
-  function iconNode(id){
+  function inventoryEntries(){
+    if(!current) return [];
+    if(current.id==='b.hq'){
+      const store=window.RegistryValues||{};
+      const ids=[...new Set([...HQ_ORDER,...Object.keys(store).map(x=>String(x).replace(/^res\./,''))])];
+      return ids.filter(id=>ICONS[id]||Number(store[id])!==0).map(id=>({id,value:Math.max(0,Number(store[id])||0)}));
+    }
+
+    const stock=stockMap(current.uid);
+    const expected=expectedResourceIds(current.id);
+    const ids=[...new Set([...expected,...stock.keys()])];
+    return ids.map(id=>({id,value:stock.get(id)||0}));
+  }
+
+  function iconNode(id,value){
     const cfg=ICONS[id]||{label:id,x:128,y:256};
     const wrap=document.createElement('span');
     Object.assign(wrap.style,{display:'inline-flex',alignItems:'center',gap:'3px',marginRight:'8px',whiteSpace:'nowrap'});
@@ -151,24 +194,27 @@
       backgroundRepeat:'no-repeat',backgroundSize:`${1024*scale}px ${1536*scale}px`,
       backgroundPosition:`-${cfg.x*scale}px -${cfg.y*scale}px`,verticalAlign:'middle'
     });
-    const txt=document.createElement('span'); txt.textContent=cfg.label;
-    wrap.append(icon,txt);
+    icon.title=cfg.label;
+    const txt=document.createElement('span');
+    txt.textContent=`${cfg.label} `;
+    const n=document.createElement('b');
+    n.textContent=String(value|0);
+    wrap.append(icon,txt,n);
     return wrap;
   }
 
   function syncStock(){
     if(!current||!panel||panel.style.display==='none') return;
     const host=panel.querySelector('[data-k="stock"]');
-    if(!host) return;
+    const row=panel.querySelector('[data-row="stock"]');
+    if(!host||!row) return;
     host.innerHTML='';
-    const entries=readStock(current.uid);
-    if(!entries.length){host.textContent='0';return;}
-    for(const e of entries){
-      const node=iconNode(e.id);
-      const n=document.createElement('b'); n.textContent=` ${e.value}`;
-      node.appendChild(n);
-      host.appendChild(node);
-    }
+    const entries=inventoryEntries();
+    const showRow=current.id==='b.hq' || entries.length>0 || expectedResourceIds(current.id).length>0;
+    row.style.display=showRow?'block':'none';
+    if(!showRow) return;
+    if(!entries.length){ host.textContent='0'; return; }
+    for(const e of entries) host.appendChild(iconNode(e.id,e.value));
   }
 
   function syncPause(btn,paused){if(btn)btn.textContent=paused?'Weiter':'Pause';}
@@ -201,8 +247,11 @@
     if(current&&((uid&&current.uid===uid)||(!uid&&id&&current.id===id))){current.workPaused=paused;const btn=panel?.querySelector('#ui-building-btn-pause');syncPause(btn,paused);syncSubtitle(paused);pauseBtnLocked=false;if(btn)btn.disabled=false;}
   });
   window.addEventListener('cb:stock:change',()=>syncStock());
+  window.addEventListener('cb:stock:restored',()=>syncStock());
+  window.addEventListener('cb:res:change',()=>syncStock());
+  window.addEventListener('cb:res:snapshot',()=>syncStock());
   setInterval(syncStock,500);
 
   ensurePanel();
-  LOG.ok('✅ [ui-building] v26.08.31-sa04-menu3 loaded');
+  LOG.ok('✅ [ui-building] v26.08.31-sa04-menu4 loaded');
 })();
