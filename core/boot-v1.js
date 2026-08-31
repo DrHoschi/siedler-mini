@@ -1,8 +1,8 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
  * Projekt  : Neue Siedler
- * Version  : v26.08.31-sa04-continue-gate14
- * Zweck    : 3-Gate-Boot + SA-04 SaveGame-V2-Gate + Runtime-/Production-Guards.
+ * Version  : v26.08.31-sa05-resident-gate1
+ * Zweck    : SA-04-Freeze-Unterbau + SA-05 Resident-Workforce-Testmodul.
  * ========================================================================== */
 (function(){
   'use strict';
@@ -11,7 +11,7 @@
   window.__BOOT_SINGLETON__ = true;
   const INFO=(...a)=>(window.CBLog?.info||console.info)(TAG,...a);
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG,...a);
-  const state={version:'v26.08.31-sa04-continue-gate14',userReady:false,assetsReady:false,registryReady:false,saveV2Ready:false,continuePrepared:false,started:false,mode:null};
+  const state={version:'v26.08.31-sa05-resident-gate1',userReady:false,assetsReady:false,registryReady:false,saveV2Ready:false,continuePrepared:false,started:false,mode:null};
   window.BootState=state; INFO('BootManager initialisiert',state.version);
   function emit(name,detail={}){try{dispatchEvent(new CustomEvent(name,{detail}));}catch(_){}}
   function maybeStart(){
@@ -44,6 +44,7 @@
   appendScript('core/sa04.housing-residents.js?v=26.08.31-sa04-housing1');
   appendScript('core/sa04.housing-taxes.js?v=26.08.31-sa04-tax1');
   appendScript('core/sa04.housing-menu.js?v=26.08.31-sa04-housing-menu2');
+  appendScript('core/sa05.resident-workforce.js?v=26.08.31-sa05-resident1');
   appendScript('core/savegame-v2-uid-guard.js?v=26.08.27-sa04-1');
   appendScript('core/savegame-v2.js?v=26.08.27-sa04-2');
 })();
