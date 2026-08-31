@@ -1,15 +1,17 @@
 /* ============================================================================
  * SA-04 Physical Resource Piles
- * Version: v26.08.31-sa04-piles1
+ * Version: v26.08.31-sa04-piles2
  * - uses the existing item master sprite atlas
  * - visualizes delivered construction material beside construction sites
  * - visualizes BuildingStock output beside production buildings
+ * - suppresses the old construction resource dots while this visual layer is active
  * - visual layer only: authoritative quantities stay in delivered/BuildingStock
  * ========================================================================== */
 (function(){
   'use strict';
 
   const TAG='[sa04-piles]';
+  const LOG=(...a)=>(window.CBLog?.ok||console.log)(TAG,...a);
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG,...a);
   const ATLAS='items_master_sprite';
   const FRAME_BY_RES={
@@ -21,6 +23,8 @@
   };
 
   let atlasRequested=false;
+  let rendererWrapped=false;
+  let constructionWrapped=false;
 
   function ensureAtlas(){
     const A=window.Assets;
@@ -56,6 +60,7 @@
     const t=Number(tileSize)||64;
     const bw=Math.max(1,Number(b.w)||1);
     const bh=Math.max(1,Number(b.h)||1);
+    const cols=Math.max(3,Math.floor(bw*2.2));
     const baseX=(Number(b.x)||0)*t + t*0.45;
     const baseY=((Number(b.y)||0)+bh+offsetY)*t;
     const stepX=t*0.34;
@@ -66,16 +71,18 @@
       const qty=Math.max(0,Math.floor(Number(e.qty)||0));
       const visible=Math.min(qty,8);
       for(let i=0;i<visible;i++){
-        const col=slot%Math.max(3,Math.floor(bw*2.2));
-        const row=Math.floor(slot/Math.max(3,Math.floor(bw*2.2)));
-        const x=baseX+col*stepX;
-        const y=baseY+row*stepY;
-        drawItem(ctx,frameFor(e.res),x,y,t,0.9);
+        const col=slot%cols;
+        const row=Math.floor(slot/cols);
+        drawItem(
+          ctx,
+          frameFor(e.res),
+          baseX+col*stepX,
+          baseY+row*stepY,
+          t,
+          0.9
+        );
         slot++;
       }
-      // Bei großen Lagern nicht 30 einzelne Symbole zeichnen. Ab 9 Stück bleibt
-      // die Zahl im Gebäudemenü authoritative; die Welt zeigt einen kompakten Stapel.
-      if(qty>visible) slot++;
     }
   }
 
@@ -102,8 +109,7 @@
   }
 
   function drawOnMainCanvas(ctx,_cam,tileSize){
-    if(!ctx) return;
-    if(!ensureAtlas()) return;
+    if(!ctx || !ensureAtlas()) return;
     const stock=stockByUid();
 
     for(const b of buildings()){
@@ -121,11 +127,60 @@
     }
   }
 
+  function wrapRenderer(){
+    const R=window.Renderer;
+    if(!R || rendererWrapped || typeof R.draw!=='function') return false;
+    const raw=R.draw.bind(R);
+    R.draw=function(gameArg){
+      raw(gameArg);
+      try{
+        const g=gameArg || R.game || window.Game;
+        const ctx=g?.ctx || R.ctx;
+        if(ctx) drawOnMainCanvas(ctx,g?.camera,R.tile || g?.tileSize || 64);
+      }catch(e){ WARN('Pile-Rendering fehlgeschlagen',e); }
+    };
+    rendererWrapped=true;
+    LOG('Renderer-Hook aktiv');
+    return true;
+  }
+
+  function wrapConstruction(){
+    const C=window.GameConstruction;
+    if(!C || constructionWrapped || typeof C.render!=='function') return false;
+    const raw=C.render.bind(C);
+    C.render=function(game){
+      // The legacy construction renderer draws coloured circles for delivered
+      // resources. Hide only those visual drops while preserving delivered data.
+      const saved=[];
+      for(const b of buildings()){
+        if(!b || !Array.isArray(b.drops) || !b.drops.length) continue;
+        saved.push([b,b.drops]);
+        b.drops=[];
+      }
+      try{ return raw(game); }
+      finally{
+        for(const [b,drops] of saved) b.drops=drops;
+      }
+    };
+    constructionWrapped=true;
+    LOG('Construction-Dot-Suppression aktiv');
+    return true;
+  }
+
+  const hookTimer=setInterval(()=>{
+    try{ ensureAtlas(); }catch(_e){}
+    try{ wrapRenderer(); }catch(e){ WARN('Renderer-Hook',e); }
+    try{ wrapConstruction(); }catch(e){ WARN('Construction-Hook',e); }
+    if(rendererWrapped && constructionWrapped) clearInterval(hookTimer);
+  },100);
+
   window.SA04ResourcePiles={
-    version:'v26.08.31-sa04-piles1',
+    version:'v26.08.31-sa04-piles2',
     frameFor,
     ensureAtlas,
-    drawOnMainCanvas
+    drawOnMainCanvas,
+    wrapRenderer,
+    wrapConstruction
   };
 
   ensureAtlas();
