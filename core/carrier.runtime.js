@@ -1,81 +1,42 @@
 /* ============================================================================
  * Datei   : core/carrier.runtime.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.12.12-carrier-runtime-v2 (tick-driven, no-RAF)
+ * Version : v26.08.31-carrier-runtime-v3
  *
- * Zweck   :
- *   "Runtime"-Schicht zwischen JobEngine und GameUnits.
- *   - Holt Jobs aus JobEngine
- *   - Weist Jobs freien Carriern in GameUnits zu
- *   - Emitiert cb:unit:step bei Tile-Wechsel (für PathOverlay / Traces / Debug)
- *
- * WICHTIG:
- *   - Diese Datei bewegt NICHT die Units selbst.
- *   - Bewegung/Animation bleibt in GameUnits.tick(dt).
- *   - carrier.runtime.js ist nur "Dispatcher/Orchestrator".
- *
- * Erwartete Globals (bestehender Projekt-Stand):
- *   window.JobEngine.pop()            -> Job | null
- *   window.GameUnits.needsJob()       -> boolean
- *   window.GameUnits.assignJob(job)   -> void
- *   window.GameUnits.getUnits()       -> Unit[]
- *
- * Events:
- *   - Lauscht : cb:game:start
- *   - Sendet  : cb:unit:step { id, tx, ty, x, y, type, role }
- *
- * Struktur : Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
- * ============================================================================ */
+ * Zweck:
+ *   Runtime-Schicht zwischen JobEngine und GameUnits.
+ *   Baustellenjobs behalten Prioritaet; freie Traeger duerfen aber mehrere
+ *   Produktions-Abholjobs parallel uebernehmen.
+ * ========================================================================== */
 (function () {
   'use strict';
 
-  /* =========================
-   * Konstanten / Logging
-   * ========================= */
   const TAG = '[carrier.runtime]';
-  const VER = 'v25.12.12-carrier-runtime-v2';
-
-  // ---------------------------------------------------------
-  // FEATURE FLAG: cb:unit:step (für Debug/Legacy-Overlays)
-  // - Einige iOS/Safari Builds werfen sonst ReferenceError,
-  //   wenn EMIT_UNIT_STEP irgendwo referenziert wird.
-  // - Default: false (wir nutzen cb:unit:move Segmente als Quelle)
-  // ---------------------------------------------------------
+  const VER = 'v26.08.31-carrier-runtime-v3';
   const EMIT_UNIT_STEP = (typeof globalThis.EMIT_UNIT_STEP === 'boolean')
     ? globalThis.EMIT_UNIT_STEP
     : false;
   globalThis.EMIT_UNIT_STEP = EMIT_UNIT_STEP;
 
-
-  // Sanftes Logging (passt zu deinem Projekt: CBLog wenn vorhanden, sonst console)
   const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const INFO = (...a) => (window.CBLog?.info ?? console.log)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // Pro tick maximal so viele Job-Zuweisungen (verhindert "Job-Sturm" bei großen Queues)
-  const MAX_CARRY_ACTIVE = 1; // max. gleichzeitig laufende Produktions-Abholjobs ('carry')
+  // JobEngine.pop() priorisiert bereits alle Nicht-carry Jobs. Daher muessen wir
+  // Produktionsabholungen nicht auf genau einen Carrier kuenstlich drosseln.
+  // Vier parallele carry-Jobs sind fuer den aktuellen Start-Carriersatz genug,
+  // ohne bei grossen Produktionslagern sofort alle Carrier zu binden.
+  const MAX_CARRY_ACTIVE = 4;
   const MAX_ASSIGN_PER_TICK = 8;
 
-  /* =========================
-   * Interner State
-   * ========================= */
   let enabled = false;
-
-  // Für cb:unit:step (Tile-Wechsel) merken wir uns die letzte Tile-Position je Unit
   const _lastTileByUnitId = new Map();
-
-  /* =========================
-   * Hilfsfunktionen
-   * ========================= */
 
   function _isFiniteNumber(n) {
     return typeof n === 'number' && Number.isFinite(n);
   }
 
-  // Wir normalisieren Tile-Koordinaten robust (falls Units float x/y nutzen)
   function _toTile(n) {
-    // "klassisch" im Projekt: Tiles sind integer; wir runden auf nearest-int
-    // (damit bei float-Positionen nicht dauernd step-events flackern)
     return Math.round(n);
   }
 
@@ -93,111 +54,84 @@
     if (!units || !units.length) return;
 
     for (const u of units) {
-      // Wir tracken primär Carrier/Worker; falls du später filterst: hier ist der zentrale Punkt.
-      // Aktuell lassen wir ALLE Units step-events emitieren -> gut für Debug/Trampelpfade.
       const id = u?.id ?? u?.uid ?? u?.carrierId ?? u?.i;
       if (id == null) continue;
 
-      // bevorzugt tx/ty (tile coords), fallback x/y
       const rawTx = _isFiniteNumber(u.tx) ? u.tx : u.x;
       const rawTy = _isFiniteNumber(u.ty) ? u.ty : u.y;
       if (!_isFiniteNumber(rawTx) || !_isFiniteNumber(rawTy)) continue;
 
       const tx = _toTile(rawTx);
       const ty = _toTile(rawTy);
-
       const key = String(id);
       const last = _lastTileByUnitId.get(key);
-      if (last && last.tx === tx && last.ty === ty) continue; // nichts geändert
+      if (last && last.tx === tx && last.ty === ty) continue;
 
       _lastTileByUnitId.set(key, { tx, ty });
 
-      // Event für PathOverlay/Traces/Debug
       if (EMIT_UNIT_STEP) {
-            window.dispatchEvent(new CustomEvent('cb:unit:step', {
-              detail: {
-                id: id,
-                tx, ty,
-                x: u.x, y: u.y,          // world/tile float falls vorhanden
-                type: u.type || 'carrier',
-                role: u.role || 'worker'
-              }
-            }));
-                }
-}
+        window.dispatchEvent(new CustomEvent('cb:unit:step', {
+          detail: {
+            id,
+            tx, ty,
+            x: u.x, y: u.y,
+            type: u.type || 'carrier',
+            role: u.role || 'worker'
+          }
+        }));
+      }
+    }
+  }
+
+  function _activeCarryCount(GU){
+    try {
+      const units=(typeof GU.getUnits==='function') ? GU.getUnits() : (GU.list || []);
+      return (units || []).filter(u=>
+        u && u.type==='carrier' && u.task && u.task.job?.type==='carry'
+      ).length;
+    } catch(_e){
+      return 0;
+    }
   }
 
   function _takeJobsAndAssign() {
     const GU = window.GameUnits;
     const JE = window.JobEngine;
-
-    if (!GU?.needsJob || !GU?.assignJob) return;
-    if (!JE?.pop) return;
+    if (!GU?.needsJob || !GU?.assignJob || !JE?.pop) return;
 
     let assigned = 0;
 
-    // Solange es freie Carrier gibt UND Jobs vorhanden sind → zuweisen
     while (assigned < MAX_ASSIGN_PER_TICK && GU.needsJob()) {
       const job = JE.pop();
       if (!job) break;
 
-      // -------------------------------------------------------------------
-      // THROTTLE FIX (v26.01.08):
-      // Damit Baustellen IMMER "Luft" bekommen, begrenzen wir aktive carry-
-      // Jobs (Produktion → HQ). Sobald MAX_CARRY_ACTIVE erreicht ist,
-      // werden weitere carry-Jobs wieder hinten eingereiht.
-      // -------------------------------------------------------------------
-      if (job?.type === 'carry') {
-        try {
-          const units = (typeof GU.getUnits === 'function') ? GU.getUnits() : (GU.list || []);
-          const activeCarry = (units || []).filter(u =>
-            u && u.type === 'carrier' && u.task && (u.task.job?.type === 'carry')
-          ).length;
-
-          if (activeCarry >= MAX_CARRY_ACTIVE) {
-            // zurück ans Ende der Queue und hier abbrechen → Carrier bleiben frei
-            if (typeof window.JobEngine?.add === 'function') {
-              window.JobEngine.add(job);
-            }
-            break;
-          }
-        } catch (e) {
-          // wenn Debug schiefgeht: normal assignen (fail-open)
-        }
+      if (job?.type === 'carry' && _activeCarryCount(GU) >= MAX_CARRY_ACTIVE) {
+        if (typeof JE.add === 'function') JE.add(job);
+        break;
       }
 
-try {
-        GU.assignJob(job);
+      try {
+        const ok=GU.assignJob(job);
+        if(ok===false){
+          // Kein freier Carrier trotz needsJob-Rennen: Job erhalten.
+          if(typeof JE.add==='function') JE.add(job);
+          break;
+        }
         LOG('Job → Carrier:', job);
         assigned++;
       } catch (e) {
-        // Wenn assignJob fehlschlägt, ist es besser NICHT automatisch requeue zu machen,
-        // sonst kann man sich Endlos-Loops bauen.
-        WARN('assignJob Fehler – Job verworfen:', job, e);
+        WARN('assignJob Fehler – Job wird zurueckgestellt:', job, e);
+        if(typeof JE.add==='function') JE.add(job);
         break;
       }
     }
   }
 
-  /* =========================
-   * Hauptlogik
-   * ========================= */
-
-  /**
-   * tick(dt)
-   * Wird idealerweise von deinem zentralen Ticker aufgerufen (game.tick.js / game.js).
-   * dt ist optional – wir brauchen es hier nicht zwingend, aber behalten es für spätere Erweiterungen.
-   */
   function tick(dt) {
     if (!enabled) return;
-
     try {
-      // 1) Jobs -> Carrier
       _takeJobsAndAssign();
-
-      // 2) Step-Events (Trampelpfade / Debug)
       _emitUnitStepIfChanged();
-
     } catch (e) {
       WARN('tick()', e);
     }
@@ -215,26 +149,15 @@ try {
     LOG('gestoppt');
   }
 
-  /* =========================
-   * Event Hooks
-   * ========================= */
+  window.addEventListener('cb:game:start', () => start());
 
-  // Standard: nach cb:game:start aktivieren
-  window.addEventListener('cb:game:start', () => {
-    start();
-  });
-
-  /* =========================
-   * Exports (global)
-   * ========================= */
   window.CarrierRuntime = {
     start,
     stop,
     tick,
     isRunning: () => enabled,
-
-    // Debug: letzter Tile-Stand (hilft bei "springt komisch" / falscher Layer / etc.)
-    _lastTileByUnitId
+    _lastTileByUnitId,
+    limits:{maxCarryActive:MAX_CARRY_ACTIVE,maxAssignPerTick:MAX_ASSIGN_PER_TICK}
   };
 
   INFO('bereit', VER);
