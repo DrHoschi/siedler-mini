@@ -1,6 +1,6 @@
 # SA-04 – SaveGame V2 + echter Continue-Pfad
 
-Status: FINAL TEST – 1 Randfall offen
+Status: PASS / FROZEN
 Datum: 2026-08-31
 Branch: `feature/sa-04-savegame-v2`
 Basis: `main` @ `c4b904fa0609ba4e93d0ae52e3e9401d3b594ecd`
@@ -58,21 +58,7 @@ Bewusst nicht gespeichert werden Runtime-Zustände wie JobQueue, Carrier-/Builde
 - Test-Steuerregel 1 Gold/Bewohner/10 s funktioniert.
 - Gold wird zentral gebucht und im HQ/HUD sichtbar.
 - Steuer-Timer und Goldfluss funktionieren auch nach Reload/Continue.
-
-## Letzter Freeze-Gate-Test RT-04 – Reload mitten im Bau
-
-1. Ein Gebäude vollständig mit Material versorgen.
-2. Warten, bis Builder angekommen sind und der Bau sichtbar begonnen hat.
-3. Bau einige Sekunden laufen lassen, aber vor Fertigstellung reloaden.
-4. `Weiterspielen` wählen.
-
-Erwartung:
-- bisheriger Baufortschritt bleibt erhalten und wird nicht auf 0 gesetzt;
-- Baustelle läuft nach Continue nicht ohne Arbeiter weiter;
-- echte Builder werden erneut aus dem HQ angefordert;
-- nach Ankunft der Builder setzt sich der Bau ab dem gespeicherten Fortschritt fort;
-- Gebäude wird normal fertiggestellt;
-- keine zusätzlichen Materiallieferungen für bereits vollständig geliefertes Material.
+- RT-04: Reload mitten in laufender Bauphase bestanden; Baufortschritt bleibt erhalten, Builder werden neu angefordert und setzen den Bau fort, bereits geliefertes Material wird nicht erneut angefordert.
 
 ## Nicht Teil von SA-04 / bewusst später
 
@@ -81,7 +67,8 @@ Erwartung:
 - finales Balancing der Steuerwerte
 - finale Item-/Ressourcen-Icons und Fell-Sprite
 - langfristige Bereinigung der Legacy-Produktions-/Worker-Doppelpfade
+- Bewohner-Arbeits-/Freizeit-AI und finale Bewohner-Sprites
 
-## Freeze-Regel
+## Freeze
 
-SA-04 darf als `PASS / FROZEN` markiert werden, sobald RT-04 praktisch bestanden ist. Danach wird der aktuelle Stand des Branches als verbindlicher SA-04-Zwischenstand festgehalten. `main` bleibt bis zur ausdrücklichen Freigabe unverändert.
+SA-04 ist nach bestandenem RT-04 am 2026-08-31 als `PASS / FROZEN` abgeschlossen. Der Branch `feature/sa-04-savegame-v2` ist damit der verbindliche stabile SA-04-Zwischenstand. `main` bleibt unverändert, bis eine ausdrückliche Freigabe zum Merge erfolgt.
