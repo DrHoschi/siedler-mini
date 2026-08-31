@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
  * Projekt  : Neue Siedler
- * Version  : v26.08.31-sa04-continue-gate13
+ * Version  : v26.08.31-sa04-continue-gate14
  * Zweck    : 3-Gate-Boot + SA-04 SaveGame-V2-Gate + Runtime-/Production-Guards.
  * ========================================================================== */
 (function(){
@@ -11,7 +11,7 @@
   window.__BOOT_SINGLETON__ = true;
   const INFO=(...a)=>(window.CBLog?.info||console.info)(TAG,...a);
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG,...a);
-  const state={version:'v26.08.31-sa04-continue-gate13',userReady:false,assetsReady:false,registryReady:false,saveV2Ready:false,continuePrepared:false,started:false,mode:null};
+  const state={version:'v26.08.31-sa04-continue-gate14',userReady:false,assetsReady:false,registryReady:false,saveV2Ready:false,continuePrepared:false,started:false,mode:null};
   window.BootState=state; INFO('BootManager initialisiert',state.version);
   function emit(name,detail={}){try{dispatchEvent(new CustomEvent(name,{detail}));}catch(_){}}
   function maybeStart(){
@@ -35,7 +35,7 @@
   function appendScript(src){const s=document.createElement('script');s.src=src;s.async=false;s.onerror=()=>WARN('Modul konnte nicht geladen werden:',src);(document.head||document.documentElement).appendChild(s);return s;}
   appendScript('core/sa04.runtime-guards.js?v=26.08.28-sa04-1');
   appendScript('core/sa04.production-bridge.js?v=26.08.30-hunter-stock');
-  appendScript('core/sa04.pause-builder-fixes.js?v=26.08.28-sa04-2');
+  appendScript('core/sa04.pause-builder-fixes.js?v=26.08.31-sa04-builder-recovery2');
   appendScript('core/sa04.worker-pause-hunter.js?v=26.08.30-sa04-worker4');
   appendScript('core/sa04.hunter-production-fix.js?v=26.08.31-sa04-hunter-prod1');
   appendScript('core/sa04.hunter-entry-fix.js?v=26.08.31-sa04-hunter-entry1');
