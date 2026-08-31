@@ -1,90 +1,87 @@
 # SA-04 – SaveGame V2 + echter Continue-Pfad
 
-Status: TEST READY (Arbeitsbranch)
-Datum: 2026-08-27
+Status: FINAL TEST – 1 Randfall offen
+Datum: 2026-08-31
 Branch: `feature/sa-04-savegame-v2`
 Basis: `main` @ `c4b904fa0609ba4e93d0ae52e3e9401d3b594ecd`
 
 ## Ziel
 
-Den bisherigen `continue`-Pseudo-Neustart durch einen kontrollierten V2-Restore ersetzen, ohne die bestehende Gameplay-Architektur groß umzubauen.
+Den bisherigen `continue`-Pseudo-Neustart durch einen kontrollierten V2-Restore ersetzen und die für den aktuellen 2D-Teststand relevanten Wirtschafts-/Runtime-Zustände nach Reload zuverlässig fortsetzen.
 
-## Implementierter Stand
+## Persistierter fachlicher Zustand
 
-1. `core/savegame-v2.js`
-   - Namespace `siedler.save.v2.*`
-   - Autosave-Slot `autosave`
-   - Snapshot-Version 2
-   - speichert Ressourcen, Gebäude/Baufortschritt, MapResources und Units-Grundzustand
-   - speichert bewusst keine JobQueue, Unit-Tasks/Nav-Caches, Renderer-, DOM-, Timer- oder Asset-Zustände
-   - Autosave bei `visibilitychange`, `pagehide` sowie zyklisch alle 30 Sekunden
+- Meta/World und Kartenidentität
+- zentrale Ressourcen `RegistryValues`
+- Gebäude inklusive Bauzustand und stabiler UID
+- Pausezustand `workPaused`
+- MapResources
+- Units-Grundzustand
+- Trampelpfad-Wear und sichtbare Stamps
+- physischer `BuildingStock` vor Produktionsgebäuden
+- Wohnhaus-Bewohnerzuordnung über Unit/Home-UID
+- Steuer-Timer pro Wohnhaus
 
-2. `core/boot-v1.js`
-   - SaveGame V2 ist eigenes Boot-Gate
-   - `new` und `continue` bleiben getrennt
-   - `continue` darf nur nach erfolgreichem `SaveGameV2.prepareContinue()` starten
-   - ohne gültigen V2-Spielstand wird Continue blockiert statt als neues Spiel weiterzulaufen
+Bewusst nicht gespeichert werden Runtime-Zustände wie JobQueue, Carrier-/Builder-Tasks, Navigation/A*-Caches, Renderer, DOM, Asset-Caches oder Timer-Handles. Diese werden bei Continue rekonstruiert.
 
-3. Continue-Restore-Reihenfolge
-   - Gebäude vor dem normalen Game-Start-Rest setzen
-   - Ressourcen einsetzen und nach dem synchronen Start-Dispatch nochmals absichern
-   - nach `cb:map:ready`: MapResources restaurieren
-   - Units-Grundzustand restaurieren und HQ-Position aus dem gespeicherten HQ ableiten
-   - nur fehlende Baustellen-Lieferjobs aus `needs - delivered` rekonstruieren
+## Implementierte Restore-/Runtime-Regeln
 
-4. `core/savegame-v2-uid-guard.js`
-   - gespeicherte Gebäude-UIDs bleiben unverändert
-   - neue Gebäude nach Continue werden bei einer UID-Kollision vor dem Queue-Aufbau auf eine freie UID umgebogen
+1. `new` und `continue` sind getrennte Boot-Pfade. Continue startet nur mit gültigem SaveGame V2.
+2. Gebäude werden vor dem normalen Startrest restauriert; Ressourcen werden gegen Legacy-Startwerte nochmals abgesichert.
+3. Nach MapReady werden MapResources und Units restauriert und die HQ-Position rekonstruiert.
+4. Fehlende Baustellen-Lieferjobs werden aus `needs - delivered` neu erzeugt; überzählige Lieferungen werden blockiert.
+5. Gespeicherte Gebäude-UIDs bleiben stabil; neue UID-Kollisionen werden abgefangen.
+6. Produktionsgebäude werden nach Continue rehydriert; Output landet physisch im BuildingStock und wird erst nach Trägerlieferung im HQ global gebucht.
+7. BuildingStock wird gespeichert; laufende Carry-Jobs nicht. Nach Continue werden Abholjobs aus dem wiederhergestellten Stock neu erzeugt.
+8. Baustellen beginnen erst zu bauen, wenn echte Builder angekommen sind.
+9. Laufende Bauphasen nach Continue behalten `buildElapsed/buildProgress`, verlangen aber erneut echte Builder, da `_builderJob` bewusst nicht persistiert wird.
+10. Bewohner und Wohnhaus-Steuertimer werden über Continue erhalten; Bewohner werden dedupliziert.
 
-## Noch nicht Bestandteil dieses Teststands
+## Praktisch bestätigte Tests – PASS
 
-- Path-Wear-Restore
-- exakte Fortsetzung laufender Carrier-Tasks (absichtlich verworfen; Jobs werden rekonstruiert)
-- vollständige Rekonstruktion interner Production-Caches für bereits fertige Produktionsgebäude
-- Kamera-Position/Zoom im Savegame
-- Migration alter `siedler.save.v1.*`-Spielstände
+- Gebäude bleiben nach Reload/Continue erhalten.
+- zentrale Ressourcen bleiben nach Reload/Continue erhalten.
+- Trampelpfade bleiben nach Reload/Continue erhalten.
+- Produktionsgebäude-Pause funktioniert und bleibt nach Continue erhalten.
+- Produktionsarbeiter Holzfäller/Steinbruch/Fischer kehren bei Pause ins Gebäude zurück und kommen bei Weiter wieder heraus.
+- Jäger produziert Fleisch/Fell; Pause stoppt Jagd/Output und Worker kehrt zum Gebäude zurück.
+- Baustellen beginnen nicht vor Ankunft echter Builder zu bauen.
+- Träger liefern nicht über den tatsächlichen Baustellenbedarf hinaus.
+- sichtbare Baustellenressourcen entsprechen den gelieferten Mengen und verschwinden korrekt bei Fertigstellung.
+- Produktionslager werden sichtbar vor Gebäuden dargestellt.
+- Produktionslager bleiben nach Reload/Continue erhalten.
+- mehrere freie Träger bedienen mehrere Baustellen und Produktionsgebäude parallel; Baustellen bleiben priorisiert.
+- HQ-Menü zeigt zentralen Lagerbestand strukturiert an.
+- Produktionsgebäude-Menüs zeigen vorgesehene Lagerressourcen auch mit Bestand 0.
+- kleines Wohnhaus hat 2/2 echte Bewohner, mittleres Wohnhaus 3/3.
+- Bewohnerbelegung bleibt nach Reload/Continue erhalten.
+- Test-Steuerregel 1 Gold/Bewohner/10 s funktioniert.
+- Gold wird zentral gebucht und im HQ/HUD sichtbar.
+- Steuer-Timer und Goldfluss funktionieren auch nach Reload/Continue.
 
-## Reload-Test RT-01 – Grundzustand
+## Letzter Freeze-Gate-Test RT-04 – Reload mitten im Bau
 
-1. Branch starten.
-2. `Neues Spiel` wählen.
-3. Prüfen, dass HQ und Startressourcen normal erscheinen.
-4. Mindestens ein Gebäude platzieren.
-5. Ressourcenwert und Gebäudeposition notieren.
-6. In der Konsole optional `SaveGameV2.save({slot:'autosave',name:'RT-01'})` ausführen; alternativ Tab/App in den Hintergrund schicken.
-7. Seite vollständig neu laden.
-8. `Weiterspielen` wählen.
-
-Erwartung:
-- kein zweites Auto-HQ
-- gespeicherte Gebäude bleiben an ihren Positionen
-- Ressourcen entsprechen dem Save und nicht den Startwerten
-- MapResources werden nicht neu ausgewürfelt
-- gespeicherte Units werden wiederhergestellt
-
-## Reload-Test RT-02 – Baustelle teilweise beliefert
-
-1. Eine Baustelle mit mehreren benötigten Ressourcen erzeugen.
-2. Warten, bis nur ein Teil geliefert wurde.
-3. Speichern und vollständig reloaden.
+1. Ein Gebäude vollständig mit Material versorgen.
+2. Warten, bis Builder angekommen sind und der Bau sichtbar begonnen hat.
+3. Bau einige Sekunden laufen lassen, aber vor Fertigstellung reloaden.
 4. `Weiterspielen` wählen.
 
 Erwartung:
-- `needs` und `delivered` bleiben erhalten
-- nur die noch fehlenden Liefermengen erzeugen neue `deliver`-Jobs
-- bereits gelieferte Ressourcen werden nicht nochmals angefordert
+- bisheriger Baufortschritt bleibt erhalten und wird nicht auf 0 gesetzt;
+- Baustelle läuft nach Continue nicht ohne Arbeiter weiter;
+- echte Builder werden erneut aus dem HQ angefordert;
+- nach Ankunft der Builder setzt sich der Bau ab dem gespeicherten Fortschritt fort;
+- Gebäude wird normal fertiggestellt;
+- keine zusätzlichen Materiallieferungen für bereits vollständig geliefertes Material.
 
-## Reload-Test RT-03 – Continue ohne V2-Save
+## Nicht Teil von SA-04 / bewusst später
 
-1. `SaveGameV2.clear('autosave')` ausführen.
-2. Seite reloaden.
-3. `Weiterspielen` wählen.
+- Kamera-Position/Zoom im Savegame
+- Migration alter `siedler.save.v1.*`-Spielstände
+- finales Balancing der Steuerwerte
+- finale Item-/Ressourcen-Icons und Fell-Sprite
+- langfristige Bereinigung der Legacy-Produktions-/Worker-Doppelpfade
 
-Erwartung:
-- kein Spielstart
-- kein neues HQ / keine Startressourcen unter dem Deckmantel von Continue
-- Boot meldet `no-valid-save-v2`
+## Freeze-Regel
 
-## Merge-Regel
-
-Nicht nach `main` mergen, bevor RT-01 bis RT-03 praktisch bestanden sind und die Production-Restore-Frage für bereits fertige Produktionsgebäude geprüft wurde.
+SA-04 darf als `PASS / FROZEN` markiert werden, sobald RT-04 praktisch bestanden ist. Danach wird der aktuelle Stand des Branches als verbindlicher SA-04-Zwischenstand festgehalten. `main` bleibt bis zur ausdrücklichen Freigabe unverändert.
