@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/boot-v1.js
  * Projekt  : Neue Siedler
- * Version  : v26.08.31-sa05-resident-gate2
+ * Version  : v26.08.31-sa05-resident-gate3
  * Zweck    : SA-04-Freeze-Unterbau + SA-05 Resident-Workforce-Testmodul.
  * ========================================================================== */
 (function(){
@@ -11,7 +11,7 @@
   window.__BOOT_SINGLETON__ = true;
   const INFO=(...a)=>(window.CBLog?.info||console.info)(TAG,...a);
   const WARN=(...a)=>(window.CBLog?.warn||console.warn)(TAG,...a);
-  const state={version:'v26.08.31-sa05-resident-gate2',userReady:false,assetsReady:false,registryReady:false,saveV2Ready:false,continuePrepared:false,started:false,mode:null};
+  const state={version:'v26.08.31-sa05-resident-gate3',userReady:false,assetsReady:false,registryReady:false,saveV2Ready:false,continuePrepared:false,started:false,mode:null};
   window.BootState=state; INFO('BootManager initialisiert',state.version);
   function emit(name,detail={}){try{dispatchEvent(new CustomEvent(name,{detail}));}catch(_){}}
   function maybeStart(){
@@ -45,6 +45,7 @@
   appendScript('core/sa04.housing-taxes.js?v=26.08.31-sa04-tax1');
   appendScript('core/sa04.housing-menu.js?v=26.08.31-sa04-housing-menu2');
   appendScript('core/sa05.resident-workforce.js?v=26.08.31-sa05-resident3-pathperf');
+  appendScript('core/sa05.path-render-diagnostic.js?v=26.08.31-sa05-pathdiag1');
   appendScript('core/savegame-v2-uid-guard.js?v=26.08.27-sa04-1');
   appendScript('core/savegame-v2.js?v=26.08.27-sa04-2');
 })();
