@@ -1,12 +1,14 @@
 /* ============================================================================
- * SA-05 Resident Workforce
- * Version: v26.08.31-sa05-resident2-perf
+ * SA-05 Resident Workforce + Performance Guard
+ * Version: v26.08.31-sa05-resident3-pathperf
  *
  * - u.villager remains bound to its residential home
  * - free residents can help with deliver/carry jobs when regular carriers are busy
  * - after work residents return to their own house and go inside
  * - idle residents occasionally leave the house for a short walk and return
- * - optimized: cached home lookup, single unit pass, reduced polling frequency
+ * - cached home lookup, single unit pass, reduced resident polling frequency
+ * - PERF-02: caps live path stamps, disables expensive path halo pass,
+ *   and throttles path-wear decay work without changing saved wear semantics
  * ========================================================================== */
 (function(){
   'use strict';
@@ -16,9 +18,12 @@
   const SPEED=0.75;
   const ARRIVE=0.08;
   const TICK_MS=200;
+  const PATH_STAMP_LIMIT=2800;
+  const PATH_DECAY_STEP_SEC=0.5;
   const STATE=new Map();
   const HOME_CACHE=new Map();
   let patched=false;
+  let pathPatched=false;
 
   function units(){return window.GameUnits?.getUnits?.()||[];}
   function isVillager(u){return !!(u&&String(u.kind||'')==='u.villager');}
@@ -127,9 +132,47 @@
     GU.__sa05ResidentWorkforcePatched=true;patched=true;LOG('GameUnits Job-Pool um Bewohner erweitert');return true;
   }
 
+  function patchPathPerformance(){
+    const inst=window.PathOverlayInstance;
+    if(!inst||pathPatched||typeof inst.drawOnMainCanvas!=='function')return false;
+
+    const rawDraw=inst.drawOnMainCanvas.bind(inst);
+    const rawDecay=typeof inst._decayWear==='function'?inst._decayWear.bind(inst):null;
+    let decayAccum=0;
+
+    if(rawDecay){
+      inst._decayWear=function(dt){
+        decayAccum+=Math.max(0,Number(dt)||0);
+        if(decayAccum<PATH_DECAY_STEP_SEC)return;
+        const run=Math.min(1,decayAccum);
+        decayAccum=0;
+        return rawDecay(run);
+      };
+    }
+
+    inst.drawOnMainCanvas=function(ctx){
+      if(Array.isArray(inst._stamps)&&inst._stamps.length>PATH_STAMP_LIMIT){
+        inst._stamps=inst._stamps.slice(-PATH_STAMP_LIMIT);
+      }
+
+      // The legacy path renderer adds a second atlas draw per stamp when
+      // softness is above 0.8. Temporarily clamp softness to 0.8 so every
+      // visible stamp needs only one atlas draw. Width/alpha/path state stay intact.
+      const oldSoft=inst.softness;
+      if(Number(oldSoft)>0.8)inst.softness=0.8;
+      try{return rawDraw(ctx);}
+      finally{inst.softness=oldSoft;}
+    };
+
+    pathPatched=true;
+    LOG('Path PERF-02 aktiv',{stampLimit:PATH_STAMP_LIMIT,decayStepSec:PATH_DECAY_STEP_SEC});
+    return true;
+  }
+
   setInterval(()=>{
     try{
       if(!patched)patchJobs();
+      if(!pathPatched)patchPathPerformance();
       const list=units();
       if(!list.length)return;
       const now=Date.now(),dt=TICK_MS/1000;
@@ -144,7 +187,8 @@
 
   window.addEventListener('cb:build:complete',rebuildHomeCache);
   window.addEventListener('cb:savegame:v2:buildings-restored',rebuildHomeCache);
-  window.addEventListener('cb:game:start',()=>setTimeout(rebuildHomeCache,100));
+  window.addEventListener('cb:game:start',()=>setTimeout(()=>{rebuildHomeCache();patchPathPerformance();},100));
+  window.addEventListener('cb:map:ready',()=>setTimeout(patchPathPerformance,50));
   window.addEventListener('cb:savegame:v2:continue-restored',()=>{
     STATE.clear();rebuildHomeCache();
     setTimeout(()=>{
@@ -157,6 +201,6 @@
     },120);
   });
 
-  window.SA05ResidentWorkforce={version:'v26.08.31-sa05-resident2-perf',state:STATE,homeCache:HOME_CACHE,patchJobs,rebuildHomeCache};
-  LOG('bereit v26.08.31-sa05-resident2-perf');
+  window.SA05ResidentWorkforce={version:'v26.08.31-sa05-resident3-pathperf',state:STATE,homeCache:HOME_CACHE,patchJobs,rebuildHomeCache,patchPathPerformance};
+  LOG('bereit v26.08.31-sa05-resident3-pathperf');
 })();
