@@ -1,6 +1,6 @@
 # S2D-01 – GAME DESIGN
 
-Status: **V0.1 DRAFT – S2D-01A/B COMPLETE**  
+Status: **V0.1 DRAFT – S2D-01A/B/C COMPLETE**  
 Datum: 2026-09-01  
 Repository: `DrHoschi/siedler-mini`  
 Arbeitsbranch: `feature/s2d-01-game-design`  
@@ -602,5 +602,416 @@ Diese Punkte werden in S2D-02, S2D-03, S2D-05 bzw. späteren Game-Design-Blöcke
 Der fachliche Wirtschaftsfluss ist damit geschlossen definiert, ohne technische Implementierung vorwegzunehmen.
 
 **S2D-01B – Economy Rules & Resource Flow: COMPLETE**  
+**Implementation changes: 0**  
+**Product scope conflict gegenüber S2D-00 V0.1 FROZEN: 0**
+
+---
+
+# S2D-01C – Buildings, Production & Construction Behavior
+
+## 37. Gemeinsame Gebäudegrundregeln
+
+Jedes Gebäude besitzt im Game Design mindestens folgende fachliche Eigenschaften:
+
+- eine klar definierte Funktion,
+- eine blockierende Grundfläche,
+- mindestens einen gültigen Zugang für Units,
+- gegebenenfalls einen Waren-Pickup-/Delivery-Bereich,
+- gegebenenfalls sichtbare Lagerflächen,
+- einen klaren Betriebszustand,
+- sichtbares Feedback über seinen Zustand,
+- einen auswählbaren Bereich für Spielerinformationen und erlaubte Aktionen.
+
+Gebäude sind keine rein dekorativen Bilder. Ihre sichtbare Form, Zugänge, Laufwege und Warenplätze müssen mit dem tatsächlichen Gameplay übereinstimmen.
+
+## 38. Verbindliche Gebäudezustände
+
+Für normale platzierbare Gebäude gilt fachlich mindestens:
+
+`PLANNED/PLACEMENT -> CONSTRUCTION_WAIT_MATERIAL -> CONSTRUCTION_WAIT_BUILDER -> CONSTRUCTION_BUILDING -> ACTIVE`
+
+Je nach Gebäudetyp können zusätzlich auftreten:
+
+- `PAUSED`,
+- `BLOCKED`,
+- `NO_WORKER`,
+- `NO_RESOURCE`,
+- `OUTPUT_FULL`,
+- `DEMOLISHING/REMOVED`.
+
+Diese Begriffe beschreiben Game-Design-Zustände. Die endgültigen technischen Enum-Namen werden erst in S2D-03 festgelegt.
+
+## 39. Platzierung und Gebäudegrundfläche
+
+Der Spieler darf ein Gebäude nur an einem fachlich gültigen Standort platzieren.
+
+Die Platzierung muss mindestens berücksichtigen:
+
+- ausreichende freie Grundfläche,
+- keine Überlappung mit anderen blockierenden Gebäuden,
+- keine Platzierung auf unzulässigem Terrain,
+- einen nutzbaren Zugang für Units,
+- genug Raum für zwingend benötigte Arbeits-/Ablagebereiche, soweit diese zum Gebäudetyp gehören.
+
+Ein Gebäude darf nicht so stehen, dass sein einziger Zugang in einer unpassierbaren Fläche endet.
+
+Die genaue Raster-/Footprint-/Terrainprüfung gehört in S2D-03.
+
+## 40. Zugänge, Pickup und Delivery
+
+Gebäude benötigen fachlich definierte Interaktionspunkte.
+
+Mindestens zu unterscheiden sind:
+
+- **Unit Access** – Punkt/Bereich, den Bewohner oder Arbeiter zum Betreten/Arbeiten erreichen,
+- **Pickup** – Punkt/Bereich, an dem Waren aufgenommen werden,
+- **Delivery** – Punkt/Bereich, an dem Waren angeliefert werden,
+- **Visible Storage Area** – Bereich, in dem Bestände sichtbar dargestellt werden.
+
+Diese Bereiche dürfen identisch sein, wenn das Gebäude klein und die Darstellung eindeutig bleibt. Sie sollen aber fachlich getrennt gedacht werden, damit Warenstapel nicht Eingänge blockieren und Units nicht scheinbar durch Wände laufen.
+
+## 41. Baustellenverhalten
+
+### 41.1 Nach Platzierung
+
+Nach Bestätigung wird aus der Platzierung eine reale Baustelle.
+
+Sie besitzt:
+
+- Gebäudetyp,
+- Standort und Footprint,
+- Zugang,
+- benötigte Materialien,
+- bereits gelieferte Materialien,
+- reservierte/unterwegs befindliche Materialien,
+- sichtbaren Bauzustand.
+
+### 41.2 Materialphase
+
+Solange Material fehlt, befindet sich die Baustelle in `CONSTRUCTION_WAIT_MATERIAL`.
+
+Waren werden real angeliefert und bleiben fachlich Teil der Baustelle. Bereits gelieferte Materialien sollen, soweit sinnvoll, sichtbar am Bauplatz erscheinen.
+
+Es gilt weiterhin:
+
+`Restbedarf = Soll - geliefert - gültig reserviert/unterwegs`
+
+Bei `Restbedarf <= 0` entstehen keine weiteren Materialtransporte.
+
+### 41.3 Builderphase
+
+Sobald alle benötigten Materialien vollständig vorhanden sind, wechselt die Baustelle in `CONSTRUCTION_WAIT_BUILDER`.
+
+Ein geeigneter Bauarbeiter muss die Baustelle tatsächlich erreichen.
+
+Die bloße Zuweisung eines Builders oder ein vorhandener Builder irgendwo auf der Karte darf **keinen Baufortschritt** auslösen.
+
+### 41.4 Bauphase
+
+Erst nach tatsächlicher Ankunft beginnt `CONSTRUCTION_BUILDING`.
+
+Der Baufortschritt soll sichtbar sein. Die genaue Anzahl von Bauphasen/Frames und ob Material währenddessen schrittweise optisch verschwindet, wird später festgelegt.
+
+### 41.5 Fertigstellung
+
+Bei Abschluss:
+
+- endet der Baustellenzustand,
+- die gelieferten Materialien gelten als verbaut/verbraucht,
+- das fertige Gebäude wird aktiv,
+- seine Betriebs-/Wohn-/Produktionsfunktion startet nach den jeweiligen Regeln,
+- seine normalen Zugänge und Lagerflächen werden aktiv.
+
+## 42. Abriss
+
+Grundlegender Abriss gehört zum Kern.
+
+Der Spieler kann ein gebautes Gebäude grundsätzlich zum Abriss markieren.
+
+Dabei gilt fachlich:
+
+- das Gebäude startet keine neue normale Produktion mehr,
+- neue nicht zwingende Jobs sollen nicht mehr dafür erzeugt werden,
+- bestehende Waren und Bewohner dürfen nicht stillschweigend verschwinden,
+- die Umgebung wird nach Abschluss wieder baubar/begehbar,
+- Rückerstattung und mögliche Abrissdauer bleiben spätere Balance-/Designentscheidung.
+
+Für Wohnhäuser muss vor Implementierung eindeutig geklärt sein, wie Bewohner bei Abriss umgesiedelt bzw. behandelt werden. Das gehört in S2D-02.
+
+## 43. Sichtbare Zustände
+
+Ein Spieler soll wichtige Gebäudeprobleme möglichst bereits an der Welt erkennen können.
+
+Mögliche visuelle Hinweise:
+
+- Baustellenmaterial liegt sichtbar bereit,
+- Bauarbeiter ist an der Baustelle sichtbar,
+- Produktion zeigt kleine Arbeitsanimationen,
+- lokales Warenlager füllt/leert sich,
+- Pause ist am Gebäude erkennbar,
+- fehlender Arbeiter kann über ein dezentes Symbol angezeigt werden,
+- kein Rohstoff im Arbeitsbereich kann erkennbar werden,
+- voller Ausgangsbestand kann sichtbar und/oder über UI markiert werden.
+
+Die konkrete Symbolik und Animation gehört in S2D-04/S2D-05.
+
+## 44. HQ / Rathaus
+
+### Funktion
+
+Das HQ ist:
+
+- Startgebäude,
+- wirtschaftlicher Mittelpunkt,
+- primäres V1-Lager,
+- Hauptziel für produzierte physische Waren,
+- Hauptquelle für zentral eingelagerte Baumaterialien.
+
+### Spieleraktionen
+
+Im V1-Kern mindestens:
+
+- auswählen,
+- Bestände ansehen,
+- wirtschaftliche Übersicht öffnen.
+
+Eine Produktionspause ist für das HQ nicht erforderlich.
+
+### Zugänge und Lager
+
+Das HQ benötigt:
+
+- mindestens einen klaren Unit-/Logistikzugang,
+- einen Delivery-/Pickup-Bereich,
+- sichtbare Lagerflächen für physische Waren.
+
+Die sichtbaren Lagerflächen dürfen mehrere Stapel füllen und sollen mit dem realen Bestand reagieren.
+
+## 45. Kleines Wohnhaus
+
+### Funktion
+
+Das kleine Wohnhaus stellt Wohnraum für **2 Bewohner** bereit.
+
+Es ist deren dauerhafte Home-Bindung, solange kein späterer fachlicher Umzug stattfindet.
+
+### Spieleraktionen
+
+Mindestens:
+
+- auswählen,
+- Bewohnerzahl/Belegung ansehen,
+- grundlegenden Status ansehen,
+- abreißen.
+
+### Verhalten
+
+Bewohner dürfen:
+
+- im Haus sein,
+- das Haus über den definierten Zugang verlassen,
+- Freizeit/temporäre Aufgaben ausführen,
+- wieder zum selben Zugang zurückkehren.
+
+Wohnhäuser benötigen im V1 keinen Waren-Ausgangsbestand wie Produktionsgebäude.
+
+Sie erzeugen nach späterer Steuerregel Gold als Wirtschaftswert.
+
+## 46. Mittleres Wohnhaus
+
+Das mittlere Wohnhaus folgt denselben Grundregeln wie das kleine Wohnhaus, stellt aber **3 Bewohner** bereit.
+
+Unterschiede bei Baukosten, Größe, Aussehen oder späteren Vorteilen werden in S2D-05 festgelegt.
+
+## 47. Holzfällerhütte
+
+### Funktion
+
+Die Holzfällerhütte erzeugt **Holz** aus real nutzbaren Bäumen im Arbeitsbereich.
+
+### Spieleraktionen
+
+Mindestens:
+
+- platzieren,
+- auswählen,
+- Arbeitsbereich ansehen/setzen,
+- Produktion pausieren/fortsetzen,
+- lokalen Holzbestand ansehen,
+- Status/Engpass erkennen,
+- abreißen.
+
+### Simulation
+
+Verbindlicher Ablauf:
+
+`geeigneter Arbeiter -> gültiger Baum im Arbeitsbereich -> Weg zum Ziel -> Arbeit/Fällen -> Rückkehr/Output -> Holz in lokalen Bestand -> Pickup durch Logistik -> HQ`
+
+Die genaue Fällanimation und ob der Arbeiter den Stamm physisch bis zur Hütte trägt oder die Produktionsware nach Abschluss dort entsteht, wird später fachlich/technisch präzisiert. Entscheidend ist: Holz entsteht nicht direkt im globalen HQ-Bestand.
+
+### Lager/Zugang
+
+Die Hütte benötigt:
+
+- Worker-Zugang,
+- Pickup-Bereich,
+- sichtbare lokale Holzablage.
+
+Bei vollem Ausgangsbestand kann die Produktion warten.
+
+## 48. Steinbruch
+
+### Funktion
+
+Der Steinbruch erzeugt **Stein** aus real nutzbaren Stein-/Rohstoffquellen im Arbeitsbereich.
+
+### Spieleraktionen
+
+Wie bei der Holzfällerhütte:
+
+- Arbeitsbereich,
+- Pause,
+- lokalen Bestand/Status,
+- Abriss.
+
+### Simulation
+
+`geeigneter Arbeiter -> gültige Steinquelle -> Arbeit/Abbau -> Output zum Gebäude -> lokaler Steinbestand -> Logistik -> HQ`
+
+Der Steinbruch benötigt Worker-Zugang, Pickup und sichtbare Steinablage.
+
+## 49. Fischerhütte
+
+### Funktion
+
+Die Fischerhütte erzeugt **Fisch** aus einem gültigen fischbaren Bereich.
+
+### Spieleraktionen
+
+Mindestens:
+
+- platzieren,
+- Arbeitsbereich bzw. nutzbaren Ufer-/Fischbereich erkennen/setzen,
+- pausieren/fortsetzen,
+- lokalen Fischbestand/Status ansehen,
+- abreißen.
+
+### Simulation
+
+Der Fischer arbeitet nur, wenn ein sinnvoller erreichbarer Fischbereich vorhanden ist.
+
+`Fischer -> gültiger Arbeits-/Fischpunkt -> Fischfang -> Rückkehr/Output -> lokaler Fischbestand -> Logistik -> HQ`
+
+Der Gebäudezugang darf nicht im Wasser oder in unpassierbarer Fläche liegen.
+
+## 50. Jägerhütte
+
+### Funktion
+
+Die Jägerhütte erzeugt im aktuellen Kern **Fleisch und Fell** aus real vorhandenen geeigneten Wildtieren.
+
+### Spieleraktionen
+
+Mindestens:
+
+- platzieren,
+- Arbeitsbereich ansehen/setzen,
+- pausieren/fortsetzen,
+- lokale Bestände ansehen,
+- Engpass erkennen,
+- abreißen.
+
+### Simulation
+
+`Jäger -> geeignetes reales Tier im Arbeitsbereich -> Weg/Jagd -> Tier wird fachlich konsumiert -> Rückkehr/Output -> Fleisch/Fell in lokalen Beständen -> Logistik -> HQ`
+
+Es darf keine zweite abstrakte Jagdproduktion parallel zum realen Tierbestand geben.
+
+Die genaue Jagdanimation, Tierarten und Ertragsmengen werden später festgelegt.
+
+## 51. Produktionsgebäude – gemeinsames Verhalten
+
+Holzfällerhütte, Steinbruch, Fischerhütte und Jägerhütte folgen denselben übergeordneten Regeln:
+
+1. Gebäude ist fertig gebaut und nicht pausiert.
+2. Ein geeigneter Worker ist verfügbar/zugeordnet.
+3. Arbeitsbedingungen sind gültig.
+4. Ein reales Ziel bzw. eine gültige Arbeitsquelle existiert, sofern erforderlich.
+5. Der Arbeiter führt den sichtbaren Arbeitsablauf aus.
+6. Das Ergebnis wird im lokalen Gebäudebestand gebucht.
+7. Der lokale Bestand ist sichtbar repräsentierbar.
+8. Logistik transportiert fertige Ware zum HQ.
+9. Erst die HQ-Lieferung macht sie zentral verfügbar.
+
+Produktionsgebäude dürfen nicht direkt globale Ressourcen erhöhen.
+
+## 52. Pause – verbindliches Gebäudeverhalten
+
+Für Produktionsgebäude bedeutet `PAUSED` mindestens:
+
+- keine neue Produktionsaufgabe beginnen,
+- keine neue Rohstoff-/Tierarbeit starten,
+- vorhandene fertige Ware bleibt erhalten,
+- vorhandene Ware darf weiterhin abgeholt werden,
+- Transportjobs für bereits erzeugte Ware dürfen grundsätzlich weiterlaufen,
+- das Gebäude zeigt seinen Pausenstatus sichtbar.
+
+Wie ein Arbeiter reagiert, der im Moment des Pausierens bereits unterwegs oder mitten in einer Tätigkeit ist, wird in S2D-02 festgelegt.
+
+Diese Trennung verhindert, dass Pause versehentlich fertige Ware blockiert oder vernichtet.
+
+## 53. Lagerflächen pro Gebäude – fachliche Anforderungen
+
+Noch ohne konkrete Slotzahlen gilt:
+
+- HQ: mehrere sichtbare Lagergruppen für verschiedene physische Waren,
+- Holzfäller: sichtbarer Holz-Ausgangsbereich,
+- Steinbruch: sichtbarer Stein-Ausgangsbereich,
+- Fischer: sichtbarer Fisch-Ausgangsbereich,
+- Jäger: sichtbare Ausgangsbereiche für Fleisch und Fell,
+- Wohnhäuser: kein normaler Produktionslagerplatz erforderlich,
+- Baustellen: sichtbarer Materialbereitstellungsbereich nach Bedarf.
+
+Ablageflächen sollen leicht lebendig wirken, aber niemals Eingänge, Dockingpunkte oder Laufkorridore blockieren.
+
+## 54. Gebäude und Renderreihenfolge
+
+Für alle sieben Kerngebäude gilt als Game-Design-Anforderung:
+
+- Unit vor/hinter Gebäude muss visuell plausibel erscheinen,
+- Unit darf nicht durch den massiven Gebäude-Footprint laufen,
+- Zugang muss optisch zur Bewegung passen,
+- Warenstapel müssen korrekt in die Tiefenwirkung eingebunden werden,
+- Arbeitsanimationen dürfen nicht scheinbar durch Wände stattfinden.
+
+Die technische Lösung über Y-Sort, Layer, Footprint-Masken oder andere Verfahren wird in S2D-03 festgelegt.
+
+## 55. Was S2D-01C bewusst offen lässt
+
+Noch nicht festgelegt werden:
+
+- finale Baukosten,
+- finale Bauzeiten,
+- genaue visuelle Bauphasen,
+- konkrete Footprint-Größen,
+- genaue Koordinaten der Zugänge/Pickup-/Delivery-/Storage-Slots,
+- konkrete lokale Lagerkapazitäten,
+- genaue Worker-State-Machine,
+- Zahl und Typ der Startarbeiter,
+- exakte Produktionszeiten,
+- exakte Rohstofferträge,
+- finale Jagderträge,
+- genaue Abrissrückerstattung,
+- technische Layer-/Y-Sort-Implementierung,
+- konkrete Animationen/Sprites,
+- spätere Lagerhäuser und weitere Gebäude.
+
+Diese Punkte gehören in S2D-02, S2D-03, S2D-05 oder spätere Detailblöcke.
+
+## 56. Abschluss S2D-01C
+
+Die sieben Kerngebäude besitzen damit eine verbindliche fachliche Rolle, gemeinsame räumliche Regeln und einen konsistenten Lebenszyklus von Platzierung über Bau und Betrieb bis Pause/Abriss.
+
+**S2D-01C – Buildings, Production & Construction Behavior: COMPLETE**  
 **Implementation changes: 0**  
 **Product scope conflict gegenüber S2D-00 V0.1 FROZEN: 0**
