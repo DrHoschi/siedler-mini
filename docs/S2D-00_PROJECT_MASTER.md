@@ -1,11 +1,12 @@
 # S2D-00 – PROJECT MASTER
 
-Status: **V0.1 DRAFT**  
+Status: **V0.1 FROZEN – PASS / 0 BLOCKER**  
 Datum: 2026-09-01  
 Repository: `DrHoschi/siedler-mini`  
 Arbeitsbranch: `feature/sa-05-resident-workforce`  
 Planungsbasis: S2D-00A Project Reconstruction & Design Audit + S2D-00B Product Scope & Open Decision Register  
 Technische Referenzbasis: SA-DOC-01A / SA-DOC-01B / SA-DOC-01C / SA-R01A  
+Freeze-Gate: S2D-00D Internal Consistency & Freeze Gate – PASS / 0 BLOCKER
 
 ## 1. Zweck
 
@@ -518,7 +519,7 @@ Grundsatz für jeden kommenden Block:
 6. Browser-/Runtime-Test möglichst automatisieren,
 7. nur die für echtes Spielgefühl nötigen manuellen Tests beim Nutzer lassen.
 
-Die öffentliche bzw. direkt zugängliche Repository-Struktur und GitHub-Integration sollen genutzt werden, um Codeprüfung, Branchkontrolle, Dokumentation und möglichst viele Regressionstests zu automatisieren.
+Die direkt zugängliche Repository-Struktur und GitHub-Integration sollen genutzt werden, um Codeprüfung, Branchkontrolle, Dokumentation und möglichst viele Regressionstests zu automatisieren.
 
 ## 18. Branch- und Freeze-Regeln
 
@@ -530,13 +531,13 @@ Verbindlich:
 - Vor jedem Implementierungsblock: Branch + HEAD prüfen.
 - Nach jedem Implementierungsblock: Branch + geänderte Dateien prüfen.
 
-## 19. Status des Masters
+## 19. Freeze-Status und Detailgrenzen
 
-Dieser Stand ist `V0.1 DRAFT`.
+Dieser Stand ist **S2D-00 V0.1 FROZEN**.
 
-Er legt Produktziel, Scope, Architekturgrundsätze und Systemgrenzen fest, ersetzt aber noch nicht die Detailentscheidungen der nachfolgenden S2D-Dokumente.
+Er legt Produktziel, NOW/LATER/OUT-Scope, Architekturgrundsätze und Systemgrenzen verbindlich fest. Er ersetzt nicht die Detailentscheidungen der nachfolgenden S2D-Dokumente.
 
-Noch nicht in diesem Dokument festzulegen sind insbesondere:
+Bewusst noch nicht festgelegt sind insbesondere:
 
 - genaue Worker-State-Machine,
 - exakte Job-Prioritäten,
@@ -547,15 +548,33 @@ Noch nicht in diesem Dokument festzulegen sind insbesondere:
 - endgültiges Path-Wear-/Bake-Verfahren,
 - konkrete Inspector-UI.
 
-Diese Entscheidungen werden bewusst in den zuständigen Folgedokumenten getroffen.
+Diese Entscheidungen werden in den jeweils zuständigen Folgedokumenten getroffen, ohne den hier eingefrorenen Produktscope stillschweigend zu verändern.
 
-## 20. Abschluss S2D-00C
+## 20. S2D-00D – Internal Consistency & Freeze Gate
 
-S2D-00A hat den realen Projektstand und die Altlasten rekonstruiert.
+Geprüft wurden:
 
-S2D-00B hat den Produktscope in NOW / LATER / OUT getrennt.
+- S2D-00A Ist-/Legacy-Rekonstruktion gegen den Master,
+- S2D-00B NOW/LATER/OUT-Scope gegen die Master-Kapitel,
+- SA-DOC-01C Runtime-Ownership-Zielmatrix gegen die technische Zielarchitektur und Datenflüsse,
+- Trennung von Produktentscheidung und späterem Detaildesign,
+- Vollständigkeit der NOW-Kernpunkte,
+- Trennung Game-Inspector vs. externe Dev-Tool-Seite,
+- Guidance/Tooltip/Tutorial als eigener, nicht gameplay-besitzender Systembereich,
+- PathSystem als fachlicher Wear-Owner und Rendering als getrennte Cache/Bake-Verantwortung,
+- SaveGame als Snapshot-/Restore-System ohne zweite Gameplay-Ownership,
+- Mobile-First als verbindliche Produktanforderung.
 
-S2D-00C führt beides in diesem Master zusammen.
+### Gate-Ergebnis
 
-**S2D-00C – Project Master Assembly: COMPLETE**  
-**S2D-00 – PROJECT MASTER V0.1: DRAFT**
+- Widersprüche zum verbindlichen Produktscope: **0**
+- fehlende NOW-Kernbereiche: **0**
+- Ownership-Konflikte zum technischen Zielbild: **0**
+- versehentlich finalisierte Detailentscheidungen: **0 Blocker**
+- offene Detailentscheidungen: **zulässig und den Folgedokumenten zugeordnet**
+
+**S2D-00D – Internal Consistency & Freeze Gate: PASS**  
+**Open Blockers: 0**  
+**S2D-00 – PROJECT MASTER V0.1: FROZEN**
+
+Änderungen am eingefrorenen Scope erfolgen ab jetzt nachvollziehbar über `S2D-07 – DECISION & CHANGE LOG`.
