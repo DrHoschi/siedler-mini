@@ -4,6 +4,11 @@
   "type": "module",
   "scripts": {
     "verify": "node tools/verify-structure.js",
+    "check:syntax": "node tools/ci-check.mjs",
+    "test:cr03": "node src/dev/cr-03-freeze-gate.node.js",
+    "test:cr04a": "node src/dev/cr-04a-self-test.node.js",
+    "test:domain": "node src/dev/cr-04a-integration-gate.node.js",
+    "ci": "npm run check:syntax && npm run verify && npm run test:domain",
     "events": "node tools/gen-event-doc.js"
   }
 }
