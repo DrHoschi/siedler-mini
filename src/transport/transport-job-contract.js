@@ -1,7 +1,12 @@
 import { parseStableId } from '../world/stable-id.js';
 
-const TRANSPORT_JOB_STATES = Object.freeze(['PENDING']);
+const TRANSPORT_JOB_STATES = Object.freeze(['PENDING', 'CANCELLED', 'RELEASED']);
 const SOURCE_KINDS = Object.freeze(['cell', 'owner']);
+const ALLOWED_TRANSITIONS = Object.freeze({
+  PENDING: Object.freeze(['CANCELLED', 'RELEASED']),
+  CANCELLED: Object.freeze(['RELEASED']),
+  RELEASED: Object.freeze([])
+});
 
 function clone(value) {
   return value == null ? value : structuredClone(value);
@@ -50,6 +55,18 @@ function sameLocation(a, b) {
 export class TransportJobContract {
   static get states() { return TRANSPORT_JOB_STATES; }
   static get sourceKinds() { return SOURCE_KINDS; }
+  static get transitions() { return ALLOWED_TRANSITIONS; }
+
+  static canTransition(from, to) {
+    const current = normalizeStatus(from);
+    const next = normalizeStatus(to);
+    return ALLOWED_TRANSITIONS[current].includes(next);
+  }
+
+  static assertTransition(from, to) {
+    if (!this.canTransition(from, to)) throw new Error(`invalid transport job transition: ${from} -> ${to}`);
+    return normalizeStatus(to);
+  }
 
   static define({
     id,
