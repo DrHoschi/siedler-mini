@@ -16,7 +16,7 @@ import { runCr03cSelfTest } from './dev/cr-03c-self-test.js';
 import { runCr03FreezeGate } from './dev/cr-03-freeze-gate.js';
 import { runCr04aSelfTest } from './dev/cr-04a-self-test.js';
 import { runCr04bSelfTest } from './dev/cr-04b-self-test.js';
-import { runCr04cSelfTest } from './dev/cr-04c-self-test.js';
+import { runCr04cSelfTest } from './dev/cr-04c-self-test.js?v=cr04c-2';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -26,38 +26,13 @@ import { ResourceDemands } from './resources/resource-demands.js';
 import { ResourceMatching } from './resources/resource-matching.js';
 import { ResourceAssignment } from './resources/resource-assignment.js';
 
-const statusEl = document.querySelector('#runtime-status');
-const testEl = document.querySelector('#test-status');
-const canvas = document.querySelector('#game-canvas');
-const runtime = new Runtime(RuntimeConfig);
-const renderer = new Renderer(canvas, RuntimeConfig);
-const world = new WorldStore();
-const map = new MapStructure(world, { name:'CR-04C Transport Job Lifecycle Test Map', width:8, height:8, cellSize:1, metadata:{ foundation:'CR-04C-TRANSPORT-JOB-LIFECYCLE' } });
-const domains = new CoreDomainStores();
-const resources = new ResourceState({ world, resourceStore:domains.resources });
-const resourceClaims = new ResourceClaims({ resourceState:resources });
-const resourceDemands = new ResourceDemands({ resourceState:resources, claims:resourceClaims });
-const resourceMatching = new ResourceMatching({ resourceState:resources, claims:resourceClaims, demands:resourceDemands });
-const resourceAssignment = new ResourceAssignment({ resourceState:resources, claims:resourceClaims, demands:resourceDemands });
-
-runtime.events.on('runtime.stateChanged', ({current}) => { if (statusEl) statusEl.textContent=current; });
-runtime.boot(); renderer.render(); window.addEventListener('resize',()=>renderer.render(),{passive:true});
-
-const reports = {
-  foundation: runFoundationSelfTest(RuntimeConfig),
-  cr01a: runCr01aSelfTest(), cr01b: runCr01bSelfTest(), cr01c: runCr01cSelfTest(),
-  cr01Freeze: runCr01FreezeGate({world,map,domains}),
-  cr02a: runCr02aSelfTest(), cr02b: runCr02bSelfTest(), cr02c: runCr02cSelfTest(),
-  cr02Freeze: runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),
-  cr03a: runCr03aSelfTest(), cr03b: runCr03bSelfTest(), cr03c: runCr03cSelfTest(),
-  cr03Freeze: runCr03FreezeGate(), cr04a: runCr04aSelfTest(), cr04b: runCr04bSelfTest(), cr04c: runCr04cSelfTest()
-};
-const failedLayers = Object.entries(reports).filter(([,report]) => !report.pass || ('blockerCount' in report && report.blockerCount !== 0)).map(([name])=>name);
-const pass = failedLayers.length === 0;
-const cr04cFailures = reports.cr04c.results?.filter(result=>!result.pass).map(result=>result.error ? `${result.name}: ${result.error}` : result.name) ?? [];
-if (testEl) testEl.textContent = pass
-  ? 'CR-04C TRANSPORT JOB LIFECYCLE: PASS / 0 BLOCKER'
-  : `CR-04C TRANSPORT JOB LIFECYCLE: FAIL — ${[...failedLayers, ...cr04cFailures].join(' | ')}`;
-
-window.CleanRuntime = Object.freeze({ config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>({ cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest() }) });
+const statusEl=document.querySelector('#runtime-status'),testEl=document.querySelector('#test-status'),canvas=document.querySelector('#game-canvas');
+const runtime=new Runtime(RuntimeConfig),renderer=new Renderer(canvas,RuntimeConfig),world=new WorldStore();
+const map=new MapStructure(world,{name:'CR-04C Transport Job Lifecycle Test Map',width:8,height:8,cellSize:1,metadata:{foundation:'CR-04C-TRANSPORT-JOB-LIFECYCLE'}});
+const domains=new CoreDomainStores(),resources=new ResourceState({world,resourceStore:domains.resources}),resourceClaims=new ResourceClaims({resourceState:resources}),resourceDemands=new ResourceDemands({resourceState:resources,claims:resourceClaims}),resourceMatching=new ResourceMatching({resourceState:resources,claims:resourceClaims,demands:resourceDemands}),resourceAssignment=new ResourceAssignment({resourceState:resources,claims:resourceClaims,demands:resourceDemands});
+runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); renderer.render(); window.addEventListener('resize',()=>renderer.render(),{passive:true});
+const reports={foundation:runFoundationSelfTest(RuntimeConfig),cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),cr03a:runCr03aSelfTest(),cr03b:runCr03bSelfTest(),cr03c:runCr03cSelfTest(),cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest()};
+const failedLayers=Object.entries(reports).filter(([,r])=>!r.pass||('blockerCount'in r&&r.blockerCount!==0)).map(([n])=>n),pass=failedLayers.length===0,cr04cFailures=reports.cr04c.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
+if(testEl)testEl.textContent=pass?'CR-04C TRANSPORT JOB LIFECYCLE: PASS / 0 BLOCKER':`CR-04C TRANSPORT JOB LIFECYCLE: FAIL — ${[...failedLayers,...cr04cFailures].join(' | ')}`;
+window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>({cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest()})});
 console.info('[CR-04C] Transport Job Lifecycle device/browser gate',{build:RuntimeConfig.build,state:runtime.state,cr03Regression:reports.cr03Freeze,cr04aRegression:reports.cr04a,cr04bRegression:reports.cr04b,cr04cLifecycle:reports.cr04c,failedLayers,cr04cFailures,overallPass:pass});
