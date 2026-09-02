@@ -11,6 +11,7 @@ import { runCr02bSelfTest } from './dev/cr-02b-self-test.js';
 import { runCr02cSelfTest } from './dev/cr-02c-self-test.js';
 import { runCr02FreezeGate } from './dev/cr-02-freeze-gate.js';
 import { runCr03aSelfTest } from './dev/cr-03a-self-test.js';
+import { runCr03bSelfTest } from './dev/cr-03b-self-test.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -18,6 +19,7 @@ import { ResourceState } from './resources/resource-state.js';
 import { ResourceClaims } from './resources/resource-claims.js';
 import { ResourceDemands } from './resources/resource-demands.js';
 import { ResourceMatching } from './resources/resource-matching.js';
+import { ResourceAssignment } from './resources/resource-assignment.js';
 
 const statusEl = document.querySelector('#runtime-status');
 const testEl = document.querySelector('#test-status');
@@ -27,17 +29,18 @@ const runtime = new Runtime(RuntimeConfig);
 const renderer = new Renderer(canvas, RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-03A Deterministic Resource Matching Map',
+  name: 'CR-03B Reservation Assignment Map',
   width: 8,
   height: 8,
   cellSize: 1,
-  metadata: { foundation: 'CR-03A-RESOURCE-MATCHING' }
+  metadata: { foundation: 'CR-03B-RESERVATION-ASSIGNMENT' }
 });
 const domains = new CoreDomainStores();
 const resources = new ResourceState({ world, resourceStore: domains.resources });
 const resourceClaims = new ResourceClaims({ resourceState: resources });
 const resourceDemands = new ResourceDemands({ resourceState: resources, claims: resourceClaims });
 const resourceMatching = new ResourceMatching({ resourceState: resources, claims: resourceClaims, demands: resourceDemands });
+const resourceAssignment = new ResourceAssignment({ resourceState: resources, claims: resourceClaims, demands: resourceDemands });
 
 runtime.events.on('runtime.stateChanged', ({ current }) => {
   if (statusEl) statusEl.textContent = current;
@@ -57,6 +60,7 @@ const cr02bReport = runCr02bSelfTest();
 const cr02cReport = runCr02cSelfTest();
 const cr02FreezeGateReport = runCr02FreezeGate({ domains, resources, resourceClaims, resourceDemands });
 const cr03aReport = runCr03aSelfTest();
+const cr03bReport = runCr03bSelfTest();
 const pass = foundationReport.pass
   && cr01aReport.pass
   && cr01bReport.pass
@@ -66,9 +70,10 @@ const pass = foundationReport.pass
   && cr02bReport.pass
   && cr02cReport.pass
   && cr02FreezeGateReport.pass
-  && cr03aReport.pass;
+  && cr03aReport.pass
+  && cr03bReport.pass;
 
-if (testEl) testEl.textContent = pass ? 'CR-03A MATCHING: PASS' : 'CR-03A MATCHING: FAIL';
+if (testEl) testEl.textContent = pass ? 'CR-03B ASSIGNMENT: PASS' : 'CR-03B ASSIGNMENT: FAIL';
 
 window.CleanRuntime = Object.freeze({
   config: RuntimeConfig,
@@ -81,6 +86,7 @@ window.CleanRuntime = Object.freeze({
   resourceClaims,
   resourceDemands,
   resourceMatching,
+  resourceAssignment,
   selfTest: () => ({
     foundation: runFoundationSelfTest(RuntimeConfig),
     cr01a: runCr01aSelfTest(),
@@ -91,7 +97,8 @@ window.CleanRuntime = Object.freeze({
     cr02b: runCr02bSelfTest(),
     cr02c: runCr02cSelfTest(),
     cr02FreezeGate: runCr02FreezeGate({ domains, resources, resourceClaims, resourceDemands }),
-    cr03a: runCr03aSelfTest()
+    cr03a: runCr03aSelfTest(),
+    cr03b: runCr03bSelfTest()
   }),
   foundationReport,
   cr01aReport,
@@ -102,10 +109,11 @@ window.CleanRuntime = Object.freeze({
   cr02bReport,
   cr02cReport,
   cr02FreezeGateReport,
-  cr03aReport
+  cr03aReport,
+  cr03bReport
 });
 
-console.info('[CR-03A] Deterministic Demand -> Resource Matching READY', {
+console.info('[CR-03B] Matching -> Reservation Assignment READY', {
   build: RuntimeConfig.build,
   state: runtime.state,
   worldId: world.worldId,
@@ -115,6 +123,7 @@ console.info('[CR-03A] Deterministic Demand -> Resource Matching READY', {
   claimCount: resourceClaims.ids().length,
   demandCount: resourceDemands.ids().length,
   matchPolicy: ResourceMatching.policy,
+  assignmentSource: ResourceAssignment.source,
   foundation: foundationReport,
   cr01a: cr01aReport,
   cr01b: cr01bReport,
@@ -124,5 +133,6 @@ console.info('[CR-03A] Deterministic Demand -> Resource Matching READY', {
   cr02b: cr02bReport,
   cr02c: cr02cReport,
   cr02FreezeGate: cr02FreezeGateReport,
-  cr03a: cr03aReport
+  cr03a: cr03aReport,
+  cr03b: cr03bReport
 });
