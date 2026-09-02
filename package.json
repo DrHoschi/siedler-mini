@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "verify": "node tools/verify-structure.js",
+    "check:syntax": "node tools/ci-check.mjs",
+    "ci": "npm run check:syntax && npm run verify",
     "events": "node tools/gen-event-doc.js"
   }
 }
