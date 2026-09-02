@@ -7,7 +7,8 @@
     "check:syntax": "node tools/ci-check.mjs",
     "test:cr03": "node src/dev/cr-03-freeze-gate.node.js",
     "test:cr04a": "node src/dev/cr-04a-self-test.node.js",
-    "test:domain": "node src/dev/cr-04a-integration-gate.node.js",
+    "test:cr04b": "node src/dev/cr-04b-self-test.node.js",
+    "test:domain": "npm run test:cr03 && npm run test:cr04a && npm run test:cr04b",
     "ci": "npm run check:syntax && npm run verify && npm run test:domain",
     "events": "node tools/gen-event-doc.js"
   }
