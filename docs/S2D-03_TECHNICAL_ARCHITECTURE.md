@@ -1,132 +1,131 @@
 # S2D-03 – TECHNICAL ARCHITECTURE
 
-Status: **V0.1 DRAFT – S2D-03A COMPLETE**  
+Status: **V0.1 FROZEN – PASS / 0 BLOCKER**  
 Datum: 2026-09-02  
 Repository: `DrHoschi/siedler-mini`  
 Arbeitsbranch: `feature/s2d-03-technical-architecture`  
-Verbindliche Basis: `S2D-00 PROJECT MASTER V0.1 FROZEN` + `S2D-01 GAME DESIGN V0.1 FROZEN` + `S2D-02 UNIT & WORKFORCE MODEL V0.1 FROZEN`  
-Technische Referenzen: bestehende SA-Audit-/Ownership-Unterlagen und Scheduler-Inventur, soweit sie dem eingefrorenen S2D-Zielbild nicht widersprechen.
+Verbindliche Basis: `S2D-00 PROJECT MASTER V0.1 FROZEN` + `S2D-01 GAME DESIGN V0.1 FROZEN` + `S2D-02 UNIT & WORKFORCE MODEL V0.1 FROZEN`
 
 ## 1. Zweck
 
 S2D-03 übersetzt die eingefrorenen Produkt-, Economy- und Workforce-Regeln in eine belastbare technische Zielarchitektur.
 
-S2D-03A legt dafür zunächst ausschließlich fest:
+Dieses Dokument konsolidiert die geschlossenen Teilblöcke:
 
-- welche Runtime-Zustände existieren,
-- welches System jeweils autoritativer Owner ist,
-- welche Systeme Zustände nur lesen bzw. über definierte Schnittstellen verändern dürfen,
-- welche fachlichen Abhängigkeiten zwischen den Kernsystemen zulässig sind,
-- welche historischen Doppel-Owner und Patch-Schichten langfristig ersetzt werden müssen,
-- welche Grenzen für SaveGame, Rendering, UI, Inspector und Scheduler gelten.
+- S2D-03A – Runtime Ownership & Core System Boundaries,
+- S2D-03B – Commands, Queries, Events & Cross-System Contracts,
+- S2D-03C – Simulation Scheduler, Update Phases & Runtime Timing Model,
+- S2D-03D – SaveGame Snapshot, Restore & Runtime Reconstruction Architecture,
+- S2D-03E – Navigation, Reachability & Path Request Architecture,
+- S2D-03F – Path/Wear Runtime, Dirty Regions & Render Cache Architecture,
+- S2D-03G – Runtime Validation, Invariants & Failure Containment Architecture,
+- S2D-03H – Architecture Migration Map & Legacy Replacement Strategy,
+- S2D-03I – Internal Consistency & Architecture Freeze Gate.
 
-Noch **nicht** Teil von S2D-03A sind konkrete Klassen-, Datei-, Enum-, Event- oder API-Namen, Tickraten, Datenstrukturen oder eine Implementierungsreihenfolge.
+Konkrete Klassen-, API-, Millisekunden-, Tickrate-, Cachegrößen-, Balance- und Implementierungsdetails bleiben späteren Implementierungsblöcken vorbehalten, sofern sie hier nicht ausdrücklich als Architekturregel eingefroren sind.
 
-## 2. Zentrale Architekturregel
+## 2. Zentrale Architekturregeln
+
+### 2.1 Ein State – ein Owner
 
 > **Jeder wichtige Gameplay-Zustand besitzt genau einen autoritativen Runtime-Owner.**
 
-Andere Systeme dürfen diesen Zustand:
+Andere Systeme dürfen Zustände über öffentliche Queries/Snapshots lesen, über Commands/Services verändern lassen und über Events auf bereits erfolgte Änderungen reagieren. Parallel geführte zweite Wahrheiten sind nicht zulässig.
 
-- über öffentliche Lesezugriffe bzw. Snapshots beobachten,
-- über definierte Commands/Services verändern lassen,
-- über Events über Änderungen informiert werden,
+### 2.2 Nur der Owner mutiert direkt
 
-aber nicht parallel selbst als zweite Wahrheit führen.
+> **Nur der autoritative Owner darf seinen eigenen Gameplay-State direkt verändern.**
 
-Daraus folgt:
+Systemgrenzen werden über drei Vertragsarten überschritten:
 
-`ein State -> ein Owner -> definierte Schnittstellen -> abhängige Systeme`
+1. Command / Operation – Mutation beim Owner anfordern,
+2. Query / Snapshot – Zustand ohne Ownership lesen,
+3. Event – über eine bereits abgeschlossene relevante Änderung informieren.
 
-Nicht zulässig ist:
+Zielbild:
 
-`ein State -> mehrere unabhängige Stores/Patches/Timer -> gegenseitige Korrektur`
+`Consumer -> Command -> Owner -> Mutation -> Event -> Consumer`
 
-## 3. Owner vs. Consumer vs. Coordinator
+### 2.3 Eine Gameplay-Zeitquelle
 
-### 3.1 Owner
+> **Es gibt genau eine autoritative Quelle für den Fortschritt der Gameplay-Simulation.**
 
-Ein Owner besitzt die autoritative Wahrheit eines fachlichen Runtime-Zustands und ist allein für dessen gültige Mutation verantwortlich.
+Gameplay-State wird über einen zentralen SimulationScheduler / GameTick fortgeschrieben. Feature-eigene Endlosintervalle sind keine dauerhafte Zielarchitektur.
 
-### 3.2 Consumer
+### 2.4 SaveGame speichert fachliche Wahrheit
 
-Ein Consumer darf den Zustand lesen oder darauf reagieren, besitzt ihn aber nicht.
+> **SaveGame speichert die autoritative fachliche Wahrheit der Owner – nicht die zufällige Form ihrer aktuellen Runtime-Implementierung.**
 
-Beispiele:
+### 2.5 Navigation nur über NavigationService
 
-- Renderer liest Gebäudezustände,
-- UI liest Produktionsstatus,
-- Inspector liest Unit-/Job-Snapshots.
+> **Alle Gameplay-Systeme greifen auf Navigation ausschließlich über einen gemeinsamen NavigationService zu.**
 
-### 3.3 Coordinator / Service
+### 2.6 PathSystem besitzt Wear
 
-Ein Coordinator verbindet mehrere Owner über definierte Abläufe, darf aber nicht dieselben Zustände nochmals dauerhaft speichern.
+> **PathSystem besitzt den autoritativen Wear-Zustand; Renderer und Render-Cache besitzen ausschließlich dessen visuelle Repräsentation.**
 
-Beispiel:
+### 2.7 Validatoren reparieren nicht heimlich
 
-Ein Logistics-Service darf aus Warenbedarf und Jobs Transportabläufe koordinieren, aber weder BuildingStock noch Unit-Inventar als zweite Wahrheit besitzen.
+> **Validatoren dürfen Inkonsistenzen erkennen, klassifizieren und unsichere Abläufe stoppen, aber keinen fremden Gameplay-State heimlich passend umschreiben.**
+
+## 3. Owner, Consumer und Coordinator
+
+Ein Owner besitzt die autoritative fachliche Wahrheit und ist allein für deren gültige Mutation verantwortlich.
+
+Ein Consumer liest Zustände oder reagiert auf Events, besitzt sie aber nicht. Renderer, UI, Guidance und Inspector sind typische Consumer.
+
+Ein Coordinator verbindet mehrere Owner über definierte Abläufe, darf aber deren Zustände nicht als zweite Wahrheit dauerhaft duplizieren. Logistics, Workforce/Assignment und SaveGame sind typische koordinierende Rollen.
 
 ## 4. Runtime-Ownership-Matrix
 
-| Fachbereich | Autoritativer Ziel-Owner | Darf konsumiert werden von | Darf nicht parallel besitzen |
-|---|---|---|---|
-| Boot/Lifecycle | Boot-/Lifecycle-System | alle Runtime-Systeme | einzelne Feature-Patches mit eigenem Boot-Lifecycle |
-| globale physische Ressourcen im HQ/Lager | ResourceStore / Storage-System | Construction, Logistics, UI, SaveGame, Inspector | UI, Produktion, SaveGame, Carrier-Code |
-| Gold / Wirtschaftswert | Economy-System bzw. klar abgegrenzter ResourceStore-Bereich | Housing/Taxes, UI, SaveGame | Housing-Patch, UI-Zähler |
-| Gebäudeinstanzen | BuildingStore / Buildings-System | Construction, Production, Housing, Renderer, UI, SaveGame | `Game.buildings` plus zweites `Buildings.list` als unabhängige Wahrheiten |
-| Gebäude-Lifecycle/-Betriebszustand | zuständiges Buildings-/Domain-System | UI, Renderer, Guidance, Inspector | separate Guard-/Patch-Flags als zweite Wahrheit |
-| Baustellenzustand | ConstructionSystem | Logistics, Buildings, Renderer, UI, SaveGame | Builder-Patch, JobEngine, Renderer |
-| lokale Produktionsbestände | BuildingStock-System | Production, Logistics, Renderer, SaveGame | Production-Patch, sichtbare Stack-Objekte |
-| Produktionszyklen | ProductionSystem | BuildingStock, Units/Workforce, UI, SaveGame | alte und neue Produktionspfade parallel |
-| reale Personen/Units | UnitStore / GameUnits-Zielsystem | Workforce, Logistics, Navigation, Renderer, UI, SaveGame | Resident-Patch, JobEngine, Housing-Patch |
-| Unit-Identität/Home/Spezialisierung/Capabilities | Unit-/Workforce-Domain | Housing, Assignment, SaveGame, Inspector | JobEngine oder temporäre Typmutation |
-| Unit-Aktivität/Bewegungszustand | Unit-System | Renderer, Workforce, SaveGame | Renderer-/Animationsebene |
-| Jobs / Arbeitsbedarf | JobEngine | Workforce Scheduler, UI, Inspector, SaveGame falls nötig | Production-/Construction-/Resident-Patches mit eigenen Joblisten |
-| konkrete Assignment-Bindung | Workforce-/Assignment-Service in enger Kopplung mit Unit-System | JobEngine, UI, Inspector, SaveGame | Unit und JobEngine als zwei unabhängige Wahrheiten |
-| Transportbedarf/-koordination | Logistics-System | JobEngine, Unit-System, BuildingStock, ResourceStore | Construction-/Production-Patches mit eigener Carrier-Verwaltung |
-| von Unit getragene Ware | Unit-/Transport-Assignment-Kontext | Logistics, Renderer, SaveGame | Quell-/Zielbestand gleichzeitig |
-| Wohnraum/Home-Bindung | Housing-Service + Unit-Domain | Workforce, Economy, UI, SaveGame | separates Population-/Housing-Patch als zweite Personenliste |
-| Bevölkerung | abgeleiteter Wert aus realen Bewohnern | UI, Economy, Guidance | globaler unabhängiger Population-Resource-Counter |
-| Tiere | MapAnimals / Animal-System | Hunting/Production, Renderer, SaveGame | Hunter-Patch mit eigener Tierliste |
-| Weltressourcen | MapResources | Production, Renderer, SaveGame | einzelne Produktionsmodule mit Kopien der Rohstoffzustände |
-| Arbeitsbereiche | WorkArea-System | Production, UI, SaveGame | je Produktionsmodul separate unabhängige WorkArea-States |
-| Navigation/Reachability | NavigationService | Workforce, Logistics, Units | einzelne Guards/Patches mit eigener Reachability-Wahrheit |
-| Weg-/Wear-Daten | PathSystem | Renderer, SaveGame, Inspector | Renderer/PathOverlay als Gameplay-Owner |
-| Pfad-Visualisierung/cache | PathRenderer/Render-Cache | Renderer | PathRenderer darf Wear nicht selbst besitzen |
-| SaveGame | SaveGameService | alle Owner über Snapshot/Restore-Verträge | SaveGame als zweiter Runtime-Store |
-| Rendering | Render-Pipeline / Layer-System | liest Owner-Zustände | keine Gameplay-Mutation |
-| UI | UI-System | liest Owner-Zustände, sendet Commands | keine Gameplay-Ownership |
-| Guidance | GuidanceSystem | hört Events, speichert nur Guidance-Fortschritt | keine Gameplay-Logik |
-| Inspector | separater Dev-Read/Command-Layer | liest Snapshots, sendet Debug-Commands | keine Produktivlogik / keine direkten internen Arrays |
-| Hauptsimulation | zentraler Scheduler/GameTick | ruft Runtime-Systeme kontrolliert auf | Feature-eigene Endlosintervalle als Dauerarchitektur |
+| Fachbereich | Autoritativer Ziel-Owner |
+|---|---|
+| Boot/Lifecycle | Boot-/Lifecycle-System |
+| globale physische Ressourcen im HQ/Lager | ResourceStore / Storage-System |
+| Gold / Wirtschaftswert | Economy-System bzw. klar abgegrenzter Gold-Store |
+| Gebäudeinstanzen | BuildingStore / Buildings-System |
+| Gebäude-Lifecycle | Buildings-/zuständiges Domain-System |
+| Baustellenzustand | ConstructionSystem |
+| lokale Produktionsbestände | BuildingStock |
+| Produktionszyklen | ProductionSystem |
+| reale Personen/Units | UnitStore / GameUnits-Zielsystem |
+| Unit-Identität, Home, Spezialisierung, Capabilities | Unit-/Workforce-Domain |
+| Unit-Aktivität und Bewegung | Unit-System |
+| Jobs / Arbeitsbedarf | JobEngine |
+| konkrete Assignment-Bindung | Workforce-/Assignment-Service in enger Kopplung mit Unit-System |
+| Transportbedarf / Koordination | LogisticsSystem |
+| von Unit getragene Ware | Unit-/Transport-Assignment-Kontext |
+| Wohnraum / Home-Bindung | Housing-Service + Unit-Domain |
+| Bevölkerung | abgeleitet aus realen Bewohnern |
+| Tiere | MapAnimals / AnimalSystem |
+| Weltressourcen | MapResources |
+| Arbeitsbereiche | WorkAreaSystem |
+| Navigation / Reachability | NavigationService |
+| Path/Wear | PathSystem |
+| Path-Darstellung / Cache | PathRenderer / Render-Cache |
+| SaveGame | SaveGameService |
+| Rendering | Render-Pipeline / Layer-System |
+| UI | UI-System |
+| Guidance | GuidanceSystem |
+| Inspector | separater Dev-Read/Command-Layer |
+| Hauptsimulation | zentraler SimulationScheduler / GameTick |
 
-Die finalen technischen Namen können sich ändern; die Ownership-Grenzen nicht ohne spätere dokumentierte Architekturentscheidung.
+Die konkreten technischen Namen dürfen später angepasst werden; Ownership-Grenzen dürfen nur über eine dokumentierte Architekturentscheidung geändert werden.
 
-## 5. Gebäude-Ownership
+## 5. Buildings
 
-Das Gebäude-System besitzt die Identität und den grundlegenden Runtime-Lifecycle jeder Gebäudeinstanz.
+Buildings besitzt stabile Building-ID, Typ/Definition, Position, Footprint, Existenz und gemeinsame Interaktions-/Zugangsreferenzen.
 
-Dazu gehören mindestens:
+Domänenspezifische Zustände bleiben bei ihren jeweiligen Ownern:
 
-- stabile Building-ID,
-- Definition/Typ,
-- Position/Footprint,
-- Existenz bzw. Entfernt-Zustand,
-- gemeinsame Zugangs-/Interaktionsreferenzen,
-- grundlegender Lifecycle-Bezug.
+- Baufortschritt bei Construction,
+- lokale Output-Ware bei BuildingStock,
+- Produktionszyklus bei Production,
+- Bewohner/Home-Zuordnung bei Housing/Units.
 
-Domänenspezifische Zustände werden nicht zurück in einen riesigen monolithischen BuildingStore gezogen.
+`Game.buildings` und `Buildings.list` dürfen langfristig keine zwei unabhängigen Wahrheiten sein.
 
-Beispiele:
-
-- Baufortschritt gehört Construction,
-- lokale Output-Ware gehört BuildingStock,
-- Produktionszyklus gehört Production,
-- Bewohnerbelegung/Home-Zuordnung gehört Housing/Units.
-
-Das Gebäude-System referenziert diese Zustände, besitzt sie aber nicht mehrfach.
-
-## 6. ConstructionSystem
+## 6. Construction
 
 Construction ist alleiniger Owner des fachlichen Baustellenablaufs.
 
@@ -134,487 +133,557 @@ Verbindlicher Ablauf:
 
 `WAIT_MATERIAL -> WAIT_BUILDER -> BUILDING -> COMPLETE`
 
-Construction besitzt mindestens fachlich:
+Construction besitzt Materialbedarf, physisch gelieferte Materialien, Baufortschritt, Baustellenstatus und die gültige Builder-Ankunft als Voraussetzung für Fortschritt.
 
-- benötigte Materialien,
-- gelieferte Materialien,
-- gültig zugehörige Baustellenbedarfe,
-- Status `WAIT_MATERIAL / WAIT_BUILDER / BUILDING / COMPLETE`,
-- Baufortschritt,
-- gültige Builder-Ankunft als Voraussetzung für Fortschritt.
+Verbindlich gilt:
 
-Construction darf nicht selbst Carrier steuern oder Wege berechnen.
+> **Vollständig gelieferte Materialien allein starten keinen Baufortschritt. Ein geeigneter Builder muss tatsächlich angekommen sein.**
 
-Es meldet Bedarf an Logistics und Builder-Bedarf an das Job-/Workforce-System.
+Construction steuert keine Carrier und berechnet keine Wege. Materialbedarf wird an Logistics gemeldet, Builder-Bedarf an JobEngine/Workforce.
 
-## 7. ProductionSystem
+Überlieferung wird vor Entstehung zusätzlicher Transportarbeit verhindert. Restbedarf wird fachlich bestimmt als:
 
-Production besitzt Produktionsregeln und aktive Produktionszyklen.
+`Restbedarf = Soll - geliefert - gültig reserviert/unterwegs`
 
-Es darf:
+## 7. Production und BuildingStock
 
-- Produktionsvoraussetzungen prüfen,
-- geeignete Arbeitsanforderung erzeugen,
-- reale Rohstoff-/Tierziele über deren Owner referenzieren,
-- bei erfolgreichem Produktionsabschluss Output an BuildingStock übergeben.
+Production besitzt Regeln und aktive Produktionszyklen. Es prüft Voraussetzungen, referenziert reale Rohstoff-/Tierziele über deren Owner und übergibt erfolgreich erzeugten Output an BuildingStock.
 
-Es darf **nicht**:
+Production darf keine globale HQ-Ressource direkt gutschreiben.
 
-- globale HQ-Ressourcen direkt gutschreiben,
-- Carrier direkt umtypisieren/steuern,
-- lokale Output-Ware parallel zu BuildingStock speichern,
-- MapResources oder MapAnimals kopieren.
-
-Verbindlicher Fluss:
+Verbindlicher Warenfluss:
 
 `Production -> BuildingStock -> Logistics -> Unit -> Storage/ResourceStore`
 
-## 8. BuildingStock
+BuildingStock ist die einzige wirtschaftliche Wahrheit für lokal fertig produzierte physische Waren. Sichtbare Stapel sind reine Darstellung und dürfen keinen zweiten Bestand besitzen.
 
-BuildingStock ist die einzige wirtschaftliche Wahrheit für lokal fertig produzierte physische Waren an einem Gebäude.
+Pause eines Produktionsgebäudes verhindert neue Produktionsarbeit; bereits fertige lokale Ware bleibt transportierbar.
 
-Sichtbare Stapel lesen BuildingStock nur aus.
+## 8. ResourceStore, Gold und Population
 
-Pickup verändert BuildingStock über einen definierten Transportvorgang; der Renderer entfernt daraus lediglich die sichtbare Repräsentation.
+HQ-/Lagerbestände werden ausschließlich durch fachlich gültige Übergänge verändert, insbesondere erfolgreiche Delivery.
 
-Es darf keine zweite Warenmenge in Produktionsmodulen oder Sprite-/Stack-Objekten geben.
+Physische Waren bleiben von Gold getrennt. Gold ist ein nicht-physischer Wirtschaftswert und wird nur beim zuständigen Gold-/Economy-Owner mutiert.
 
-## 9. ResourceStore / Storage
-
-Der zentrale Lagerbestand des HQ bzw. später weiterer Lager ist ein eigener autoritativer Warenzustand.
-
-Er erhält Ware ausschließlich durch fachlich gültige Übergänge, insbesondere erfolgreiche Delivery.
-
-Construction, Production und UI dürfen globale Bestände nicht direkt manipulieren.
-
-Gold darf technisch im selben Store oder in einem EconomyStore liegen; entscheidend ist, dass Gold als nicht-physischer Wirtschaftswert klar von physischen Transportwaren getrennt bleibt.
-
-## 10. Unit-/Workforce-Domain
-
-Das Unit-System besitzt reale Personen und deren dauerhafte Personenzustände.
-
-Mindestens:
-
-- stabile Unit-ID,
-- tatsächliche Weltposition,
-- Home-Bindung,
-- Spezialisierung/Capabilities,
-- Availability,
-- Activity,
-- aktuelles Assignment bzw. eindeutige Assignment-Referenz,
-- gegebenenfalls real getragene Ware.
-
-Die S2D-02-Regel ist technisch zwingend:
-
-> **Ein temporärer Job verändert niemals die dauerhafte Unit-Identität.**
-
-Historische Muster wie `resident -> carrier -> resident` werden daher später entfernt und nicht in die Zielarchitektur übernommen.
-
-## 11. JobEngine
-
-JobEngine besitzt Arbeitsbedarf, nicht Personenidentität und nicht die eigentliche Ausführung einer Unit.
-
-Ein Job beschreibt mindestens fachlich:
-
-- Job-Art,
-- realen Bedarf,
-- notwendige Capability,
-- Quelle/Ziel bzw. fachliche Referenzen,
-- Status/Priorität,
-- Reservation/Assignment-Bezug,
-- Retry-/Backoff-Zustand, soweit für die Jobplanung nötig.
-
-JobEngine darf keine zweite vollständige Unit-State-Machine führen.
-
-## 12. Workforce-/Assignment-Service
-
-Zwischen Jobs und Units liegt ein klarer Assignment-Vertrag.
-
-Zielablauf:
-
-`JobEngine meldet vergabefähigen Bedarf -> Workforce prüft geeignete Units -> Navigation/Reachability wird berücksichtigt -> genau eine Unit wird gebunden -> Unit führt aus -> Ergebnis wird an Job/Domain zurückgemeldet -> Bindung endet`
-
-Dabei gilt:
-
-- genau eine authoritative Assignment-Verknüpfung,
-- Unit und Job dürfen nicht voneinander abweichende Zuweisungswahrheiten besitzen,
-- Spezialisten-Vorrang und Helper-Resident-Regeln stammen aus S2D-02,
-- kein paralleles Assignment einer bereits gebundenen Unit,
-- kein stilles Capability-/Type-Mutieren.
-
-Ob der Assignment-Service technisch im Unit-System, beim JobEngine oder als dünner eigener Coordinator umgesetzt wird, bleibt für einen späteren S2D-03-Unterblock offen. Die Ownership-Invariante ist bereits verbindlich.
-
-## 13. LogisticsSystem
-
-Logistics koordiniert physische Warenbewegungen, besitzt aber die Waren nicht selbst als zweiten Bestand.
-
-Es verbindet:
-
-- realen Bedarf,
-- Quellbestand,
-- Reservation,
-- Transportjob,
-- geeignete Unit,
-- Pickup,
-- Delivery,
-- Recovery.
-
-Verbindliche wirtschaftliche Übergänge:
-
-### Vor Pickup
-
-`Ware = Quelle`
-
-### Nach Pickup
-
-`Ware = Unit`
-
-### Nach Delivery
-
-`Ware = Ziel`
-
-Logistics darf diese Zustände koordinieren, aber Quellbestand, Unit-Inventar und Zielbestand müssen bei ihren jeweiligen Ownern bleiben.
-
-## 14. Reservationen
-
-Reservationen sind keine zweite Warenkopie.
-
-Sie blockieren eine reale Menge an ihrem aktuellen Owner-Ort für einen konkreten Bedarf.
-
-Die technische Ownership kann nahe am jeweiligen Stock-System oder in einem klaren Logistics-Reservierungsdienst liegen; verboten ist lediglich, dass mehrere Systeme dieselbe Menge unabhängig reservieren.
-
-Eine spätere S2D-03-Entscheidung legt die genaue technische Platzierung fest.
-
-## 15. Housing und Population
-
-Housing koordiniert Wohnraum und Home-Bindungen, darf aber keine zweite Bewohnerliste besitzen.
-
-Reale Personen bleiben im Unit-System.
-
-Population ist ein abgeleiteter Wert:
+Population ist kein unabhängig gepflegter Rohstoffcounter:
 
 `Population = Anzahl gültiger realer Bewohner`
 
-Ein UI-/Resource-Counter darf diesen Wert cachen oder anzeigen, aber nicht als unabhängige Gameplay-Wahrheit verwenden.
+UI darf diesen Wert anzeigen oder cachen, aber nicht als zweite Gameplay-Wahrheit führen.
 
-## 16. Economy / Taxes
+## 9. Units, Workforce und Assignment
 
-Steuererzeugung aus Häusern/Bewohnern ist fachlich ein Economy-Vorgang.
+Das Unit-System besitzt reale Personen einschließlich stabiler Unit-ID, tatsächlicher Position, Home-Bindung, Spezialisierung/Capabilities, Availability, Activity, Assignment-Referenz und gegebenenfalls getragener Ware.
 
-Housing kann die relevanten Bewohner-/Hausinformationen bereitstellen; die Goldmutation erfolgt ausschließlich beim Owner des Goldbestands.
+Verbindlich bleibt S2D-02:
 
-Historische Housing-Timer dürfen langfristig keine direkte zweite Goldlogik enthalten.
+> **Ein temporärer Job verändert niemals die dauerhafte Unit-Identität.**
 
-## 17. MapResources
+Historische Muster wie `resident -> carrier -> resident` sind Zielarchitektur-OUT.
 
-MapResources besitzt reale abbaubare/nutzbare Weltressourcen.
+JobEngine besitzt Arbeitsbedarf, nicht Personenzustand. Workforce prüft geeignete Units und bindet genau eine gültige Person an genau ein Assignment.
 
-Produktionsmodule dürfen:
+Zielablauf:
 
-- geeignete Ziele abfragen,
-- gültige Reservations-/Arbeitsbezüge erzeugen,
-- über definierte Operationen Ressourcen abbauen/verändern.
+`realer Bedarf -> Job -> Eligibility/Capability -> Reachability -> Assignment -> reale Ausführung -> Completion/Recovery -> Release`
 
-Sie dürfen MapResource-Zustände nicht in eigenen Kopien weiterführen.
+Eine Unit ist erst `FREE`, wenn kein Assignment, keine exklusive Reservation, keine ungeklärte getragene Ware und kein Recovery-Kontext mehr offen ist.
 
-## 18. MapAnimals
+## 10. Logistics, Warenort und Reservation
 
-MapAnimals bzw. ein AnimalSystem besitzt alle realen Tiere und deren Weltzustand.
+Logistics koordiniert Transport, besitzt Waren aber nicht als zweiten Bestand.
 
-Hunter/Production darf reale Tiere auswählen und über öffentliche Operationen auf sie wirken.
+Verbindliche Zustände:
 
-Ein Hunter-spezifischer Fix-/Patch darf langfristig keine eigene Tierwahrheit führen.
+- vor Pickup: Ware liegt bei der Quelle,
+- nach Pickup: Ware liegt bei der Unit,
+- nach Delivery: Ware liegt beim Ziel.
 
-## 19. WorkAreaSystem
+> **Eine physische Warenmenge besitzt zu jedem Zeitpunkt genau einen autoritativen wirtschaftlichen Ort.**
 
-Arbeitsbereiche werden als eigener fachlicher Zustand betrachtet.
+Reservation ist keine Warenkopie. Sie blockiert eine reale Menge an ihrem aktuellen Owner-Ort für einen konkreten Bedarf.
 
-Ein Produktionsgebäude referenziert seinen gültigen WorkArea-Zustand; die tatsächlichen Gebietsgrenzen und Änderungen besitzen einen eindeutigen Owner.
+Bei Abbruch vor Pickup bleibt Ware an der Quelle und Reservation wird gelöst. Nach Pickup bleibt Ware bei der Unit und muss über einen definierten Recovery-Pfad zu einem gültigen Ziel geführt werden. Silent delete oder Rückteleport sind nicht zulässig.
 
-Damit werden UI, Produktion und SaveGame nicht zu parallelen Besitzern derselben Arbeitsbereichsdaten.
+## 11. MapResources, MapAnimals und WorkAreas
 
-## 20. NavigationService
+MapResources besitzt reale abbaubare/nutzbare Weltressourcen. Produktionssysteme referenzieren und verändern sie ausschließlich über definierte Operationen.
 
-Navigation besitzt die technische Wahrheit über Wegfindung und Reachability-Abfragen, nicht aber über Jobs oder Unit-Aufgaben.
+MapAnimals besitzt existierende Tiere und deren relevanten Weltzustand. Hunter-Logik darf keine eigene Tierwahrheit führen.
 
-Es stellt mindestens fachlich bereit:
+WorkAreaSystem besitzt Arbeitsbereiche. Änderungen an WorkAreas invalidieren betroffene Arbeitsziele gezielt und können Job-/Navigation-Neubewertung auslösen.
 
-- Erreichbarkeitsprüfung,
-- Weganforderung,
-- gültige Ziel-/Interaktionspunkte,
-- kontrolliertes Fehlerergebnis.
+## 12. Cross-System Contracts
 
-Workforce und Logistics verwenden Navigation, statt eigene A*-Sonderlogik zu führen.
+Commands fordern Mutationen an. Der Owner validiert Voraussetzungen, schützt seine Invarianten, akzeptiert oder lehnt ab und emittiert erst nach konsistenter Mutation ein Event.
 
-Die S2D-00/02-Regel bleibt zwingend:
+Queries und Snapshots sind nebenwirkungsfrei. Über Systemgrenzen werden bevorzugt stabile IDs statt Live-Objektverweise verwendet.
 
-- Reachability möglichst vor Vergabe prüfen,
-- Fail -> Backoff/Trigger statt heißer Wiederholung,
-- kein endloser A*-FAIL-Loop.
+Events sind Fakten nach einer Änderung, keine versteckten Commands. Event-Listener dürfen auf ein Event reagieren, aber keine fremden Owner-Interna direkt verändern.
 
-A* selbst bleibt zunächst erhalten.
+UI, Renderer, Guidance, SaveGame und Inspector verwenden dieselben öffentlichen Verträge. Direkte Array-/Map-/Objektmanipulation über Systemgrenzen ist Zielarchitektur-OUT.
 
-## 21. PathSystem und PathRenderer
+## 13. Simulation Scheduler
 
-Gameplay-Wear und sichtbare Pfaddarstellung werden getrennt.
+Gameplay-Simulation und Rendering sind getrennt. Render-FPS ist nicht Simulations-Tickrate.
 
-### PathSystem
+Der Scheduler besitzt keine Gebäude, Units, Jobs oder Waren. Er besitzt nur zeitliche Koordination, Simulationszeit, Phasenreihenfolge, Fälligkeiten, Pause/Resume und Performance-Messpunkte.
 
-Besitzt:
+Ein logischer Simulationsschritt folgt fachlich dieser Reihenfolge:
 
-- lokale Wear-Werte,
-- zeitliche Abnahme/Zuwachsen,
-- Dirty-Bereiche,
-- Snapshot-relevanten Pfadzustand.
+1. INPUT / COMMAND INTAKE
+2. WORLD VALIDATION & INVALIDATION
+3. DEMAND / JOB GENERATION
+4. ASSIGNMENT / WORKFORCE SCHEDULING
+5. UNIT INTENT & NAVIGATION REQUESTS
+6. UNIT MOVEMENT & ARRIVAL
+7. WORK / PRODUCTION / CONSTRUCTION EXECUTION
+8. LOGISTICS TRANSFERS / ECONOMY EFFECTS
+9. RECOVERY / COMPLETION / RELEASE
+10. POST-STEP EVENTS / DERIVED STATE
+11. LOW-FREQUENCY / MAINTENANCE WORK, falls fällig
 
-### PathRenderer / Cache
+Verbindliche Trennung:
 
-Besitzt nur:
+`Assignment != Arrival != Work Effect`
 
-- Render-Cache,
-- Offscreen-/Bake-Repräsentation,
-- visuelle Dirty-Updates.
+Feature-eigene `setInterval`-Schleifen für Builder, Residents, Hunter, Taxes, Production, Navigation-Retry oder Path-Decay sind langfristig zu entfernen und in Scheduler-Phasen oder Eventreaktionen zu überführen.
 
-Der Renderer darf aus Pixeln/Stempeln niemals wieder Gameplay-Wear zurückrechnen oder einen zweiten Pfadbestand erzeugen.
+Pause stoppt Simulationszeit. Renderer, UI und Inspector dürfen weiterlaufen, aber keine Gameplay-Zeit fortschreiben.
 
-## 22. SaveGameService
+## 14. Event-driven statt Full-Polling
 
-SaveGame ist kein Runtime-Owner der gespeicherten Domänen.
+Bevorzugte Reaktionen sind ereignis-/dirty-getrieben, z. B.:
 
-Zielprinzip:
+- neuer BuildingStock-Output -> Logistics neu bewerten,
+- Construction vollständig versorgt -> Builder-Bedarf,
+- Unit wird frei -> Workforce neu bewerten,
+- Gebäude pausiert -> Production reagieren,
+- Tier entfernt -> Hunting-Target invalidieren,
+- WorkArea geändert -> Arbeitsziel neu prüfen,
+- Restore abgeschlossen -> Views/Caches neu aufbauen.
 
-`Owner.snapshot() -> SaveGame -> Storage`
+Nicht in jedem Tick vollständig neu gescannt werden sollen unveränderte ungültige Jobs, gebundene Units, erfüllte Transportbedarfe, pausierte Produktion, Guidance-Bedingungen oder UI-/Inspector-Komplettbestände.
 
-und beim Laden:
+## 15. Backoff und Retry
 
-`Storage -> SaveGame validate -> Owner.restore()/reconstruct()`
+Backoff ist Simulationszustand/Fälligkeit innerhalb des zentralen Schedulers, kein Timer pro Job.
 
-SaveGame darf:
+Ein fehlgeschlagener unveränderter Job/Navigation-Request wird nicht in jedem Tick neu vollständig geprüft.
 
-- Snapshots sammeln,
-- Version/Schema prüfen,
-- Restore-Reihenfolge koordinieren,
-- rekonstruierbare Laufzeitzustände gezielt neu aufbauen lassen.
+Erneute Bewertung erfolgt bei:
 
-SaveGame darf nicht:
+- Ablauf von `retryNotBefore` in Simulationszeit,
+- relevanter Weltänderung/Invalidierung,
+- Änderung der fachlichen Voraussetzungen.
 
-- Gebäude, Units, Jobs oder Waren als zweite dauerhafte Runtime-Wahrheit weiterführen,
-- nach Restore eigene Patch-Zustände gegen die Owner zurückschreiben.
+Ein neuer Renderframe oder GameTick allein ist kein ausreichender Retry-Grund.
 
-## 23. Central Scheduler / GameTick
+## 16. NavigationService
 
-Die Simulation besitzt langfristig einen kontrollierten zentralen Scheduler.
+Navigation besitzt begehbare Navigationsrepräsentation, Reachability-Prüfungen, Pfadsuche, Cache, Invalidierung, Deduplizierung und Diagnosemetriken. Es besitzt keine Jobs oder Units.
 
-Feature-Systeme dürfen unterschiedliche logische Frequenzen besitzen, aber sie werden zentral getaktet bzw. geplant.
+Navigation wird in drei fachliche Ebenen getrennt:
 
-Dauerhafte Architektur ist **nicht**:
+1. Structural Reachability – billige/grobe Connectivity-Prüfung,
+2. Exact Reachability Check – konkrete Erreichbarkeit, wenn erforderlich,
+3. Actual Path Request – konkreter Bewegungspfad für eine bereits gültige Bewegungsabsicht.
 
-- eigenes `setInterval` pro Feature,
-- konkurrierende unabhängige Runtime-Timer,
-- Patch-Timer, die andere Systeme periodisch korrigieren.
+Zielablauf vor Assignment:
 
-Rendering über `requestAnimationFrame` bleibt als Darstellungsloop getrennt von der fachlichen Simulation möglich.
+`Job gültig -> Unit capability/availability -> structural reachability -> falls nötig exact reachability -> Assignment -> actual path request`
 
-Die genaue Scheduler-Struktur wird in einem späteren S2D-03-Block festgelegt.
+Damit ist das historische Muster `für jeden Tick -> für jeden Job -> für jede freie Unit -> voller A*` ausdrücklich verboten.
 
-## 24. Rendering
+Positive und insbesondere negative Reachability-Ergebnisse dürfen gecacht werden. Gleichwertige Requests sollen dedupliziert werden.
 
-Rendering ist Consumer.
+Navigationsergebnisse werden durch relevante Weltänderungen gezielt invalidiert. Normale Unit-Bewegung löst keine globale Cache-Invalidierung aus.
 
-Renderer dürfen:
+Gebäude werden über definierte Access-, Pickup-, Delivery- und Build-Punkte navigiert, nicht blind über Gebäudezentren.
 
-- Gebäude, Units, Tiere, Warenstapel, Pfade und Status visualisieren,
-- Render-Caches besitzen,
-- Animationen aus Runtime-Zuständen ableiten.
+A*-Pfad, Open-/Closed-Listen und Navigation-Cache sind transiente Runtime und werden nach Continue neu aufgebaut.
 
-Renderer dürfen nicht:
+## 17. Path/Wear
 
-- Baufortschritt erhöhen,
-- Warenmengen buchen,
-- Jobs abschließen,
-- Unit-Assignments ändern,
-- Path-Wear als Gameplay-State besitzen.
+Wear entsteht ausschließlich aus real stattfindender Unit-Bewegung.
 
-## 25. UI
+Zielablauf:
 
-UI liest öffentliche ViewModels/Snapshots und sendet definierte Spielercommands.
+`reale Unit-Bewegung -> Wear-Akkumulation -> Dirty Region -> Re-Bake -> sichtbarer Trampelpfad`
 
-Beispiele:
+Wiederholte Bewegung verstärkt vorhandenen lokalen Wear, statt unbegrenzt neue permanente Einzelstempel anzulegen.
 
-- Gebäude platzieren,
-- Produktion pausieren/fortsetzen,
-- WorkArea ändern,
-- Abriss auslösen.
+Bewegung wird segmentbasiert eingetragen, damit zwischen Simulationsschritten keine sichtbaren Lücken entstehen.
 
-UI darf keine Domain-State-Felder direkt mutieren und keine eigenen Korrekturintervalle für Gameplay enthalten.
+Wear sättigt sich und kann über Simulationszeit langsam abklingen. Decay ist Low-Frequency-Arbeit des Schedulers; kein Full-Map-Scan pro GameTick.
 
-## 26. GuidanceSystem
+Änderungen markieren nur betroffene Dirty Regions. Dirty Regions können koalesziert und gesammelt neu gebacken werden.
 
-Guidance besitzt ausschließlich seinen eigenen Hinweisfortschritt.
+PathRenderer/Render-Cache ist rein abgeleitet. Cachetechnik wie OffscreenCanvas/RenderTexture/Chunk-Texturen bleibt Implementierungsdetail.
 
-Gameplay-Systeme veröffentlichen definierte Ereignisse; Guidance reagiert darauf.
+SaveGame persistiert den autoritativen Wear-State, nicht Render-Caches, Dirty-Flags, Canvas-Daten oder Einzelstempel als zweite Wahrheit.
 
-Guidance darf keine Gebäude, Units, Jobs oder Waren verändern, nur um einen Tutorialschritt zu erzwingen.
+Automatische Wear-Pfade bleiben fachlich getrennt von späteren gebauten Straßen.
 
-## 27. Inspector
+## 18. SaveGame Snapshot
 
-Inspector ist ein separater Developer-Consumer.
+Jeder Owner liefert einen eigenen fachlichen Snapshot. SaveGame darf nicht beliebig interne Live-Objekte serialisieren.
 
-Er darf:
+Persistente Beziehungen verwenden stabile IDs, nicht JavaScript-Objektreferenzen.
 
-- öffentliche Snapshots lesen,
-- Events/Traces beobachten,
-- über definierte Debug-Commands kontrollierte Änderungen anstoßen.
+### 18.1 Persistent Authoritative State
 
-Er darf nicht:
+Dazu gehören insbesondere:
 
-- direkte interne Arrays/Maps als produktive Schnittstelle verwenden,
-- Runtime-Methoden patchen,
-- eigene Job-/Economy-/Unit-Logik besitzen,
-- im deaktivierten Zustand das Gameplay verändern.
+- Gebäude und stabile IDs,
+- Construction-Zustand und Fortschritt,
+- BuildingStock und zentrale Lagerbestände,
+- Units, Home-Bindungen und dauerhafte Spezialisierung,
+- getragene Waren,
+- relevante Production-Zyklen/Pause,
+- Weltressourcen,
+- Tiere,
+- WorkAreas,
+- Gold,
+- Path/Wear,
+- Guidance-Fortschritt.
 
-## 28. Zulässige Kernabhängigkeiten
+### 18.2 Persistent Coordinated Runtime State
 
-Die fachlichen Hauptflüsse sind:
+Nur soweit zur verlustfreien Rekonstruktion erforderlich:
 
-### Produktion
+- laufende fachlich relevante Assignments,
+- gültige Reservationen,
+- Recovery-Kontexte,
+- relevante Backoff-Information in Simulationszeit.
 
-`Production -> BuildingStock -> Logistics -> JobEngine/Workforce -> Unit -> Storage/ResourceStore`
+### 18.3 Transient Reconstructable State
 
-### Bau
+Nicht als autoritative SaveGame-Wahrheit speichern:
 
-`Placement/Buildings -> Construction -> Logistics(Material) + JobEngine(Builder) -> Workforce -> Unit -> Construction COMPLETE`
+- A*-Suchzustände und fertige Pfad-Caches,
+- Renderer-/Sprite-/Animation-Handles,
+- Event-Queues,
+- Dirty-Flags,
+- Performance-Messdaten,
+- Inspector-Views,
+- Scheduler-Registrierungen/Queuepositionen,
+- JavaScript-Timer-Handles,
+- Render-/OffscreenCanvas-Caches,
+- abgeleitete Population,
+- sichtbare Stacks.
 
-### Workforce
+## 19. Restore / Continue
 
-`Housing/Units -> FREE Person -> JobEngine Bedarf -> Workforce Eligibility -> Assignment -> Unit Execution -> Completion -> FREE`
+Continue ist ein eigener Lifecycle-Pfad und darf nicht den New-Game-Initialisierer ausführen, der Defaultzustände zusätzlich spawnt oder gutschreibt.
 
-### Navigation
+Verbindliche Restore-Reihenfolge:
 
-`Workforce/Unit/Logistics -> NavigationService -> Path/Reachability-Ergebnis`
+1. Scheduler stoppen / Runtime quiescent machen,
+2. Save lesen und Schema/Version validieren,
+3. inkompatiblen oder korrupten Save vor Mutation ablehnen,
+4. alte Runtime sauber leeren,
+5. grundlegende Welt-/Building-/Store-Owner restaurieren,
+6. Construction, Production, Housing, Economy, MapResources, Animals, WorkAreas und Path/Wear restaurieren,
+7. Units und stabile Beziehungen restaurieren,
+8. getragene Waren, notwendige Reservationen/Assignments/Recovery rekonstruieren,
+9. rekonstruierbare Jobs aus realem Bedarf neu erzeugen,
+10. Cross-Owner-Invarianten validieren,
+11. Navigation, Render-Caches, Views und weitere transiente Runtime neu aufbauen,
+12. Scheduler/Systeme genau einmal registrieren,
+13. Scheduler erst nach PASS starten,
+14. ein Restore-Completed-Lifecycle-Event emittieren; historische Fachereignisse nicht blind replayen.
 
-### Save
+Verbindlich:
 
-`Domain Owner -> Snapshot -> SaveGame -> Storage`
+> **Continue benötigt im Zielbild keinen Post-Restore-Gameplay-Patch mehr.**
 
-### Darstellung
+Das Laden desselben SaveGames muss zu einem äquivalenten Zustand führen und darf keine additiven Bewohner, Gebäude, Waren oder Timer erzeugen.
 
-`Domain Owner -> Read Model/Event -> Renderer/UI/Inspector`
+## 20. Runtime Validation und Failure Containment
 
-## 29. Verbotene Abhängigkeitsmuster
+Owner schützen lokale Invarianten unmittelbar an ihren Mutationen. Cross-System-Grenzen werden an kritischen Übergängen geprüft, insbesondere Assignment, Pickup, Delivery und Restore.
 
-Langfristig unzulässig sind insbesondere:
+Wirtschaftlich kritische Mutationen arbeiten fail-closed: Sind zentrale Voraussetzungen ungültig, findet die Mutation nicht statt.
 
-1. UI mutiert direkt Domain-Arrays.
-2. Renderer erzeugt Gameplay-State.
-3. SaveGame wird zweiter Runtime-Store.
-4. Production schreibt direkt globale HQ-Ressourcen.
-5. Construction steuert direkt Carrier.
-6. JobEngine verändert Unit-Identität oder Spezialisierung.
-7. Resident-/Housing-Patch mutiert Unit-Typen.
-8. Feature-eigene Intervalle korrigieren periodisch andere Owner.
-9. Navigation entscheidet fachliche Jobpriorität.
-10. Inspector patcht Produktivlogik.
-11. sichtbare Warenstapel besitzen eigene wirtschaftliche Mengen.
-12. Population wird unabhängig von realen Bewohnern als Resource hoch-/heruntergezählt.
+Normale Wartezustände wie `kein Builder`, `Output voll`, `kein freier Worker` oder `temporär unerreichbar` sind keine Architekturfehler.
 
-## 30. Historische Doppel-Owner / Patch-Schichten, die ersetzt werden müssen
+Architektur-/Runtimefehler sind z. B.:
 
-Die vorhandenen historischen Systeme werden nicht blind gelöscht, sondern gegen diese Zielgrenzen migriert.
+- doppelte autoritative Warenposition,
+- Unit gleichzeitig FREE und assigned,
+- Zombie-Assignment,
+- Zombie-Reservation,
+- getragene Ware ohne gültigen Assignment-/Recovery-Kontext,
+- Baufortschritt ohne reale Builder-Ankunft,
+- doppelte Resident-/Home-Ownership,
+- identische Navigation-Fails in Hot-Retry-Schleife,
+- Restore mit ungültigen Cross-Referenzen,
+- mehrfach registrierte Scheduler-/Event-Schleifen nach Continue.
 
-Bekannte Konfliktklassen sind:
+Der betroffene Ablauf wird kontrolliert gestoppt oder isoliert. Recovery bleibt fachliche Logik des zuständigen Owners/Coordinators.
 
-- parallele Gebäudezustände wie `Game.buildings` und `Buildings.list`,
-- alte und neue Produktionspfade,
-- JobEngine plus Wrapper-/Patch-Joblogik,
-- Construction plus Builder-/Runtime-Guards,
-- Production plus BuildingStock plus Bridge-/Patchlogik,
-- SaveGame V2 plus zusätzliche Persistence-Module,
-- PathOverlay plus direkter Zugriff auf interne Pfadstrukturen,
-- Resident-Workforce-Patch inklusive temporärer Unit-Typmutation,
-- Resident-Workforce-Datei mit zusätzlich eingemischter Path-Performance-Logik,
-- Housing-/Tax-Patches mit eigenen Intervallen,
-- Hunter-Fixes mit eigenem Intervall,
-- zahlreiche autonome `setInterval`-Schleifen neben GameTick,
-- Renderer-Wrapper und Runtime-Guards, die andere Systeme korrigieren.
+Inspector und Diagnostics dürfen Invariant Violations, IDs, FailReasons, Trace und Performance-Metriken anzeigen, aber keine Produktivlogik reparieren.
 
-Diese Elemente sind **Migrationsquellen**, nicht Zielarchitektur.
+Globale Vollvalidierungen laufen gezielt, insbesondere vor/nach Restore oder als bewusste Diagnose, nicht als Full-State-Scan pro GameTick.
 
-## 31. Transitional Guards
+## 21. UI, Renderer, Guidance und Inspector
 
-Ein Guard/Patch darf in einer Übergangsphase nur bestehen, wenn dokumentiert ist:
+Renderer besitzt keine Gameplay-Ownership. Er liest Owner-Zustände und abgeleitete Views.
 
-1. welcher konkrete Altfehler abgefangen wird,
-2. welcher Ziel-Owner den Zustand später übernimmt,
-3. welche Ablösung ihn entfernt,
-4. unter welcher Testbedingung er gelöscht werden darf.
+UI liest öffentliche Zustände und sendet Commands. Direkte Mutation von Gameplay-Arrays ist verboten.
 
-Ein Guard darf nie stillschweigend zum dauerhaften neuen Owner werden.
+Guidance reagiert auf öffentliche Events und besitzt nur eigenen Tutorial-/Guidance-Fortschritt.
 
-## 32. Öffentliche Kommunikationsprinzipien
+Inspector ist ein optionaler Dev-Read/Command-Layer. Er darf Runtime-Snapshots lesen, Diagnosen anzeigen und kontrollierte Debug-Commands senden. Er darf keine produktive Business-Logik ersetzen oder automatisch fremde Zustände patchen.
 
-Zwischen Systemen gelten künftig drei bevorzugte Kommunikationsformen:
+Asset-/Sprite-/JSON-Entwicklungswerkzeuge gehören langfristig in die gemeinsame Halle-Demo-Dev-Tool-Umgebung, nicht in den produktiven Runtime-Inspector.
 
-### Commands / Services
+## 22. Boot, Registrierung und Shutdown
 
-Für beabsichtigte Mutationen.
+Runtime-Systeme werden explizit durch Lifecycle/Boot registriert und gestartet. Hidden Self-Start beim bloßen Laden einer Feature-Datei ist nicht Zielarchitektur.
 
-### Queries / Snapshots
+Systemregistrierung definiert mindestens fachlich:
 
-Für Lesezugriffe.
+- Scheduler-Phase,
+- continuous / due / event-driven,
+- gelesene Inputs,
+- eigene Mutationen,
+- emittierte Events.
 
-### Events
+Shutdown/Continue muss Subscriptions und Registrierungen sauber lösen. Nach Continue darf kein altes Feature-Intervall und keine doppelte Scheduler-Registrierung weiterlaufen.
 
-Für bereits eingetretene Zustandsänderungen.
+## 23. Performance-Messung
 
-Nicht bevorzugt ist dauerhaftes Polling fremder interner Datenstrukturen.
+Diagnostics/Inspector sollen später mindestens beobachtbar machen:
 
-Die konkreten API-/Eventnamen werden später definiert.
+- Simulation-Step-Dauer,
+- Phase-/System-Dauer,
+- aktive/fällige Jobs,
+- Navigation-Aufrufe und Failrate,
+- Unit-Update-Anzahl,
+- Maintenance-Kosten,
+- Save-Snapshot-Kosten,
+- Path dirty/re-bake Aktivität.
 
-## 33. Ownership- und Konsistenzinvarianten S2D-03A
+Messung ist Diagnose, nicht Business-Owner.
 
-1. Jeder wichtige Gameplay-State besitzt genau einen autoritativen Owner.
-2. Consumers dürfen Gameplay-State nicht parallel führen.
-3. Rendering, UI, Guidance und Inspector besitzen keine Domain-Business-Logik.
-4. SaveGame serialisiert Owner, es ersetzt sie nicht.
-5. Jobs besitzen Bedarf; Units besitzen Personen-/Ausführungszustand.
-6. Assignment-Zuordnung besitzt genau eine konsistente Wahrheit.
-7. Production erzeugt lokale Ware, nicht direkt globale Gutschrift.
-8. BuildingStock ist autoritativer lokaler Outputbestand.
-9. Pickup/Delivery verschieben reale Ware zwischen Ownern; keine Kopien.
-10. Construction ist alleiniger Owner von Baustellenfortschritt.
-11. Population wird aus realen Bewohnern abgeleitet.
-12. Navigation liefert Wege/Reachability, entscheidet aber keine Wirtschaftslogik.
-13. Path-Wear und Path-Rendering sind getrennt.
-14. zentrale Simulation ersetzt langfristig Feature-eigene Korrekturintervalle.
-15. historische Patches dürfen nur Übergang sein, nicht Ziel-Owner.
-16. Domain-Kommunikation erfolgt über definierte Commands, Queries/Snapshots und Events.
+## 24. Migrationsklassen
 
-## 34. Was S2D-03A bewusst offen lässt
+Bestehende Runtime-Dateien werden in vier Klassen eingeordnet:
 
-Noch nicht festgelegt werden:
+- **KEEP** – fachliche Basis passt grundsätzlich,
+- **ADAPT** – richtige Kernverantwortung, aber alte Kopplungen/API/Timer müssen angepasst werden,
+- **REPLACE** – Funktion wird kontrolliert in einen neuen Owner/Service überführt,
+- **REMOVE** – reine Legacy-/Guard-/Patch-Schicht nach bestandenem Exit-Gate löschen.
 
-- konkrete Modul-/Klassen-/Dateinamen,
-- finale Store-Strukturen,
-- technische Eventnamen und Payloads,
-- konkrete Command-/Query-APIs,
-- exakte Assignment-Ownership zwischen Unit-/Workforce-/Job-Komponenten,
-- konkrete Reservation-Datenstruktur,
-- technische Transaktions-/Idempotenzmechanik für Pickup/Delivery,
-- zentraler Scheduler-Aufbau und Frequenzen,
-- SaveGame-Schema und Restore-Reihenfolge,
-- Navigation-API und Path-Cache-Details,
-- konkrete Migrationsreihenfolge aus Legacy-/Patch-Systemen.
+Die Migration erfolgt kontrolliert und nicht als Big-Bang-Rewrite.
 
-Diese Punkte werden in den folgenden S2D-03-Blöcken geschlossen.
+## 25. Legacy Migration Map – Kernbestand
 
-## 35. Abschluss S2D-03A
+### 25.1 KEEP / ADAPT
 
-Die fachlich-technischen Runtime-Owner und Systemgrenzen sind damit als Zielarchitektur festgelegt.
+Hoher Wiederverwendungswert besteht insbesondere bei:
 
-Der Block verändert keine Gameplay-Implementierung.
+- `core/game.buildings.js` -> Buildings/BuildingStore,
+- `core/game.construction.js` -> ConstructionSystem,
+- `core/game.units.js` -> UnitStore/GameUnits-Zielsystem,
+- `core/job.engine.js` -> JobEngine,
+- `core/building.stock.js` -> BuildingStock,
+- `core/game.production.js` und Produktionsmodule -> ProductionSystem,
+- `core/map.resources.js` -> MapResources,
+- `core/map.animals.js` -> MapAnimals,
+- `core/game.workarea.js` -> WorkAreaSystem,
+- `core/eventbus.js` -> Event-Infrastruktur,
+- `core/game.renderer.js` -> Render-Pipeline,
+- `core/savegame-v2.js` -> Ausgangsbasis für SaveGameService.
 
-**S2D-03A – Runtime Ownership & Core System Boundaries: COMPLETE**  
-**Implementation changes: 0**  
-**Conflict gegenüber S2D-00/S2D-01/S2D-02 FROZEN: 0**  
-**Open Blockers: 0**
+Diese Module dürfen angepasst werden, bis sie die eingefrorenen Owner-/Contract-/Scheduler-Regeln erfüllen.
+
+### 25.2 REPLACE / ABSORB
+
+Funktional in Zielsysteme zu überführen sind insbesondere:
+
+- `core/worker.production.js` -> Production/Workforce/Scheduler,
+- `core/carrier.runtime.js` -> Logistics/Unit/Assignment/Scheduler,
+- `core/core.pfglue.js` -> NavigationService,
+- heutiges `path-overlay.js`-/Stamp-Modell -> PathSystem + PathRenderer/Cache.
+
+### 25.3 REMOVE nach Exit-Gate
+
+Reine Übergangs-/Patch-Schichten sind insbesondere:
+
+- `core/sa04.runtime-guards.js`,
+- `core/sa04.production-bridge.js`,
+- `core/sa04.stock-persistence.js`,
+- `core/sa04.pause-builder-fixes.js`,
+- `core/sa04.worker-pause-hunter.js`,
+- `core/sa04.hunter-entry-fix.js`,
+- `core/sa04.hunter-production-fix.js`,
+- `core/sa05.resident-workforce.js`,
+- `core/savegame-v2-uid-guard.js`,
+- `core/event.compat.js`,
+- später obsolete Render-/Compatibility-Shims, sofern ihre Funktionen ersetzt sind.
+
+`sa04.resource-piles.js` darf funktional nur als rein visuelle BuildingStock-Darstellung weiterleben oder in eine solche überführt werden.
+
+Diagnosemodule dürfen erhalten bleiben, wenn sie ausschließlich beobachten und keine produktive Zustandskorrektur durchführen.
+
+## 26. Exit Gates für Legacy-Guards
+
+Ein Guard/Patch darf erst entfernt werden, wenn der Ziel-Owner die Verantwortung selbst korrekt erfüllt und die zugehörige Regression PASS ist.
+
+### Building-Doppel-Owner
+
+Entfernung erst wenn:
+
+- genau eine Building-Collection autoritativ ist,
+- New Game und Continue dieselbe Owner-Quelle benutzen,
+- Pause/UI/Renderer/Construction darüber laufen,
+- keine Listen-Synchronisierung nach Restore nötig ist.
+
+### Construction Builder Guard
+
+Entfernung erst wenn:
+
+- Materials complete -> WAIT_BUILDER,
+- realer Builder wird zugewiesen,
+- Navigation/Arrival läuft über Standardpfad,
+- Baufortschritt erst nach realer Ankunft,
+- kein Polling-Guard mehr notwendig.
+
+### Overdelivery Guard
+
+Entfernung erst wenn:
+
+- Restbedarf Reservationen/unterwegs berücksichtigt,
+- keine neuen überschüssigen Lieferjobs entstehen,
+- bestehende Transporttransaktionen sauber über Recovery behandelt werden,
+- kein nachträgliches Löschen von Carrier-State nötig ist.
+
+### Production Bridge
+
+Entfernung erst wenn:
+
+- Production nativ nach BuildingStock schreibt,
+- keine direkte HQ-Gutschrift parallel existiert,
+- Pause nativ vom Production-Owner berücksichtigt wird,
+- Continue Owner-State restauriert statt BuildComplete zu replayen,
+- keine Legacy-Buildjobs mehr entstehen.
+
+### Resident Workforce Patch
+
+Entfernung erst wenn:
+
+- Residents dauerhafte Identität behalten,
+- Housing/Home-Bindung nativ im Unit-/Housing-Modell liegt,
+- Workforce Helper-Residents über Capabilities zuweist,
+- Idle/Home/Leisure über Scheduler/Unit-Lifecycle läuft,
+- kein Unit-Type-Mutieren und kein eigener Resident-Timer mehr existiert,
+- Path-Performance nicht mehr in Workforce-Code steckt.
+
+### SaveGame Guards
+
+Entfernung erst wenn:
+
+- Owner eigene Snapshots/Restore-Verträge liefern,
+- stabile IDs nativ garantiert sind,
+- Restore-Reihenfolge definiert und getestet ist,
+- keine additive Post-Restore-Patchphase mehr notwendig ist,
+- Scheduler/Subscriptions genau einmal starten.
+
+## 27. Verbotene Dauerarchitekturen
+
+Langfristig ausdrücklich OUT sind:
+
+1. mehrere unabhängige Stores für denselben Gameplay-State,
+2. Feature-Patches, die fremde Owner-Interna periodisch korrigieren,
+3. Resident-Identity-Mutation für temporäre Arbeit,
+4. direkte HQ-Gutschrift aus Production vor physischem Transport,
+5. Construction, die Carrier direkt steuert,
+6. Renderer/UI/Inspector als Gameplay-Owner,
+7. SaveGame als zweiter Runtime-Store,
+8. A*-Aufrufe aus vielen Feature-Modulen mit eigenen Retry-Schleifen,
+9. ein A*-Vollpfad pro Job × Unit × Tick,
+10. persistente Einzelstempel als Pfad-Gameplaymodell,
+11. Timer pro Unit/Job/Gebäude als Primärsimulation,
+12. Event-Replay beim Restore, das erneut wirtschaftliche Side Effects erzeugt,
+13. Validator-/Guard-Code, der Inkonsistenzen durch fremde Direktmutation kaschiert,
+14. Teleport/Silent Delete als produktiver Recovery-Fallback für Waren oder Personen.
+
+## 28. Bewusst offene Implementierungsdetails
+
+Noch nicht eingefroren sind unter anderem:
+
+- konkrete JavaScript-Klassennamen und Modulgrenzen innerhalb eines Owners,
+- finale API-Signaturen,
+- EventBus-Implementierung,
+- Basis-Tickrate,
+- fixed vs. variable timestep,
+- Catch-up-Regeln,
+- konkrete Backoff-Zeiten,
+- konkrete Due-Queue-Datenstruktur,
+- konkrete Navigation-Grid-/Graph-/Heap-Strukturen und Heuristik,
+- Cachegrößen,
+- Navigation-/Job-/Unit-Budgets,
+- Path-Raster-/Brush-Größe,
+- Wear-/Decay-Balance,
+- Re-Bake-Frequenz,
+- OffscreenCanvas/GPU/Worker-Technik,
+- konkrete SaveGame-JSON-Feldnamen, Kompression und Storage-Technologie,
+- Save-Migrationscode,
+- konkrete Autosave-Frequenz,
+- Inspector-UI-Layout,
+- spätere Spielgeschwindigkeitsstufen.
+
+Diese Offenheit ist kein Blocker, solange die eingefrorenen Owner-, Contract-, Timing-, Restore- und Invariantenregeln eingehalten werden.
+
+## 29. S2D-03I – Internal Consistency & Architecture Freeze Gate
+
+Geprüft wurden S2D-03A–H geschlossen gegen die eingefrorenen S2D-00/01/02-Regeln.
+
+### 29.1 Prüfergebnis
+
+| Prüfung | Ergebnis |
+|---|---|
+| Widersprüche zu S2D-00 Product Scope | 0 |
+| Widersprüche zu S2D-01 Game Design / Economy | 0 |
+| Widersprüche zu S2D-02 Unit & Workforce | 0 |
+| doppelte autoritative Owner im Zielbild | 0 |
+| Cross-System-Contract-Widersprüche | 0 |
+| Scheduler-/Feature-Timer-Widersprüche | 0 |
+| Save/Continue-/Restore-Widersprüche | 0 |
+| Navigation-/Backoff-Widersprüche | 0 |
+| Path/Wear-/Rendering-Ownership-Widersprüche | 0 |
+| Validation-/Recovery-Ownership-Widersprüche | 0 |
+| Migration ohne Exit-Gate | 0 |
+| vorgezogene UI-/Balance-/Content-Detailentscheidungen als Blocker | 0 |
+| Gameplay-/Runtime-Codeänderungen in S2D-03 | 0 |
+| offene Architekturblocker | **0** |
+
+### 29.2 Kritische Cross-Checks
+
+- Physical Goods: S2D-01B One-Location-Invariant bleibt in Logistics, SaveGame und Recovery konsistent.
+- Construction: Material vollständig + reale Builder-Ankunft bleibt in Scheduler, Restore und Validation konsistent.
+- Workforce: stabile Resident-Identität bleibt in Ownership, Assignment, Migration und SaveGame konsistent.
+- Backoff: gehört zur Job-/Scheduling-Logik und erzeugt keine eigenständigen Timer.
+- Continue: restauriert Owner-State, rekonstruiert transiente Runtime und startet den Scheduler erst nach PASS.
+- Path/Wear: autoritativer Wear-State wird persistiert; Render-Cache bleibt transient.
+- Validation: erkennt/isoliert, übernimmt aber keine fremde Ownership.
+- Legacy: jeder bekannte Guard-/Bridge-Bestand besitzt Ziel-Owner und Exit-Bedingung.
+
+### 29.3 Freeze-Entscheidung
+
+S2D-03A – COMPLETE  
+S2D-03B – COMPLETE  
+S2D-03C – COMPLETE  
+S2D-03D – COMPLETE  
+S2D-03E – COMPLETE  
+S2D-03F – COMPLETE  
+S2D-03G – COMPLETE  
+S2D-03H – COMPLETE  
+S2D-03I – PASS / 0 BLOCKER
+
+**S2D-03 TECHNICAL ARCHITECTURE V0.1 FROZEN**
+
+Änderungen an diesen Architekturregeln erfolgen ab jetzt nur noch kontrolliert über `S2D-07 – DECISION & CHANGE LOG` bzw. einen ausdrücklich freigegebenen späteren Architektur-Revisionsblock.
