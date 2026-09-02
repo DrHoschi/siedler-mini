@@ -33,7 +33,9 @@ const MUST_HAVE = [
   "src/dev/cr-04b-self-test.js",
   "src/dev/cr-04b-self-test.node.js",
   "src/dev/cr-04c-self-test.js",
-  "src/dev/cr-04c-self-test.node.js"
+  "src/dev/cr-04c-self-test.node.js",
+  "src/dev/cr-04-freeze-gate.js",
+  "src/dev/cr-04-freeze-gate.node.js"
 ];
 
 let failures = 0;
