@@ -1,72 +1,60 @@
-/* ============================================================================
- * Datei   : tools/verify-structure.js
- * Projekt : Neue Siedler
- * Version : v1.0.0 (2025-10-21)
- * Zweck   : Prüft Kernstruktur, Import-Reihenfolge, Pflicht-Module und simple Exports
- * ========================================================================== */
 import { promises as fs } from "fs";
 
 const MUST_HAVE = [
   "index.html",
-  "core/asset.js","core/registry.js","core/boot.js","core/game.js",
-  "ui/ui-start.js","ui/ui-hud.js","ui/ui-build.js","ui/ui-inspector.js"
+  "src/main.js",
+  "src/runtime/config.js",
+  "src/runtime/event-bus.js",
+  "src/runtime/runtime.js",
+  "src/runtime/scheduler.js",
+  "src/runtime/store.js",
+  "src/domain/domain-store.js",
+  "src/domain/core-domain-stores.js",
+  "src/world/stable-id.js",
+  "src/world/world-store.js",
+  "src/world/map-structure.js",
+  "src/resources/resource-state.js",
+  "src/resources/resource-claims.js",
+  "src/resources/resource-demands.js",
+  "src/resources/resource-matching.js",
+  "src/resources/resource-assignment.js",
+  "src/transport/transport-job-contract.js",
+  "src/render/renderer.js",
+  "src/ui/app.css",
+  "src/dev/self-test.js",
+  "src/dev/cr-01-freeze-gate.js",
+  "src/dev/cr-02-freeze-gate.js",
+  "src/dev/cr-03-freeze-gate.js",
+  "src/dev/cr-03-freeze-gate.node.js",
+  "src/dev/cr-04a-self-test.js",
+  "src/dev/cr-04a-self-test.node.js",
+  "src/dev/cr-04a-integration-gate.node.js"
 ];
 
-const ORDER = [
-  "core/asset.js",
-  "core/registry.js",
-  "core/boot.js",
-  "core/game.js",
-  "ui/ui-start.js",
-  "ui/ui-hud.js",
-  "ui/ui-build.js",
-  "ui/ui-inspector.js"
-];
+let failures = 0;
+const fail = msg => { failures += 1; console.error("❌", msg); };
+const ok = msg => console.log("✅", msg);
 
-function fail(msg){ console.log("❌", msg); }
-function ok(msg){ console.log("✅", msg); }
-function warn(msg){ console.log("⚠️", msg); }
-
-async function checkFiles(){
-  let okAll = true;
-  for(const f of MUST_HAVE){
-    try{ await fs.access(f); ok(`[file] vorhanden: ${f}`); }
-    catch{ fail(`[file] fehlt: ${f}`); okAll = false; }
-  }
-  return okAll;
+for (const file of MUST_HAVE) {
+  try { await fs.access(file); ok(`[file] vorhanden: ${file}`); }
+  catch { fail(`[file] fehlt: ${file}`); }
 }
 
-async function checkIndex(){
-  try{
-    const html = await fs.readFile("index.html","utf8");
-    const scripts = Array.from(html.matchAll(/<script[^>]+src="([^"]+)"/g)).map(m=>m[1]);
-    const missing = ORDER.filter(s => !scripts.some(x=>x.endsWith(s)));
-    if(missing.length){ return fail(`[index] fehlende <script>: ${missing.join(", ")}`); }
-    // Grobe Reihenfolge-Prüfung: jeder muss vor dem nächsten stehen
-    let lastIdx = -1, orderOK = true;
-    for(const s of ORDER){
-      const i = scripts.findIndex(x=>x.endsWith(s));
-      if(i < lastIdx){ orderOK = false; break; }
-      lastIdx = i;
-    }
-    orderOK ? ok("[index] Reihenfolge ok (Startpanel-Regel erfüllt)") :
-              fail("[index] Reihenfolge fehlerhaft (siehe CODE_STYLE)");
-  }catch(e){ fail(`[index] konnte nicht gelesen werden: ${e.message}`); }
+try {
+  const html = await fs.readFile("index.html", "utf8");
+  /<script[^>]+type=["']module["'][^>]+src=["'][^"']*src\/main\.js(?:\?[^"']*)?["']/.test(html)
+    ? ok("[index] src/main.js als Moduleinstieg vorhanden")
+    : fail("[index] aktiver Moduleinstieg src/main.js fehlt");
+  /<link[^>]+href=["'][^"']*src\/ui\/app\.css(?:\?[^"']*)?["']/.test(html)
+    ? ok("[index] src/ui/app.css vorhanden")
+    : fail("[index] aktives Stylesheet src/ui/app.css fehlt");
+} catch (error) {
+  fail(`[index] konnte nicht gelesen werden: ${error.message}`);
 }
 
-async function checkHeadersAndLogs(){
-  for(const f of MUST_HAVE.filter(x=>x.endsWith(".js"))){
-    const txt = await fs.readFile(f,"utf8");
-    if(!/Version\s*:\s*v\d+\.\d+\.\d+/.test(txt)) warn(`[header] Version fehlt in ${f}`);
-    if(!/\[.+\]\s+Modul geladen/.test(txt))        warn(`[log] Lade-Log fehlt in ${f}`);
-    if(f.endsWith("asset.js") && /assets\.js/.test(txt)) warn(`[rule] asset.js muss singular bleiben (CODE_STYLE)`);
-  }
+if (failures > 0) {
+  console.error(`\n❌ Clean-Runtime-Strukturprüfung fehlgeschlagen: ${failures} Blocker`);
+  process.exitCode = 1;
+} else {
+  console.log("\n✅ Clean-Runtime-Strukturprüfung PASS / 0 Blocker");
 }
-
-(async function(){
-  console.log("— verify-structure —");
-  const filesOK = await checkFiles();
-  await checkIndex();
-  await checkHeadersAndLogs();
-  if(filesOK) ok("Basisstruktur vorhanden ✅");
-})();
