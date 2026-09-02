@@ -1,6 +1,6 @@
 # S2D-04 – UI / MOBILE UX
 
-Status: **V0.1 DRAFT – S2D-04A COMPLETE**  
+Status: **V0.1 DRAFT – S2D-04A/B COMPLETE**  
 Datum: 2026-09-02  
 Repository: `DrHoschi/siedler-mini`  
 Arbeitsbranch: `feature/s2d-04-ui-mobile-ux`  
@@ -10,27 +10,23 @@ Verbindliche Basis: `S2D-00 PROJECT MASTER V0.1 FROZEN` + `S2D-01 GAME DESIGN V0
 
 S2D-04 definiert die verbindliche Zielstruktur der Spieleroberfläche und der mobilen Bedienung.
 
-S2D-04A legt ausschließlich fest:
+Die bisher geschlossenen Teilblöcke sind:
 
-- welche primären Ansichten und Oberflächenbereiche das Spiel besitzt,
-- welche Informationen dauerhaft oder kontextabhängig sichtbar sind,
-- wie Kamera, Auswahl und Bauen auf Smartphone grundsätzlich bedient werden,
-- wie Touch-Konflikte vermieden werden,
-- welche wirtschaftlichen Zustände ohne Entwickler-Inspector verständlich sein müssen,
-- wie dieselbe Gameplay-Logik auf Smartphone, Tablet und Desktop bedient wird.
+- S2D-04A – Screen Structure, HUD & Primary Mobile Interaction Model,
+- S2D-04B – Building Selection, Context Panels & Economy Feedback Model.
 
-Nicht festgelegt werden in S2D-04A:
+S2D-04A legt die primäre Screen-, HUD-, Kamera-, Auswahl- und Touch-Baulogik fest.
 
-- finale Pixelmaße,
-- konkrete Farben, Fonts oder Grafiken,
-- endgültige Icons,
-- Animationstiming,
-- konkrete CSS-/HTML-Struktur,
-- Desktop-Hotkeys,
-- Detailaufbau aller Untermenüs,
-- Tutorialtexte,
-- Inspector-UI,
-- Implementierung.
+S2D-04B legt im Detail fest:
+
+- welche Informationen ein ausgewähltes Gebäude oder eine Baustelle zeigt,
+- wie Context Panels aufgebaut sind,
+- wie Status und Engpässe priorisiert werden,
+- welche direkten Spieleraktionen je Gebäudeklasse angeboten werden,
+- wie Rathaus/HQ, Wohnhäuser, Produktionsgebäude und Baustellen voneinander unterschieden werden,
+- wie lokale Waren, Transport, Workforce und Bauzustände spielerverständlich dargestellt werden.
+
+Noch nicht Gegenstand sind finale Pixelmaße, Farben, Fonts, Icons, CSS/HTML, konkrete Animationen oder UI-Implementierung.
 
 ## 2. Zentrale UX-Regel
 
@@ -57,287 +53,134 @@ Der normale Spielscreen besteht aus fünf logischen Ebenen.
 
 Die Welt ist die dominante Fläche und bleibt möglichst groß sichtbar.
 
-Sie enthält unter anderem:
-
-- Gelände,
-- Gebäude und Baustellen,
-- Personen/Units,
-- Tiere,
-- Rohstoffquellen,
-- sichtbare lokale Waren,
-- Transportbewegungen,
-- Trampelpfade/Wear,
-- Auswahlmarkierungen,
-- Platzierungsvorschau,
-- relevante Statussymbole direkt an Objekten.
+Sie enthält Gelände, Gebäude/Baustellen, Personen, Tiere, Rohstoffquellen, sichtbare Waren, Transporte, Trampelpfade, Auswahlmarkierungen, Platzierungsvorschau und relevante Statussymbole.
 
 Die Welt ist keine bloße Hintergrundfläche. Ein wesentlicher Teil des Economy-Feedbacks muss dort direkt erkennbar sein.
 
 ### 3.2 Permanenter kompakter HUD-Bereich
 
-Der permanente HUD zeigt nur Informationen, die der Spieler häufig zur Orientierung benötigt.
-
 NOW vorgesehen:
-
-- zentrale verfügbare Bau-/Lagerwaren des aktuellen Wirtschaftskerns: Holz und Stein,
-- Gold,
-- Bevölkerung,
-- Zugang zum Hauptmenü/Systemmenü,
-- Zugang zum Bauen.
-
-Fish, Meat und Pelt gehören zum Wirtschaftssystem, müssen aber nicht zwingend alle dauerhaft im knappen Smartphone-HUD stehen. Sie müssen über Wirtschafts-/Lageransichten schnell erreichbar sein.
-
-Grundregel:
-
-> **Dauerhaft sichtbar ist die Orientierungsebene; Detailbestände erscheinen bei Bedarf.**
-
-Der HUD darf nicht so breit oder hoch werden, dass auf kleinen Displays die eigentliche Siedlung zur Restfläche wird.
-
-### 3.3 Kontextbereich / Auswahlpanel
-
-Wählt der Spieler ein Gebäude, eine Baustelle oder ein anderes relevantes Objekt, erscheint ein kontextabhängiger Informations- und Aktionsbereich.
-
-Er zeigt nur Informationen und Aktionen für das ausgewählte Objekt.
-
-Beispiele:
-
-- Gebäudename/Typ,
-- aktueller Status,
-- Produktion aktiv/pausiert,
-- lokale Waren,
-- fehlende Eingangsbedingungen,
-- Baustellenbedarf und bereits gelieferte Waren,
-- Warten auf Bauarbeiter / Bauarbeiter unterwegs / Baufortschritt,
-- Bewohnerzahl bei Häusern,
-- Arbeitsbereich bei entsprechenden Produktionsgebäuden,
-- einfache Aktionen wie Pause/Fortsetzen, Arbeitsbereich ändern oder Abreißen.
-
-Auf Smartphone soll dieser Bereich bevorzugt als kompakte Bottom-Sheet-/Panel-Logik funktionieren und nicht als frei schwebendes Desktopfenster.
-
-Er muss minimierbar/schließbar sein und darf die Welt nicht unnötig dauerhaft verdecken.
-
-### 3.4 Modus-/Werkzeugbereich
-
-Bestimmte Aktionen versetzen die Oberfläche vorübergehend in einen klar erkennbaren Modus, beispielsweise:
-
-- Gebäude platzieren,
-- Arbeitsbereich festlegen,
-- später gegebenenfalls Straßenbau,
-- Abreißen bestätigen.
-
-Ein aktiver Modus muss sichtbar sein und einen eindeutigen Abbruchweg besitzen.
-
-### 3.5 Temporäre Hinweise / Guidance
-
-Kontextuelle Hinweise, Tutorial-Hinweise, kurze Warnungen und Bestätigungen liegen über der normalen Oberfläche, ohne eine zweite dauerhafte HUD-Schicht zu bilden.
-
-Sie werden nur bei Bedarf eingeblendet und verschwinden wieder.
-
-Guidance bleibt gemäß S2D-00/S2D-03 ein eigenes System und mutiert keinen Gameplay-State direkt.
-
-## 4. Hauptzustände des Spielscreens
-
-Die Oberfläche unterscheidet mindestens folgende primäre Interaktionszustände:
-
-1. **NORMAL / OBSERVE** – Siedlung ansehen und Kamera bewegen.
-2. **OBJECT SELECTED** – ein Weltobjekt ist ausgewählt und sein Kontext sichtbar.
-3. **BUILD CATALOG** – Gebäudeauswahl geöffnet.
-4. **BUILD PLACEMENT** – gewähltes Gebäude wird positioniert.
-5. **WORK AREA EDIT** – Arbeitsbereich eines geeigneten Gebäudes wird festgelegt/geändert.
-6. **CONFIRMATION** – destruktive oder relevante Aktion benötigt Bestätigung.
-7. **SYSTEM MENU** – Speichern, Einstellungen, Hilfe usw.
-8. **GUIDANCE FOCUS** – ein Tutorial-/Hinweiszustand lenkt auf eine Aktion, ohne die normale Runtime-Ownership zu umgehen.
-
-Diese Zustände dürfen technisch nicht als neue Gameplay-Owner verstanden werden. Sie beschreiben UI-Interaktion.
-
-## 5. Kamera auf Smartphone
-
-### 5.1 Pan
-
-Die Karte wird durch Ziehen auf einer freien Weltfläche verschoben.
-
-Ein Drag ist Kamerabewegung und darf nicht versehentlich ein Gebäude platzieren oder eine Objektaktion auslösen.
-
-### 5.2 Zoom
-
-Pinch mit zwei Fingern steuert den Zoom.
-
-Zoom ist unabhängig von der Simulation und darf keine Gameplay-Auswirkung besitzen.
-
-### 5.3 Auswahl
-
-Ein kurzer Tap auf ein auswählbares Weltobjekt selektiert dieses.
-
-Tap und Drag müssen durch eine kleine Bewegungs-/Gesture-Schwelle voneinander unterschieden werden, damit Kamerabewegung nicht ständig Objekte auswählt.
-
-### 5.4 Leere Weltfläche
-
-Ein Tap auf eine freie Weltfläche kann eine bestehende Auswahl schließen, sofern kein aktiver Werkzeugmodus diesen Tap benötigt.
-
-### 5.5 Kein permanentes Ein-Finger-Kamera-/Werkzeug-Doppelverhalten
-
-Während eines aktiven Platzierungs- oder Editiermodus muss eindeutig sein, welche Geste Kamera und welche Geste Werkzeug bedeutet.
-
-Die UI darf nicht verlangen, dass derselbe unmarkierte Tap gleichzeitig als Auswahl, Platzierung und Kamerabedienung interpretiert wird.
-
-## 6. Primärer Bauablauf auf Smartphone
-
-Der verbindliche Interaktionsfluss lautet konzeptionell:
-
-`Bauen öffnen -> Kategorie/Gebäude wählen -> Katalog reduziert/schließt -> Platzierungsvorschau erscheint -> Position prüfen/verschieben -> gültig/ungültig sichtbar -> Platzierung ausdrücklich bestätigen -> Baustelle entsteht -> Platzierungsmodus endet oder bewusst erneut aktiviert`
-
-### 6.1 Gebäudeauswahl
-
-Der Baukatalog soll keine dauerhaft offene große Seitenleiste benötigen.
-
-Auf Smartphone ist eine kompakte, scrollbare Bottom-Sheet-/Drawer-Lösung bevorzugt.
-
-Gebäude müssen mindestens über Icon + verständlichen Namen identifizierbar sein.
-
-Baukosten und wesentliche Voraussetzung müssen vor der Bestätigung erkennbar sein.
-
-### 6.2 Platzierungsvorschau
-
-Nach Gebäudeauswahl erscheint eine Vorschau in der Welt.
-
-Die Vorschau zeigt mindestens:
-
-- geplante Position,
-- Footprint,
-- gültige/ungültige Platzierung,
-- soweit für die Entscheidung relevant den vorgesehenen Zugang/Entrance.
-
-### 6.3 Positionieren
-
-Der Spieler kann die Vorschau verschieben, ohne sofort zu bauen.
-
-Kamerabewegung muss während der Platzierung weiterhin möglich sein.
-
-### 6.4 Explizite Bestätigung
-
-Auf Touch gilt:
-
-> **Das bloße Berühren einer Kartenposition darf nicht unmittelbar eine irreversible Gebäudeplatzierung auslösen.**
-
-Die finale Platzierung benötigt eine erkennbare Bestätigung.
-
-Damit werden Fehlplatzierungen durch Scrollen, Zoomen oder Fingerabweichung reduziert.
-
-### 6.5 Abbruch
-
-Jeder Platzierungsmodus besitzt einen jederzeit sichtbaren oder eindeutig erreichbaren Abbruch.
-
-Abbruch erzeugt keine Baustelle und verbraucht keine Ressourcen.
-
-## 7. Objektwahl und Gebäudeinteraktion
-
-### 7.1 Ein Tap – ein Fokus
-
-Ein normaler Tap auf ein Gebäude wählt es aus.
-
-Die Auswahl wird in der Welt sichtbar markiert und öffnet den Kontextbereich.
-
-### 7.2 Informationen vor Aktionen
-
-Das Panel zeigt zuerst den Zustand des Gebäudes und erst danach passende Aktionen.
-
-Der Spieler soll verstehen können, warum etwas nicht funktioniert, bevor er versucht, es durch Bedienung zu korrigieren.
-
-### 7.3 Keine versteckten Kernzustände
-
-Für den Kern müssen bei Auswahl verständlich sichtbar sein:
-
-- aktiv / pausiert,
-- arbeitet / wartet,
-- wesentlicher Grund für Warten,
-- lokale Waren bzw. relevante Bestände,
-- Baufortschritt und Materialstatus bei Baustellen,
-- Bewohner bei Häusern,
-- Arbeitsbereich bei entsprechenden Gebäuden.
-
-### 7.4 Destruktive Aktionen
-
-Abreißen und vergleichbar destruktive Aktionen benötigen eine Bestätigung und dürfen nicht unmittelbar neben häufig genutzten harmlosen Aktionen zu leicht versehentlich ausgelöst werden.
-
-## 8. HUD-Informationshierarchie
-
-Informationen werden in vier Ebenen eingeteilt.
-
-### Ebene 1 – permanent
-
-Nur sehr häufig benötigte globale Orientierung:
 
 - Holz,
 - Stein,
 - Gold,
 - Bevölkerung,
-- Bauzugang,
-- Menüzugang.
+- Zugang zum Systemmenü,
+- Zugang zum Bauen.
+
+Fish, Meat und Pelt gehören zum Wirtschaftssystem, müssen aber nicht alle dauerhaft im knappen Smartphone-HUD stehen. Sie bleiben über Wirtschafts-/Lageransichten schnell erreichbar.
+
+> **Dauerhaft sichtbar ist die Orientierungsebene; Detailbestände erscheinen bei Bedarf.**
+
+### 3.3 Kontextbereich / Auswahlpanel
+
+Ein ausgewähltes relevantes Weltobjekt öffnet einen kontextabhängigen Informations- und Aktionsbereich.
+
+Auf Smartphone wird dieser bevorzugt als kompakte Bottom-Sheet-/Panel-Logik behandelt, nicht als frei schwebendes Desktopfenster.
+
+Er ist minimierbar/schließbar und darf die Welt nicht unnötig dauerhaft verdecken.
+
+### 3.4 Modus-/Werkzeugbereich
+
+Bestimmte Aktionen erzeugen einen klar erkennbaren temporären Modus, z. B. Gebäudeplatzierung, Arbeitsbereich-Edit oder Abrissbestätigung.
+
+Jeder aktive Modus besitzt einen eindeutigen Abbruchweg.
+
+### 3.5 Temporäre Hinweise / Guidance
+
+Tutorial-/Guidance-Hinweise und kurze Warnungen sind temporär und bilden keine zweite dauerhafte HUD-Schicht.
+
+## 4. Hauptzustände des Spielscreens
+
+Mindestens:
+
+1. NORMAL / OBSERVE
+2. OBJECT SELECTED
+3. BUILD CATALOG
+4. BUILD PLACEMENT
+5. WORK AREA EDIT
+6. CONFIRMATION
+7. SYSTEM MENU
+8. GUIDANCE FOCUS
+
+Diese Zustände beschreiben UI-Interaktion und sind keine Gameplay-Owner.
+
+## 5. Kamera und Auswahl auf Smartphone
+
+- Ein-Finger-Drag auf der Welt: Kamera pannt.
+- Zwei-Finger-Pinch: Kamera zoomt.
+- kurzer Tap auf auswählbares Objekt: Auswahl.
+- Tap und Drag werden durch Gesture-Schwelle getrennt.
+- Tap auf freie Weltfläche kann Auswahl schließen, sofern kein Werkzeugmodus den Tap benötigt.
+- Kamera- und Werkzeuggesten dürfen nicht unmarkiert dieselbe Aktion bedeuten.
+
+## 6. Primärer Bauablauf auf Smartphone
+
+`Bauen öffnen -> Gebäude wählen -> Katalog reduziert/schließt -> Platzierungsvorschau -> Position prüfen/verschieben -> gültig/ungültig sichtbar -> ausdrücklich bestätigen -> Baustelle entsteht`
+
+Die Vorschau zeigt mindestens Position, Footprint, Gültigkeit und – soweit relevant – Zugang.
+
+Die Karte bleibt während der Platzierung bewegbar.
+
+> **Das bloße Berühren einer Kartenposition darf nicht unmittelbar eine irreversible Gebäudeplatzierung auslösen.**
+
+Abbruch erzeugt keine Baustelle und verbraucht keine Ressourcen.
+
+## 7. Objektwahl und Gebäudeinteraktion – Grundregeln
+
+Ein Tap auf ein Gebäude wählt es aus, markiert es in der Welt und öffnet seinen Kontext.
+
+Das Panel zeigt zuerst den Zustand, danach passende Aktionen.
+
+Für den Kern müssen verständlich sichtbar sein:
+
+- aktiv / pausiert,
+- arbeitet / wartet,
+- primärer Wartegrund,
+- lokale Waren/relevante Bestände,
+- Baufortschritt und Materialstatus bei Baustellen,
+- Bewohner bei Häusern,
+- Arbeitsbereich bei geeigneten Produktionsgebäuden.
+
+Destruktive Aktionen benötigen Bestätigung.
+
+## 8. HUD-Informationshierarchie
+
+### Ebene 1 – permanent
+
+Holz, Stein, Gold, Bevölkerung, Bauzugang, Menüzugang.
 
 ### Ebene 2 – Weltfeedback
 
-Ohne Menü direkt sichtbar:
-
-- Warenstapel,
-- laufende Transporte,
-- Baustellenzustand,
-- Figurenbewegung,
-- Tierbewegung,
-- Trampelpfade,
-- kompakte Statussymbole an problematischen/pausierten Gebäuden.
+Warenstapel, laufende Transporte, Baustellenzustand, Figuren-/Tierbewegung, Trampelpfade und sparsame Statussymbole.
 
 ### Ebene 3 – Auswahlkontext
 
-Nach Tap auf ein Objekt:
-
-- detaillierter Status,
-- lokaler Stock,
-- Produktion,
-- Bedarf,
-- Bewohner,
-- Arbeitsbereich,
-- Baufortschritt,
-- passende Aktionen.
+Detaillierter Status, lokaler Stock, Produktion, Bedarf, Bewohner, Arbeitsbereich, Baufortschritt und passende Aktionen.
 
 ### Ebene 4 – Übersicht/Analyse
 
-Seltener benötigte Gesamtdaten:
-
-- vollständige Ressourcen-/Warenübersicht,
-- Wirtschafts-/Lagerübersicht,
-- detailliertere Engpassinformationen,
-- später weitere Managementansichten.
-
-Diese Ebene darf ein eigenes Panel/Overlay verwenden, muss aber für den normalen Spielablauf nicht permanent geöffnet sein.
+Vollständige Ressourcen-/Warenübersicht, Wirtschafts-/Lagerübersicht, detailliertere Engpassinformationen und spätere Managementansichten.
 
 ## 9. Wirtschaft muss ohne Inspector lesbar sein
 
-Der Entwickler-Inspector ist kein Spielerwerkzeug.
+Der Spieler muss im normalen Spiel erkennen können:
 
-Ein Spieler muss im normalen Spiel erkennen können:
-
-- dass ein Produktionsgebäude arbeitet oder wartet,
+- ob Produktion arbeitet oder wartet,
 - ob lokal fertige Waren liegen,
 - ob Waren abgeholt werden,
-- ob eine Baustelle noch Material braucht,
+- ob eine Baustelle Material braucht,
 - ob Material bereits reserviert/unterwegs ist, soweit für das Verständnis nötig,
-- ob der Bau auf einen Bauarbeiter wartet,
-- ob ein Arbeiter/Bauarbeiter unterwegs ist,
+- ob ein Bauarbeiter fehlt oder unterwegs ist,
 - ob ein Gebäude pausiert ist,
 - ob ein Arbeitsbereich keine geeigneten Ziele bietet,
 - ob ein logistischer oder personeller Engpass vorliegt.
 
-Nicht jede interne technische Ursache muss gezeigt werden. Die Spielerinformation soll fachlich verständlich sein, nicht Debug-Sprache verwenden.
+Spielertexte verwenden Fachsprache des Spiels statt Debug-Sprache.
 
-Beispiel:
-
-Spielertext: `Wartet auf Bauarbeiter`
-
-statt interner Diagnose wie: `assignment=null / builderJob pending / retryNotBefore=...`.
+Beispiel: `Wartet auf Bauarbeiter` statt interner Assignment-/Retry-Daten.
 
 ## 10. Weltfeedback und Statussymbole
-
-Statussymbole sollen sparsam eingesetzt werden.
 
 Geeignete NOW-Fälle:
 
@@ -347,208 +190,724 @@ Geeignete NOW-Fälle:
 - Ausgang voll / Transportstau,
 - Baustelle wartet auf Material,
 - Baustelle wartet auf Bauarbeiter,
-- unerreichbar/blockiert, wenn dies spielerisch relevant ist.
+- unerreichbar/blockiert, wenn spielerisch relevant.
 
-Regeln:
-
-- Normal funktionierende Gebäude brauchen kein dauerhaftes Statussymbol.
-- Ein Symbol soll einen Zustand zusammenfassen, nicht technische Details darstellen.
-- Tap auf Gebäude liefert die Erklärung.
-- Mehrere gleichzeitige Ursachen werden im Panel priorisiert, nicht als Symbolwolke über dem Gebäude dargestellt.
+Normal funktionierende Gebäude brauchen kein permanentes Statussymbol. Mehrere Ursachen werden im Panel priorisiert, nicht als Symbolwolke dargestellt.
 
 ## 11. Touch-Ziele und Fehlbedienung
 
-Die genaue Pixelgröße wird später festgelegt. Bereits verbindlich ist:
+Verbindlich:
 
-- Kernaktionen besitzen großzügige Touch-Ziele,
-- Icon und Touchfläche sind nicht identisch; die berührbare Fläche darf größer sein,
-- wichtige Aktionen dürfen nicht nur über winzige Weltobjekte erreichbar sein,
-- häufige Aktionen und destruktive Aktionen werden räumlich/visuell getrennt,
-- ein geschlossenes Panel darf keine unsichtbare Touchfläche zurücklassen,
-- UI-Flächen blockieren darunterliegende Weltinteraktion zuverlässig,
-- Safe Areas moderner Smartphones werden berücksichtigt,
-- Landscape und Portrait werden nicht automatisch beide als gleichwertige Spiellayouts vorausgesetzt; die endgültige Orientierungsentscheidung folgt innerhalb S2D-04.
+- großzügige Touch-Ziele,
+- Touchfläche darf größer als sichtbares Icon sein,
+- wichtige Aktionen nicht nur über winzige Weltobjekte,
+- häufige und destruktive Aktionen getrennt,
+- geschlossene Panels hinterlassen keine unsichtbaren Touchflächen,
+- UI blockiert darunterliegende Weltinteraktion,
+- Smartphone-Safe-Areas werden berücksichtigt.
+
+Die endgültige Portrait-/Landscape-Strategie bleibt offen.
 
 ## 12. Smartphone, Tablet und Desktop
 
-### Smartphone
+Smartphone ist Referenz für minimale nutzbare Fläche: Welt maximal sichtbar, kompakter HUD, Bottom Sheets/Drawer, keine Fensterketten, Touch-first.
 
-Smartphone ist Referenz für minimale nutzbare Fläche.
+Tablet darf größere Panels und mehr gleichzeitig sichtbare Information verwenden.
 
-Prinzip:
-
-- Welt maximal sichtbar,
-- kompakter HUD,
-- Bottom Sheets/Drawer für Details,
-- keine gleichzeitig offenen Fensterketten,
-- Touch-first.
-
-### Tablet
-
-Tablet darf:
-
-- größere Panels,
-- mehr gleichzeitig sichtbare Informationen,
-- breiteren Baukatalog
-
-verwenden, ohne Gameplayregeln zu ändern.
-
-### Desktop
-
-Desktop darf:
-
-- Maus-Hover als Zusatzinformation,
-- Tastaturkürzel,
-- dauerhaft breitere Seiten-/Detailbereiche,
-- präzisere Cursor-Vorschau
-
-anbieten.
-
-Aber:
+Desktop darf Hover-Zusatzinfos, Hotkeys, breitere Panels und präzisere Cursor-Vorschau ergänzen.
 
 > **Keine Kernaktion darf ausschließlich auf Hover, Rechtsklick oder Tastatur angewiesen sein.**
 
-## 13. Systemmenü und sekundäre Zugänge
+## 13. Systemmenü und Guidance
 
-Vom normalen Spielscreen muss ein klarer Systemmenü-Zugang existieren.
+Vom Spielscreen existiert ein klarer Systemmenü-Zugang für Speichern, Zurück/Fortsetzen, Einstellungen, Hilfe, Tutorial-Neustart und gegebenenfalls Verlassen.
 
-Dort gehören konzeptionell hin:
+Guidance darf UI/Welt hervorheben und erklären, aber keine Gameplay-Bedingungen umgehen oder Domain-State direkt verändern.
 
-- Speichern,
-- Spiel fortsetzen/zurück,
-- Einstellungen,
-- Hilfe,
-- Einführung/Tutorial neu starten,
-- gegebenenfalls Spiel verlassen/zum Startbildschirm.
+## 14. UI und technische Ownership
 
-Die exakte Menüstruktur wird in einem späteren S2D-04-Teilblock festgelegt.
+S2D-03 bleibt bindend.
 
-## 14. Guidance-Verankerung
-
-S2D-04A reserviert UI-Flächen und Interaktionsregeln für Guidance, ohne Tutorialinhalte vollständig zu spezifizieren.
-
-Guidance darf:
-
-- ein relevantes UI-Element hervorheben,
-- eine kurze Erklärung anzeigen,
-- auf ein Weltobjekt hinweisen,
-- bei Bedarf eine Aktion erklären.
-
-Guidance darf nicht:
-
-- fachliche Bedingungen umgehen,
-- Gebäude/Ressourcen direkt erzeugen,
-- Runtime-State außerhalb der Owner verändern,
-- den Spieler dauerhaft mit denselben Hinweisen blockieren.
-
-Gesehene/abgeschlossene Hinweise werden gemäß S2D-00/S2D-03 persistiert.
-
-## 15. UI und technische Ownership
-
-S2D-03 bleibt vollständig bindend.
-
-Die UI:
-
-- liest Owner-Zustände über Queries/Read Models/Snapshots,
-- sendet fachliche Commands für Spieleraktionen,
-- reagiert auf Events,
-- besitzt keinen zweiten Gameplay-State,
-- korrigiert keine Runtime-Inkonsistenzen,
-- startet keine eigenen Gameplay-Timer,
-- darf lokale rein visuelle UI-Zustände besitzen, z. B. welches Panel geöffnet ist oder welches Katalogelement markiert ist.
+Die UI liest Owner-Zustände über öffentliche Read Models/Queries, sendet Commands und reagiert auf Events. Sie besitzt keinen zweiten Gameplay-State und startet keine Gameplay-Timer.
 
 Beispiel:
 
-`Pause Button -> PauseBuilding Command -> Production/Owner validiert -> State Mutation -> Event -> UI aktualisiert Anzeige`
+`Pause Button -> PauseBuilding Command -> Owner validiert -> State Mutation -> Event -> UI aktualisiert`
 
 Nicht:
 
 `Pause Button -> UI setzt building.paused direkt`.
 
-## 16. Primäre mobile Bedienmatrix
+## 15. Primäre mobile Bedienmatrix
 
 | Spielerabsicht | Primäre Smartphone-Interaktion | Ergebnis |
 |---|---|---|
 | Karte bewegen | Ein-Finger-Drag auf Welt | Kamera pannt |
 | Zoomen | Zwei-Finger-Pinch | Kamera zoomt |
 | Objekt ansehen | kurzer Tap | Objekt selektiert, Kontextpanel öffnet |
-| Auswahl schließen | Tap auf freie Fläche / Schließen | zurück zu NORMAL |
-| Bauen beginnen | Bauen-Button | Baukatalog öffnet |
+| Auswahl schließen | Tap freie Fläche / Schließen | NORMAL |
+| Bauen beginnen | Bauen-Button | Baukatalog |
 | Gebäude wählen | Tap im Katalog | Platzierungsvorschau |
 | Position ändern | Vorschau ziehen/Position wählen | Vorschau bewegt sich |
-| Karte beim Bauen bewegen | klar getrennte Drag-Geste auf Welt | Kamera pannt, keine Platzierung |
+| Karte beim Bauen bewegen | getrennte Drag-Geste | Kamera pannt, keine Platzierung |
 | Gebäude setzen | explizite Bestätigung | Placement-Command |
 | Bauen abbrechen | Abbruch | keine Änderung |
-| Produktion pausieren | Gebäude wählen -> Pause | Command an Owner |
-| Arbeitsbereich ändern | Gebäude wählen -> Arbeitsbereich | Editiermodus |
-| Abreißen | Gebäude wählen -> Abreißen -> Bestätigung | Demolition-Command |
-| Detailbestände ansehen | Ressourcen-/Lagerübersicht | Ebene-4-Ansicht |
+| Produktion pausieren | Gebäude -> Pause | Owner-Command |
+| Arbeitsbereich ändern | Gebäude -> Arbeitsbereich | Editiermodus |
+| Abreißen | Gebäude -> Abreißen -> Bestätigung | Demolition-Command |
+| Detailbestände | Ressourcen-/Lagerübersicht | Ebene 4 |
 | Hilfe | Systemmenü/Hilfe | Hilfe/Guidance |
 
-## 17. Verbindliche S2D-04A-Invarianten
+# S2D-04B – Building Selection, Context Panels & Economy Feedback Model
 
-1. Smartphone ist vollwertige Zielplattform.
-2. Die Welt bleibt die dominante Bildschirmfläche.
-3. Der permanente HUD zeigt nur häufig benötigte globale Orientierung.
-4. Holz, Stein, Gold und Bevölkerung gehören zum NOW-Kern des permanenten HUD.
-5. Weitere Waren bleiben schnell erreichbar, müssen aber nicht permanent Platz belegen.
-6. Objektinformationen erscheinen kontextabhängig.
-7. Ein Tap auf ein Objekt selektiert; ein Drag bewegt die Kamera.
-8. Pinch zoomt die Kamera.
-9. Kameraaktionen dürfen keine unbeabsichtigten Gameplay-Aktionen auslösen.
-10. Gebäudeplatzierung benötigt auf Touch eine explizite Bestätigung.
-11. Jeder Werkzeugmodus besitzt einen klaren Abbruch.
-12. Ein aktiver Modus ist sichtbar erkennbar.
-13. Kernwirtschaft und Engpässe sind ohne Entwickler-Inspector verständlich.
-14. Normale funktionierende Gebäude benötigen keine permanente Symbolflut.
-15. Destruktive Aktionen benötigen Bestätigung.
-16. UI besitzt keinen Gameplay-State als zweite Wahrheit.
-17. UI mutiert Domain-State ausschließlich über öffentliche Owner-Verträge.
-18. Render-/UI-Refresh-Timing beeinflusst keine Simulation.
-19. Tablet/Desktop erweitern Komfort, nicht Gameplayregeln.
-20. Keine Kernaktion ist ausschließlich von Hover, Rechtsklick oder Tastatur abhängig.
-21. Guidance und Spieler-UI bleiben von Entwickler-Inspector getrennt.
-22. Safe Areas und kleine Displays werden als reale Zielbedingungen behandelt.
-23. Weltfeedback ist Teil der Economy-Lesbarkeit, nicht bloße Dekoration.
-24. Platzierung, Auswahl und Kamera besitzen eindeutig unterscheidbare Touch-Interaktionen.
+## 16. Ziel des Context Panels
 
-## 18. Bewusst noch offen
+> **Ein ausgewähltes Gebäude soll dem Spieler innerhalb weniger Sekunden beantworten: Was ist das? Was macht es gerade? Wenn es nicht arbeitet: warum? Was kann ich hier sinnvoll tun?**
 
-S2D-04A entscheidet ausdrücklich noch nicht:
+Das Context Panel ist keine Mini-Version des Inspectors und kein Rohdatenfenster.
 
-- finale Bildschirmorientierung bzw. verbindliche Portrait-/Landscape-Strategie,
-- exakte HUD-Anordnung,
-- finale Position jedes Buttons,
-- konkrete Touch-Zielgrößen in px/dp,
-- Farben und UI-Designsprache,
-- finale Icon-Bibliothek,
-- genaue Baukategorien,
-- vollständige Struktur aller Gebäude-Panels,
-- vollständige Wirtschaftsübersicht,
-- konkrete Tutorialsequenz,
-- Startmenü-/New-/Continue-Detaildesign,
-- Einstellungen,
+Es zeigt spielerrelevante Informationen in klarer Priorität und blendet technische Details aus, solange sie nicht als verständliche Spielursache relevant sind.
+
+## 17. Gemeinsame Panel-Struktur
+
+Jedes Gebäude-/Baustellenpanel folgt derselben Grundreihenfolge.
+
+### 17.1 Kopf
+
+Immer sichtbar:
+
+- Gebäudename,
+- Gebäudeart/kurze Funktion, soweit nicht bereits eindeutig,
+- kompakter Hauptstatus,
+- Schließen/Minimieren.
+
+Der Hauptstatus ist eine verständliche Aussage, z. B.:
+
+- `Arbeitet`,
+- `Pausiert`,
+- `Wartet auf Arbeiter`,
+- `Wartet auf Rohstoff`,
+- `Ausgang voll`,
+- `Wartet auf Material`,
+- `Material vollständig – Bauarbeiter fehlt`,
+- `Bauarbeiter unterwegs`,
+- `Im Bau`.
+
+### 17.2 Primäre Zustandskarte
+
+Direkt nach dem Kopf steht genau der aktuell wichtigste spielerische Zustand.
+
+Bei normalem Betrieb kann diese kompakt sein. Bei einem Engpass erhält sie mehr Raum und erklärt den Grund.
+
+### 17.3 Fachlicher Kernbereich
+
+Je Gebäudeklasse folgt der wichtigste Inhalt:
+
+- HQ: zentrale Bestände,
+- Haus: Bewohner,
+- Produktion: Produktion + lokaler Ausgang,
+- Baustelle: Material + Builder-/Fortschrittszustand.
+
+### 17.4 Sekundäre Informationen
+
+Nur soweit relevant:
+
+- Arbeitsbereich,
+- Transportstatus,
+- zusätzliche Waren,
+- Bewohner-/Worker-Zusammenhang,
+- weitere Ursache nach dem Primärengpass.
+
+### 17.5 Aktionen
+
+Häufige und reversible Aktionen stehen vor seltenen/destruktiven Aktionen.
+
+Abriss ist räumlich/visuell getrennt und bestätigt.
+
+## 18. Panel-Größenlogik auf Smartphone
+
+Das Context Panel besitzt konzeptionell drei Darstellungsstufen:
+
+### PEEK
+
+Kompakt sichtbar:
+
+- Name,
+- Hauptstatus,
+- wichtigste Kennzahl bzw. wichtigste Aktion.
+
+Die Welt bleibt fast vollständig sichtbar.
+
+### STANDARD
+
+Normale Auswahlansicht mit den für das Gebäude wichtigsten Informationen und Aktionen.
+
+### EXPANDED
+
+Für Detailinformationen wie vollständige Bestände oder Material-/Transportdetails.
+
+EXPANDED ist kein permanenter Zustand und darf die Karte weitgehend überdecken, solange es leicht wieder reduziert werden kann.
+
+Die konkrete Gesten-/Snap-Mechanik bleibt Implementierungsdetail.
+
+## 19. Status-Prioritätsmodell
+
+Ein Gebäude kann intern mehrere Zustände gleichzeitig haben. Der Spieler erhält dennoch einen klaren Hauptstatus.
+
+Prioritätsprinzip:
+
+1. **kritische/ungültige Spielzustände**, sofern spielerisch relevant,
+2. **bewusste Spielerzustände** wie Pausiert,
+3. **blockierende Voraussetzungen**,
+4. **aktive Übergänge** wie Arbeiter/Transport unterwegs,
+5. **normaler aktiver Betrieb**,
+6. **neutrales Warten ohne Problem**.
+
+Die konkrete Ursache wird fachlich priorisiert, nicht nach technischer Modulreihenfolge.
+
+Beispiel Produktionsgebäude:
+
+`Pausiert` hat Vorrang vor `kein Rohstoffziel`, weil die Produktion bewusst angehalten wurde und der zweite Zustand aktuell keine Handlungsursache ist.
+
+Beispiel Baustelle:
+
+`Wartet auf Material` hat Vorrang vor `kein Bauarbeiter`, solange die Materialien noch nicht vollständig sind, weil gemäß Game Design noch gar kein Builder benötigt wird.
+
+## 20. Engpassdarstellung
+
+Jeder Engpass besitzt nach Möglichkeit drei Ebenen:
+
+1. **Was?** – verständlicher Status.
+2. **Warum?** – kurze Ursache.
+3. **Was kann der Spieler tun?** – nur wenn eine sinnvolle direkte Handlung existiert.
+
+Beispiel:
+
+- Status: `Ausgang voll`
+- Ursache: `3 Holz warten auf Abholung.`
+- Handlungshinweis: `Mehr Transportkapazität oder kürzere Wege können helfen.`
+
+Der dritte Punkt ist Hilfe, keine automatische Reparatur und kein Zwang zu Mikromanagement.
+
+## 21. HQ / Rathaus – Context Panel
+
+Das Rathaus ist Startgebäude, Hauptlager und zentraler Lieferpunkt des ersten Wirtschaftskerns.
+
+### 21.1 PEEK
+
+- `Rathaus`
+- Hauptstatus, normalerweise `Hauptlager`
+- kompakte Gesamtbelegung bzw. zentrale Orientierung, sofern später Kapazität relevant wird.
+
+### 21.2 STANDARD
+
+Primär sichtbar:
+
+- Holz,
+- Stein,
+- Fisch,
+- Fleisch,
+- Fell,
+- Gold als separater Wirtschafts-/Wertbestand,
+- Bevölkerung als abgeleitete Siedlungskennzahl, nicht als Lagerware.
+
+Die Darstellung muss klar machen:
+
+> **Physische Waren gelten im Rathaus erst als verfügbar, nachdem sie tatsächlich dorthin geliefert wurden.**
+
+Unterwegs befindliche Waren werden nicht in den verfügbaren Bestand hineingerechnet.
+
+### 21.3 Transportfeedback
+
+Falls relevant kann das Rathaus zusätzlich zeigen:
+
+- Waren unterwegs zum Rathaus,
+- aktive Anlieferung,
+- auffälligen Transportstau.
+
+`Unterwegs` bleibt visuell getrennt von `Verfügbar`.
+
+### 21.4 Aktionen
+
+NOW keine unnötige Lager-Mikrosteuerung.
+
+Mögliche direkte Aktionen beschränken sich auf allgemein sinnvolle Gebäudeaktionen, soweit fachlich erlaubt. Ein separates Lager-/Prioritätenmanagement wird nicht in S2D-04B vorweggenommen.
+
+Abriss des Start-HQ wird nicht als normale Kernaktion vorausgesetzt; genaue HQ-Abrissregel gehört ins Content/Game-Rule-Detail, falls überhaupt zulässig.
+
+## 22. Wohnhaus – Context Panel
+
+Gilt für kleines und mittleres Wohnhaus mit jeweiliger realer Bewohnerzahl.
+
+### 22.1 PEEK
+
+- Hausname,
+- `2 Bewohner` beim kleinen Haus bzw. tatsächlicher aktueller Wert,
+- `3 Bewohner` beim mittleren Haus bzw. tatsächlicher aktueller Wert.
+
+Die UI zeigt den tatsächlichen Runtime-Bestand, nicht blind den Sollwert der Definition.
+
+### 22.2 STANDARD
+
+Primär:
+
+- Bewohnerzahl,
+- Bewohner als reale Personen der Siedlung,
+- kompakter Verfügbarkeitsüberblick, z. B. wie viele aktuell frei/unterwegs/bei Arbeit sind, sofern dies ohne unnötige Komplexität verständlich dargestellt werden kann,
+- Gold-/Steuerbeitrag in spielerisch sinnvoller Form.
+
+Der aktuelle historische Testwert `1 Gold/Bewohner/10s` darf nicht als finales Balancing in der UI-Spezifikation festgeschrieben werden.
+
+### 22.3 Bewohnerdetails
+
+Eine spätere erweiterte Ansicht darf einzelne Bewohner mit Name/Status/Arbeitsrolle zeigen, ist für S2D-04B aber keine Pflicht des Standardpanels.
+
+Wichtig ist bereits jetzt:
+
+- Bewohner bleiben Bewohner,
+- temporäre Hilfsarbeit darf nicht als Identitätswechsel zu `Träger` dargestellt werden,
+- Spezialisierung und aktuelle Aufgabe sind getrennte Begriffe.
+
+### 22.4 Hauszustände
+
+Spielerrelevante Zustände können sein:
+
+- normal bewohnt,
+- Bewohner unterwegs/bei Arbeit,
+- Übergang nach Verlust einer Wohnbindung, falls dieser Zustand später sichtbar relevant wird.
+
+Ein Haus erhält kein künstliches `arbeitet`/`wartet`-Produktionsschema.
+
+### 22.5 Aktionen
+
+NOW:
+
+- Abriss mit Bestätigung, sofern fachlich zulässig.
+
+Keine Bewohner-Mikrozuweisung im Kern. Der Spieler weist einzelne Bewohner nicht manuell jedem Transportjob zu.
+
+## 23. Produktionsgebäude – gemeinsames Context Panel
+
+Gilt für Holzfällerhütte, Steinbruch, Fischerhütte und Jägerhütte, mit gebäudespezifischen Inhalten.
+
+### 23.1 PEEK
+
+- Gebäudename,
+- Hauptstatus,
+- kompakter lokaler Ausgang, z. B. `Holz: 2`.
+
+### 23.2 STANDARD – Produktionsstatus
+
+Zeigt mindestens:
+
+- aktiv oder pausiert,
+- arbeitet / wartet / Worker unterwegs,
+- primären Wartegrund,
+- lokale fertige Waren,
+- Transportstatus der fertigen Waren,
+- Arbeitsbereich, wenn das Gebäude einen solchen besitzt.
+
+### 23.3 Lokaler Ausgang
+
+Lokaler Output wird als echter Bestand des Gebäudes dargestellt.
+
+Beispiele:
+
+- Holzfäller: Holz,
+- Steinbruch: Stein,
+- Fischer: Fisch,
+- Jäger: Fleisch + Fell.
+
+Die UI darf denselben physischen Bestand nicht gleichzeitig als lokal und im HQ verfügbar darstellen.
+
+Mögliche Anzeige:
+
+`Lokal: 3 Holz`
+
+`Davon zur Abholung reserviert/unterwegs: 1`
+
+Dabei muss klar bleiben: Reservation ist kein zweiter Warenort.
+
+### 23.4 Transportzustände
+
+Spielerrelevante Aussagen:
+
+- `Wartet auf Abholung`,
+- `Träger unterwegs`,
+- `Wird zum Rathaus gebracht`,
+- `Ausgang voll`, sofern Kapazität/Blockierung relevant ist.
+
+Nicht anzeigen:
+
+- interne Job IDs,
+- Assignment IDs,
+- Retry-Zeitstempel,
+- A*-Failcodes.
+
+### 23.5 Workerzustände
+
+Spielerrelevante Aussagen:
+
+- `Arbeiter vorhanden`,
+- `Wartet auf Arbeiter`,
+- `Arbeiter unterwegs`,
+- `Arbeiter bei Arbeit`.
+
+Die UI darf Spezialisierung anzeigen, z. B. `Jäger`, aber nicht durch historische Type-Mutation falsche Identität suggerieren.
+
+### 23.6 Pause
+
+Pause/Fortsetzen ist eine primäre direkte Aktion.
+
+Bei Pause:
+
+- Hauptstatus `Pausiert`,
+- keine neue Produktions-/Rohstoffarbeit,
+- bereits fertige lokale Waren bleiben sichtbar und dürfen weiterhin transportiert werden,
+- der Pause-Button wird zu `Fortsetzen`.
+
+Die UI darf fertige Ware nicht ausblenden, nur weil Produktion pausiert ist.
+
+### 23.7 Arbeitsbereich
+
+Für Gebäude mit Arbeitsbereich:
+
+- aktuelle Arbeitszone ist in der Welt visualisierbar,
+- Panel bietet `Arbeitsbereich ändern`,
+- bei ungeeignetem/leeren Bereich verständlicher Status, z. B. `Kein geeignetes Ziel im Arbeitsbereich`.
+
+Der Arbeitsbereich-Editor ist ein eigener klarer UI-Modus und wird in einem späteren S2D-04-Block detailliert.
+
+### 23.8 Aktionen
+
+Primär:
+
+- Pause/Fortsetzen,
+- Arbeitsbereich anzeigen/ändern, wenn unterstützt.
+
+Sekundär/destruktiv:
+
+- Abreißen mit Bestätigung.
+
+Keine direkte `Ware ins HQ buchen`-Aktion und kein `Träger jetzt teleportieren`.
+
+## 24. Gebäudespezifische Produktionsinformationen
+
+### 24.1 Holzfällerhütte
+
+Zeigt:
+
+- Holz als lokalen Output,
+- Arbeitsbereich,
+- verständlich, wenn kein geeigneter Baum/Rohstoff erreichbar bzw. im Bereich vorhanden ist,
+- Worker-/Transportstatus.
+
+### 24.2 Steinbruch
+
+Zeigt:
+
+- Stein als lokalen Output,
+- Arbeitsbereich,
+- verständlich, wenn kein geeigneter Stein/Rohstoff verfügbar ist,
+- Worker-/Transportstatus.
+
+### 24.3 Fischerhütte
+
+Zeigt:
+
+- Fisch als lokalen Output,
+- Arbeitsbereich,
+- verständlich, wenn kein geeignetes Fisch-/Arbeitsziel vorhanden ist,
+- Worker-/Transportstatus.
+
+### 24.4 Jägerhütte
+
+Zeigt:
+
+- Fleisch und Fell getrennt als lokale Outputs,
+- Arbeitsbereich,
+- verständlich, wenn aktuell kein geeignetes Tierziel vorhanden ist,
+- Jäger-/Transportstatus.
+
+Die Anzeige respektiert, dass der Jäger reale Tiere der Welt nutzt; es wird kein abstrakter unsichtbarer Tierbestand suggeriert.
+
+## 25. Baustelle – Context Panel
+
+Baustellen erhalten ein eigenes Panelmodell und werden nicht wie fertige Produktionsgebäude behandelt.
+
+### 25.1 PEEK
+
+- Name des entstehenden Gebäudes,
+- Hauptstatus,
+- kompakter Gesamtfortschritt.
+
+### 25.2 Materialdarstellung
+
+Für jede benötigte physische Ware wird mindestens unterschieden:
+
+- Soll,
+- geliefert,
+- gültig reserviert/unterwegs, soweit für den Spieler relevant,
+- noch offen.
+
+Die Darstellung muss die fachliche Regel respektieren:
+
+`Restbedarf = Soll - geliefert - gültig reserviert/unterwegs`
+
+Beispiel:
+
+`Holz 2/3 geliefert · 1 unterwegs`
+
+Dann ist der Restbedarf bereits 0 und die UI darf nicht suggerieren, dass noch ein weiteres Holz benötigt wird.
+
+### 25.3 Material-Statuspriorität
+
+Solange Restmaterial fehlt:
+
+- Hauptstatus `Wartet auf Material`, oder
+- `Material unterwegs`, wenn der komplette offene Rest bereits gültig unterwegs/reserviert ist.
+
+Ein fehlender Builder ist in dieser Phase kein primärer Engpass, weil der Builder gemäß Game Design erst nach vollständiger Materialversorgung benötigt wird.
+
+### 25.4 Übergang zu Builder
+
+Wenn alle benötigten Materialien physisch geliefert wurden:
+
+1. `Material vollständig – wartet auf Bauarbeiter`,
+2. `Bauarbeiter unterwegs`,
+3. nach realer Ankunft `Im Bau`.
+
+> **Die UI darf Baufortschritt erst anzeigen, wenn der Builder tatsächlich angekommen ist und ConstructionSystem den BUILDING-Zustand bestätigt.**
+
+### 25.5 Baufortschritt
+
+Während `Im Bau`:
+
+- klarer Fortschrittsindikator,
+- Bauarbeiterstatus,
+- keine weitere Materialanforderung, sofern alle Sollmengen erfüllt sind.
+
+Der Fortschrittsindikator liest Construction-State und berechnet keinen eigenen Bauzustand.
+
+### 25.6 Baustellen-Transport
+
+Falls Material unterwegs ist, kann die Baustelle dies pro Ware oder zusammengefasst zeigen.
+
+Wichtig:
+
+- `unterwegs` ist nicht `geliefert`,
+- überlieferte Mengen werden nicht als normaler Zustand geplant,
+- bei bereits erfülltem Restbedarf darf die UI keine zusätzliche Nachfrage suggerieren.
+
+### 25.7 Aktionen
+
+NOW primär keine manuelle Builder-/Carrier-Zuweisung.
+
+Mögliche Aktion:
+
+- Baustelle abbrechen/abreißen mit Bestätigung.
+
+Eine spätere Materialpriorisierung wird nicht in S2D-04B vorweggenommen.
+
+## 26. Primärer und sekundärer Engpass
+
+Das Panel zeigt grundsätzlich **einen primären Engpass prominent**.
+
+Ein sekundärer Hinweis darf ergänzt werden, wenn er für die Planung relevant ist und nicht irreführt.
+
+Beispiele:
+
+Produktionsgebäude:
+
+- Primär: `Ausgang voll`
+- Sekundär: `3 Holz warten auf Abholung`
+
+Baustelle:
+
+- Primär: `Material unterwegs`
+- Sekundär: `Bauarbeiter wird erst danach benötigt`
+
+Nicht zulässig ist eine ungeordnete Liste aller intern denkbaren Zustände.
+
+## 27. Economy-Feedback: verfügbar, lokal, reserviert, unterwegs
+
+Diese Begriffe müssen in der Spieleroberfläche konsistent verwendet werden.
+
+### Verfügbar
+
+Ware befindet sich im zentral nutzbaren HQ-/Lagerbestand.
+
+### Lokal
+
+Ware liegt physisch im lokalen Bestand eines Produktionsgebäudes oder – bei Baustellenmaterial – bereits an der Baustelle.
+
+### Reserviert
+
+Ware besitzt eine gültige Zuordnung zu einem Bedarf, befindet sich aber weiterhin an ihrem aktuellen physischen Ort.
+
+### Unterwegs
+
+Ware wird physisch von einer Unit getragen.
+
+Zentrale Regel:
+
+> **Die UI darf Reservation oder Transport niemals als zusätzliche Warenmenge zählen.**
+
+## 28. Economy-Feedback durch Welt + Panel
+
+Panel und Welt ergänzen sich.
+
+Beispiel Holzfäller:
+
+- Welt: sichtbarer Holzstapel am Gebäude,
+- Panel: `Lokal 3 Holz · 1 zur Abholung reserviert`,
+- Welt: Träger läuft zum Pickup,
+- nach Pickup: lokaler Stapel sinkt fachlich entsprechend; Unit trägt Ware,
+- Panel: `1 Holz unterwegs zum Rathaus`,
+- nach realer Lieferung: HQ-Bestand steigt.
+
+Die sichtbare Welt darf keine zweite wirtschaftliche Wahrheit besitzen. Warenstapel sind Darstellung des Owner-State.
+
+## 29. Gebäudezustände in der Welt
+
+Die Welt zeigt nur Zustände, die aus der Entfernung nützlich sind.
+
+Vorgesehen:
+
+- Pause,
+- wesentlicher Blocker,
+- Baustellenphase,
+- sichtbare Warenstapel,
+- reale Worker-/Transportbewegung.
+
+Detailursachen erscheinen erst nach Auswahl.
+
+Bei Zoomstufen mit wenig Platz dürfen Statussymbole weiter reduziert/aggregiert werden. Exakte LOD-Regeln bleiben offen.
+
+## 30. Auswahlwechsel und Panel-Aktualisierung
+
+- Tap auf anderes Gebäude wechselt den Panelkontext direkt.
+- Panel liest den neuen Owner-State und übernimmt keine Daten des vorherigen Gebäudes.
+- Wird das ausgewählte Gebäude entfernt, schließt oder wechselt das Panel kontrolliert in einen nicht mehr verfügbaren Zustand; es hält keinen Zombie-Verweis.
+- Live-Änderungen wie Lieferung, Pause oder Builder-Ankunft aktualisieren das Panel über öffentliche Runtime-Verträge/Events/Read Models.
+- UI-Refresh erzeugt keine Gameplay-Mutation.
+
+## 31. Keine unnötige Mikromanagement-UI
+
+Für den ersten Kern ausdrücklich nicht vorgesehen:
+
+- einzelne Träger per Tap einer Ware zuweisen,
+- einzelne freie Bewohner manuell als Hilfsträger umschalten,
+- Bauarbeiter per Drag auf Baustelle ziehen,
+- Produktionswaren manuell ins HQ buchen,
+- interne Jobprioritäten pro Einzeljob editieren,
+- Navigation/A*-Parameter im Spielerpanel ändern.
+
+Die Siedlung führt operative Arbeit autonom aus. Der Spieler löst wirtschaftliche und räumliche Probleme.
+
+## 32. Fehler, Warten und technische Störung
+
+Das Spielerpanel unterscheidet:
+
+### Normales Warten
+
+Beispiele:
+
+- Ware unterwegs,
+- Worker unterwegs,
+- Bauarbeiter unterwegs,
+- aktuell kein Tier im Arbeitsbereich.
+
+### Spielerischer Engpass
+
+Beispiele:
+
+- dauerhaft kein Arbeiter,
+- Ausgang voll,
+- keine geeignete Rohstoffquelle,
+- Baustoff fehlt,
+- unerreichbarer Zugang, soweit dies eine spielerisch lösbare Situation ist.
+
+### Technische Inkonsistenz
+
+Eine Runtime-Invariant-Verletzung aus S2D-03G wird nicht als gewöhnlicher Economy-Status schöngeredet.
+
+Im normalen Spielerbetrieb kann eine neutrale Fehlermeldung nötig sein; die technischen Details gehören in Diagnostics/Inspector.
+
+Die UI repariert den Zustand nicht selbst.
+
+## 33. Actions-Matrix nach Gebäudeklasse
+
+| Gebäudeklasse | Primäre Information | Primäre Aktion | Weitere Aktion | Destruktiv |
+|---|---|---|---|---|
+| Rathaus/HQ | zentrale Bestände | Bestände ansehen | spätere Übersicht | nur falls Game Rules erlauben |
+| Kleines Wohnhaus | Bewohner | Bewohnerstatus ansehen | Steuer-/Beitragsinfo | Abriss + Bestätigung |
+| Mittleres Wohnhaus | Bewohner | Bewohnerstatus ansehen | Steuer-/Beitragsinfo | Abriss + Bestätigung |
+| Holzfäller | Produktion + Holz lokal | Pause/Fortsetzen | Arbeitsbereich | Abriss + Bestätigung |
+| Steinbruch | Produktion + Stein lokal | Pause/Fortsetzen | Arbeitsbereich | Abriss + Bestätigung |
+| Fischer | Produktion + Fisch lokal | Pause/Fortsetzen | Arbeitsbereich | Abriss + Bestätigung |
+| Jäger | Produktion + Fleisch/Fell lokal | Pause/Fortsetzen | Arbeitsbereich | Abriss + Bestätigung |
+| Baustelle | Material + Builder + Fortschritt | Status ansehen | ggf. Weltfokus auf Lieferung/Builder später | Abbruch/Abriss + Bestätigung |
+
+## 34. Verbindliche S2D-04B-Invarianten
+
+1. Jedes Gebäude zeigt einen klaren Hauptstatus.
+2. Der Hauptstatus ist spielerisch priorisiert, nicht technisch zufällig.
+3. Informationen stehen vor Aktionen.
+4. Normales Warten wird nicht automatisch als Fehler dargestellt.
+5. Ein Panel zeigt keine Debug-IDs oder Retry-/A*-Interna.
+6. HQ-Bestand enthält nur tatsächlich gelieferte physische Waren.
+7. Unterwegs befindliche Waren werden getrennt von verfügbarem HQ-Bestand gezeigt.
+8. Lokaler Produktionsoutput bleibt bis Pickup lokaler Bestand.
+9. Reservation ist kein zweiter Warenort.
+10. Transportierte Ware gehört während des Transports zur Unit und wird nicht doppelt gezählt.
+11. Häuser zeigen reale Bewohner, nicht einen unabhängigen Population-Pool.
+12. Temporäre Hilfsarbeit ändert in der UI nicht die Resident-Identität.
+13. Produktionsgebäude zeigen lokale Outputs.
+14. Jäger zeigt Fleisch und Fell getrennt.
+15. Pause ist ein primärer sichtbarer Zustand.
+16. Fertige lokale Waren bleiben bei pausierter Produktion sichtbar/transportierbar.
+17. Arbeitsbereich ist bei unterstützten Gebäuden sichtbar und editierbar.
+18. Baustellen unterscheiden Soll, geliefert, unterwegs/reserviert und Restbedarf fachlich korrekt.
+19. Ein Builder wird erst nach vollständiger Materiallieferung als notwendiger nächster Engpass behandelt.
+20. Baufortschritt wird erst nach real bestätigter Builder-Ankunft dargestellt.
+21. Überlieferung wird nicht als normaler UI-Workflow vorausgesetzt.
+22. Weltfeedback und Panel lesen dieselbe wirtschaftliche Wahrheit.
+23. Ein Gebäudeabriss benötigt Bestätigung.
+24. Spielerpanels bieten keine operative Einzel-Unit-Mikrosteuerung.
+25. Panel-State besitzt keine zweite Gameplay-Wahrheit.
+26. Entfernte Objekte hinterlassen keinen Zombie-Panelzustand.
+27. Technische Inkonsistenzen werden nicht durch UI-Patches repariert.
+28. Das Standardpanel bleibt auf Smartphone kompakt; Details sind progressiv erweiterbar.
+
+## 35. Bewusst nach S2D-04B noch offen
+
+Noch nicht festgelegt:
+
+- finale Portrait-/Landscape-Strategie,
+- exakte Panelhöhen und Snap-Positionen,
+- konkrete visuelle Gestaltung,
+- finale Icons und Statussymbolsprache,
+- Baukategorien und Katalogdetailstruktur,
+- vollständige Ressourcen-/Wirtschaftsübersicht,
+- Arbeitsbereich-Editor im Detail,
+- Tutorial-/Guidance-Sequenzen,
+- Start-/New-/Continue-Menüs,
+- Einstellungen/Hilfe im Detail,
 - Desktop-Hotkeys,
-- Inspector-Oberfläche,
-- Accessibility-Detailregeln.
+- Accessibility-Details,
+- Inspector-UI.
 
-Diese Punkte werden kontrolliert in den folgenden S2D-04-Teilblöcken geschlossen.
+## 36. S2D-04A/B Abschlussstatus
 
-## 19. S2D-04A Abschluss
+### S2D-04A – Screen Structure, HUD & Primary Mobile Interaction Model
 
-S2D-04A – Screen Structure, HUD & Primary Mobile Interaction Model ist **COMPLETE**.
+**COMPLETE / 0 BLOCKER**
 
-Ergebnis:
+### S2D-04B – Building Selection, Context Panels & Economy Feedback Model
 
-- primäre Screen-Ebenen definiert,
-- permanenter HUD fachlich begrenzt,
-- Informationshierarchie festgelegt,
-- Smartphone-Kamera und Auswahlmodell festgelegt,
-- Touch-Bauablauf einschließlich expliziter Bestätigung festgelegt,
-- Objekt-/Kontextinteraktion definiert,
-- Economy-Lesbarkeit ohne Inspector verbindlich gemacht,
-- Plattformabstufung Smartphone/Tablet/Desktop festgelegt,
-- technische UI-Ownership an S2D-03 gebunden,
-- keine Gameplay- oder UI-Implementierung begonnen.
+**COMPLETE / 0 BLOCKER**
 
-**Open Blockers: 0**
+S2D-04 bleibt **V0.1 DRAFT** bis die vorgesehenen UI-/Mobile-UX-Teilblöcke geschlossen und gemeinsam eingefroren sind.
+
+Es wurde keine Gameplay- oder UI-Implementierung begonnen.
