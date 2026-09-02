@@ -5,7 +5,7 @@ export class CoreDomainStores {
     this.buildings = new DomainStore('buildings', 'building');
     this.units = new DomainStore('units', 'unit');
     this.resources = new DomainStore('resources', 'resource');
-    this.jobs = new DomainStore('jobs', 'job');
+    this.jobs = new DomainStore('jobs', 'transport-job');
     Object.freeze(this);
   }
 
