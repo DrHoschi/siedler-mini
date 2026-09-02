@@ -12,6 +12,7 @@ import { runCr02cSelfTest } from './dev/cr-02c-self-test.js';
 import { runCr02FreezeGate } from './dev/cr-02-freeze-gate.js';
 import { runCr03aSelfTest } from './dev/cr-03a-self-test.js';
 import { runCr03bSelfTest } from './dev/cr-03b-self-test.js';
+import { runCr03cSelfTest } from './dev/cr-03c-self-test.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -29,11 +30,11 @@ const runtime = new Runtime(RuntimeConfig);
 const renderer = new Renderer(canvas, RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-03B Reservation Assignment Map',
+  name: 'CR-03C Assignment Consistency Map',
   width: 8,
   height: 8,
   cellSize: 1,
-  metadata: { foundation: 'CR-03B-RESERVATION-ASSIGNMENT' }
+  metadata: { foundation: 'CR-03C-ASSIGNMENT-CONSISTENCY' }
 });
 const domains = new CoreDomainStores();
 const resources = new ResourceState({ world, resourceStore: domains.resources });
@@ -61,6 +62,7 @@ const cr02cReport = runCr02cSelfTest();
 const cr02FreezeGateReport = runCr02FreezeGate({ domains, resources, resourceClaims, resourceDemands });
 const cr03aReport = runCr03aSelfTest();
 const cr03bReport = runCr03bSelfTest();
+const cr03cReport = runCr03cSelfTest();
 const pass = foundationReport.pass
   && cr01aReport.pass
   && cr01bReport.pass
@@ -71,9 +73,10 @@ const pass = foundationReport.pass
   && cr02cReport.pass
   && cr02FreezeGateReport.pass
   && cr03aReport.pass
-  && cr03bReport.pass;
+  && cr03bReport.pass
+  && cr03cReport.pass;
 
-if (testEl) testEl.textContent = pass ? 'CR-03B ASSIGNMENT: PASS' : 'CR-03B ASSIGNMENT: FAIL';
+if (testEl) testEl.textContent = pass ? 'CR-03C CONSISTENCY: PASS' : 'CR-03C CONSISTENCY: FAIL';
 
 window.CleanRuntime = Object.freeze({
   config: RuntimeConfig,
@@ -98,7 +101,8 @@ window.CleanRuntime = Object.freeze({
     cr02c: runCr02cSelfTest(),
     cr02FreezeGate: runCr02FreezeGate({ domains, resources, resourceClaims, resourceDemands }),
     cr03a: runCr03aSelfTest(),
-    cr03b: runCr03bSelfTest()
+    cr03b: runCr03bSelfTest(),
+    cr03c: runCr03cSelfTest()
   }),
   foundationReport,
   cr01aReport,
@@ -110,10 +114,11 @@ window.CleanRuntime = Object.freeze({
   cr02cReport,
   cr02FreezeGateReport,
   cr03aReport,
-  cr03bReport
+  cr03bReport,
+  cr03cReport
 });
 
-console.info('[CR-03B] Matching -> Reservation Assignment READY', {
+console.info('[CR-03C] Assignment Consistency / Release & Reassignment Gate READY', {
   build: RuntimeConfig.build,
   state: runtime.state,
   worldId: world.worldId,
@@ -134,5 +139,6 @@ console.info('[CR-03B] Matching -> Reservation Assignment READY', {
   cr02c: cr02cReport,
   cr02FreezeGate: cr02FreezeGateReport,
   cr03a: cr03aReport,
-  cr03b: cr03bReport
+  cr03b: cr03bReport,
+  cr03c: cr03cReport
 });
