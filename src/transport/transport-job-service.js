@@ -13,9 +13,9 @@ export class TransportJobService {
   #resources;
 
   constructor({ jobStore, claims, demands, resourceState }) {
-    if (!jobStore || typeof jobStore.create !== 'function' || typeof jobStore.allocateId !== 'function') throw new TypeError('jobStore required');
+    if (!jobStore || typeof jobStore.create !== 'function' || typeof jobStore.allocateId !== 'function' || typeof jobStore.update !== 'function') throw new TypeError('jobStore required');
     if (!claims || typeof claims.get !== 'function') throw new TypeError('claims required');
-    if (!demands || typeof demands.get !== 'function') throw new TypeError('demands required');
+    if (!demands || typeof demands.get !== 'function' || typeof demands.releaseClaim !== 'function') throw new TypeError('demands required');
     if (!resourceState || typeof resourceState.get !== 'function') throw new TypeError('resourceState required');
     this.#jobs = jobStore;
     this.#claims = claims;
@@ -66,6 +66,34 @@ export class TransportJobService {
       createdCount: plan.filter(item => item.job).length,
       jobs
     });
+  }
+
+  cancel(jobId) {
+    const job = this.#requireJob(jobId);
+    if (job.status === 'CANCELLED') return job;
+    TransportJobContract.assertTransition(job.status, 'CANCELLED');
+    return this.#jobs.update(job.id, draft => { draft.status = 'CANCELLED'; });
+  }
+
+  release(jobId) {
+    const job = this.#requireJob(jobId);
+    if (job.status === 'RELEASED') return job;
+    TransportJobContract.assertTransition(job.status, 'RELEASED');
+
+    const claim = this.#claims.get(job.claimId);
+    if (!claim) throw new TypeError(`unknown claim id: ${job.claimId}`);
+    if (claim.state === 'CONSUMED') throw new Error(`consumed claim cannot release transport job: ${job.claimId}`);
+    if (claim.state === 'ACTIVE') this.#demands.releaseClaim(job.claimId);
+    const releasedClaim = this.#claims.get(job.claimId);
+    if (releasedClaim?.state !== 'RELEASED') throw new Error(`transport job claim release failed: ${job.claimId}`);
+
+    return this.#jobs.update(job.id, draft => { draft.status = 'RELEASED'; });
+  }
+
+  #requireJob(jobId) {
+    const job = this.#jobs.get(jobId);
+    if (!job) throw new TypeError(`unknown transport job id: ${jobId}`);
+    return job;
   }
 
   #existingByClaim() {
