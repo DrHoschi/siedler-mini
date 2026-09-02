@@ -1,80 +1,69 @@
-name: CI & Diagnose
+name: CI Baseline
+
 on:
   push:
-    branches: [ main ]
+    paths:
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.json"
+      - "**/*.html"
+      - "core/**"
+      - "data/**"
+      - "inspector/**"
+      - "ui/**"
+      - "tools/**"
+      - "package.json"
+      - ".github/workflows/ci.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
+    paths:
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.json"
+      - "**/*.html"
+      - "core/**"
+      - "data/**"
+      - "inspector/**"
+      - "ui/**"
+      - "tools/**"
+      - "package.json"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-test:
+  baseline:
+    name: Syntax + Structure
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 5
 
-      # Node einrichten
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
-        continue-on-error: true
 
-      # Lints (optional – falls ESLint/Stylelint konfiguriert)
-      - run: npm run lint --if-present
-      - run: npm run stylelint --if-present
-
-      # kleine „Smoke“-Tests für Inspector & CBLog
-      - name: Run unit/e2e tests
-        run: npm test --if-present
-
-      # Statische Checks auf deine Schlüsseldateien
-      - name: Inspect critical files
+      - name: Run deterministic repository checks
+        shell: bash
         run: |
-          echo "## Inspector file summary" > diag.md
-          for f in \
-            assets/inspector/inspector.core.js \
-            assets/inspector/inspector.logs.js \
-            assets/inspector/inspector.build.js \
-            assets/inspector/inspector.paths.js \
-            assets/inspector/inspector.tests.js \
-            assets/inspector/inspector.css \
-            assets/core/cblog.polyfill.js \
-            assets/ui/ui-bridge.js \
-            index.html
-          do
-            echo -e "\n### $f" >> diag.md
-            test -f "$f" && (echo "\`\`\`js" >> diag.md; sed -n '1,120p' "$f" >> diag.md; echo "\n\`\`\`" >> diag.md) || echo "_missing_" >> diag.md
-          done
-          echo -e "\n---\nBuild done: $(date -u +%FT%TZ)" >> diag.md
+          set -o pipefail
+          npm run ci 2>&1 | tee ci-baseline.log
 
-      # Artefakte anhängen (damit ich sie öffnen kann)
-      - uses: actions/upload-artifact@v4
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          name: inspector-diagnostics
-          path: |
-            diag.md
-            assets/inspector/**
-            assets/core/cblog.polyfill.js
-            assets/ui/ui-bridge.js
-            index.html
-
-  pr-comment:
-    needs: build-test
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: inspector-diagnostics
-          path: diag
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const body = fs.readFileSync('diag/diag.md','utf8');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
+          name: ci-baseline-${{ github.sha }}
+          path: ci-baseline.log
+          retention-days: 7
