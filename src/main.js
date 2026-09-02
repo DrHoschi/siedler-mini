@@ -14,6 +14,7 @@ import { runCr03aSelfTest } from './dev/cr-03a-self-test.js';
 import { runCr03bSelfTest } from './dev/cr-03b-self-test.js';
 import { runCr03cSelfTest } from './dev/cr-03c-self-test.js';
 import { runCr03FreezeGate } from './dev/cr-03-freeze-gate.js';
+import { runCr04aSelfTest } from './dev/cr-04a-self-test.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -31,11 +32,11 @@ const runtime = new Runtime(RuntimeConfig);
 const renderer = new Renderer(canvas, RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-03 Resource Matching & Assignment Freeze Gate Map',
+  name: 'CR-04A Transport Job Contract Test Map',
   width: 8,
   height: 8,
   cellSize: 1,
-  metadata: { foundation: 'CR-03-FREEZE-GATE' }
+  metadata: { foundation: 'CR-04A-TRANSPORT-JOB-CONTRACT' }
 });
 const domains = new CoreDomainStores();
 const resources = new ResourceState({ world, resourceStore: domains.resources });
@@ -65,6 +66,7 @@ const cr03aReport = runCr03aSelfTest();
 const cr03bReport = runCr03bSelfTest();
 const cr03cReport = runCr03cSelfTest();
 const cr03FreezeGateReport = runCr03FreezeGate();
+const cr04aReport = runCr04aSelfTest();
 const pass = foundationReport.pass
   && cr01aReport.pass
   && cr01bReport.pass
@@ -78,9 +80,10 @@ const pass = foundationReport.pass
   && cr03bReport.pass
   && cr03cReport.pass
   && cr03FreezeGateReport.pass
-  && cr03FreezeGateReport.blockerCount === 0;
+  && cr03FreezeGateReport.blockerCount === 0
+  && cr04aReport.pass;
 
-if (testEl) testEl.textContent = pass ? 'CR-03 FREEZE-GATE: PASS / 0 BLOCKER' : `CR-03 FREEZE-GATE: FAIL / ${cr03FreezeGateReport.blockerCount} BLOCKER`;
+if (testEl) testEl.textContent = pass ? 'CR-04A TRANSPORT JOB CONTRACT: PASS / 0 BLOCKER' : 'CR-04A TRANSPORT JOB CONTRACT: FAIL';
 
 window.CleanRuntime = Object.freeze({
   config: RuntimeConfig,
@@ -107,7 +110,8 @@ window.CleanRuntime = Object.freeze({
     cr03a: runCr03aSelfTest(),
     cr03b: runCr03bSelfTest(),
     cr03c: runCr03cSelfTest(),
-    cr03FreezeGate: runCr03FreezeGate()
+    cr03FreezeGate: runCr03FreezeGate(),
+    cr04a: runCr04aSelfTest()
   }),
   foundationReport,
   cr01aReport,
@@ -121,10 +125,11 @@ window.CleanRuntime = Object.freeze({
   cr03aReport,
   cr03bReport,
   cr03cReport,
-  cr03FreezeGateReport
+  cr03FreezeGateReport,
+  cr04aReport
 });
 
-console.info('[CR-03] Resource Matching & Assignment Foundation FREEZE GATE', {
+console.info('[CR-04A] Transport Job Contract device/browser gate', {
   build: RuntimeConfig.build,
   state: runtime.state,
   worldId: world.worldId,
@@ -135,17 +140,7 @@ console.info('[CR-03] Resource Matching & Assignment Foundation FREEZE GATE', {
   demandCount: resourceDemands.ids().length,
   matchPolicy: ResourceMatching.policy,
   assignmentSource: ResourceAssignment.source,
-  foundation: foundationReport,
-  cr01a: cr01aReport,
-  cr01b: cr01bReport,
-  cr01c: cr01cReport,
-  freezeGate: freezeGateReport,
-  cr02a: cr02aReport,
-  cr02b: cr02bReport,
-  cr02c: cr02cReport,
-  cr02FreezeGate: cr02FreezeGateReport,
-  cr03a: cr03aReport,
-  cr03b: cr03bReport,
-  cr03c: cr03cReport,
-  cr03FreezeGate: cr03FreezeGateReport
+  cr03Regression: cr03FreezeGateReport,
+  cr04aContract: cr04aReport,
+  overallPass: pass
 });
