@@ -19,7 +19,7 @@ export function runCr01cSelfTest() {
     return stores.buildings.create({ label:'A' }).id === 'building:00000001' &&
       stores.units.create({ label:'U' }).id === 'unit:00000001' &&
       stores.resources.create({ label:'R' }).id === 'resource:00000001' &&
-      stores.jobs.create({ label:'J' }).id === 'job:00000001';
+      stores.jobs.create({ label:'J' }).id === 'transport-job:00000001';
   });
 
   check('domain-isolation', () => {
