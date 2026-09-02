@@ -1,40 +1,50 @@
 # S2D-05 – CONTENT CATALOG
 
-Status: **V0.1 DRAFT – S2D-05A/B COMPLETE**  
+Status: **V0.1 FROZEN – PASS / 0 BLOCKER**  
 Datum: 2026-09-02  
 Repository: `DrHoschi/siedler-mini`  
 Arbeitsbranch: `feature/s2d-05-content-catalog`  
-Verbindliche Basis: `S2D-00 PROJECT MASTER V0.1 FROZEN` + `S2D-01 GAME DESIGN V0.1 FROZEN` + `S2D-02 UNIT & WORKFORCE MODEL V0.1 FROZEN` + `S2D-03 TECHNICAL ARCHITECTURE V0.1 FROZEN` + `S2D-04 UI / MOBILE UX V0.1 FROZEN`
+Verbindliche Basis: `S2D-00 PROJECT MASTER V0.1 FROZEN` + `S2D-01 GAME DESIGN V0.1 FROZEN` + `S2D-02 UNIT & WORKFORCE MODEL V0.1 FROZEN` + `S2D-03 TECHNICAL ARCHITECTURE V0.1 FROZEN` + `S2D-04 UI / MOBILE UX V0.1 FROZEN`  
+Freeze-Gate: **S2D-05G – Internal Consistency & Content Freeze Gate – PASS / 0 BLOCKER**
+
+## 1. Zweck
+
+S2D-05 definiert den verbindlichen Content des ersten vollständigen 2D-Wirtschaftskerns. Es trennt vorhandene Repository-Inhalte von tatsächlich freigegebenem V1-Content, beschreibt die sieben Kerngebäude, fünf physischen Waren, Weltressourcen, Tiere, Bewohner/Spezialisten, Gold/Steuern, den New-Game-Workforce-Bootstrap sowie den später zu balancierenden Parameterraum.
+
+S2D-05 friert fachliche Contentregeln ein, aber bewusst **keine finalen Balancezahlen und kein technisches JSON-/Runtime-Schema**.
+
+Zentrale Regel:
+
+> **Vorhanden im Repository ist nicht gleich freigegeben für V1. Eine Contentdefinition beschreibt fachliche Bedeutung, nicht eine zweite Runtime-Wahrheit.**
+
+---
 
 # S2D-05A – Existing Content Inventory & V1 Content Baseline
 
-## 1. Zweck und Ergebnis
+## 2. Klassifikation
 
-S2D-05A erfasst den vorhandenen Content und trennt ihn vom V1-Kern. Vorhanden im Repository ist nicht automatisch für V1 freigegeben.
-
-Klassifikation:
 - **KEEP** – gehört direkt zum V1-Kern.
-- **ADAPT** – V1-relevant, aber an Zielmodell/Definitionen anzupassen.
-- **LATER** – sinnvoller Zukunftscontent, nicht für den ersten Wirtschaftskern.
-- **OUT** – keine produktive V1-Wahrheit; historische/Test-Inhalte dürfen bis Cleanup bestehen bleiben.
+- **ADAPT** – V1-relevant, aber an S2D-02/03/04 bzw. neue Definitionen anzupassen.
+- **LATER** – brauchbarer Zukunftscontent, nicht Teil des ersten Wirtschaftskerns.
+- **OUT** – keine produktive V1-Wahrheit; historische/Testdateien dürfen bis kontrolliertem Cleanup bestehen bleiben.
 
-## 2. V1-Baseline aus S2D-05A
+## 3. V1-Gebäudekern
 
-### 2.1 Gebäude
+| ID | Name | Funktion |
+|---|---|---|
+| `b.hq` | Rathaus | Start-HQ, Hauptlager, zentrale Anlieferstelle |
+| `b.house_small` | Kleines Wohnhaus | Wohnraum, Baseline 2 Bewohner |
+| `b.house_middle` | Mittleres Wohnhaus | Wohnraum, Baseline 3 Bewohner |
+| `b.lumberjack` | Holzfällerhütte | Holzproduktion |
+| `b.quarry` | Steinbruch | Steinproduktion |
+| `b.fisher` | Fischerhütte | Fischproduktion |
+| `b.hunter` | Jägerhütte | Fleisch- und Fellproduktion aus realen Tieren |
 
-| ID | Name | V1 | Kernfunktion |
-|---|---|---|---|
-| `b.hq` | Rathaus | KEEP | Start-HQ, Hauptlager, zentrale Anlieferstelle |
-| `b.lumberjack` | Holzfällerhütte | KEEP | Holzproduktion |
-| `b.quarry` | Steinbruch | KEEP | Steinproduktion |
-| `b.fisher` | Fischerhütte | KEEP | Fischproduktion |
-| `b.hunter` | Jägerhütte | KEEP | Fleisch + Fell aus realen Tieren |
-| `b.house_small` | Kleines Wohnhaus | KEEP | Wohnraum für bestätigte Baseline 2 Bewohner |
-| `b.house_middle` | Mittleres Wohnhaus | KEEP | Wohnraum für bestätigte Baseline 3 Bewohner |
+Weitere vorhandene Gebäude-/Assetideen wie Depot, Farm, Windmühle, Bäckerei, Schmied, Wachturm, Militär- und Epoche-2-Inhalte bleiben **LATER**.
 
-### 2.2 Waren und Wirtschaftswerte
+## 4. V1-Waren und Wirtschaftswerte
 
-Physische V1-Waren:
+Physische Waren:
 - Holz,
 - Stein,
 - Fisch,
@@ -42,638 +52,646 @@ Physische V1-Waren:
 - Fell.
 
 Sonderwerte:
-- Gold = Wirtschaftswert, keine normale Transportware.
+- Gold = nicht-physischer Wirtschaftswert,
 - Bevölkerung = aus realen Bewohnern abgeleiteter Wert, keine Ware.
 
-### 2.3 Personenrollen
+## 5. V1-Personenrollen
 
-V1-relevant:
-- Bewohner,
-- Träger,
-- Bauarbeiter,
+Fachlich relevant:
+- allgemeiner Bewohner,
+- Carrier/Träger,
+- Builder/Bauarbeiter,
 - Holzfäller,
-- Steinmetz,
+- Steinmetz/Steinbrucharbeiter,
 - Fischer,
 - Jäger.
 
-Die vorhandenen Unit-Definitionen werden bei Bedarf an das S2D-02-Modell `Identität + Capabilities + aktuelles Assignment` angepasst. Temporäre Hilfsarbeit ändert niemals die Personenidentität.
+Spezialisierung, Capability, Identität und aktuelles Assignment bleiben getrennte Ebenen gemäß S2D-02.
 
-### 2.4 Weltressourcen und Tiere
+## 6. V1-Weltcontent
 
-V1-Weltressourcen:
+Weltressourcen:
 - Bäume,
 - Steinquellen,
-- Fischziele.
+- Fischvorkommen/-ziele.
 
-Vorhandene Tierbasis:
+Tierbasis:
 - Reh/Hirsch,
 - Wildschwein,
 - Hase/Kaninchen,
 - Fuchs.
 
-Welche Tierarten im V1 konkret jagd-/beuterelevant sind, wird erst in einem passenden Content-Unterblock verbindlich festgelegt.
+Geeignete vorhandene Sprites, Atlanten, Icons und Goods-Grafiken werden bevorzugt wiederverwendet. Assetnormalisierung erfolgt später kontrolliert, vorzugsweise über die gemeinsame Halle-Demo-Dev-Tool-Umgebung.
 
-### 2.5 Assets
-
-Für alle sieben V1-Gebäude, Baustellen, Kerncharaktere, Goods/Items, Resource-Icons und Tiere existiert bereits verwertbarer Asset-Unterbau. Geeignete vorhandene Sprites/Atlanten/Icons werden bevorzugt wiederverwendet; Normalisierung erfolgt später kontrolliert, möglichst über die gemeinsame Halle-Demo-Dev-Tool-Umgebung.
-
-Vorhandene spätere Inhalte wie Depot, Farm, Windmühle, Bäckerei, Schmied, Wachturm, Epoche-2-Berufe und weitere Produktionsketten bleiben **LATER**.
-
-### 2.6 S2D-05A Balance-Regel
-
-Vorhandene Werte wie Baukosten, Produktionszyklen, Geschwindigkeiten, WorkArea-Radien, Tierlimits, Lagerkapazitäten und Steuer-Testraten sind nur Baseline/Testwerte und wurden in S2D-05A nicht als finale Balance eingefroren.
-
-**S2D-05A – Existing Content Inventory & V1 Content Baseline: COMPLETE / 0 BLOCKER**
+**S2D-05A: COMPLETE / 0 BLOCKER**
 
 ---
 
 # S2D-05B – Building & Production Content Definitions
 
-## 3. Zweck
+## 7. Gemeinsames Building-Definition-Modell
 
-S2D-05B legt für die sieben V1-Gebäude die fachlich verbindliche Contentbedeutung fest, ohne die technische Implementierung oder unnötig frühe Balancezahlen einzufrieren.
+Ein V1-Gebäude muss fachlich mindestens beschreiben können:
+- stabile Building-ID,
+- Spielername und Funktion,
+- Footprint/Placementbezug,
+- gültige Zugangs-/Interaktionspunkte,
+- Baukostenprofil,
+- Bau-/Visualprofil,
+- Worker-/Capability-Anforderung, falls relevant,
+- WorkArea-Profil, falls relevant,
+- Produktionsdefinition, falls relevant,
+- lokalen Stock, falls relevant,
+- Housing- oder HQ-/Storageprofil, falls relevant,
+- player-facing ableitbare Zustände,
+- Trennung zwischen festen Regeln und Balanceparametern.
 
-Der Block beantwortet für jedes Gebäude:
-- Welche Funktion erfüllt es im Wirtschaftskern?
-- Welche Inputs und Outputs besitzt es fachlich?
-- Welche Baukostenarten sind zulässig?
-- Welcher Worker-/Bewohnerbezug besteht?
-- Wird ein WorkArea benötigt?
-- Welche Art lokalen Bestands besitzt das Gebäude?
-- Welche Bau-/Betriebs-/Visualzustände muss der Content unterstützen?
-- Welche Werte sind feste Produktregeln und welche bleiben Balanceparameter?
+Konkrete JSON-Feldnamen bleiben Implementierungsdetail.
 
-## 4. Zentrale Contentregel
+## 8. Baukosten und Construction
 
-> **Eine Contentdefinition beschreibt fachliche Bedeutung und zulässige Beziehungen; sie darf keine zweite Runtime-Wahrheit erzeugen.**
-
-Beispiele:
-- `produces wood` beschreibt, was ein Holzfäller erzeugen darf; die reale Menge gehört zur Laufzeit dem BuildingStock/Transport/HQ entsprechend S2D-03.
-- `residentCapacity = 2` beschreibt die V1-Wohnkapazität des kleinen Hauses; die reale Bevölkerung wird aus realen Personen abgeleitet.
-- `requires builder` beschreibt die Bauvoraussetzung; der Content darf keinen Baufortschritt vor echter Builder-Ankunft erzeugen.
-
-## 5. Gemeinsames Building-Definition-Modell
-
-Jedes V1-Gebäude soll fachlich mindestens folgende Definitionsbereiche besitzen bzw. aus stabilen Definitionen ableiten können:
-
-1. stabile Building-ID,
-2. Spielername,
-3. Content-Gruppe/Funktion,
-4. Platzierungs-/Footprintinformation,
-5. gültige Zugangs-/Interaktionspunkte,
-6. Baukosten als Warenanforderungen,
-7. Bau-/Visualprofil,
-8. Worker-/Capability-Anforderung, falls relevant,
-9. WorkArea-Profil, falls relevant,
-10. Produktionsdefinition, falls relevant,
-11. lokales Stockprofil, falls relevant,
-12. Wohnprofil, falls relevant,
-13. HQ-/Storageprofil, falls relevant,
-14. UI-relevante fachliche Zustände,
-15. Balanceparameter getrennt von festen Regeln.
-
-Technische Feldnamen bleiben der Implementierung vorbehalten. S2D-05B friert die Semantik ein, nicht ein bestimmtes JSON-Schema.
-
-## 6. Gemeinsame Baukostenregel
-
-Für den V1-Gebäudekern werden Baukosten ausschließlich aus den bereits vorhandenen physischen Baumaterialien gebildet:
-
+V1-Baumaterialarten:
 - Holz,
 - Stein.
 
-Fisch, Fleisch und Fell sind im V1 keine normalen Baumaterialien. Gold wird in S2D-05B nicht als zusätzlicher Standard-Baupreis eingeführt.
+Fisch, Fleisch und Fell sind keine normalen V1-Baumaterialien. Gold wird nicht als allgemeiner zusätzlicher Baupreis eingeführt.
 
-Die exakten Mengen je Gebäude bleiben zunächst Balanceparameter. Die heutigen Werte in `data/buildings.json` sind Test-/Baselinewerte und dürfen später bewusst übernommen oder verändert werden.
+Exakte Mengen je Gebäude bleiben Balance.
 
-Verbindlich bleibt dagegen:
+Verbindlicher Baufluss:
 
-`Baustelle -> benötigte Waren -> physische Lieferung -> Material vollständig -> Builder physisch angekommen -> Baufortschritt`
+`Baustelle -> physische Materiallieferung -> Materialien vollständig -> geeigneter Builder zugewiesen -> Builder erreicht realen Baupunkt -> erst dann Baufortschritt -> Fertigstellung`
 
-## 7. Gemeinsames Construction-/Visual-Profil
+Keine Bauwirkung allein durch Materialvollständigkeit oder Assignment.
 
-Alle regulär errichtbaren V1-Gebäude benötigen fachlich folgende Zustandsdarstellung:
+## 9. Construction-/Visualzustände
 
-1. **Placement Preview** – rein visuelle UI-Vorschau, noch kein Gebäudezustand.
-2. **Construction Site / Material Phase** – Baustelle existiert, Waren fehlen oder sind unterwegs.
-3. **Ready for Builder** – Materialien physisch vollständig, Bauarbeiter fehlt/ist unterwegs.
-4. **Under Construction** – Bauarbeiter ist tatsächlich angekommen; Fortschritt läuft.
-5. **Completed / Live** – fertiges Gebäude.
-6. **Paused** – nur dort, wo die fachliche Funktion pausierbar ist; kein universeller Gebäudezustand für Wohnhäuser/HQ.
-7. **Blocked/Waiting Feedback** – UI-/Renderableitung aus realem Owner-Zustand, keine eigene Contentwahrheit.
+Fachlich erforderlich:
+1. Placement Preview – UI-only, keine Runtime-Baustelle.
+2. Construction Site / Material Phase.
+3. Ready for Builder.
+4. Under Construction – erst nach echter Builder-Ankunft.
+5. Completed / Live.
+6. Paused – nur für fachlich pausierbare Produktion.
+7. Blocked/Waiting – aus echter Runtime-Wahrheit abgeleitet, keine zweite State-Wahrheit.
 
-Die vorhandenen Baustellenbilder können wiederverwendet werden. Die Anzahl sichtbarer Bauphasen/Frames und deren Fortschrittsschwellen bleiben Visual-/Balanceparameter.
+Vorhandene Baustellen-/Gebäudeassets dürfen wiederverwendet werden; genaue Frames/Schwellen bleiben Visual-/Balanceparameter.
 
-Das historische `reserve`-Frame darf nicht automatisch als fachlich eigenständiger Waren-/Reservierungszustand interpretiert werden.
+## 10. Gebäudeprofile
 
-## 8. Zugangs- und Interaktionspunkte
+### Rathaus/HQ
+- Startgebäude, kein normales Produktionsgebäude.
+- Hauptlager und zentrale physische Anlieferstelle.
+- Nimmt Holz, Stein, Fisch, Fleisch und Fell nach realer Lieferung auf.
+- Gold wird dort nicht als physische Ware gelagert.
+- Population wird dort nicht gelagert.
+- Keine Produktions-WorkArea.
+- HQ-Baukosten sind für den normalen New-Game-Start nicht spielentscheidend; späterer HQ-Neubau ist eigener Scope.
 
-Alle Gebäude benötigen mindestens einen fachlich gültigen Unit-Zugang. Je nach Funktion können zusätzlich getrennte Punkte sinnvoll sein:
-- Unit Entrance,
-- Pickup,
-- Delivery,
-- Build Access,
-- Work Departure/Return.
+### Kleines Wohnhaus
+- Kapazität: 2 Bewohner.
+- Keine Produktionsinputs/-outputs.
+- Kein BuildingStock.
+- Keine WorkArea.
+- Goldbeitrag entsteht über reale Bewohner, nicht als Goldware.
 
-Vorhandene Entrance-/Markerdaten werden bevorzugt übernommen, aber in der technischen Migration auf das S2D-03E-NavigationService-Modell normalisiert.
+### Mittleres Wohnhaus
+- Kapazität: 3 Bewohner.
+- Sonst dieselbe fachliche Housingrolle wie kleines Wohnhaus.
+
+### Holzfällerhütte
+- Weltinput: realer Baum.
+- Output: Holz.
+- Benötigt Holzfäller-Capability.
+- WorkArea Pflicht.
+- Output zunächst lokaler BuildingStock.
+- Pause stoppt neue Produktion; vorhandenes Holz bleibt transportierbar.
+
+### Steinbruch
+- Weltinput: reale Steinquelle.
+- Output: Stein.
+- Benötigt Stonecutter-/Quarry-Capability.
+- WorkArea Pflicht.
+- Lokaler Steinbestand vor Transport.
+
+### Fischerhütte
+- Weltinput: reales Fischziel/-vorkommen im gültigen Wasserbereich.
+- Output: Fisch.
+- Benötigt Fisher-Capability.
+- WorkArea Pflicht.
+- Lokaler Fischbestand vor Transport.
+
+### Jägerhütte
+- Weltinput: reales gültiges Tier.
+- Outputs: Fleisch und Fell als getrennte Waren.
+- Benötigt Hunter-Capability.
+- WorkArea Pflicht.
+- Keine abstrakte unsichtbare Tierressource.
+
+## 11. Gemeinsame Produktionsregel
+
+Für Holzfäller, Steinbruch, Fischer und Jäger gilt:
+
+`reales Ziel -> geeigneter Spezialist -> reale Anreise/Interaktion -> erfolgreicher Arbeitsabschluss -> lokaler Output -> realer Carriertransport -> HQ`
 
 Verbindlich:
-- Worker, Builder und Carrier arbeiten nicht aus beliebiger Gebäudezentrum-Koordinate.
-- Ein Gebäude muss für die benötigte Interaktion einen gültigen erreichbaren Zugang anbieten.
+- Assignment allein erzeugt keinen Output.
+- Produktion schreibt nie direkt ins HQ.
+- Lokaler Outputstock ist begrenzbar.
+- Sichtbare Warenstapel stellen echten Stock dar und erzeugen keine zweite Menge.
+- Fehlender Worker, fehlendes Weltziel oder voller Outputstock sind normale verständliche Wirtschaftsengpässe.
+- Keine mehrstufige Produktions-Wareninputkette im ersten Kern.
+
+**S2D-05B: COMPLETE / 0 BLOCKER**
 
 ---
 
-# 9. Rathaus / HQ (`b.hq`)
+# S2D-05C – Goods, World Resources & Animal Content Definitions
 
-## 9.1 Fachliche Funktion
+## 12. Warenmodell
 
-Das Rathaus ist im ersten Wirtschaftskern:
-- Startgebäude,
-- Hauptlager,
-- zentrale physische Anlieferstelle,
-- wirtschaftlicher Bezugspunkt der Siedlung.
+Für jede physische Ware gilt:
 
-Es ist kein normales Produktionsgebäude und im V1 kein regulär mehrfach baubares Kataloggebäude.
+> **Eine reale Warenmenge besitzt genau einen autoritativen wirtschaftlichen Ort.**
 
-## 9.2 Inputs/Outputs
+Mögliche Zustände/Orte umfassen insbesondere:
+- lokal im BuildingStock,
+- am gleichen Ort reserviert,
+- physisch von einer Unit getragen,
+- im HQ verfügbar,
+- bei Holz/Stein physisch an Baustelle geliefert,
+- verbraucht/verbaut.
 
-Produktionsinput: **keiner**.  
-Produktionsoutput: **keiner**.
+Reservation ist keine zusätzliche Warenmenge.
 
-Das HQ empfängt physische Waren durch reale Transporte. Eine Ware zählt erst nach tatsächlicher Lieferung als im HQ verfügbar.
+## 13. Waren
 
-Gold wird nicht als physische Lieferware des HQ definiert. Bevölkerung wird dort nicht gelagert.
+### Holz
+- physische Ware,
+- Baumaterial,
+- entsteht aus realen Bäumen durch Holzfällerarbeit.
 
-## 9.3 Baukosten
+### Stein
+- physische Ware,
+- Baumaterial,
+- entsteht aus realen Steinquellen.
 
-Für den normalen New-Game-Pfad wird das HQ als Startgebäude vorausgesetzt. Seine vorhandene Holz-/Stein-Kostendefinition bleibt als historische/optionale Contentbasis erhalten, ist aber für den ersten Startablauf kein zwingender Spieler-Baupreis.
+### Fisch
+- physische Nahrungsware,
+- entsteht aus realen Fischvorkommen/-zielen.
 
-Falls spätere Modi einen HQ-Neubau erlauben, wird dessen Kostenmodell separat freigegeben.
+### Fleisch
+- physische Nahrungsware,
+- entsteht aus erfolgreicher Jagd.
 
-## 9.4 Worker/WorkArea
+### Fell
+- physische Ware,
+- getrennt von Fleisch zu zählen,
+- konkrete spätere Nutzung außerhalb des Kerntransports nicht vorgezogen.
 
-- kein Produktionsworker,
-- keine Produktions-WorkArea,
-- Carrier nutzen definierte Delivery-/Pickup-/Access-Punkte.
+## 14. Gemeinsames Weltressourcenmodell
 
-## 9.5 Stock
+Bäume, Steinquellen und Fischvorkommen sind reale autoritative Weltobjekte/-Nodes und keine versteckten Warenlager.
 
-HQ besitzt zentralen physischen Storage für:
-- Holz,
-- Stein,
-- Fisch,
-- Fleisch,
-- Fell.
+Sie benötigen fachlich:
+- Identität im Weltzustand,
+- Typ,
+- Position,
+- verfügbar/erschöpft bzw. Lebens-/Wachstumszustand,
+- gültige Interaktion,
+- Save/Continue-fähigen Zustand.
 
-Kapazitätsgrenzen sind **BALANCE/DEFERRED**. S2D-05B führt keine neue harte HQ-Kapazität ein.
+Output darf nur entstehen, wenn die zugehörige Quelle erfolgreich beansprucht wurde. Doppelverwertung desselben verbrauchten Ziels ist unzulässig.
 
-## 9.6 Visualzustände
+## 15. Bäume
 
-NOW erforderlich:
-- Start/Completed-Live,
-- sichtbare Waren-/Lagerdarstellung soweit sinnvoll,
-- Delivery-/Pickup-Aktivität über reale Units/Goods.
+- reale endliche Holzquellen,
+- gefällter Baum darf nicht erneut als voll gültiges Ziel dienen,
+- sichtbare Welt reagiert auf Fällung,
+- langsame natürliche Regeneration ist V1-Zielregel,
+- Regeneration gehört dem Weltressourcen-System, nicht dem Holzfäller,
+- kein sofortiger Ersatz nach Fällung.
 
-Baustellenzustände des HQ sind nur erforderlich, wenn ein Spielmodus HQ-Bau tatsächlich nutzt; nicht Teil des normalen V1-New-Game-Flows.
+Regenerationszeit, Dichte, Wachstumsstufen und Yield bleiben Balance.
 
----
+## 16. Steinquellen
 
-# 10. Kleines Wohnhaus (`b.house_small`)
+- reale begrenzte Ressourcen,
+- erfolgreicher Abbau reduziert Vorrat bzw. verbraucht Quelle,
+- erschöpfte Quelle ist kein gültiges Ziel,
+- keine schnelle natürliche Steinregeneration als V1-Pflicht.
 
-## 10.1 Fachliche Funktion
+Langfristige Lösungen wie sehr langsame Neubildung, größere Vorkommen oder spätere Minen bleiben späterem Scope vorbehalten.
 
-- Wohnort realer Bewohner,
-- stabile Home-Bindung,
-- Baseline-Wohnkapazität: **2 Bewohner**,
-- Beitrag zur Gold-/Steuerwirtschaft über Bewohner.
+## 17. Fischvorkommen
 
-## 10.2 Inputs/Outputs
+- reale Wasser-Arbeitsziele,
+- erfolgreicher Fang reduziert Verfügbarkeit/Vorrat oder setzt Ziel temporär in Ruhephase,
+- zeitliche Regeneration ist V1-Zielregel,
+- Fischer erzeugt keine Fischspots selbst.
 
-Keine Produktionsinputs und keine physischen Produktionsoutputs.
+## 18. Tiere
 
-Gold entsteht nicht als lokaler Warenstapel. Die genaue Steuer-/Goldrate bleibt Balanceparameter.
+Tiere sind reale bewegliche World-Units, keine Workforce und keine fertigen Fleisch-/Fellbestände.
 
-## 10.3 Baukosten
+Tierarten:
+- Reh/Hirsch,
+- Wildschwein,
+- Hase/Kaninchen,
+- Fuchs.
 
-Kostenarten: Holz + Stein.  
-Exakte Mengen: **BALANCE**.
+V1-Ziel:
+- sichtbare eigenständige Bewegung,
+- gültige Terrainregeln,
+- kontrollierte Population/Regeneration,
+- Jagd nur auf real existierende gültige Ziele.
 
-## 10.4 Worker/WorkArea
+Jagdbar im V1 grundsätzlich:
+- Reh/Hirsch,
+- Wildschwein,
+- Hase/Kaninchen.
 
-- kein Arbeitsplatz,
-- kein Produktionsworker,
-- keine WorkArea.
+Fuchs bleibt sicher sichtbare Tierwelt; seine produktive Beuterolle ist nicht verpflichtend eingefroren.
 
-Bewohner können gemäß S2D-02 von ihrem Zuhause aus für geeignete Aufgaben verfügbar werden. Das Wohnhaus weist ihnen aber keine einzelnen Jobs zu.
+Jagdablauf:
 
-## 10.5 Stock
+`reales Tier -> gültige Jagdzuweisung -> Jäger erreicht/arbeitet -> Tier wird fachlich entfernt -> Beute entsteht lokal an Jägerhütte`
 
-Kein BuildingStock für Produktionswaren.
+Beutemengen und genaue Tierpopulationen bleiben Balance.
 
-## 10.6 Visualzustände
-
-- Construction Site,
-- Ready for Builder,
-- Under Construction,
-- Completed/Occupied.
-
-Optional sichtbares Bewohnerleben/Ein-/Ausgehen ist Unit-/Lifestyle-Darstellung, kein eigener Hausbestand.
-
----
-
-# 11. Mittleres Wohnhaus (`b.house_middle`)
-
-Entspricht fachlich dem kleinen Wohnhaus mit folgenden Unterschieden:
-- Baseline-Wohnkapazität: **3 Bewohner**,
-- eigene Gebäudedefinition/eigenes Asset,
-- eigene Baukosten-Balance möglich.
-
-Kostenarten: Holz + Stein.  
-Exakte Mengen: **BALANCE**.
-
-Keine Produktion, kein BuildingStock, keine WorkArea, kein Arbeitsplatz.
-
-Die Existenz zweier Wohnhaustypen darf später unterschiedliche Baukosten/Flächen-/Wohnraum-Effizienz ermöglichen, ohne für S2D-05B bereits eine optimale Balance festzulegen.
-
----
-
-# 12. Holzfällerhütte (`b.lumberjack`)
-
-## 12.1 Fachliche Funktion
-
-Erzeugt Holz aus realen Baumressourcen im zugewiesenen Arbeitsbereich.
-
-## 12.2 Produktionsvertrag
-
-Input: **reale Baumressource als Weltziel**, keine physische Inputware aus dem HQ.  
-Output: **Holz** als physische Ware.
-
-Produktionsfluss:
-
-`geeigneter Baum -> Holzfäller erreicht/arbeitet -> Produktion abgeschlossen -> Holz in lokalem BuildingStock -> Transportbedarf -> Carrier nimmt auf -> HQ-Lieferung`
-
-Kein direkter ResourceStore/HQ-Credit bei Produktionsabschluss.
-
-## 12.3 Worker
-
-Benötigt einen geeigneten Holzfäller-Spezialisten bzw. eine Person mit entsprechender Capability. Freie Bewohner dürfen im V1 nicht automatisch professionelle Holzfällerarbeit übernehmen, sofern sie diese Capability nicht besitzen.
-
-Anzahl gleichzeitig benötigter/zulässiger Produktionsworker: **BALANCE**, V1-Baseline zunächst ein aktiver Spezialist pro Hütte.
-
-## 12.4 WorkArea
-
-**Pflicht.**
-
-Die WorkArea begrenzt die zulässigen Baumziele. Der aktuelle Radius von 4 Tiles bleibt Baseline, nicht Freeze-Wert.
-
-Kein geeignetes Baumziel ist ein normaler Produktions-Wartezustand und muss player-facing erklärbar sein.
-
-## 12.5 Lokaler Output
-
-Lokaler Stocktyp: Holz.  
-Kapazität: **BALANCE**.
-
-Der lokale Stock muss begrenzt sein können, damit sichtbare Transportengpässe entstehen. Die exakte Zahl wird nicht in S2D-05B eingefroren.
-
-## 12.6 Pause
-
-Produktion ist pausierbar. Bereits fertig produziertes Holz bleibt im lokalen Stock und weiterhin transportierbar.
+**S2D-05C: COMPLETE / 0 BLOCKER**
 
 ---
 
-# 13. Steinbruch (`b.quarry`)
+# S2D-05D – Population, Housing, Specialist & Economy Content Definitions
 
-## 13.1 Fachliche Funktion
+## 19. Bevölkerung
 
-Erzeugt Stein aus realen Steinressourcen im Arbeitsbereich.
+> **Bevölkerung ist die Anzahl real existierender Bewohner-Personen der Siedlung und niemals ein unabhängiger Resource-Zähler.**
 
-## 13.2 Produktionsvertrag
+Grundzusammenhang:
 
-Input: **reale Steinquelle als Weltziel**.  
-Output: **Stein** als physische Ware.
+`Wohnraum/Startunterkunft -> reale Personen -> Spezialisierungen/Capabilities -> verfügbare Workforce`
 
-`geeignete Steinquelle -> Steinmetz erreicht/arbeitet -> Stein in lokalem BuildingStock -> realer Transport -> HQ`
+Jede Person besitzt stabile Identität, Home-Bindung, reale Position bzw. Home-State, Spezialisierung, Capabilities, Availability/Activity und höchstens ein normales aktuelles Assignment.
 
-## 13.3 Worker
+## 20. Housing
 
-Benötigt Steinmetz-/Stonecutter-Capability.  
-V1-Baseline: ein aktiver Spezialist; genaue Parallelität bleibt **BALANCE**.
+- kleines Wohnhaus = Kapazität 2,
+- mittleres Wohnhaus = Kapazität 3.
 
-## 13.4 WorkArea
+Kapazität, tatsächliche Belegung und Gesamtpopulation sind getrennte Größen. Tatsächliche Belegung wird aus realen Home-Bindungen bestimmt.
 
-**Pflicht.**
+Hausabriss löscht keine Person. Identität, Spezialisierung und Capabilities bleiben erhalten; Home-Bindung geht kontrolliert in Relocation/Homeless-Übergang, bis gültiger Wohnraum gefunden wird.
 
-Aktueller Radius 4 Tiles = Baseline/Testwert. Geeignete reale Steinziele müssen innerhalb des gültigen Arbeitsbereichs liegen.
+## 21. Spezialisten
 
-## 13.5 Lokaler Output
+Jeder Spezialist ist dieselbe reale Person, die zugleich Bewohner der Siedlung ist.
 
-Lokaler Stock: Stein.  
-Kapazität: **BALANCE**.
+V1-Spezialisierungen:
+- Carrier,
+- Builder,
+- Lumberjack,
+- Stonecutter,
+- Fisher,
+- Hunter.
 
-Pause stoppt neue Produktion, nicht den Abtransport fertiger Ware.
+Arbeitsstätte besitzt die Person nicht. Pause/Abriss eines Arbeitsplatzes löscht weder Person noch Spezialisierung.
 
----
+## 22. Allgemeine Bewohner und Transporthilfe
 
-# 14. Fischerhütte (`b.fisher`)
+Allgemeine Bewohner besitzen mindestens:
+- Bewegungsfähigkeit,
+- Home-Bindung,
+- einfache Transportfähigkeit.
 
-## 14.1 Fachliche Funktion
+Sie dürfen bei Bedarf einfache Warenbewegungen unterstützen:
 
-Erzeugt Fisch über reale/authoritative Fisch-Arbeitsziele der Karte.
+`freier Bewohner -> Transport-Assignment -> Pickup -> realer Transport -> Delivery -> wieder frei`
 
-## 14.2 Produktionsvertrag
+Dabei bleibt die Person Bewohner. `resident -> type=carrier -> resident` ist OUT.
 
-Input: **geeignetes Fisch-/Gewässerarbeitsziel**, keine physische Inputware.  
-Output: **Fisch** als physische Ware.
+Echte Carrier haben bei einfachen Transporten grundsätzlich Vorrang.
 
-`gültiges Fischziel -> Fischer erreicht/arbeitet -> Fisch in lokalem BuildingStock -> Transport -> HQ`
+Kein automatischer allgemeiner Bewohner-Fallback für:
+- Bauen,
+- Holzfällen,
+- Steinabbau,
+- Fischen,
+- Jagen.
 
-## 14.3 Worker
+## 23. Gold/Steuern
 
-Benötigt Fischer-Capability.  
-V1-Baseline: ein aktiver Spezialist; genaue Parallelität **BALANCE**.
+Gold ist nicht physisch transportierbar. Es gehört dem Economy-/Gold-Owner.
 
-## 14.4 WorkArea
+V1-Grundquelle:
 
-**Pflicht.**
+`reale gültige Bewohner -> Steuer-/Economy-Regel -> Goldzuwachs`
 
-Aktueller Radius 4,5 Tiles = Baseline/Testwert. Die WorkArea darf nur fachlich gültige Fischziele berücksichtigen.
+Kein Goldwarenstapel, kein Carriertransport, keine normale Goods-Reservation.
 
-## 14.5 Lokaler Output
+Historischer Testwert `1 Gold/Bewohner/10 Sekunden` bleibt reine Test-/Balancebaseline.
 
-Lokaler Stock: Fisch.  
-Kapazität: **BALANCE**.
+Goldfortschritt nutzt autoritative Simulationszeit. Pause stoppt wirtschaftlichen Zeitfortschritt.
 
-Pause- und Transportregel wie bei anderen Produktionsgebäuden.
+Continue stellt Gold aus Economy-State wieder her und darf keine zusätzliche Steuerzahlung nur durch Restore-Events auslösen.
 
----
-
-# 15. Jägerhütte (`b.hunter`)
-
-## 15.1 Fachliche Funktion
-
-Der Jäger arbeitet mit real existierenden Tier-Units im Arbeitsbereich und erzeugt daraus die V1-Waren Fleisch und Fell.
-
-## 15.2 Produktionsvertrag
-
-Input: **gültiges reales jagdbares Tierziel**, keine abstrakte Tierressource und keine physische HQ-Inputware.  
-Outputs:
-- Fleisch,
-- Fell.
-
-Die beiden Outputs sind getrennte physische Waren und getrennte Stockmengen.
-
-Die heutige Baseline `1 Fleisch + 1 Fell` pro Produktionsvorgang wird **nicht** als finale Beuteformel eingefroren. Welche Tierart welche Menge/Art liefert, wird in einem Tier-/Ressourcen-Contentblock spezifiziert.
-
-## 15.3 Worker
-
-Benötigt Jäger-Capability.  
-V1-Baseline: ein aktiver Spezialist; Parallelität **BALANCE**.
-
-## 15.4 WorkArea
-
-**Pflicht.**
-
-Aktueller Radius 8 Tiles = Baseline/Testwert.
-
-Nur reale gültige Tier-Units innerhalb der fachlich zulässigen WorkArea dürfen als Jagdziel dienen. Kein Tierziel vorhanden ist normaler Wartezustand, kein technischer Fehler.
-
-## 15.5 Lokaler Output
-
-Lokaler Stock führt mindestens getrennt:
-- Fleisch,
-- Fell.
-
-Kapazitäten können je Ware oder als geeignete Gesamtregel modelliert werden; exakte Entscheidung/Zahlen bleiben **BALANCE/IMPLEMENTATION DETAIL**, solange die Warenmengen eindeutig bleiben.
-
-Pause stoppt neue Jagd/Produktion. Bereits vorhandene Beute bleibt transportierbar.
+**S2D-05D: COMPLETE / 0 BLOCKER**
 
 ---
 
-# 16. Gemeinsames Produktionsgebäude-Profil
+# S2D-05E – V1 Balance Parameter Catalog & Tuning Boundaries
 
-Für Holzfäller, Steinbruch, Fischer und Jäger gelten verbindlich:
+## 24. Balanceklassen
 
-1. Produktion benötigt einen geeigneten realen Spezialisten/Capability.
-2. Assignment allein erzeugt keinen Output.
-3. Der Worker muss den fachlich erforderlichen Ort tatsächlich erreichen.
-4. WorkArea ist Teil der Contentfunktion.
-5. Weltziel muss real und gültig sein.
-6. Produktionsabschluss erzeugt Ware ausschließlich im lokalen BuildingStock.
-7. Lokaler Stock und HQ-Stock sind getrennte physische Orte.
-8. Carriertransport ist real und sichtbar.
-9. HQ wird erst nach tatsächlicher Lieferung erhöht.
-10. Produktionspause stoppt neue Produktion.
-11. Fertiger lokaler Stock bleibt trotz Pause abholbar.
-12. Outputkapazität ist begrenzbar; genaue Zahl bleibt Balance.
-13. Voller Outputstock erzeugt einen normalen Transport-/Produktionsengpass.
-14. Fehlender Worker erzeugt einen normalen Personalengpass.
-15. Fehlendes Weltziel erzeugt einen normalen Ressourcen-/WorkArea-Wartezustand.
-16. Unreachable/invalid targets werden nicht endlos pro Tick neu probiert; technische Behandlung folgt S2D-03.
+### CONTENT FIXED
+Nicht wegzubalancieren:
+- sieben V1-Gebäude,
+- fünf physische V1-Waren,
+- Gold nicht physisch,
+- Population aus realen Personen,
+- Housing-Kapazitäten 2/3,
+- Outputarten der vier Produktionen,
+- Spezialisten-/Capability-Anforderungen,
+- reale WorkArea-/Weltzielbindung,
+- realer Transport,
+- Builder-Ankunft vor Baufortschritt.
 
-## 17. Input-Kategorien – wichtige Trennung
-
-S2D-05B unterscheidet drei fachliche Arten von Input:
-
-### 17.1 Bauinput
-Physische Waren für eine Baustelle:
-- Holz,
-- Stein.
-
-### 17.2 Produktions-Weltinput
-Reales Weltziel, das nicht als Ware vom HQ angeliefert wird:
-- Baum,
-- Steinquelle,
-- Fischziel,
-- jagdbares Tier.
-
-### 17.3 Produktions-Wareninput
-Physische Inputware aus einer anderen Produktionskette.
-
-Für die vier aktuellen V1-Produktionsgebäude gilt:
-
-> **Keines benötigt im V1 eine physische Produktions-Wareninputkette.**
-
-Damit bleibt der erste Wirtschaftskern bewusst verständlich. Mehrstufige Ketten wie Getreide -> Mehl -> Brot bleiben LATER.
-
----
-
-# 18. Local Stock / sichtbare Waren
-
-## 18.1 Fachliche Regel
-
-Jedes V1-Produktionsgebäude besitzt einen lokalen Outputbestand für seine erzeugten physischen Waren.
-
-Dieser Bestand ist authoritative BuildingStock und kann visuell durch reale Warenstapel repräsentiert werden.
-
-> **Die sichtbare Stapelgrafik ist niemals eine zweite Mengenwahrheit.**
-
-## 18.2 Kapazität
-
-Eine begrenzte lokale Kapazität gehört fachlich zum Ziel, weil sie:
-- Transportbedarf sichtbar macht,
-- Logistikengpässe erzeugt,
-- verhindert, dass Gebäude unbegrenzt unsichtbar produzieren.
-
-Die konkrete Kapazität pro Gebäude/Ware bleibt Balanceparameter.
-
-Die Darstellung darf mehrere sichtbare Warenobjekte zeigen und leicht organisch/ungeordnet wirken, solange die Anzahl aus dem echten Stock abgeleitet wird und keine zusätzlichen Waren erzeugt.
-
----
-
-# 19. Worker-Bedarf vs. Bewohneridentität
-
-Die Contentdefinition eines Produktionsgebäudes darf eine erforderliche Spezialisierung/Capability nennen, aber keine Personenidentität umschreiben.
-
-Beispiel:
-
-`Holzfällerhütte requires lumberjack capability`
-
-nicht:
-
-`set resident type = lumberjack while assigned`.
-
-Ein Spezialist bleibt dieselbe Person mit Home-Bindung. Arbeitsplatz, Spezialisierung und aktuelles Assignment sind getrennte Beziehungen gemäß S2D-02.
-
----
-
-# 20. Gebäudezustände – fachlich vs. abgeleitet
-
-## 20.1 Fachlich persistente/authoritative Zustände
-
-Je nach Owner gehören hierzu beispielsweise:
-- Baustelle vs. fertig,
-- gelieferte Baumaterialien,
-- Baufortschritt,
-- Produktionspause,
-- lokaler Stock,
-- Wohnbelegung/Home-Bindungen über zuständige Owner.
-
-## 20.2 Abgeleitete Spielerzustände
-
-Nicht als zweite Content-/Runtimevariable speichern, wenn aus Wahrheit ableitbar:
-- „Wartet auf Träger“,
-- „Bauarbeiter unterwegs“,
-- „Keine geeigneten Bäume“,
-- „Ausgangslager voll“,
-- „Produziert“,
-- „Arbeiter unterwegs“.
-
-Diese Zustände werden aus Ownerdaten/Assignments/Navigation/Stocks abgeleitet und entsprechend S2D-04 angezeigt.
-
----
-
-# 21. Balanceparameter vs. feste Regeln
-
-## 21.1 In S2D-05B fachlich fest
-
-- sieben V1-Gebäudetypen,
-- HQ-Funktion als Start-HQ/Hauptlager,
-- kleine/mittlere Häuser mit Baseline 2/3 Bewohnern,
-- vier Produktionsgebäude und ihre Outputarten,
-- Produktionsgebäude benötigen passende Spezialisten/Capabilities,
-- Produktionsgebäude nutzen WorkAreas,
-- Weltressourcen/Tiere sind reale Arbeitsziele,
-- Holz/Stein als V1-Baumaterialarten,
-- lokale Produktion vor realem Transport,
-- keine direkte Produktionsgutschrift ins HQ,
-- Pause stoppt neue Produktion, nicht Abtransport fertiger Ware,
-- Construction benötigt Materialvollständigkeit + reale Builder-Ankunft,
-- sichtbare Waren sind Darstellung echten Stocks.
-
-## 21.2 Noch BALANCE
-
-- exakte Baukostenmengen,
-- Produktionsdauer/Zykluszeit,
-- lokale Stockkapazität,
+### TUNABLE BALANCE
+Zu kalibrieren:
+- Baukosten,
+- Startbestände,
+- Bauzeiten,
+- Produktionszeiten,
+- lokale Stockkapazitäten,
+- HQ-Kapazität,
 - WorkArea-Radien,
-- Workeranzahl/Parallelität oberhalb der V1-Baseline,
-- Bewegungs-/Arbeitsgeschwindigkeiten,
-- Jagdbeute je Tier,
-- Tierdichte/Respawn,
-- Gold-/Steuerrate,
-- HQ-Lagerkapazität,
-- Baustellendauer,
-- sichtbare Stapelgrenzen/Visual-Aggregation.
+- Workforce-Verteilung,
+- Unitgeschwindigkeiten/Tragkapazitäten,
+- Weltressourcenerträge und Regeneration,
+- Tierpopulationen/Respawn,
+- Jagdbeute,
+- Goldrate,
+- Gründer-/Startrostergrößen,
+- player-facing Prioritätsgewichte, sofern sie keine Architekturregel umgehen.
 
-## 21.3 Noch IMPLEMENTATION/VISUAL DETAIL
+### TECHNICAL / NOT BALANCE
+Keine Economy-Balanceparameter:
+- Scheduler-Tickrate,
+- Render-FPS,
+- Autosaveintervall,
+- Navigation-/A*-Cachegrößen,
+- technische Backoff-Implementierung,
+- Debugintervalle,
+- UI-Pixelmaße,
+- rein visuelle Atlas-FPS.
 
-- konkrete JSON-Feldnamen,
-- genaue Markerstruktur,
-- Atlas-/Frame-Namen nach Normalisierung,
-- Zahl und Schwellen sichtbarer Bauphasen,
-- Animations-FPS,
-- genaue Dockingpunkt-Geometrie,
-- Pixel-/Spritegrößen,
-- genaue Stack-Anordnung.
+Historische `data/balance.json` ist daher keine automatische Zielstruktur.
+
+## 25. Wichtige Parameterabhängigkeiten
+
+Balance wird nicht isoliert pro Zahl betrachtet.
+
+Beispiele:
+
+Transportleistung hängt ab von:
+`Transportkräfte × Tragkapazität × Bewegungsgeschwindigkeit × Weglänge × Job-/Warteanteil`
+
+Reale Produktionsleistung hängt ab von:
+`Spezialist + Weg zum Weltziel + Ressourcenverfügbarkeit + Arbeitszeit + lokaler Stock + Abtransport`
+
+Bauzeit hängt ab von:
+`Materialkosten + Lieferzeit + Builder-Verfügbarkeit + Builderweg + eigentliche Baufortschrittsdauer`
+
+Holzwirtschaft hängt ab von:
+`Startdichte + Yield + Produktionsbedarf + Baukosten + Regeneration + Transport`
+
+Jagd hängt ab von:
+`Tierbestand + Bewegung/Erreichbarkeit + Respawn/Reproduktion + Suchaufwand + Beute + Transport`
+
+## 26. Tuning-Testprofile
+
+Später verbindlich als Balanceprüfungen zu verwenden:
+- **Early Settlement** – Start bis erste funktionierende Grundproduktion/Wohnraumerweiterung.
+- **Stable Small Settlement** – mehrere Kernproduktionen laufen dauerhaft.
+- **Logistics Stress** – lokale Stocks und mehrere Transporte erzeugen Engpässe ohne Systemkollaps.
+- **Workforce Stress** – mehrere Gebäude konkurrieren nachvollziehbar um Fachkräfte.
+- **Resource Pressure** – lokale Weltressourcen werden knapp/erschöpfen temporär.
+- **Hunting Sustainability** – Tierwelt bleibt langfristig jagdbar, ohne Sofortrespawn.
+- **Long Sandbox** – längerer Betrieb ohne unvermeidbaren frühen Ressourcen-/Workforce-Softlock.
+
+Finale Zahlen werden erst durch Messung und Regression freigegeben.
+
+**S2D-05E: COMPLETE / 0 BLOCKER**
 
 ---
 
-# 22. V1 Building Content Matrix
+# S2D-05F – V1 Specialist Availability & Start Roster
 
-| Gebäude | Bauwaren | Produktions-Weltinput | Output | Worker | WorkArea | lokaler Outputstock | Wohnraum |
-|---|---|---|---|---|---|---|---|
-| Rathaus | Startgebäude; historische Holz/Stein-Kosten nicht V1-Startpreis | – | – | – | nein | zentraler HQ-Storage, kein Producer-Stock | nein |
-| Kleines Wohnhaus | Holz + Stein | – | – | – | nein | nein | 2 |
-| Mittleres Wohnhaus | Holz + Stein | – | – | – | nein | nein | 3 |
-| Holzfäller | Holz/ggf. Stein gemäß späterer Balance; aktuelle Baseline nur Holz | Baum | Holz | Holzfäller | ja | Holz | nein |
-| Steinbruch | Holz + Stein | Steinquelle | Stein | Steinmetz | ja | Stein | nein |
-| Fischer | Holz/ggf. Stein gemäß späterer Balance; aktuelle Baseline nur Holz | Fischziel | Fisch | Fischer | ja | Fisch | nein |
-| Jäger | Holz + Stein | reales jagdbares Tier | Fleisch + Fell | Jäger | ja | Fleisch + Fell | nein |
+## 27. Bootstrap-Problem und Lösung
 
-Hinweis zur Matrix: S2D-05B friert als gemeinsame V1-Baukostengüter Holz und Stein ein, aber nicht die exakte Kombination je Gebäude. Wo die heutige Definition nur Holz nutzt, darf dies bei der späteren Balanceprüfung unverändert bleiben.
+Ohne Startworker entstünde ein Zirkelschluss:
+
+`kein Wohnhaus -> keine Bewohner -> kein Builder -> kein Wohnhaus`
+
+Zusätzlich wären Produktionsgebäude ohne Ausbildungssystem möglicherweise unbetreibbar.
+
+Verbindliche V1-Lösung:
+
+> **New Game startet mit einer kleinen realen Gründergruppe am HQ, die alle zwingend benötigten Fach-Capabilities des ersten Wirtschaftskerns abdeckt.**
+
+## 28. Gründergruppe
+
+Gründer sind reale Personen:
+- stabile Unit-ID,
+- reale Weltposition,
+- Spezialisierung/Capabilities,
+- normale Availability/Activity,
+- Teil der echten Bevölkerung.
+
+HQ dient im Startzustand als **temporäre Gründerunterkunft**, nicht als normales unbegrenztes Wohnhaus.
+
+Gründer benötigen gültige Home-Bindungen und können später kontrolliert in reguläre Wohnhäuser umziehen, ohne Identitätswechsel oder Doppelspawn.
+
+## 29. Mindest-Capability-Abdeckung
+
+New Game muss mindestens prinzipiell verfügbar machen:
+- Transport,
+- Bauen,
+- Holzfällen,
+- Steinabbau,
+- Fischen,
+- Jagen.
+
+Mindestens benötigt die Gründergruppe Capability-Abdeckung für:
+- echten Carrier,
+- Builder,
+- Lumberjack,
+- Stonecutter/Quarry,
+- Fisher,
+- Hunter.
+
+Exakte Personenzahlen bleiben Balance. Mehrfachfähigkeiten sind grundsätzlich möglich, die bevorzugte Baseline sind aber verständlich sichtbare unterschiedliche Spezialisten statt „eine Person kann alles“.
+
+## 30. Neue Wohnhausbewohner
+
+Neue Bewohner aus Wohnhäusern sind im V1 standardmäßig **allgemeine Bewohner** mit:
+- Home-Bindung,
+- Bewegungsfähigkeit,
+- einfacher Transportfähigkeit.
+
+Wohnhäuser erzeugen nicht zufällig professionelle Spezialisten.
+
+Ausbildung/Umschulung, Rekrutierung, Werkzeugbedarf, Skills oder Berufsentwicklung bleiben **LATER**.
+
+## 31. Housing mit Gründern
+
+Bei Fertigstellung regulären Wohnraums gilt fachlich:
+1. neue Wohnkapazität entsteht,
+2. noch am HQ wohnende Gründer dürfen regulär umziehen,
+3. verbleibende freie Plätze dürfen mit neuen allgemeinen Bewohnern besetzt werden,
+4. Gesamtpopulation ergibt sich aus realen Personen und Home-Bindungen.
+
+Hauskapazität 2/3 darf nicht blind zusätzlich zur Gründerbevölkerung gezählt werden.
+
+## 32. Mehr Arbeitsstätten als Spezialisten
+
+Besitzt der Spieler mehr Arbeitsstätten eines Typs als passende Fachkräfte, entstehen keine unsichtbaren Worker. Nicht bediente Gebäude warten verständlich auf Fachkraft.
+
+Spezialistenknappheit ist damit ein echter V1-Engpass.
+
+## 33. New Game vs. Continue
+
+New Game initialisiert Gründergruppe und Startressourcen gemäß späterer Balance.
+
+Continue:
+- erzeugt **keine** neue Gründergruppe,
+- restauriert Personen, Capabilities und Home-Bindungen aus Save-State,
+- leitet Population daraus ab,
+- legt niemals den New-Game-Starterzustand über den Restore.
+
+**S2D-05F: COMPLETE / 0 BLOCKER**
 
 ---
 
-# 23. S2D-05B-Invarianten
+# S2D-05G – Internal Consistency & Content Freeze Gate
 
-1. Es bleiben genau sieben Gebäude im ersten Wirtschaftskern.
-2. HQ ist Startgebäude/Hauptlager und kein normales Produktionsgebäude.
-3. Kleine und mittlere Häuser haben die bestätigte Baseline 2 bzw. 3 Bewohner.
-4. Wohnhäuser besitzen keine Produktions-WorkArea.
-5. Wohnhäuser erzeugen keine physische Goldware.
-6. Holzfäller erzeugt Holz.
-7. Steinbruch erzeugt Stein.
-8. Fischer erzeugt Fisch.
-9. Jäger erzeugt Fleisch und Fell als getrennte Waren.
-10. Produktionsgebäude verwenden reale Weltziele.
-11. Jäger verwendet reale Tier-Units.
-12. Keines der vier V1-Produktionsgebäude benötigt eine vorgelagerte physische Produktionsware.
-13. Produktion benötigt geeignete Worker-Capability.
-14. Assignment allein erzeugt keinen Output.
-15. Output entsteht zunächst lokal im BuildingStock.
-16. Produktion schreibt nie direkt ins HQ.
-17. Carriertransport ist physisch und sichtbar.
-18. HQ-Credit erfolgt erst bei realer Lieferung.
-19. Lokale Outputkapazität ist begrenzbar.
-20. Sichtbare Warenstapel sind keine zweite Stockwahrheit.
-21. Pause stoppt neue Produktion, nicht Transport vorhandener Ware.
-22. Holz und Stein sind die V1-Baumaterialarten.
-23. Baukostenmengen bleiben Balanceparameter.
-24. Baufortschritt beginnt erst nach vollständiger Materiallieferung und echter Builder-Ankunft.
-25. WorkArea-Radien bleiben Balanceparameter.
-26. Produktionszyklen bleiben Balanceparameter.
-27. Jagdbeute je Tier bleibt für späteren Contentblock offen.
-28. Technische JSON-/Runtime-Struktur wird durch S2D-05B nicht vorgezogen.
-29. Contentdefinitionen ändern keine Unit-Identität.
-30. Spielerstatus wie „wartet auf Träger“ wird aus echter Runtime-Wahrheit abgeleitet.
-31. Bestehende geeignete V1-Assets bleiben bevorzugte Basis.
-32. S2D-05B führt keine LATER-Gebäude oder mehrstufige Produktionskette ein.
-33. S2D-05B verändert keinen Gameplay-/Runtime-/UI-Code.
+## 34. Prüfumfang
 
-# 24. Abschlussstatus S2D-05B
+Geprüft wurden S2D-05A bis F gegen:
+- S2D-00 PROJECT MASTER,
+- S2D-01 GAME DESIGN,
+- S2D-02 UNIT & WORKFORCE MODEL,
+- S2D-03 TECHNICAL ARCHITECTURE,
+- S2D-04 UI / MOBILE UX.
 
-- sieben Gebäude fachlich definiert: **PASS**
-- Inputs/Outputs getrennt: **PASS**
-- Baukostenarten vs. Balancewerte getrennt: **PASS**
-- Worker-/Capability-Bedarf definiert: **PASS**
-- WorkArea-Nutzung definiert: **PASS**
-- lokale Outputstocks definiert: **PASS**
-- Construction-/Visualzustände definiert: **PASS**
-- HQ-/Housing-Sonderrollen definiert: **PASS**
-- Balanceparameter explizit offen gehalten: **PASS**
-- Widersprüche zu S2D-00/01/02/03/04: **0**
-- Gameplay-/Runtime-/UI-Codeänderungen: **0**
-- offene S2D-05B-Blocker: **0**
+Außerdem geprüft:
+- doppelte Content-Wahrheiten,
+- widersprüchliche Warenorte,
+- Population vs. Resource-Modell,
+- Housing vs. Gründer-Bootstrap,
+- Specialist/Capability/Assignment-Trennung,
+- Construction-Gate,
+- Production/BuildingStock/Transportfluss,
+- Weltressourcen/Tierverbrauch,
+- Regeneration,
+- Save/Continue,
+- UI-/Inspector-Grenzen,
+- Balance vs. technische Parameter,
+- LATER/OUT-Abgrenzung,
+- ungewollte neue Features.
 
-**S2D-05B – Building & Production Content Definitions: COMPLETE / 0 BLOCKER**
+## 35. Freeze-Ergebnis
 
-S2D-05 bleibt **V0.1 DRAFT** bis die übrigen Content-Unterblöcke und das gemeinsame Freeze-Gate abgeschlossen sind.
+- Widersprüche zu S2D-00: **0**
+- Widersprüche zu S2D-01: **0**
+- Widersprüche zu S2D-02: **0**
+- Widersprüche zu S2D-03: **0**
+- Widersprüche zu S2D-04: **0**
+- doppelte autoritative Waren-/Populationwahrheiten: **0**
+- offene V1-Gebäudedefinitionen: **0**
+- offene V1-Warenarten: **0**
+- offene V1-Weltressourcenklassen: **0**
+- offene zwingende Workforce-Bootstrapfrage: **0**
+- offene Construction-/Production-Contentkonflikte: **0**
+- offene Save/Continue-Contentkonflikte: **0**
+- unkontrolliert vorgezogene LATER-Inhalte: **0**
+- final eingefrorene Balancezahlen: **0**
+- Gameplay-/Runtime-/UI-Codeänderungen durch S2D-05: **0**
+- offene S2D-05-Blocker: **0**
+
+## 36. Verbindliche S2D-05-Invarianten
+
+1. V1 besitzt genau sieben Kerngebäudetypen.
+2. HQ ist Startgebäude/Hauptlager, kein normales Produktionsgebäude.
+3. Kleine/mittlere Häuser besitzen Kapazität 2/3.
+4. Bevölkerung wird ausschließlich aus realen Personen abgeleitet.
+5. Spezialisten sind reale Bewohner/Personen, keine zusätzliche Workforce-Wahrheit.
+6. Temporäre Arbeit ändert niemals Personenidentität.
+7. Allgemeine Bewohner dürfen einfache Transporte unterstützen.
+8. Echte Carrier haben bei Transport grundsätzlich Vorrang.
+9. Facharbeit benötigt passende Capability.
+10. Holz, Stein, Fisch, Fleisch und Fell sind physische Waren.
+11. Gold ist nicht physisch transportierbar.
+12. Bäume, Steinquellen, Fischvorkommen und Tiere sind reale Weltquellen/-ziele.
+13. Weltquelle und erzeugte Ware sind unterschiedliche fachliche Dinge.
+14. Ein verbrauchtes Weltziel darf keinen Doppeloutput erzeugen.
+15. Holz regeneriert langsam natürlich; konkrete Rate bleibt Balance.
+16. Fisch regeneriert zeitlich; konkrete Rate bleibt Balance.
+17. Stein ist im V1 deutlich endlicher und benötigt keine schnelle Regeneration.
+18. Tiere regenerieren/populieren kontrolliert; kein sichtbarer Sofortersatz nach Jagd.
+19. Reh/Hirsch, Wildschwein und Hase/Kaninchen sind grundsätzlich jagdbar.
+20. Fuchs bleibt Tierwelt; produktive Beuterolle nicht zwingend.
+21. Produktion erzeugt Output zuerst im lokalen BuildingStock.
+22. HQ-Gutschrift erfolgt erst nach realem Transport und Delivery.
+23. Pause stoppt neue Produktion, nicht Abtransport fertiger Ware.
+24. Baufortschritt startet erst nach Materialvollständigkeit und realer Builder-Ankunft.
+25. Sichtbare Goods-Stapel sind Darstellung echten Stocks, keine zweite Menge.
+26. New Game besitzt reale Gründer mit Mindest-Capability-Abdeckung.
+27. HQ ist nur temporäre Gründerunterkunft, kein beliebiges Housing.
+28. Wohnhäuser erzeugen standardmäßig allgemeine Bewohner, keine zufälligen Spezialisten.
+29. Gründerumzug verändert keine Identität und erzeugt keine Doppelpopulation.
+30. Continue erzeugt keine New-Game-Gründer oder Standardzustände über Save-State.
+31. Ausbildung/Umschulung bleibt LATER.
+32. Mehrstufige Produktionsketten bleiben LATER.
+33. Depot/Lagerhaus, Straßenbau, Militär, Kampagne und komplexe Epoch-Progression bleiben LATER.
+34. Balanceparameter dürfen fachliche Regeln nicht umgehen.
+35. Technische Scheduler-/Render-/Autosave-/A*-Parameter sind keine Economy-Balancewerte.
+36. Geeignete vorhandene Assets werden bevorzugt wiederverwendet.
+37. Asset-/JSON-Entwicklung gehört primär in die gemeinsame Dev-Tool-Umgebung, nicht in den Runtime-Inspector.
+38. Änderungen am eingefrorenen S2D-05 erfolgen nur über S2D-07 bzw. eine explizite spätere Revision.
+
+## 37. Bewusst offene Punkte nach Freeze
+
+Diese Punkte blockieren den Content-Freeze nicht:
+- exakte Baukosten,
+- Startbestände,
+- exakte Gründer-/Carrier-/Builderzahlen,
+- exakte Produktions- und Bauzeiten,
+- WorkArea-Radien,
+- lokale/HQ-Kapazitäten,
+- Resource-Yields und Regenerationsraten,
+- Tierpopulationen und Jagdbeute,
+- Goldrate,
+- Bewegungs-/Tragegeschwindigkeiten,
+- spätere Ausbildung/Umschulung,
+- spätere Gold-Ausgabenseite,
+- spätere mehrstufige Produktionsketten,
+- genaue JSON-Feldnamen,
+- genaue Sprite-/Atlasnormalisierung.
+
+Diese Punkte sind entweder ausdrücklich Balance, Implementierungsdetail oder LATER-Scope.
+
+# 38. Freeze-Status
+
+- S2D-05A: **COMPLETE**
+- S2D-05B: **COMPLETE**
+- S2D-05C: **COMPLETE**
+- S2D-05D: **COMPLETE**
+- S2D-05E: **COMPLETE**
+- S2D-05F: **COMPLETE**
+- S2D-05G: **PASS / 0 BLOCKER**
+
+# S2D-05 – CONTENT CATALOG V0.1 FROZEN – PASS / 0 BLOCKER
+
+Änderungen an dieser eingefrorenen Contentbasis erfolgen nur über `S2D-07 – DECISION & CHANGE LOG` oder eine ausdrücklich freigegebene spätere Revision.
