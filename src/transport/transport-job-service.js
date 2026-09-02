@@ -1,4 +1,4 @@
-import { TransportJobContract } from './transport-job-contract.js';
+import { TransportJobContract } from './transport-job-contract.js?v=cr04c-4';
 
 function deepFreeze(value) {
   if (value == null || typeof value !== 'object' || Object.isFrozen(value)) return value;
