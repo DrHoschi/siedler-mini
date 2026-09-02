@@ -1,27 +1,35 @@
 /* ============================================================================
  * Datei   : tools/verify-structure.js
  * Projekt : Neue Siedler
- * Version : v1.1.0 (2026-09-02)
- * Zweck   : Prüft Kernstruktur, Import-Reihenfolge und Pflicht-Module.
- *           Fehler liefern einen echten Exit-Code != 0 für CI.
+ * Version : v2.0.0 (2026-09-02)
+ * Zweck   : Prüft ausschliesslich die neue Clean-Runtime-Struktur.
+ *           Legacy-/Monolith-Strukturen sind bewusst nicht Teil dieses Gates.
  * ========================================================================== */
 import { promises as fs } from "fs";
 
 const MUST_HAVE = [
   "index.html",
-  "core/asset.js", "core/registry.js", "core/boot.js", "core/game.js",
-  "ui/ui-start.js", "ui/ui-hud.js", "ui/ui-build.js", "ui/ui-inspector.js"
-];
-
-const ORDER = [
-  "core/asset.js",
-  "core/registry.js",
-  "core/boot.js",
-  "core/game.js",
-  "ui/ui-start.js",
-  "ui/ui-hud.js",
-  "ui/ui-build.js",
-  "ui/ui-inspector.js"
+  "src/main.js",
+  "src/runtime/config.js",
+  "src/runtime/event-bus.js",
+  "src/runtime/runtime.js",
+  "src/runtime/scheduler.js",
+  "src/runtime/store.js",
+  "src/domain/domain-store.js",
+  "src/domain/core-domain-stores.js",
+  "src/world/stable-id.js",
+  "src/world/world-store.js",
+  "src/world/map-structure.js",
+  "src/resources/resource-state.js",
+  "src/resources/resource-claims.js",
+  "src/resources/resource-demands.js",
+  "src/resources/resource-matching.js",
+  "src/render/renderer.js",
+  "src/ui/app.css",
+  "src/dev/self-test.js",
+  "src/dev/cr-01-freeze-gate.js",
+  "src/dev/cr-02-freeze-gate.js",
+  "src/dev/cr-03a-self-test.js"
 ];
 
 let failures = 0;
@@ -31,15 +39,14 @@ function fail(msg) {
   console.error("❌", msg);
 }
 function ok(msg) { console.log("✅", msg); }
-function warn(msg) { console.warn("⚠️", msg); }
 
 async function checkFiles() {
-  for (const f of MUST_HAVE) {
+  for (const file of MUST_HAVE) {
     try {
-      await fs.access(f);
-      ok(`[file] vorhanden: ${f}`);
+      await fs.access(file);
+      ok(`[file] vorhanden: ${file}`);
     } catch {
-      fail(`[file] fehlt: ${f}`);
+      fail(`[file] fehlt: ${file}`);
     }
   }
 }
@@ -47,50 +54,28 @@ async function checkFiles() {
 async function checkIndex() {
   try {
     const html = await fs.readFile("index.html", "utf8");
-    const scripts = Array.from(html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)).map(m => m[1]);
-    const missing = ORDER.filter(s => !scripts.some(x => x.endsWith(s)));
-
-    if (missing.length) {
-      fail(`[index] fehlende <script>: ${missing.join(", ")}`);
-      return;
+    if (!/<script[^>]+type=["']module["'][^>]+src=["'][^"']*src\/main\.js(?:\?[^"']*)?["']/.test(html)) {
+      fail("[index] aktiver Moduleinstieg src/main.js fehlt");
+    } else {
+      ok("[index] src/main.js als Moduleinstieg vorhanden");
     }
-
-    let lastIdx = -1;
-    for (const s of ORDER) {
-      const i = scripts.findIndex(x => x.endsWith(s));
-      if (i < lastIdx) {
-        fail("[index] Reihenfolge fehlerhaft (siehe CODE_STYLE)");
-        return;
-      }
-      lastIdx = i;
+    if (!/<link[^>]+href=["'][^"']*src\/ui\/app\.css(?:\?[^"']*)?["']/.test(html)) {
+      fail("[index] aktives Stylesheet src/ui/app.css fehlt");
+    } else {
+      ok("[index] src/ui/app.css vorhanden");
     }
-    ok("[index] Reihenfolge ok");
   } catch (error) {
     fail(`[index] konnte nicht gelesen werden: ${error.message}`);
   }
 }
 
-async function checkHeadersAndLogs() {
-  for (const f of MUST_HAVE.filter(x => x.endsWith(".js"))) {
-    try {
-      const txt = await fs.readFile(f, "utf8");
-      if (!/Version\s*:\s*v\d+\.\d+\.\d+/.test(txt)) warn(`[header] Version fehlt in ${f}`);
-      if (!/\[.+\]\s+Modul geladen/.test(txt)) warn(`[log] Lade-Log fehlt in ${f}`);
-      if (f.endsWith("asset.js") && /assets\.js/.test(txt)) warn(`[rule] asset.js muss singular bleiben (CODE_STYLE)`);
-    } catch (error) {
-      fail(`[read] ${f}: ${error.message}`);
-    }
-  }
-}
-
-console.log("— verify-structure —");
+console.log("— verify Clean Runtime structure —");
 await checkFiles();
 await checkIndex();
-await checkHeadersAndLogs();
 
 if (failures > 0) {
-  console.error(`\n❌ Strukturprüfung fehlgeschlagen: ${failures} Blocker`);
+  console.error(`\n❌ Clean-Runtime-Strukturprüfung fehlgeschlagen: ${failures} Blocker`);
   process.exitCode = 1;
 } else {
-  console.log("\n✅ Strukturprüfung PASS / 0 Blocker");
+  console.log("\n✅ Clean-Runtime-Strukturprüfung PASS / 0 Blocker");
 }
