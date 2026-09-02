@@ -1,116 +1,110 @@
-name: Code Bundle (ZIP + Monolith)
+name: Code Snapshot
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    paths-ignore:
+      - "assets/**"
+      - "**/*.png"
+      - "**/*.jpg"
+      - "**/*.jpeg"
+      - "**/*.webp"
+      - "**/*.gif"
+      - "**/*.mp3"
+      - "**/*.wav"
+      - "**/*.mp4"
   workflow_dispatch: {}
-  schedule:
-    - cron: "11 2 * * *"   # täglich 02:11 UTC
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: snapshot-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-bundle:
+  snapshot:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare snapshot meta
+      - name: Prepare metadata
         id: meta
         shell: bash
         run: |
-          COMMIT=$(git rev-parse --short=8 HEAD)
-          DATE=$(date -u +"%Y%m%d-%H%M%S")
-          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
-          echo "date=$DATE" >> $GITHUB_OUTPUT
+          echo "commit=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
           mkdir -p snapshots
 
-      # Dateiliste: typische Code-/Textdateien; binäre/Assets ausgeschlossen
-      - name: Collect code files
-        id: files
+      - name: Collect tracked text/code files
         shell: bash
         run: |
-          mapfile -t FILES < <(git ls-files \
+          git ls-files \
             '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' \
             '*.json' '*.jsonc' '*.md' '*.html' '*.css' \
             '*.yml' '*.yaml' '*.toml' '*.ini' '*.txt' '*.dot' \
-            ':!:**/*.png' ':!:**/*.PNG' ':!:**/*.jpg' ':!:**/*.jpeg' ':!:**/*.gif' ':!:**/*.webp' ':!:**/*.svg' \
-            ':!:**/*.ico' ':!:**/*.pdf' ':!:**/*.psd' ':!:**/*.ai' ':!:**/*.mp3' ':!:**/*.mp4' ':!:**/*.wav' \
-            ':!:**/*.zip' ':!:**/*.7z' ':!:**/*.gz' ':!:**/*.tgz' ':!:**/*.bz2' \
-            ':!:assets/**/*' ':!:**/*.atlas' ':!:**/*.ktx2' ':!:**/*.astc')
-          printf "%s\n" "${FILES[@]}" > snapshots/_files.list
-          echo "Found $(wc -l < snapshots/_files.list) text files."
+            ':!:assets/**' ':!:snapshots/**' \
+            > snapshots/_files.list
+          echo "Collected $(wc -l < snapshots/_files.list) files"
 
-      # Monolith bauen (alle Inhalte in EINER Datei)
       - name: Build monolith
         shell: bash
         run: |
           MONO="snapshots/CODES_MONOLITH_${{ steps.meta.outputs.commit }}-${{ steps.meta.outputs.date }}.txt"
           {
-            echo "# Code-Monolith"
-            echo "_Commit: ${{ steps.meta.outputs.commit }} · UTC: ${{ steps.meta.outputs.date }}_"
-            echo ""
-            echo "## Dateiübersicht"
+            echo "# Neue Siedler – Code Snapshot"
+            echo "Commit: ${{ github.sha }}"
+            echo "UTC: ${{ steps.meta.outputs.date }}"
+            echo
+            echo "## Files"
             sed 's/^/- /' snapshots/_files.list
-            echo ""
-            echo "## Inhalte"
-            while IFS= read -r f; do
-              echo ""
+            echo
+            echo "## Contents"
+            while IFS= read -r file; do
+              echo
               echo "--------------------------------------------------------------------------------"
-              echo "### FILE: $f"
+              echo "### FILE: $file"
               echo "--------------------------------------------------------------------------------"
-              echo ""
-              sed -e 's/\r$//' "$f"
-              echo ""
+              sed -e 's/\r$//' "$file"
             done < snapshots/_files.list
           } > "$MONO"
-          ls -lh "$MONO"
 
-      # ZIP mit genau diesen Textdateien
-      - name: Build ZIP bundle
+      - name: Build ZIP
         shell: bash
         run: |
           ZIP="snapshots/CODES_${{ steps.meta.outputs.commit }}-${{ steps.meta.outputs.date }}.zip"
-          # zip nur die gelisteten Dateien; Pfadstruktur bleibt erhalten
-          zip -@ "$ZIP" < snapshots/_files.list
-          ls -lh "$ZIP"
+          zip -q -@ "$ZIP" < snapshots/_files.list
 
-      # Manifest mit Hash/Größen (hilfreich für Vergleiche)
-      - name: Build manifest.json
+      - name: Build manifest
         shell: bash
         run: |
-          MANI="snapshots/manifest_${{ steps.meta.outputs.commit }}-${{ steps.meta.outputs.date }}.json"
-          echo "[" > "$MANI"
-          first=1
-          while IFS= read -r f; do
-            size=$(wc -c < "$f" | tr -d ' ')
-            sha=$(sha256sum "$f" | awk '{print $1}')
-            if [ $first -eq 0 ]; then echo "," >> "$MANI"; fi
-            first=0
-            printf '  {"file":"%s","size":%s,"sha256":"%s"}' "$f" "$size" "$sha" >> "$MANI"
-          done < snapshots/_files.list
-          echo "" >> "$MANI"
-          echo "]" >> "$MANI"
-          ls -lh "$MANI"
+          MANIFEST="snapshots/manifest_${{ steps.meta.outputs.commit }}-${{ steps.meta.outputs.date }}.json"
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFileSync, statSync, writeFileSync } from 'node:fs';
+          const list = readFileSync('snapshots/_files.list', 'utf8').split('\n').filter(Boolean);
+          const data = list.map(file => ({
+            file,
+            size: statSync(file).size,
+            sha256: createHash('sha256').update(readFileSync(file)).digest('hex')
+          }));
+          const commit = process.env.COMMIT;
+          const date = process.env.DATE;
+          writeFileSync(`snapshots/manifest_${commit}-${date}.json`, JSON.stringify(data, null, 2) + '\n');
+          NODE
+        env:
+          COMMIT: ${{ steps.meta.outputs.commit }}
+          DATE: ${{ steps.meta.outputs.date }}
 
-      # Optional: in Repo einchecken (Ordner snapshots/)
-      - name: Commit snapshots to repo (optional)
-        if: ${{ false }}   # auf true setzen, wenn du sie im Repo haben willst
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add snapshots/
-          git commit -m "chore(snapshot): code bundle + monolith [skip ci]" || echo "No changes"
-          git push
-
-      - name: Upload artifacts
+      - name: Upload snapshot artifact
         uses: actions/upload-artifact@v4
         with:
-          name: code-bundle-${{ steps.meta.outputs.commit }}-${{ steps.meta.outputs.date }}
+          name: code-snapshot-${{ steps.meta.outputs.commit }}-${{ steps.meta.outputs.date }}
           path: |
             snapshots/CODES_*.zip
             snapshots/CODES_MONOLITH_*.txt
             snapshots/manifest_*.json
+          retention-days: 14
