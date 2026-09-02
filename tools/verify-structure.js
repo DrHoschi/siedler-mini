@@ -19,6 +19,7 @@ const MUST_HAVE = [
   "src/resources/resource-matching.js",
   "src/resources/resource-assignment.js",
   "src/transport/transport-job-contract.js",
+  "src/transport/transport-job-service.js",
   "src/render/renderer.js",
   "src/ui/app.css",
   "src/dev/self-test.js",
@@ -28,7 +29,9 @@ const MUST_HAVE = [
   "src/dev/cr-03-freeze-gate.node.js",
   "src/dev/cr-04a-self-test.js",
   "src/dev/cr-04a-self-test.node.js",
-  "src/dev/cr-04a-integration-gate.node.js"
+  "src/dev/cr-04a-integration-gate.node.js",
+  "src/dev/cr-04b-self-test.js",
+  "src/dev/cr-04b-self-test.node.js"
 ];
 
 let failures = 0;
