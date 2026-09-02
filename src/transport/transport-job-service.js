@@ -1,4 +1,3 @@
-import { StableIdAllocator } from '../world/stable-id.js';
 import { TransportJobContract } from './transport-job-contract.js';
 
 function deepFreeze(value) {
@@ -12,10 +11,9 @@ export class TransportJobService {
   #claims;
   #demands;
   #resources;
-  #ids;
 
-  constructor({ jobStore, claims, demands, resourceState, allocator = null }) {
-    if (!jobStore || typeof jobStore.create !== 'function' || typeof jobStore.ids !== 'function') throw new TypeError('jobStore required');
+  constructor({ jobStore, claims, demands, resourceState }) {
+    if (!jobStore || typeof jobStore.create !== 'function' || typeof jobStore.allocateId !== 'function') throw new TypeError('jobStore required');
     if (!claims || typeof claims.get !== 'function') throw new TypeError('claims required');
     if (!demands || typeof demands.get !== 'function') throw new TypeError('demands required');
     if (!resourceState || typeof resourceState.get !== 'function') throw new TypeError('resourceState required');
@@ -23,7 +21,6 @@ export class TransportJobService {
     this.#claims = claims;
     this.#demands = demands;
     this.#resources = resourceState;
-    this.#ids = allocator instanceof StableIdAllocator ? allocator : new StableIdAllocator();
   }
 
   createFromAssignment(assignment) {
@@ -33,8 +30,7 @@ export class TransportJobService {
 
   createFromClaimIds(claimIds) {
     if (!Array.isArray(claimIds) || claimIds.length === 0) throw new TypeError('non-empty claimIds required');
-    const unique = new Set(claimIds);
-    if (unique.size !== claimIds.length) throw new Error('duplicate claim id in transport job creation');
+    if (new Set(claimIds).size !== claimIds.length) throw new Error('duplicate claim id in transport job creation');
 
     const existingByClaim = this.#existingByClaim();
     const plan = claimIds.map(claimId => {
@@ -44,9 +40,8 @@ export class TransportJobService {
       if (!claim) throw new TypeError(`unknown claim id: ${claimId}`);
       const demand = this.#demands.get(claim.demandId);
       const resource = this.#resources.get(claim.resourceId);
-      const id = this.#ids.next('transport-job');
       const job = TransportJobContract.validateLinks({
-        id,
+        id: this.#jobs.allocateId(),
         claimId: claim.id,
         demandId: claim.demandId,
         resourceId: claim.resourceId,
@@ -62,7 +57,7 @@ export class TransportJobService {
     const jobs = plan.map(item => {
       if (item.existing) return item.existing;
       const { id, kind, ...data } = item.job;
-      return this.#jobs.create({ ...data, contractKind: kind }, { id: id.replace(/^transport-job:/, 'job:') });
+      return this.#jobs.create(data, { id });
     });
 
     return deepFreeze({
@@ -77,7 +72,7 @@ export class TransportJobService {
     const map = new Map();
     for (const id of this.#jobs.ids()) {
       const job = this.#jobs.get(id);
-      if (job?.contractKind === 'transport-job' && job.claimId) map.set(job.claimId, job);
+      if (job?.claimId) map.set(job.claimId, job);
     }
     return map;
   }
