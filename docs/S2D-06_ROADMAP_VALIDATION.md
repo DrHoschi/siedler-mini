@@ -1,86 +1,73 @@
 # S2D-06 – ROADMAP & VALIDATION
 
-Status: **V0.1 DRAFT – S2D-06A/B COMPLETE**  
+Status: **V0.1 FROZEN – PASS / 0 BLOCKER**  
 Datum: 2026-09-02  
 Repository: `DrHoschi/siedler-mini`  
 Arbeitsbranch: `feature/s2d-06-roadmap-validation`  
-Verbindliche Basis: S2D-00 bis S2D-05 jeweils **V0.1 FROZEN – PASS / 0 BLOCKER**
-
-# S2D-06A – Implementation Work Breakdown & Migration Sequence
+Verbindliche Basis: S2D-00 bis S2D-05 jeweils **V0.1 FROZEN – PASS / 0 BLOCKER**  
+Freeze-Gate: **S2D-06D – Internal Consistency & Roadmap Freeze Gate – PASS / 0 BLOCKER**
 
 ## 1. Zweck
 
-S2D-06A übersetzt die eingefrorene Produkt-, Workforce-, Architektur-, UI- und Contentplanung in eine konkrete technische Umsetzungsreihenfolge.
+S2D-06 übersetzt die eingefrorene Produkt-, Workforce-, Architektur-, UI- und Contentplanung in eine konkrete, prüfbare und freigabefähige technische Migrationsroadmap.
 
-Ziel ist ausdrücklich **kein Big-Bang-Rewrite**.
+Ziel ist ausdrücklich kein Big-Bang-Rewrite. Die bestehende funktionierende Spielbasis wird schrittweise in die Zielarchitektur überführt. Jeder technische Block besitzt einen klaren Owner-/Funktionsscope, Entry-/Exit-Gates, definierte Regressionen, nachvollziehbare Evidence und einen eindeutigen Rückfallpunkt.
 
-Jeder Implementierungsblock soll:
-
-- eine klar begrenzte Ownership-/Funktionsverantwortung übernehmen,
-- möglichst wenige produktive Dateien gleichzeitig verändern,
-- vorhandene funktionierende Mechanik erhalten,
-- bekannte Legacy-Guards erst nach bestandenem Exit-Gate entfernen,
-- einen eindeutigen Regressionstest besitzen,
-- bei Fehlern auf einen klaren vorherigen Stand zurückführbar bleiben.
-
-## 2. Zentrale Migrationsregel
+Zentrale Regeln:
 
 > **Erst Ziel-Owner und Vertrag funktionsfähig machen, dann Legacy-Guard entfernen.**
 
-Unzulässig ist:
+> **Ein Implementierungsblock ist erst PASS, wenn seine neue Zielverantwortung funktioniert und alle bis dahin bereits freigegebenen Kerninvarianten erhalten bleiben.**
 
-`alte Patchschicht entfernen -> große Funktionslücke -> später irgendwann Zielsystem bauen`
+> **Kein Implementierungsblock startet ohne freigegebenen Parent-Stand; kein Block wird eingefroren ohne nachgewiesenen Exit-Gate; kein Branch wandert weiter, solange ein verpflichtender Nachweis BLOCKED oder FAIL ist.**
 
-Zulässig ist:
+---
 
-`Zielowner vorbereiten -> Altpfad kontrolliert anbinden -> Regression PASS -> alten Guard/Pfad entfernen -> erneut Regression PASS`
+# S2D-06A – Implementation Work Breakdown & Migration Sequence
 
-## 3. Globale Gates für jeden Implementierungsblock
+## 2. Globale Regeln für jeden Implementierungsblock
 
 Vor jedem Block:
-
 1. erwarteten Branch prüfen,
-2. erwarteten HEAD prüfen,
-3. Branch gegen vorherigen freigegebenen Stand vergleichen,
-4. geplante betroffene Owner/Dateien benennen,
-5. keine fachliche Scope-Erweiterung außerhalb S2D-00 bis S2D-05 zulassen.
+2. erwarteten Parent-/Start-HEAD prüfen,
+3. Branch gegen den letzten freigegebenen Stand vergleichen,
+4. Zielowner und erwartete Changed Files/Modulgruppen benennen,
+5. ausgeschlossenen Scope benennen,
+6. relevante Acceptance Criteria/VAL-Tests festlegen,
+7. keine fachliche Scope-Erweiterung außerhalb S2D-00 bis S2D-05 zulassen.
 
 Nach jedem Block:
-
-1. geänderte Dateien prüfen,
-2. keine unbeabsichtigten Fremdmodule/Assets verändert,
-3. Block-spezifische Regression durchführen,
+1. Changed Files prüfen,
+2. keine unbeabsichtigten Fremdmodule/Assets,
+3. T1/T2 und je nach Matrix T3/T4 ausführen,
 4. zentrale Invarianten prüfen,
-5. Commit setzen,
-6. Blockstatus PASS / BLOCKED dokumentieren.
+5. Geräte-Gate ausführen, falls erforderlich,
+6. Evidence dokumentieren,
+7. Commit setzen,
+8. Ergebnis PASS/BLOCKED/FAIL festhalten.
 
-## 4. Dauerhafte Regression-Invarianten
-
-Jeder spätere technische Block muss mindestens sicherstellen, dass keine bereits bestätigte Kernregel verletzt wird:
+## 3. Dauerhafte Regression-Invarianten
 
 - New Game erzeugt genau einen gültigen Startzustand.
 - Continue restauriert ohne additive Defaults.
 - Gebäudezustand bleibt nach Continue erhalten.
-- physische Waren existieren wirtschaftlich nur an genau einem Ort.
+- Physische Waren besitzen genau einen autoritativen wirtschaftlichen Ort.
 - Produktion schreibt zuerst in lokalen BuildingStock.
 - HQ-Credit erst nach realer Lieferung.
-- Baustellen erzeugen keinen Baufortschritt vor realer Builder-Ankunft.
-- Carrier liefern nicht über den realen Restbedarf hinaus.
+- Baufortschritt erst nach vollständigen Materialien und realer Builder-Ankunft.
+- Kein Transport über realen Restbedarf hinaus.
 - Resident-Helfer bleiben Resident.
 - Spezialisten bleiben reale Personen.
 - WorkArea-Produktion nutzt reale Weltziele.
-- Pause stoppt neue Produktion, nicht Abtransport fertiger Ware.
-- kein Zombie-Job/Assignment/Reservation.
-- keine A*-Hot-Fail-Schleife.
-- automatische Pfade bleiben aus realer Bewegung ableitbar.
-- Continue startet Scheduler/Subscriptions nicht doppelt.
-- UI/Renderer/Inspector werden nie Gameplay-Owner.
+- Pause stoppt neue Produktion; fertige lokale Ware bleibt transportierbar.
+- Kein Zombie-Job/Assignment/Reservation.
+- Keine A*-Hot-Fail-Schleife.
+- Trampelpfade bleiben aus realer Bewegung/Wear ableitbar.
+- Continue startet Scheduler/Subscriptions genau einmal.
+- UI, Renderer, Guidance und Inspector werden nie Gameplay-Owner.
+- Kein neuer dauerhafter Guard ersetzt einen alten Guard.
 
----
-
-# 5. Gesamt-Migrationsreihenfolge
-
-Die Implementierung erfolgt in folgenden Hauptphasen:
+## 4. Gesamt-Migrationsreihenfolge
 
 1. **IM-00 – Baseline & Safety Harness**
 2. **IM-01 – Public Owner Boundaries & Runtime Contracts**
@@ -101,36 +88,21 @@ Die Implementierung erfolgt in folgenden Hauptphasen:
 17. **IM-16 – Legacy Guard Removal & Architecture Closure**
 18. **IM-17 – V1 Core End-to-End Validation**
 
-Diese Reihenfolge folgt den eingefrorenen Ownership- und Exit-Gate-Abhängigkeiten. Einzelne vorbereitende Interfaces dürfen früher entstehen, aber fachliche Ownership wird nicht übersprungen.
+Diese Reihenfolge folgt der eingefrorenen Ownership- und Legacy-Migrationslogik aus S2D-03. Einzelne vorbereitende Interfaces dürfen früher entstehen, aber fachliche Ownership wird nicht übersprungen.
 
----
+## 5. IM-00 – Baseline & Safety Harness
 
-# 6. IM-00 – Baseline & Safety Harness
-
-## Ziel
-
-Vor produktiver Migration wird der aktuelle funktionierende Referenzstand technisch messbar und reproduzierbar gemacht.
-
-## Teilblöcke
+Ziel: aktuellen Referenzstand reproduzierbar und messbar machen, ohne fachliche Migration.
 
 ### IM-00A – Branch/Version/Reference Baseline
+- Implementierungsbranch direkt vom S2D-06-Frozen-Commit,
+- Referenzcommit und Bootpfade dokumentieren,
+- keine fachliche Funktion verändern.
 
-- neuen Implementierungsbranch später direkt vom eingefrorenen S2D-06-Stand erzeugen,
-- Referenzcommit dokumentieren,
-- aktuelle produktive Startdateien/Bootpfade festhalten,
-- keine Funktion verändern.
-
-Gate:
-- Spiel startet,
-- New Game möglich,
-- Continue grundsätzlich erreichbar,
-- keine produktive Codeänderung außer ggf. Versions-/Diagnosemetadaten.
-
-### IM-00B – Core Smoke-Test Checklist
-
-Verbindliche kurze Regression definieren:
+### IM-00B – Core Smoke Checklist
+Mindestens:
 - New Game,
-- Gebäude setzen,
+- Gebäude platzieren,
 - Baustelle beliefern,
 - Builder baut,
 - Produktion,
@@ -144,626 +116,214 @@ Verbindliche kurze Regression definieren:
 - Save/Continue.
 
 ### IM-00C – Diagnostic Baseline
-
-Messwerte vor Migration erfassen:
+Mindestens erfassen:
 - GameTick/Simulation-Dauer,
 - Unit-Kosten,
-- Navigation-Aufrufe/Failrate,
-- aktive Jobs,
+- Navigation calls/ok/fail,
+- aktive Jobs/Assignments/Reservations,
 - Carrier-/Workerzahl,
-- ggf. Timer-/Interval-Inventur aktualisieren.
+- Timer-/Interval-/Subscription-Ausgangslage.
 
-Keine Optimierung in diesem Block.
+Exit: **Referenzstand reproduzierbar und messbar.**
 
-Exit Gate IM-00:
-**Referenzstand reproduzierbar und messbar.**
+## 6. IM-01 – Public Owner Boundaries & Runtime Contracts
 
----
+Ziel: öffentliche Read-/Command-/Event-Grenzen für Buildings, Units, Jobs, Construction, BuildingStock, Production, Logistics, Housing/Economy, MapResources/Animals, Navigation, Path und SaveGame.
 
-# 7. IM-01 – Public Owner Boundaries & Runtime Contracts
+- Read APIs/Snapshots ohne zweite State-Kopie.
+- Mutationen schrittweise über Owner-Commands/Operations.
+- Domain Events informieren über bereits erfolgte Fakten und führen keine versteckte zweite Mutation aus.
 
-## Ziel
+Exit: **grundlegende Owner-Verträge vorhanden, Gameplay unverändert.**
 
-Vor größeren Umbauten werden die öffentlichen Zugriffsgrenzen der künftigen Owner eingeführt, ohne sofort alle Interna zu ersetzen.
+## 7. IM-02 – Central Scheduler & Lifecycle Foundation
 
-Betroffene Domänen:
-- Buildings,
-- Units,
-- Jobs,
-- Construction,
-- BuildingStock,
-- Production,
-- Logistics,
-- Housing/Economy,
-- MapResources/Animals,
-- Navigation,
-- Path,
-- SaveGame.
+- zentrale Scheduler-Phasen,
+- explizite Boot-Registrierung,
+- Pause/Resume/Shutdown-Vertrag,
+- erste unkritische Feature-Intervalle in Scheduler/Due-Tasks überführen.
 
-## Teilblöcke
-
-### IM-01A – Read APIs / Snapshots
-
-Für relevante Owner kontrollierte Read-/Snapshot-Zugriffe definieren.
-
-Gate:
-- UI/Inspector können bestehende Informationen weiterhin lesen,
-- keine zweite State-Kopie als Owner.
-
-### IM-01B – Command Boundaries
-
-Mutationen schrittweise über Owner-Commands/Operations leiten.
-
-Gate:
-- bestehende Kernfunktionen unverändert,
-- keine neue direkte Fremdmutation eingeführt.
-
-### IM-01C – Domain Events
-
-Nur echte Fakten emittieren, z. B. BuildingPlaced, GoodsDelivered, AssignmentCompleted.
-
-Gate:
-- Events lösen keine versteckte zweite Mutation aus.
-
-Exit Gate IM-01:
-**Grundlegende Owner-Verträge vorhanden, ohne Gameplay-Regression.**
-
----
-
-# 8. IM-02 – Central Scheduler & Lifecycle Foundation
-
-## Ziel
-
-Genau eine autoritative Quelle für Simulationsfortschritt etablieren.
-
-## Teilblöcke
-
-### IM-02A – Scheduler Core
-
-Zentrale Phasenstruktur implementieren, zunächst parallel zu noch nicht migrierten Legacy-Systemen nur dort aktiv, wo sicher.
-
-### IM-02B – Boot Registration
-
-Systeme werden explizit registriert; kein neuer Hidden Self-Start.
-
-### IM-02C – Pause / Resume / Shutdown Contract
-
-Simulation Pause, Continue-Vorbereitung und Shutdown sauber trennen.
-
-### IM-02D – Timer Migration Wave 1
-
-Unkritische Feature-Intervalle in Scheduler/Due-Tasks überführen.
-
-Exit Gate:
+Exit:
 - Pause stoppt Simulationszeit,
-- kein doppelter Scheduler nach Reload/Continue,
-- noch vorhandene Legacy-Timer sind inventarisiert und absichtlich beibehalten.
+- Scheduler/Systeme nach Reload/Continue nicht doppelt,
+- verbleibende Legacy-Timer inventarisiert und bewusst beibehalten.
 
----
+## 8. IM-03 – Runtime Validation Foundation
 
-# 9. IM-03 – Runtime Validation Foundation
-
-## Ziel
-
-Fehler erkennen, bevor weitere Owner migriert werden.
-
-## Prüffelder
-
+Prüffelder:
 - Goods one-location,
 - FREE vs. ASSIGNED,
 - Zombie Assignment/Reservation,
 - Builder-arrival invariant,
-- Building ownership,
-- Home ownership,
+- Building/Home ownership,
 - duplicate scheduler/subscriptions,
 - invalid restore references.
 
-## Regel
+Validator erkennt/isoliert fail-closed, repariert aber keinen fremden State heimlich.
 
-Validator beobachtet/stoppt fail-closed, repariert aber keine fremden Zustände heimlich.
+Exit: **kritische Invarianten sichtbar und testbar.**
 
-Exit Gate:
-**kritische Invarianten sichtbar/testbar, ohne produktive Auto-Reparatur.**
+## 9. IM-04 – BuildingStore Ownership Consolidation
 
----
+- eine autoritative Building-Collection,
+- Construction, Renderer, UI, Pause und SaveGame lesen denselben Owner,
+- Legacy-Sync erst nach PASS entfernen.
 
-# 10. IM-04 – BuildingStore Ownership Consolidation
+Regression:
+- Placement,
+- Selection,
+- zulässige Pause,
+- Save/Continue,
+- keine Gebäude fehlen/duplizieren,
+- keine zweite Buildingliste.
 
-## Ziel
+Exit: **Building-Doppel-Owner geschlossen.**
 
-Genau eine autoritative Building-Collection.
+## 10. IM-05 – Unit Identity, Housing & Start Roster Foundation
 
-## Teilblöcke
+Runtimebasis:
+`Person + Home + Spezialisierung + Capabilities + Assignment`
 
-### IM-04A – Authoritative BuildingStore
+Teilziele:
+- stabile Person-ID,
+- Home getrennt vom Arbeitsplatz,
+- Carrier/Builder/Lumberjack/Stonecutter/Fisher/Hunter plus allgemeiner Resident Helper,
+- reale Gründergruppe am HQ mit vollständiger Mindest-Capability-Abdeckung,
+- kleines Haus Kapazität 2, mittleres Haus 3,
+- Gründer-Umsiedlung zuerst, danach verbleibende Plätze mit allgemeinen Bewohnern.
 
-Bestehende Building-Daten auf eine Ownerquelle festziehen.
-
-### IM-04B – Consumers migrieren
-
-Construction, Renderer, UI, Pause, SaveGame lesen denselben Owner.
-
-### IM-04C – Legacy Building Sync entfernen
-
-Erst nach PASS.
-
-Regression Gate:
-- Gebäude platzieren,
-- auswählen,
-- pausieren soweit zulässig,
-- speichern,
-- Continue,
-- Gebäude weiterhin exakt vorhanden,
-- keine doppelte Buildingliste.
-
-Exit Gate:
-**Building-Doppel-Owner geschlossen.**
-
----
-
-# 11. IM-05 – Unit Identity, Housing & Start Roster Foundation
-
-## Ziel
-
-Das eingefrorene Modell `Person + Home + Spezialisierung + Capabilities + Assignment` als Runtimebasis etablieren.
-
-## Teilblöcke
-
-### IM-05A – Stable Person Identity
-
-Stabile Unit-ID und dauerhafte Personidentität.
-
-### IM-05B – Home Binding
-
-Home-Bindung unabhängig vom Arbeitsplatz.
-
-### IM-05C – Specialization & Capabilities
-
-Carrier, Builder, Lumberjack, Stonecutter, Fisher, Hunter plus allgemeiner Resident Helper.
-
-### IM-05D – New Game Founder Roster
-
-Reale Gründergruppe mit temporärer HQ-Home-Bindung und vollständiger Mindest-Capability-Abdeckung.
-
-### IM-05E – House Occupancy
-
-Kleines Haus Kapazität 2, mittleres Haus 3; Gründer-Umsiedlung zuerst, danach ggf. neue allgemeine Bewohner.
-
-Regression Gate:
+Exit:
 - Population = reale Personen,
-- Resident-Helfer bleibt Resident,
-- Gründer werden nicht doppelt gezählt,
-- Häuser besitzen korrekte Belegung,
+- keine Resident-Type-Mutation,
+- keine doppelten Gründer,
 - keine zufällige Spezialistenproduktion.
 
-Exit Gate:
-**saubere Person-/Housing-Basis ohne Resident-Type-Mutation.**
+## 11. IM-06 – JobEngine / Assignment Contract Migration
 
----
+- Jobs nur aus realem Bedarf,
+- Eligibility = Capability + Availability + Reachability + Preconditions,
+- genau ein Assignment pro normal arbeitender Unit,
+- definierte Completion/Cancel/Recovery-Pfade,
+- kein Zombie-State,
+- kein Hot-Retry.
 
-# 12. IM-06 – JobEngine / Assignment Contract Migration
+Exit: **Jobbedarf und konkrete Unit-Zuweisung sauber getrennt.**
 
-## Ziel
+## 12. IM-07 – ConstructionSystem Migration
 
-JobEngine verwaltet Bedarf/Priorität, Assignment bindet reale Units; keine Identitätsänderung.
+- `Restbedarf = Soll - geliefert - gültig reserviert/unterwegs`,
+- `WAIT_MATERIAL -> WAIT_BUILDER -> BUILDING -> COMPLETE`,
+- Builder muss real gültigen Baupunkt erreichen,
+- Fortschritt nur während gültiger Builderarbeit,
+- Construction Guards erst nach PASS entfernen.
 
-## Teilblöcke
+Exit: **Builder-/Overdelivery-Korrektur ist nativ und kein Construction-Guard mehr nötig.**
 
-### IM-06A – Job Validity
+## 13. IM-08 – BuildingStock & ProductionSystem Migration
 
-Job nur aus realem Bedarf.
-
-### IM-06B – Eligibility
-
-Capability + Availability + Reachability + Preconditions.
-
-### IM-06C – Single Assignment
-
-Keine Doppelzuweisung einer Unit.
-
-### IM-06D – Completion / Cancel / Recovery Contract
-
-Kein Zombie-State.
-
-Regression Gate:
-- Carrierjob,
-- Resident-Helferjob,
-- Builderjob,
-- Produktionsjob,
-- ungültiger Job verschwindet sauber,
-- keine Hot-Retry-Schleife.
-
-Exit Gate:
-**Job und Assignment fachlich getrennt und konsistent.**
-
----
-
-# 13. IM-07 – ConstructionSystem Migration
-
-## Ziel
-
-Construction nativ nach eingefrorenem Material-/Builder-Modell.
-
-## Teilblöcke
-
-### IM-07A – Material Demand
-
-`Restbedarf = Soll - geliefert - gültig reserviert/unterwegs`
-
-### IM-07B – WAIT_BUILDER State
-
-Material vollständig erzeugt noch keinen Fortschritt.
-
-### IM-07C – Builder Assignment & Arrival
-
-Builder muss real den gültigen Baupunkt erreichen.
-
-### IM-07D – Construction Progress / Completion
-
-Fortschritt nur während gültiger Builderarbeit.
-
-### IM-07E – Construction Guard Exit
-
-`sa04.pause-builder-fixes`/vergleichbare Construction Guards erst jetzt entfernen.
-
-Regression Gate:
-- Material unvollständig -> kein Bau,
-- Material vollständig, Builder unterwegs -> kein Bau,
-- Builder angekommen -> Bau beginnt,
-- Baustellenpause/Abbruch sauber,
-- Continue während Baustelle korrekt.
-
-Exit Gate:
-**Construction Builder Guard nicht mehr erforderlich.**
-
----
-
-# 14. IM-08 – BuildingStock & ProductionSystem Migration
-
-## Ziel
-
-Produktion erzeugt ausschließlich lokalen physischen Output.
-
-## Teilblöcke
-
-### IM-08A – BuildingStock Ownership
-
-Lokale Mengen je Produktionsgebäude eindeutig.
-
-### IM-08B – Production Worker Contract
-
-Spezialist + WorkArea + reales Weltziel + reale Ankunft.
-
-### IM-08C – Outputs
-
+- BuildingStock besitzt lokale fertige Waren,
+- Spezialist + WorkArea + reales Weltziel + reale Anreise,
 - Lumberjack -> wood,
 - Quarry -> stone,
 - Fisher -> fish,
-- Hunter -> meat + pelt.
+- Hunter -> meat + pelt,
+- Pause stoppt neue Produktion, nicht Abholung,
+- direkte HQ-Gutschrift/Production Bridge erst nach PASS entfernen.
 
-### IM-08D – Pause
+Exit: **Production erzeugt ausschließlich lokalen physischen Output.**
 
-Neue Produktion stoppt; vorhandener Output bleibt abholbar.
+## 14. IM-09 – Logistics & Reservation Migration
 
-### IM-08E – Production Bridge Exit
+- realer Transportbedarf Quelle/Ziel/Ware/Menge,
+- Reservation ist keine Warenkopie,
+- Pickup: Quelle -> Unit,
+- Delivery: Unit -> Ziel,
+- Recovery vor/nach Pickup definiert,
+- Overdelivery Guard erst entfernen, wenn Restbedarf Reservation/en route nativ berücksichtigt.
 
-Direkte HQ-Gutschrift und historische Bridge erst nach PASS entfernen.
+Exit: **physische Warenkette ohne Duplikation, Verlust oder Überlieferung.**
 
-Regression Gate:
-- Output entsteht lokal,
-- HQ bleibt zunächst unverändert,
-- voller lokaler Stock blockiert korrekt,
-- Pause funktioniert,
-- Continue erhält lokalen Stock.
+## 15. IM-10 – Housing / Population / Gold Integration
 
-Exit Gate:
-**Production Bridge nicht mehr erforderlich.**
+- Population derived aus realen Bewohnern,
+- Gründer kontrolliert in Häuser umziehen,
+- nur verbleibende freie Wohnplätze erzeugen allgemeine Bewohner,
+- Gold über Economy-Owner aus realen gültigen Bewohnern,
+- Gold nicht physisch,
+- keine Restore-Zusatzsteuer.
 
----
+Exit: **Housing/Economy ohne Doppelwahrheit.**
 
-# 15. IM-09 – Logistics & Reservation Migration
+## 16. IM-11 – NavigationService Consolidation
 
-## Ziel
+- gültige Access-/Dockingpunkte,
+- Structural Reachability vor teurer Suche,
+- Exact Reachability/Path Request nur für geeignete Kandidaten,
+- positive/negative Caches und Backoff,
+- keine `A* pro Job × Unit × Tick`,
+- PFGlue/Feature-Retry-Schichten erst nach Migration entfernen.
 
-Physischer Warentransport über eindeutige Reservation und reale Unit.
-
-## Teilblöcke
-
-### IM-09A – Transport Demand
-
-Quelle, Ziel, Ware, Menge und realer Bedarf.
-
-### IM-09B – Reservation
-
-Reservation verändert keinen physischen Warenort.
-
-### IM-09C – Pickup
-
-Ware wechselt Quelle -> Unit.
-
-### IM-09D – Delivery
-
-Ware wechselt Unit -> Ziel.
-
-### IM-09E – Recovery
-
-Abbruch vor/nach Pickup sauber.
-
-### IM-09F – Overdelivery Guard Exit
-
-Erst wenn Restbedarf nativ Reservation/unterwegs berücksichtigt.
-
-Regression Gate:
-- Produzent -> lokaler Stock -> Carrier -> HQ,
-- Baustellenlieferung exakt bis Bedarf,
-- kein Überschussjob,
-- Ziel verschwindet vor/nach Pickup sauber behandelt,
-- Resident Helper funktioniert ohne Typänderung.
-
-Exit Gate:
-**physische Warenkette und Overdelivery nativ korrekt.**
-
----
-
-# 16. IM-10 – Housing / Population / Gold Integration
-
-## Ziel
-
-Population und Economy auf realen Bewohnern aufbauen.
-
-## Teilblöcke
-
-### IM-10A – Population Derived View
-
-Kein eigener Resource-Counter als Wahrheit.
-
-### IM-10B – Founder Rehousing
-
-HQ-Gründer kontrolliert in regulären Wohnraum umziehen.
-
-### IM-10C – General Resident Spawn
-
-Nur verbleibende freie Plätze erzeugen neue allgemeine Bewohner.
-
-### IM-10D – Gold / Tax Economy
-
-Gold aus realen gültigen Bewohnern über Economy-Owner; keine physische Goldware.
-
-Regression Gate:
-- Haus klein 2 / mittel 3 Kapazität,
-- Population korrekt,
-- keine Doppelzählung,
-- Gold wächst genau einmal,
-- Pause stoppt Simulationszeit,
-- Continue erzeugt keine Zusatzsteuer beim Restore.
-
-Exit Gate:
-**Housing/Economy ohne Legacy-Doppelwahrheit.**
-
----
-
-# 17. IM-11 – NavigationService Consolidation
-
-## Ziel
-
-Alle produktiven Systeme verwenden einen NavigationService.
-
-## Teilblöcke
-
-### IM-11A – Access/Docking Points
-
-Gebäudeziele auf gültige Interaktionspunkte normalisieren.
-
-### IM-11B – Structural Reachability
-
-Grobe Vorprüfung.
-
-### IM-11C – Exact Reachability / Path Request
-
-Nur geeignete Kandidaten lösen echte Pfadsuche aus.
-
-### IM-11D – Negative/Positive Cache & Backoff
-
-Keine `A* pro Job × Unit × Tick`-Struktur.
-
-### IM-11E – PFGlue Absorb/Exit
-
-Historische Glue-Schichten erst nach vollständiger Migration entfernen.
-
-Regression Gate:
-- bekannte Performance-Stressszene,
-- A*-FAIL keine Hotloop,
+Exit:
+- keine Navigation-Hotloop,
 - unerreichbare Jobs backoffen,
 - normale Bewegung/Arbeitsankunft korrekt,
-- GameUnits-Budget deutlich unter problematischem Altzustand.
-
-Exit Gate:
-**Navigation zentralisiert, Feature-Retry-Schleifen entfernt.**
-
----
-
-# 18. IM-12 – Path/Wear System Migration
-
-## Ziel
-
-Trampelpfade aus Wear-State statt permanenten Einzelstempeln.
-
-## Teilblöcke
-
-### IM-12A – Wear State
-
-Reale Unitbewegung erhöht lokale Nutzung.
-
-### IM-12B – Dirty Regions
-
-Nur veränderte Bereiche markieren.
-
-### IM-12C – Render Cache / Bake
-
-Periodische visuelle Aktualisierung.
-
-### IM-12D – Decay
-
-Langsames Nachwachsen in Simulationszeit.
-
-### IM-12E – Legacy Stamp Exit
-
-Altes Overlay-/Stampmodell entfernen, wenn Darstellung äquivalent funktioniert.
-
-Regression Gate:
-- häufig genutzte Strecke wird sichtbarer,
-- keine endlos wachsende Stempelliste,
-- wenig genutzte Strecke kann verblassen,
-- Performance stabil,
-- Save/Continue erhält Wear-Zustand.
-
-Exit Gate:
-**PathSystem owns Wear, Renderer nur Cache/Darstellung.**
-
----
-
-# 19. IM-13 – SaveGame Owner Snapshot & Continue Reconstruction
-
-## Ziel
-
-Continue wird vollständig owner-basiert und benötigt keine additive Patchphase mehr.
-
-## Teilblöcke
-
-### IM-13A – Snapshot Contracts je Owner
-
-Persistieren nur authoritative/persistenznotwendige Daten.
-
-### IM-13B – Stable References
-
-Building/Unit/Home/Assignment/Warenbeziehungen über stabile IDs.
-
-### IM-13C – Restore Order
-
-Verbindliche Reihenfolge aus S2D-03 umsetzen:
-- Scheduler stop,
-- validate,
-- clear,
-- foundational owners,
-- domain owners,
-- Units/relations,
-- carried goods/reservations/recovery,
-- jobs reconstruct,
-- cross-owner validation,
-- transient rebuild,
-- register once,
-- scheduler start after PASS.
-
-### IM-13D – New Game vs Continue Separation
-
-Kein New-Game-Starter-Roster, kein Default-Resource-Credit, kein Resident-Spawn beim Continue.
-
-### IM-13E – Save Guards Exit
-
-UID-/Persistence-/Restore-Patches erst nach vollständigem PASS entfernen.
-
-Regression Gate:
-- Gebäude,
-- HQ-Waren,
-- lokale BuildingStocks,
-- Baustellenlieferungen/Fortschritt,
-- Bewohner/Gründer/Home,
-- Spezialisten,
-- Gold,
-- MapResources,
-- Tiere soweit persistenzpflichtig,
-- WorkAreas,
-- Path Wear,
-- carried goods/recovery,
-- Pausezustände
-
-nach Continue äquivalent.
-
-Exit Gate:
-**Continue benötigt keinen Gameplay-Patch mehr.**
-
----
-
-# 20. IM-14 – UI / Mobile Runtime Integration
-
-## Ziel
-
-Die eingefrorene S2D-04-Bedienlogik auf die neuen Owner-APIs anbinden.
-
-## Teilblöcke
-
-### IM-14A – Compact HUD
-
-Wood, stone, gold, population plus Menü/Bauen; weitere Goods schnell erreichbar.
-
-### IM-14B – Context Panel
-
-Gebäude-/Baustellenzustände aus echten Read Models.
-
-### IM-14C – Build Catalog & Placement
-
-Wohnen/Produktion, Preview, Validity, Confirm/Cancel.
-
-### IM-14D – WorkArea Editor
-
-Vorschlag getrennt vom aktiven Bereich bis Confirm.
-
-### IM-14E – Economy Overview
-
-Available / Local / Reserved / En route ohne Doppelzählung.
-
-### IM-14F – Main Menu / Save / Continue
-
-New Game und Continue technisch/visuell getrennt.
-
-Regression Gate Smartphone:
-- Pan/Zoom/Select,
-- Build,
-- Placement confirm/cancel,
-- Context Panel,
-- Pause,
-- WorkArea,
-- Save/Continue,
-- keine core action nur per Hover/Keyboard.
-
-Exit Gate:
-**UI arbeitet ausschließlich über Owner-Read/Command-Verträge.**
-
----
-
-# 21. IM-15 – Guidance & Inspector Integration
-
-## IM-15A – Guidance
-
-Stable Guidance IDs, real-event-driven, persisted, restartable.
-
-Keine Gameplay-Ausnahme durch Tutorial.
-
-## IM-15B – Runtime Inspector
-
-Read-only Snapshots plus kontrollierte Debug Commands für:
-- Buildings,
-- Units/Workforce,
-- Jobs,
-- Economy/Stocks,
-- Construction,
-- Navigation,
-- Path,
-- SaveGame,
-- Scheduler/Performance.
-
-Keine Asset-/Sprite-/JSON-Editorfunktionen zurück in den Game-Inspector.
-
-Exit Gate:
-**Guidance und Inspector optional; Abschalten verändert Gameplay nicht.**
-
----
-
-# 22. IM-16 – Legacy Guard Removal & Architecture Closure
-
-## Ziel
-
-Alle bekannten Übergangs-/Patchschichten gegen ihre Exit-Gates prüfen und nur bei PASS entfernen.
+- Performance gegen IM-00-Baseline kontrolliert.
+
+## 17. IM-12 – Path/Wear System Migration
+
+- realer Wear-State aus Unitbewegung,
+- Dirty Regions,
+- Render Cache/Bake getrennt vom Gameplay-State,
+- langsamer Decay in Simulationszeit,
+- Legacy-Stampmodell erst nach äquivalenter Darstellung entfernen.
+
+Exit:
+- häufig genutzte Strecken verstärken sich,
+- schwache Nutzung kann verblassen,
+- keine unbegrenzt wachsende Stempelliste,
+- Wear über Save/Continue erhalten,
+- Mobile Rendering/Performance PASS.
+
+## 18. IM-13 – SaveGame Owner Snapshot & Continue Reconstruction
+
+- Owner liefern Snapshots ihrer autoritativen Wahrheit,
+- stabile Building/Unit/Home/Assignment/Waren-Referenzen,
+- Restore-Reihenfolge: stop -> validate -> clear -> owners -> relations -> carried goods/recovery -> jobs reconstruct -> cross-owner validate -> transient rebuild -> register once -> scheduler start,
+- New Game und Continue strikt getrennt,
+- Save Guards erst nach vollständigem PASS entfernen.
+
+Exit: **Continue benötigt keinen Gameplay-Patch mehr und erzeugt einen fachlich äquivalenten Zustand.**
+
+## 19. IM-14 – UI / Mobile Runtime Integration
+
+- Compact HUD: wood, stone, gold, population, menu/build,
+- Context Panels aus echten Read Models,
+- Build Catalog Wohnen/Produktion,
+- Placement Preview + Validity + Confirm/Cancel,
+- WorkArea-Vorschlag getrennt vom aktiven Bereich bis Confirm,
+- Economy Overview mit Available/Local/Reserved/En route,
+- New Game/Continue/Save getrennt und verständlich,
+- alle Kernaktionen touch-first.
+
+Exit: **UI nutzt nur Owner-Read/Command-Verträge; vollständiger Smartphone-PASS.**
+
+## 20. IM-15 – Guidance & Inspector Integration
+
+Guidance:
+- stabile Guidance IDs,
+- reagiert auf reale Events,
+- persistierbar und restartbar,
+- keine Gameplay-Ausnahme.
+
+Inspector:
+- Runtime Snapshots + kontrollierte Debug Commands,
+- Buildings, Units/Workforce, Jobs, Economy/Stocks, Construction, Navigation, Path, SaveGame, Scheduler/Performance,
+- keine Business-Logik,
+- keine Asset-/Sprite-/JSON-Editorfunktionen im Game-Inspector.
+
+Exit: **Abschalten von Guidance/Inspector verändert Gameplay nicht.**
+
+## 21. IM-16 – Legacy Guard Removal & Architecture Closure
 
 Kandidaten u. a.:
 - SA04 Runtime Guards,
@@ -778,620 +338,531 @@ Kandidaten u. a.:
 
 Für jede Entfernung:
 1. Zielowner nachweisen,
-2. Regression vor Entfernung PASS,
+2. Regression mit Legacy aktiv PASS,
 3. Guard entfernen,
-4. Regression erneut PASS,
-5. keine neue Ersatz-Patchschicht einführen.
+4. gleiche Regression erneut PASS,
+5. Restreferenzen prüfen,
+6. keine Ersatz-Patchschicht.
 
-Exit Gate:
-**keine produktive Legacy-Korrekturschicht mehr für bereits migrierte Kernregeln.**
+Exit: **keine produktive Legacy-Korrekturschicht mehr für migrierte Kernregeln.**
 
----
+## 22. IM-17 – V1 Core End-to-End Validation
 
-# 23. IM-17 – V1 Core End-to-End Validation
-
-## Ziel
-
-Erstmals den vollständig migrierten kleinen Wirtschaftskern als zusammenhängendes Spiel prüfen.
-
-## 23.1 Functional Golden Path
-
+Golden Path:
 1. New Game.
 2. Gründergruppe vorhanden.
 3. erstes Wohnhaus bauen.
 4. Material real liefern.
 5. Builder real ankommen lassen.
 6. Bewohner/Home korrekt.
-7. Holzproduktion starten.
-8. lokaler Stock entsteht.
-9. Carrier bringt Holz real ins HQ.
+7. Holzproduktion.
+8. lokaler Stock.
+9. realer Carriertransport ins HQ.
 10. Steinproduktion.
 11. Fischproduktion.
 12. Jagd auf reales Tier.
 13. Fleisch/Fell transportieren.
-14. zweites/weiteres Gebäude bauen.
-15. Produktionspause/Resume.
+14. weitere Gebäude.
+15. Pause/Resume.
 16. WorkArea ändern.
-17. Resident Helper Transport beobachten.
-18. Gold/Population prüfen.
-19. Trampelpfade entstehen lassen.
+17. Resident Helper Transport.
+18. Gold/Population.
+19. Trampelpfade.
 20. Save.
 21. Continue.
-22. gesamten Zustand vergleichen.
+22. Zustand vergleichen.
 
-## 23.2 Stress Gates
-
-- mehrere Produktionsgebäude,
-- mehrere Baustellen,
-- knappe Carrier,
-- knapper Builder,
+Stress mindestens:
+- mehrere Produzenten/Baustellen,
+- knappe Carrier/Builder,
 - fehlender Spezialist,
 - voller lokaler Stock,
 - erschöpfte Weltressource,
 - keine Jagdtiere in WorkArea,
 - unerreichbares Ziel,
 - Transportabbruch/Recovery,
-- längere Simulationslaufzeit,
-- Save/Continue unter belastetem Zustand.
+- längere Laufzeit,
+- Save/Continue unter Last.
 
-## 23.3 Performance Gate
+Exit: **V1 Small Economic Core funktional, persistierbar, mobile-bedienbar und architektonisch konsistent.**
 
-Mindestens prüfen:
-- keine Navigation-Hotloop,
-- keine wachsende Timer-/Subscription-Duplikation,
-- keine unbegrenzt wachsende Path-Stamp-Liste,
-- keine dauerhaft wachsenden Zombie-Jobs/Reservations,
-- Scheduler-/Unit-/Navigation-Kosten bleiben unter kontrollierter Last stabil.
+## 23. Blockgrößen-Regel
 
-## 23.4 Mobile Gate
-
-Mindestens auf kleinem Smartphone:
-- HUD lesbar,
-- Menüs erreichbar,
-- Placement sicher,
-- Pan/Zoom/Select zuverlässig,
-- Context Panel bedienbar,
-- Save/Continue nutzbar,
-- keine abgeschnittenen Kernbuttons.
-
-Exit Gate IM-17:
-**V1 Small Economic Core = funktional, persistierbar, mobile-bedienbar und architektonisch konsistent.**
-
----
-
-# 24. Blockgrößen-Regel für die tatsächliche Implementierung
-
-Jeder technische Unterblock soll bevorzugt so klein sein, dass:
-- eine Hauptverantwortung verändert wird,
-- ein konkretes Exit-/Regression-Gate existiert,
-- Fehlerursachen lokalisiert werden können,
-- kein mehrtägiger Big-Bang-Zustand entsteht.
-
-Wenn ein Block mehrere Owner gleichzeitig grundlegend verändern müsste, ist er vor Umsetzung weiter zu teilen.
-
-## 25. Testarten
-
-S2D-06 verwendet künftig vier Testebenen:
-
-### T1 – Static/Contract Check
-
-Dateien, APIs, Ownership, keine unerlaubten Direktzugriffe.
-
-### T2 – Targeted Runtime Regression
-
-Genau der geänderte Ablauf.
-
-### T3 – Core Smoke Regression
-
-Kurzer kompletter Kerncheck aus IM-00B.
-
-### T4 – End-to-End / Stress
-
-Längere Szenarien und Save/Continue unter Last.
-
-Nicht jeder kleine Block benötigt T4. Jeder produktive Block benötigt mindestens T1 + T2; bei Owner-/Lifecycle-/Save-/Scheduler-Änderungen zusätzlich T3.
-
-## 26. Geräte-PASS-Regel
-
-Nicht jede interne Architekturänderung muss auf jedem Gerät einzeln manuell geprüft werden.
-
-Geräte-/Mobile-PASS ist besonders erforderlich, wenn betroffen sind:
-- UI,
-- Touch/Pointer,
-- Rendering,
-- Canvas/Path-Darstellung,
-- Performance,
-- Save/Storage-Verhalten im Browser,
-- Lifecycle bei echter Seitennavigation/Reload.
-
-Reine interne Contract-/Owner-Änderungen können zunächst automatisiert/gezielt geprüft werden, solange das nächste relevante Geräte-Gate nicht übersprungen wird.
-
-## 27. S2D-06A Abschlussstatus
-
-- technische Migrationsreihenfolge aus S2D-03 abgeleitet: **PASS**
-- S2D-04 UI-/Mobile-Abhängigkeiten eingebunden: **PASS**
-- S2D-05 Content-/Startroster-Abhängigkeiten eingebunden: **PASS**
-- Legacy Exit-Gates berücksichtigt: **PASS**
-- Save/Continue als eigener Lifecycle berücksichtigt: **PASS**
-- Navigation-/Path-Performance berücksichtigt: **PASS**
-- kleine prüfbare Implementierungsblöcke definiert: **PASS**
-- Regressionsebenen definiert: **PASS**
-- Gameplay-/Runtime-/UI-Codeänderungen: **0**
-- offene S2D-06A-Blocker: **0**
-
-**S2D-06A – Implementation Work Breakdown & Migration Sequence: COMPLETE / 0 BLOCKER**
+Ein technischer Unterblock soll möglichst nur eine Hauptverantwortung verändern. Wenn mehrere Owner gleichzeitig grundlegend verändert werden müssten, ist der Block vor Umsetzung weiter zu teilen.
 
 ---
 
 # S2D-06B – Validation Matrix & Acceptance Criteria
 
-## 28. Zweck
+## 24. Teststufen
 
-S2D-06B macht aus den IM-00 bis IM-17-Blöcken eine verbindliche Prüflogik. Für jeden Block wird festgelegt:
+- **T1 – Static/Contract Check**: Dateien, APIs, Ownership, unerlaubte Direktzugriffe.
+- **T2 – Targeted Runtime Regression**: exakt der geänderte Ablauf.
+- **T3 – Core Smoke Regression**: kurzer vollständiger Kerncheck.
+- **T4 – End-to-End / Stress**: längere Szenarien, Last, Save/Continue.
 
-- welche Kerninvarianten dort zwingend geprüft werden,
-- welche Teststufe erforderlich ist,
-- was automatisierbar bzw. toolgestützt prüfbar ist,
-- wann ein echter Geräte-/Mobile-PASS erforderlich wird,
-- welches Ergebnis als PASS gilt,
-- welches Ergebnis den Block zwingend auf BLOCKED/FAIL setzt.
+Jeder produktive Block benötigt mindestens T1 + T2. Owner-/Lifecycle-/Scheduler-/Save-Änderungen benötigen zusätzlich T3. T4 wird bei den dafür definierten Stress-/End-to-End-Gates eingesetzt.
 
-Ziel ist, manuelle Tests gezielt dort einzusetzen, wo sie echten Mehrwert liefern, und reine Architektur-/Contract-Prüfungen möglichst reproduzierbar und automatisierbar zu machen.
+## 25. Automatisierungsgrade
 
-## 29. Zentrale Acceptance-Regel
+- **A1 – Static Automatable**: Branch/HEAD/Diff, Contracts, bekannte Legacy-Referenzen, definierte statische Invarianten.
+- **A2 – Runtime Automatable**: Owner-State, Warenort, Jobs/Assignments, Construction, Save/Restore, Navigation, Population/Home/Gold.
+- **A3 – Tool-Assisted / Visual**: Pathdarstellung, Context Panel, WorkArea, Guidance, Rendering.
+- **A4 – Real Device Required**: Touch/Pointer, Smartphone-Layout, Mobile Browser Save/Reload, echte Lifecycle-/Storage-/Performanceeffekte.
 
-> **Ein Implementierungsblock ist erst PASS, wenn sowohl seine neue Zielverantwortung funktioniert als auch alle bis dahin bereits freigegebenen Kerninvarianten erhalten bleiben.**
-
-Damit genügt nicht:
-
-`neue Funktion funktioniert isoliert`
-
-Erforderlich ist:
-
-`neue Funktion funktioniert + keine bestehende Kernregel regressiert + kein neuer versteckter Owner/Guard/Timer entsteht`.
-
-## 30. Ergebniszustände
-
-Für jeden Implementierungsblock gelten nur folgende Freigabezustände:
+## 26. Ergebniszustände
 
 - **PASS** – alle verpflichtenden Acceptance Criteria erfüllt.
-- **PASS WITH DEFERRED NON-BLOCKER** – nur ausdrücklich nicht-blockierende, dokumentierte Punkte offen; keine Kerninvariante betroffen.
-- **BLOCKED** – Test nicht ausführbar, Abhängigkeit fehlt oder erforderlicher Geräte-/Runtime-Nachweis noch offen.
-- **FAIL** – mindestens ein verpflichtendes Acceptance Criterion verletzt.
+- **PASS WITH DEFERRED NON-BLOCKER** – nur explizite echte Non-Blocker offen.
+- **BLOCKED** – Test/Abhängigkeit/Nachweis fehlt.
+- **FAIL** – mindestens ein verpflichtendes Criterion verletzt.
 
-Ein FAIL darf nicht durch einen neuen Runtime-Guard als „PASS“ kaschiert werden.
+Ein FAIL darf nicht durch einen neuen Runtime-Guard kaschiert werden.
 
-## 31. Automatisierungsgrade
+## 27. Globale Acceptance Criteria produktiver Blöcke
 
-### A1 – Static Automatable
-
-Vollständig oder weitgehend automatisierbar:
-- Branch/HEAD/Dateidiff,
-- verbotene Dateiänderungen,
-- bekannte Legacy-Dateireferenzen,
-- doppelte Registrierungen anhand definierter Runtime-Diagnostics,
-- API-/Contract-Prüfungen,
-- definierte Invariant-Checks.
-
-### A2 – Runtime Automatable
-
-Mit reproduzierbarem Testzustand/Skript prüfbar:
-- Owner-State vor/nach Operation,
-- Warenort,
-- Job-/Assignment-Zustände,
-- Construction-State-Machine,
-- Save/Restore-Gleichheit,
-- Navigation-Failrate,
-- Timer-/Subscription-Zählung,
-- Population/Home-/Gold-Konsistenz.
-
-### A3 – Tool-Assisted / Visual
-
-Teilautomatisierbar, aber visuelle bzw. interaktive Prüfung sinnvoll:
-- Pfaddarstellung,
-- Context Panel Readability,
-- WorkArea-Vorschau,
-- Guidance-Fokus,
-- Animation/Rendering.
-
-### A4 – Real Device Required
-
-Echter Geräte-PASS erforderlich:
-- Touch-/Pointer-Verhalten,
-- kleines Smartphone-Layout,
-- Mobile Browser Save/Reload,
-- echte Lifecycle-/Storage-Effekte,
-- mobile Performance/Rendering,
-- abgeschnittene oder unerreichbare Kernaktionen.
-
-## 32. Globale Acceptance Criteria für jeden produktiven Block
-
-Jeder produktive Block IM-01 bis IM-16 muss mindestens folgende generische Kriterien erfüllen:
-
-1. Branch und erwarteter Parent-HEAD stimmen.
-2. Changed Files entsprechen dem angekündigten Scope.
-3. Keine neue dauerhafte Patch-/Guard-Schicht ohne dokumentierten Exit-Gate.
-4. Keine neue zweite autoritative State-Kopie.
+1. Branch/Parent korrekt.
+2. Changed Files entsprechen Scope.
+3. Keine neue dauerhafte Patch-/Guard-Schicht ohne Exit-Gate.
+4. Keine zweite autoritative State-Kopie.
 5. Keine neue Feature-eigene primäre Timer-/Interval-Schleife.
-6. Keine neue direkte Fremdmutation eines anderen Owners.
-7. Block-spezifischer T2-Test PASS.
-8. Kritische bisherige Invarianten bleiben PASS.
-9. Bei Owner-/Lifecycle-/Scheduler-/Save-Änderung: T3 Smoke PASS.
-10. Bei Gerätepflicht: Geräte-PASS vor Blockfreigabe.
+6. Keine direkte Fremdmutation.
+7. T2 PASS.
+8. bisherige kritische Invarianten PASS.
+9. T3 bei Owner-/Lifecycle-/Scheduler-/Save-Änderungen.
+10. Geräte-PASS, wenn vorgeschrieben.
 
-## 33. Validation Matrix IM-00 bis IM-17
+## 28. Validation Matrix IM-00 bis IM-17
 
-| Block | Pflicht-Invarianten / Schwerpunkt | Teststufe | Automatisierung | Geräte-PASS | PASS-Kriterium | FAIL/BLOCKED-Kriterium |
-|---|---|---|---|---|---|---|
-| IM-00 | Referenzstand reproduzierbar; New Game/Continue erreichbar; Baseline-Metriken vorhanden | T1 + T3 Baseline | A1 + A2 | ja, einmaliger Referenz-Gerätecheck sinnvoll | Referenzablauf und Messwerte dokumentiert; keine Funktionsänderung | Referenz nicht reproduzierbar oder Baseline unvollständig |
-| IM-01 | ein Owner pro Zustand; Read/Command/Event-Trennung; keine zweite State-Kopie | T1 + T2 | A1 + A2 | nein | Contracts nutzbar, Gameplay unverändert | neue Direktmutation, zweite Ownerkopie oder Event mit versteckter Mutation |
-| IM-02 | genau eine Simulationszeitquelle; Pause stoppt Simulation; keine Doppelregistrierung | T1 + T2 + T3 | A1 + A2 | Lifecycle-Check auf realem Browser spätestens bei Exit | Scheduler einmal aktiv; Pause/Resume/Shutdown konsistent | doppelte Scheduler, versteckter Self-Start oder aktive Simulationszeit in Pause |
-| IM-03 | Goods one-location, FREE/ASSIGNED, Zombie-States, Builder-arrival, Home/Building Ownership | T1 + T2 | A1 + A2 | nein | Validator erkennt künstlich erzeugte Fehler und repariert nicht fremd | Validator mutiert fremden State oder kritische Invariante bleibt unerkennbar |
-| IM-04 | genau eine Building-Collection; alle Consumer lesen denselben Owner | T1 + T2 + T3 | A1 + A2 | Save/Continue Browsercheck beim Exit empfohlen | Placement/Pause/Save/Continue mit identischem Building-State | doppelte Buildingliste, Restore-Sync-Patch nötig oder Gebäude fehlen/duplizieren |
-| IM-05 | stabile Person-ID; Home getrennt von Job; Gründer real; Resident bleibt Resident | T1 + T2 + T3 | A1 + A2 | nein | Population aus realen Personen; Gründer nicht doppelt; Hausbelegung korrekt | Type-Mutation, Phantom-Population, doppelte Gründer oder zufällige Fachkräfte |
-| IM-06 | Job aus realem Bedarf; Eligibility; Single Assignment; kein Zombie-State | T1 + T2 + T3 | A1 + A2 | nein | Carrier/Resident/Builder/Production Jobs sauber lifecyclefähig | Doppelassignment, Zombie-Job/-Reservation oder Hot-Retry |
-| IM-07 | Materialbedarf korrekt; WAIT_BUILDER; Bau erst nach realer Ankunft | T1 + T2 + T3 | A1 + A2 | visueller Gerätecheck nicht zwingend; Runtime-Nachweis reicht | vor Builder-Ankunft exakt 0 Fortschritt; danach regulärer Bau | Bau startet vor Ankunft, Overdelivery durch Construction oder Guard weiterhin nötig |
-| IM-08 | Output ausschließlich lokal; reales Weltziel; Pause stoppt neue Produktion | T1 + T2 + T3 | A1 + A2 | nein | lokaler Stock steigt, HQ nicht; Pause/Continue korrekt | direkte HQ-Gutschrift, Output ohne Weltziel oder lokaler Stock verloren |
-| IM-09 | Reservation != Ware; Pickup/Delivery reale Ortswechsel; Recovery; kein Overdelivery | T1 + T2 + T3 | A1 + A2 | nein | exakte Warenbilanz vor/nach Transport; Bedarf nie überschritten | doppelte Ware, Warenverlust, Überschusslieferung oder Unit wird vor Delivery FREE |
-| IM-10 | Population derived; Haus 2/3; Gründer-Rehousing; Gold einmalig, nicht physisch | T1 + T2 + T3 | A1 + A2 | nein | Personenzahl/Home/Gold stimmen auch nach Pause/Continue | Doppelzählung, Gold als Ware, Restore-Steuerbonus oder Phantom-Population |
-| IM-11 | zentraler NavigationService; Reachability vor Assignment; Backoff; keine Hotloop | T1 + T2 + T4 Stress | A1 + A2 | Performance-Gerätecheck bei Exit erforderlich | FAIL-Loop bleibt 0/beherrscht; unerreichbar backofft; normale Wege funktionieren | A*-Fail-Hotloop, Feature-Retries oder deutliche Regression gegenüber Baseline |
-| IM-12 | Wear-State autoritativ; Dirty/Bake getrennt; Decay; keine Stempelliste als Wahrheit | T1 + T2 + T4 | A2 + A3 | ja, wegen Canvas/Rendering/Performance | Pfade verstärken/verblassen korrekt; Wear nach Continue erhalten | endlos wachsende Stamp-Liste, visueller Cache als Owner oder mobile Performance unbrauchbar |
-| IM-13 | Owner-Snapshots; stabile IDs; Restore-Reihenfolge; New Game != Continue | T1 + T2 + T3 + T4 | A1 + A2 | ja, echter Reload/Storage-PASS | äquivalenter Zustand nach Continue; keine additiven Defaults/Timer | Gebäude/Waren/Units/Path fehlen, doppelte Defaults, Restore-Patches oder Doppelregistrierung |
-| IM-14 | UI nur Read/Command; Touch-first; Build/WorkArea/Menu/Save erreichbar | T1 + T2 + T3 | A1 + A3 + A4 | zwingend | alle Kernaktionen auf kleinem Smartphone erreichbar und korrekt | abgeschnittene Buttons, Hover-only, direkte UI-State-Mutation oder Touch-Konflikt |
-| IM-15 | Guidance event-driven; Inspector optional/read-command; keine Business-Logik | T1 + T2 | A1 + A3 | Guidance-Mobilecheck empfohlen | Abschalten von Guidance/Inspector ändert Gameplay nicht | Inspector/Guidance repariert oder besitzt Gameplay-State |
-| IM-16 | Legacy-Guard nur nach Zielowner-PASS entfernt; keine Ersatzpatches | T1 + T2 + T3 | A1 + A2 | nur wenn betroffener Guard Gerätepfad berührt | alle gelisteten Altguards entweder entfernt oder begründet verbleibend; Regression PASS vor/nach Entfernung | Guard entfernt vor Exit-Gate, neue Ersatzschicht oder bekannte Altownership bleibt aktiv |
-| IM-17 | kompletter Golden Path, Stress, Performance, Mobile, Save/Continue | T3 + T4 | A2 + A3 + A4 | zwingend | alle V1-Kernketten, Stress- und Mobile-Gates PASS | irgendeine Kerninvariante, Save/Continue, Mobile oder Performance-Gate FAIL |
+| Block | Schwerpunkt | Pflichtprüfung | Geräte-Gate |
+|---|---|---|---|
+| IM-00 | reproduzierbare Referenz/Baseline | T1 + T3 Baseline | einmaliger Referenz-Gerätecheck |
+| IM-01 | Owner/Read/Command/Event | T1 + T2 | nein |
+| IM-02 | Scheduler/Lifecycle | T1 + T2 + T3 | realer Browser-Lifecycle am Exit, wenn betroffen |
+| IM-03 | Runtime-Invarianten | T1 + T2 | nein |
+| IM-04 | eine Building-Collection | T1 + T2 + T3 | Browser Save/Continue, wenn betroffen |
+| IM-05 | Person/Home/Capabilities/Founder | T1 + T2 + T3 | nein |
+| IM-06 | Jobs/Assignment/Recovery | T1 + T2 + T3 | nein |
+| IM-07 | Material/WAIT_BUILDER/Arrival | T1 + T2 + T3 | Runtime-Nachweis ausreichend |
+| IM-08 | local-first Production | T1 + T2 + T3 | nein |
+| IM-09 | Logistics/Reservation/Recovery | T1 + T2 + T3 | nein |
+| IM-10 | Housing/Population/Gold | T1 + T2 + T3 | nein |
+| IM-11 | Navigation/Backoff/Performance | T1 + T2 + T4 | mobiler Performance-PASS |
+| IM-12 | Wear/Dirty/Bake/Decay | T1 + T2 + T4 | Smartphone/Tablet Rendering + Performance |
+| IM-13 | Save/Restore/New-vs-Continue | T1 + T2 + T3 + T4 | echter Mobile Browser Reload/Storage-PASS |
+| IM-14 | UI/Mobile | T1 + T2 + T3 | vollständiger Smartphone-UX-PASS |
+| IM-15 | Guidance/Inspector Non-Ownership | T1 + T2 | Mobile Guidance empfohlen |
+| IM-16 | Legacy Cleanup | T1 + T2 + T3 | je betroffenem Gerätepfad |
+| IM-17 | kompletter V1-Kern | T3 + T4 | zwingender finaler Geräte-PASS |
 
-## 34. Verbindliche Invariant Test Cases
+## 29. Verbindliche Invariant Test Cases
 
 ### VAL-001 – New Game Single Initialization
-
-Test:
-- New Game aus sauberem Zustand starten.
-- Anzahl HQ, Gründer, Startressourcen, registrierte Scheduler/Systeme erfassen.
-
-PASS:
-- genau ein HQ,
-- genau eine Gründergruppe gemäß Balanceprofil,
-- Startressourcen genau einmal,
-- jede Systemregistrierung genau einmal.
-
-FAIL:
-- doppelte Gründer, doppelte Startressourcen, mehrfaches HQ oder Doppelregistrierung.
+PASS: genau ein HQ, genau eine Gründergruppe gemäß Balanceprofil, Startressourcen genau einmal, Systemregistrierungen genau einmal.
 
 ### VAL-002 – Continue No Additive Defaults
+PASS: kein Starter-Roster, keine Default-Ressourcen, keine Zusatzbewohner und keine zusätzlichen Timer/Subscriptions durch Continue.
 
-Test:
-- Spielzustand verändern und speichern.
-- Continue ausführen.
-
-PASS:
-- kein New-Game-Starter-Roster zusätzlich,
-- keine Default-Ressourcen zusätzlich,
-- keine zusätzlichen Bewohner,
-- keine zusätzlichen Timer/Subscriptions.
-
-FAIL:
-- irgendeine additive Initialisierung nach Continue.
-
-### VAL-003 – Goods One-Location Invariant
-
-Test:
-- Ware lokal erzeugen,
-- reservieren,
-- pickup,
-- transportieren,
-- liefern.
-
-PASS:
-- dieselbe Menge ist zu jedem Zeitpunkt wirtschaftlich an genau einem physischen Ort,
-- Reservation erzeugt keine Zusatzmenge.
-
-FAIL:
-- Menge gleichzeitig Quelle + Unit bzw. Unit + Ziel oder Menge verschwindet ohne zulässigen Verbrauch/Recovery.
+### VAL-003 – Goods One-Location
+PASS: eine physische Warenmenge liegt wirtschaftlich immer genau an einem Ort; Reservation erzeugt keine Zusatzmenge.
 
 ### VAL-004 – Construction Builder Arrival
-
-Test:
-- Baustelle vollständig beliefern,
-- Builder zuweisen,
-- Builderweg beobachten.
-
-PASS:
-- Fortschritt bleibt bis realer Ankunft exakt unverändert,
-- erst gültige Ankunft startet Arbeitsfortschritt.
-
-FAIL:
-- Baufortschritt durch Materialvollständigkeit oder Assignment allein.
+PASS: Fortschritt bleibt bis zur realen Builder-Ankunft unverändert; erst danach Bauarbeit.
 
 ### VAL-005 – Construction No Overdelivery
-
-Test:
-- Baustelle mit bereits reservierten/unterwegs befindlichen Waren bis nahe Soll versorgen.
-
-PASS:
-- neuer Bedarf entspricht `Soll - geliefert - gültig reserviert/unterwegs`,
-- kein neuer Transport bei Restbedarf 0.
-
-FAIL:
-- zusätzliche Lieferjobs oder überschüssige Lieferung aufgrund ignorierter Reservation/En-route-Menge.
+PASS: Bedarf = Soll - geliefert - gültig reserviert/unterwegs; bei Restbedarf 0 kein neuer Transport.
 
 ### VAL-006 – Production Local First
-
-Test:
-- einen Produktionszyklus erfolgreich abschließen.
-
-PASS:
-- Output steigt ausschließlich im lokalen BuildingStock,
-- HQ unverändert bis reale Delivery.
-
-FAIL:
-- direkte HQ-Gutschrift oder doppelte lokale+globale Buchung.
+PASS: Produktionsoutput steigt ausschließlich lokal; HQ erst nach realer Delivery.
 
 ### VAL-007 – Pause Semantics
-
-Test:
-- Produktionsgebäude mit vorhandenem lokalem Output pausieren.
-
-PASS:
-- kein neuer Produktionszyklus startet,
-- fertige Ware bleibt vorhanden und transportierbar.
-
-FAIL:
-- Ware verschwindet, Transport stoppt künstlich oder Produktion läuft weiter.
+PASS: pausierte Produktion erzeugt nichts Neues; fertige lokale Ware bleibt vorhanden/transportierbar.
 
 ### VAL-008 – Resident Identity Preservation
-
-Test:
-- allgemeinem Bewohner einfachen Transportjob zuweisen.
-
-PASS:
-- stabile Person-ID, Home und Spezialisierung bleiben erhalten,
-- nur Assignment/Activity ändern sich.
-
-FAIL:
-- `resident -> carrier` Type-/Identity-Mutation.
+PASS: einfacher Transport ändert nur Assignment/Activity, nicht Person-ID/Home/Spezialisierung.
 
 ### VAL-009 – Specialist Capability Gate
-
-Test:
-- Fachjob mit fehlender passender Capability erzeugen.
-
-PASS:
-- Job wartet/bleibt unbesetzt nachvollziehbar,
-- kein beliebiger Bewohner wird automatisch umqualifiziert.
-
-FAIL:
-- spontane Capability-/Spezialisierungserzeugung durch Jobvergabe.
+PASS: Fachjob bleibt ohne passende Capability unbesetzt; keine automatische Umqualifizierung.
 
 ### VAL-010 – Single Assignment / No Zombie
-
-Test:
-- Unit während laufendem Assignment mit konkurrierendem Job konfrontieren; anschließend Job/Ziel invalidieren.
-
-PASS:
-- nie zwei aktive normale Assignments,
-- nach Cancel/Recovery kein verwaister Job/Reservation/Unit-Bindung.
-
-FAIL:
-- FREE+ASSIGNED gleichzeitig, doppelte Zuweisung oder Zombie-State.
+PASS: nie zwei normale aktive Assignments; Cancel/Recovery hinterlässt keine verwaisten Jobs/Reservations/Bindings.
 
 ### VAL-011 – Navigation Backoff
-
-Test:
-- absichtlich unerreichbares gültig erscheinendes Ziel anbieten.
-
-PASS:
-- Reachability/Failure erkannt,
-- Job kontrolliert zurückgestellt,
-- keine identische A*-Anfrage pro Tick.
-
-FAIL:
-- Hot-Retry oder stetig wachsende Fail-Aufrufe ohne Weltänderung.
+PASS: unerreichbares Ziel führt zu kontrolliertem Backoff, nicht identischem A*-Retry pro Tick.
 
 ### VAL-012 – Path Wear Ownership
-
-Test:
-- dieselbe Strecke häufig und danach längere Simulationszeit kaum nutzen.
-
-PASS:
-- Wear verstärkt sich lokal,
-- Darstellung folgt Wear,
-- Decay kann schwache Nutzung reduzieren,
-- keine persistente Einzelstempelliste als Wahrheit.
-
-FAIL:
-- Renderstempel sind autoritativer State oder Speicher wächst proportional zu jedem Schritt unbegrenzt.
+PASS: häufige Nutzung verstärkt Wear, Decay kann schwache Nutzung reduzieren, Renderstempel sind keine autoritative Wahrheit.
 
 ### VAL-013 – Housing / Population Consistency
-
-Test:
-- kleines und mittleres Haus bauen, Gründer umziehen, verbleibende Plätze besetzen.
-
-PASS:
-- Kapazitäten 2/3,
-- Population entspricht realen Personen,
-- Gründer werden nur umgebunden, nicht neu erzeugt.
-
-FAIL:
-- Hausabschluss addiert pauschal 2/3 trotz bereits umgezogener Gründer oder Population besitzt eigenen abweichenden Zähler.
+PASS: Hauskapazität 2/3, Population aus realen Personen, Gründer werden umgebunden statt neu erzeugt.
 
 ### VAL-014 – Gold Exactly Once
-
-Test:
-- definierte Simulationszeit mit konstanter realer Bewohnerzahl laufen lassen; Pause und Continue dazwischen.
-
-PASS:
-- Goldzuwachs entspricht genau der Economy-Regel,
-- Pause erzeugt keinen Fortschritt,
-- Continue erzeugt keinen Bonus-/Replay-Zuwachs.
-
-FAIL:
-- doppelte Steuerereignisse, Wandzeit-Zuwachs in Pause oder physische Goldware.
+PASS: Gold folgt Simulationszeit/realen Bewohnern genau einmal; Pause/Continue erzeugen keinen Bonus/Replay.
 
 ### VAL-015 – Save/Continue State Equivalence
-
-Test:
-- belasteten Zustand mit Buildings, Stocks, Baustelle, Residents, Jobs/Recovery, WorkArea und Wear speichern.
-- Continue.
-
-PASS:
-- authoritative fachliche Zustände sind äquivalent,
-- nur explizit transiente Caches/Queues dürfen neu aufgebaut sein.
-
-FAIL:
-- fachliche Mengen/IDs/Beziehungen ändern sich ohne definierte Migration.
+PASS: authoritative fachliche Zustände sind nach Continue äquivalent; nur transiente Caches/Queues dürfen neu aufgebaut sein.
 
 ### VAL-016 – Scheduler Registration Once
-
-Test:
-- New Game, Save, Continue mehrfach durchführen.
-
-PASS:
-- Anzahl registrierter Scheduler-Systeme/Subscriptions bleibt konstant entsprechend Soll.
-
-FAIL:
-- Anzahl wächst mit jedem Continue.
+PASS: Anzahl registrierter Scheduler-Systeme/Subscriptions bleibt nach wiederholtem Continue konstant.
 
 ### VAL-017 – Inspector/Guidance Non-Ownership
-
-Test:
-- Guidance und Inspector deaktivieren/entfernen und denselben Gameplay-Ablauf ausführen.
-
-PASS:
-- fachlicher Zustand und Simulation bleiben gleich.
-
-FAIL:
-- Gameplayfunktion hängt von Inspector-/Guidance-Patch oder deren internem State ab.
+PASS: Abschalten von Inspector/Guidance verändert fachlichen Zustand/Simulation nicht.
 
 ### VAL-018 – Mobile Core Interaction
+PASS auf kleinem Smartphone: Pan, Zoom, Select, Build, Placement Confirm/Cancel, Context Panel, WorkArea, Systemmenü und Save/Continue sind erreichbar/eindeutig; keine Kernaktion nur Hover/Keyboard/Rechtsklick.
 
-Test auf kleinem Smartphone:
-- Pan,
-- Zoom,
-- Select,
-- Build öffnen,
-- Placement Preview verschieben,
-- Confirm/Cancel,
-- Context Panel,
-- WorkArea,
-- Systemmenu,
-- Save/Continue.
-
-PASS:
-- alle Kernaktionen erreichbar und eindeutig,
-- keine Kernaktion nur per Hover/Keyboard/Rechtsklick,
-- keine wesentlichen Controls außerhalb Viewport.
-
-FAIL:
-- nicht erreichbare Kernaktion, Touchkonflikt oder abgeschnittener erforderlicher Button.
-
-## 35. Block-zu-Invariant-Zuordnung
+## 30. Block-zu-VAL-Zuordnung
 
 | Block | mindestens erneut ausführen |
 |---|---|
-| IM-00 | VAL-001, VAL-002 als Baseline, VAL-018 Referenz |
-| IM-01 | VAL-003, VAL-017 plus Contract-Checks |
+| IM-00 | VAL-001, VAL-002 Baseline, VAL-018 Referenz |
+| IM-01 | VAL-003, VAL-017 + Contract Checks |
 | IM-02 | VAL-001, VAL-002, VAL-007, VAL-016 |
-| IM-03 | künstliche Negativfälle aus VAL-003/004/010/016 |
-| IM-04 | VAL-001, VAL-002, VAL-015 Buildings-Teil |
+| IM-03 | Negativfälle aus VAL-003/004/010/016 |
+| IM-04 | VAL-001, VAL-002, VAL-015 Buildings |
 | IM-05 | VAL-008, VAL-009, VAL-013 |
 | IM-06 | VAL-008, VAL-009, VAL-010, VAL-011 |
 | IM-07 | VAL-004, VAL-005, VAL-010 |
 | IM-08 | VAL-006, VAL-007, VAL-009 |
 | IM-09 | VAL-003, VAL-005, VAL-008, VAL-010 |
 | IM-10 | VAL-013, VAL-014, VAL-002 |
-| IM-11 | VAL-011 plus Performance-Baselinevergleich |
-| IM-12 | VAL-012, VAL-015 Path-Teil, Geräte-Rendering |
+| IM-11 | VAL-011 + Performance-Baselinevergleich |
+| IM-12 | VAL-012, VAL-015 Path, Geräte-Rendering |
 | IM-13 | VAL-002, VAL-003, VAL-013, VAL-014, VAL-015, VAL-016 |
-| IM-14 | VAL-018 plus VAL-017 UI-Ownership-Anteil |
-| IM-15 | VAL-017, Guidance-Persistenztest |
-| IM-16 | je entferntem Guard zugehörige VAL-Tests vor und nach Entfernung |
+| IM-14 | VAL-018 + VAL-017 UI-Ownership |
+| IM-15 | VAL-017 + Guidance-Persistenz |
+| IM-16 | zugehörige VAL-Tests vor und nach jeder Guard-Entfernung |
 | IM-17 | VAL-001 bis VAL-018 vollständig bzw. alle anwendbaren Varianten |
 
-## 36. Geräte-PASS-Matrix
+## 31. Performance-Gate
 
-### Pflicht-Gates
+Keine pauschale Millisekundenzahl wird vor IM-00 eingefroren. Verbindlich:
+- bekannte Hotloop-Strukturen dürfen nicht wieder entstehen,
+- Navigation-Fails dürfen unter unveränderter Welt nicht durch sofortige Wiederholungen anwachsen,
+- Timer/Subscription/Job/Reservation-Zahlen dürfen bei stabilem Zustand nicht monoton ohne fachlichen Grund wachsen,
+- IM-11/12/17 werden gegen IM-00 verglichen,
+- deutliche unbegründete Regression blockiert den Exit.
 
-- **IM-11 Exit:** mindestens ein echter mobiler Performance-/Navigation-Lauf.
-- **IM-12 Exit:** Smartphone/Tablet-Rendering der Wear-/Pfaddarstellung und Performance.
-- **IM-13 Exit:** echter Browser-Save/Reload/Continue auf mindestens einem mobilen Gerät.
-- **IM-14 Exit:** vollständiger Smartphone-UX-PASS.
-- **IM-17 Exit:** finaler Geräte-PASS des Golden Path.
+## 32. Evidence Requirement
 
-### Kein eigener Geräte-PASS nötig
-
-IM-01, IM-03, IM-05, IM-06, IM-07, IM-08, IM-09 und IM-10 benötigen keinen separaten Geräte-PASS, sofern:
-
-- ihre T1/T2/T3-Gates vollständig PASS sind,
-- kein Touch-/Rendering-/Storage-/Browser-Lifecycle-Code verändert wurde,
-- der nächste verbindliche Geräte-Gate nicht übersprungen wird.
-
-IM-02 und IM-04 benötigen spätestens am jeweiligen Exit einen realen Browser-Lifecycle-/Save-Check, wenn ihre Änderungen tatsächliches Reload-/Lifecycle-Verhalten berühren.
-
-## 37. Automatisierbare Kernchecks für die spätere Implementierung
-
-Für die Implementierungsphase sollen bevorzugt wiederverwendbare Diagnose-/Testhilfen entstehen für:
-
-- Owner-State Snapshot vor/nach Operation,
-- Goods total by location,
-- Unit availability/assignment consistency,
-- active jobs/reservations count,
-- scheduler registration count,
-- navigation calls/ok/fail/backoff,
-- building count/IDs,
-- resident IDs/home bindings,
-- local stocks/HQ stocks,
-- construction material/progress/builder state,
-- population derived count,
-- gold delta over simulation time,
-- path wear summary/dirty regions,
-- save snapshot equivalence.
-
-Diese Hilfen sind Tests/Diagnostics und dürfen keine Gameplay-Reparatur übernehmen.
-
-## 38. PASS-Schwellen für Performance
-
-S2D-06B friert keine pauschale Millisekundenzahl für alle Geräte ein. Stattdessen gilt:
-
-1. keine bekannte Hotloop-Struktur darf wieder entstehen,
-2. Navigation-Failrate unter unverändert gültiger Welt darf nicht durch sofortige Wiederholungen anwachsen,
-3. Timer-/Subscription-/Job-/Reservation-Anzahlen dürfen bei stabilem Spielzustand nicht monoton ohne fachlichen Grund wachsen,
-4. IM-11/12/17 müssen gegen die IM-00-Baseline verglichen werden,
-5. deutliche Regression ohne fachliche Begründung blockiert den Exit auch dann, wenn das Spiel subjektiv noch „läuft“.
-
-Konkrete Geräte-/Budget-Grenzen dürfen nach IM-00-Baseline kontrolliert als spätere Tuning-/Engineering-Grenzen dokumentiert werden.
-
-## 39. Evidence Requirement
-
-Jeder technische Block muss für seinen PASS mindestens dokumentieren:
-
+Jeder technische Block dokumentiert mindestens:
 - Branch,
 - Parent-/Start-HEAD,
 - End-Commit,
 - Changed Files,
-- ausgeführte Teststufen T1/T2/T3/T4,
+- T1/T2/T3/T4,
 - relevante VAL-IDs,
 - Geräte-PASS ja/nein/nicht erforderlich,
-- bekannte Non-Blocker,
+- bekannte Non-Blocker/Baseline Issues,
 - Ergebnis PASS/BLOCKED/FAIL.
 
-Ein bloßes „sieht gut aus“ genügt nicht als formaler Blockabschluss.
+---
 
-## 40. S2D-06B Abschlussstatus
+# S2D-06C – Release Gates, Freeze Criteria & Implementation Entry Conditions
 
-- IM-00 bis IM-17 in Validation Matrix abgedeckt: **PASS**
-- globale Acceptance Criteria definiert: **PASS**
-- Testarten T1–T4 operationalisiert: **PASS**
-- Automatisierungsgrade A1–A4 definiert: **PASS**
-- Geräte-PASS-Pflichten festgelegt: **PASS**
-- 18 zentrale Invariant Test Cases definiert: **PASS**
-- Block-zu-Invariant-Zuordnung definiert: **PASS**
-- PASS/FAIL/BLOCKED-Logik definiert: **PASS**
-- Performance-Gate ohne vorgezogene willkürliche Zahlen definiert: **PASS**
-- Gameplay-/Runtime-/UI-Codeänderungen: **0**
-- offene S2D-06B-Blocker: **0**
+## 33. Statusmodell
 
-**S2D-06B – Validation Matrix & Acceptance Criteria: COMPLETE / 0 BLOCKER**
+- **PLANNED** – Scope/Gate definiert.
+- **READY** – Entry Conditions erfüllt.
+- **IN PROGRESS** – produktive Arbeit läuft.
+- **BLOCKED** – Abhängigkeit/Testumgebung/Nachweis fehlt.
+- **FAIL** – verpflichtendes Criterion verletzt.
+- **PASS** – alle verpflichtenden Gates/Evidence erfüllt.
+- **FROZEN** – PASS-Stand als verbindlicher Parent festgezogen.
 
-S2D-06 bleibt **V0.1 DRAFT**. Vor dem Freeze fehlen noch die Release-/Freeze-Gates und der interne Konsistenzabschluss.
+`PASS WITH DEFERRED NON-BLOCKER` darf nur FROZEN werden, wenn kein Deferred-Punkt eine Kerninvariante, den nächsten Entry-Gate oder eine notwendige Migration berührt.
+
+## 34. Globales Entry Gate
+
+Vor READY:
+1. FROZEN/PASS-Parent eindeutig,
+2. Arbeitsbranch direkt vom Parent oder identisch,
+3. ahead/behind dokumentiert,
+4. Scope/Owner/Changed Files/Excluded Scope definiert,
+5. Vorgängerblöcke PASS/FROZEN,
+6. T1–T4/VAL-Prüfungen vor Änderung bekannt,
+7. Rollback-Commit vorhanden,
+8. keine offene Kernregression,
+9. keine ungeklärte neue Produkt-/Architekturentscheidung; andernfalls S2D-07,
+10. T2-Nachweis grundsätzlich ausführbar.
+
+## 35. Block Entry Record
+
+Vor erstem produktiven Commit mindestens:
+- Block-ID,
+- Parent/Frozen Commit,
+- Branch,
+- Ziel/Owner,
+- erwartete Changed Files/Modulgruppen,
+- ausgeschlossene Bereiche,
+- Vorgänger,
+- Tests/VAL-IDs,
+- Geräte-Gate,
+- Rollback-Commit,
+- Status READY.
+
+## 36. In-Progress Stop-/Change-Control
+
+### Scope Expansion
+Weiteren Owner nicht beiläufig grundlegend mitverändern. Block stoppen/teilen und neues Entry-Gate.
+
+### Neue fachliche Entscheidung
+Keine spontane Codeentscheidung. BLOCKED -> S2D-07 -> kontrollierte Aktualisierung.
+
+### Neue Regression
+Im aktuellen Block klären oder zum letzten FROZEN-Stand zurück. Nicht in den nächsten Block verschieben.
+
+### Neuer Guard/Patch
+Standardmäßig FAIL/BLOCKED. Temporär nur mit dokumentiertem Grund, Zielowner, Exit-Gate und Entfernungspunkt.
+
+## 37. Exit Gate eines Unterblocks
+
+PASS nur wenn:
+- Scope vollständig,
+- Changed Files plausibel,
+- T1/T2 PASS,
+- relevante bestehende Invarianten PASS,
+- erforderliche T3/T4 PASS,
+- Geräte-Gate erfüllt oder laut Matrix am Hauptblock-Exit fällig,
+- keine zweite Ownership,
+- keine neue versteckte Timer-/Self-Start-/Patchstruktur,
+- Evidence vollständig,
+- nur echte dokumentierte Non-Blocker offen.
+
+## 38. Freeze Criteria eines IM-Hauptblocks
+
+FROZEN erst wenn:
+- alle Pflicht-Unterblöcke PASS,
+- Hauptblock-VAL-Zuordnung PASS,
+- vorgeschriebene T3/T4 PASS,
+- vorgeschriebenes Geräte-Gate PASS,
+- Legacy-Exit nur nach vollständiger Ownerübernahme,
+- keine Kernregression/ungeklärte Ownership/Save-Lifecycle-Auswirkung,
+- alle Changed Files bewertet,
+- finaler Commit eindeutig,
+- Branch gegen Parent/Startstand geprüft,
+- Status/Evidence aktualisiert.
+
+Nur dieser FROZEN-Commit ist regulärer Parent des nächsten Hauptblocks.
+
+## 39. Branch-Weiterwanderung
+
+Regel:
+`FROZEN Parent -> IM-Branch -> PASS -> FROZEN -> nächster Block`
+
+Kein späterer Block basiert auf einem zufälligen Zwischencommit eines unfertigen Vorgängers. Parallele Vorarbeit ist nur isoliert als Dokument-/Testarbeit ohne vorgezogene Zielownership zulässig.
+
+## 40. Main-/Merge-Regel
+
+S2D-06 erteilt keine automatische Merge-Freigabe nach `main`.
+- `main` bleibt unangetastet bis ausdrücklicher Merge-Schritt,
+- FROZEN = verbindlicher Entwicklungsstand, nicht automatisch gemerged,
+- nur PASS/FROZEN darf Mergequelle sein,
+- BLOCKED/FAIL/IN PROGRESS nie nach main.
+
+## 41. Deferred Non-Blocker
+
+Nur zulässig, wenn:
+- keine V1-Kernregel verletzt,
+- keine Daten-/Waren-/Personeninkonsistenz,
+- kein Save/Continue-Risiko,
+- kein Navigation-Hotloop/Leak,
+- kein unbedienbarer Mobile-Core-Flow,
+- keine Voraussetzung des nächsten Blocks,
+- späterer Zielblock/Tuningbereich benannt.
+
+Nicht als Non-Blocker zulässig: Bau vor Builder-Ankunft, doppelte Ware, State-Verlust bei Continue, Resident-Type-Mutation, Overdelivery, Doppel-Scheduler, unerreichbare Smartphone-Kernaktion.
+
+## 42. Legacy-Removal Release Gate
+
+1. Zielowner implementiert.
+2. Regression mit Legacy aktiv PASS.
+3. Keine alleinige Fachverantwortung mehr im Legacy-Code.
+4. Legacy entfernen.
+5. Gleiche Regression erneut PASS.
+6. Restreferenzen prüfen.
+7. Erst danach Removal PASS/FROZEN.
+
+## 43. Save-/Lifecycle Release Gate
+
+Vor Änderungen an New Game/Continue/Scheduler-Start/Restore/Storage:
+- Referenz-Save/Testzustand vorhanden,
+- persistente Owner-State-Liste bekannt,
+- additive Defaults als verbotener Continue-Effekt getestet,
+- Scheduler-/Subscription-Zählung messbar,
+- Rollback vorhanden,
+- echter Browser-/Reload-Test spätestens am Exit.
+
+Korruptes/inkompatibles Save: fail-closed; kein stiller New-Game-Fallback.
+
+## 44. Mobile-/Rendering Release Gate
+
+Vor IM-12/14 bzw. anderen Touch-/Renderänderungen:
+- kleines Smartphone als Pflichtziel,
+- betroffene Kerninteraktionen definiert,
+- visuelle Darstellung besitzt keine Gameplay-Ownership,
+- Desktop-PASS ersetzt Mobile-PASS nicht.
+
+## 45. Entry Conditions von S2D-06 zu IM-00
+
+IM-00 darf erst beginnen, wenn:
+1. S2D-00…05 FROZEN/PASS/0 BLOCKER,
+2. S2D-06A COMPLETE,
+3. S2D-06B COMPLETE,
+4. S2D-06C COMPLETE,
+5. S2D-06D PASS/FROZEN,
+6. keine widersprüchliche Blockreihenfolge,
+7. IM-00…17 besitzen Exit-/Acceptance-Gates,
+8. Gerätepflichten eindeutig,
+9. Legacy-Entfernung besitzt Exit-Regeln,
+10. während S2D-06 keine produktive Codeänderung vorgezogen,
+11. finaler S2D-06-Frozen-Commit bekannt,
+12. Implementierungsbranch direkt davon erzeugt.
+
+## 46. IM-00 Entry Gate
+
+Nach S2D-06 Freeze:
+- Implementierungsbranch direkt vom Frozen Commit,
+- Branch/HEAD identisch zum Parent,
+- produktiver Referenzstand startbar,
+- echter Referenz-Gerätetest des Altstands möglich,
+- Save/Continue grundsätzlich testbar,
+- Diagnose/Baseline ohne Gameplay-Reparatur möglich,
+- keine neue Produktentscheidung nötig.
+
+IM-00 darf Baseline/Test-/Diagnoseharness vorbereiten, aber keine Migration aus IM-01+ vorziehen.
+
+## 47. IM-00 Freeze Gate
+
+FROZEN wenn:
+- Referenzcommit/Bootpfad dokumentiert,
+- Core-Smoke-Checklist reproduzierbar,
+- Diagnostic Baseline erfasst,
+- Timer-/Interval-/Scheduler-Ausgangslage nachvollziehbar,
+- New Game/Continue als Referenzabläufe dokumentiert,
+- bekannte bestehende Fehler als Baseline Issues getrennt erfasst,
+- keine fachliche Funktion absichtlich verändert,
+- Geräte-Referenzcheck abgeschlossen,
+- Evidence vollständig.
+
+Erst danach IM-01 READY.
+
+## 48. Known Baseline Issues
+
+Ein vor IM-00 reproduzierbarer Fehler wird `KNOWN BASELINE ISSUE`:
+- blockiert IM-00 nicht automatisch, wenn sichere Messung möglich bleibt,
+- darf später nur als Altfehler gelten, wenn im FROZEN IM-00 nachgewiesen,
+- Verschlechterung in Häufigkeit/Auswirkung/Datenkonsistenz = neue Regression,
+- Zielprobleme späterer IM-Blöcke dürfen als Altprobleme bestehen, müssen spätestens am vorgesehenen Exit geschlossen sein.
+
+## 49. Release Evidence Record
+
+Für jeden FROZEN-Hauptblock mindestens:
+- Block-ID/Titel,
+- Parent Commit,
+- Start Branch/HEAD,
+- End Commit,
+- Changed Files,
+- veränderte Owner/Contracts,
+- entfernte Legacy-Komponenten,
+- T1/T2/T3/T4,
+- VAL-IDs,
+- Geräte/Browser,
+- Performancevergleich falls relevant,
+- Known Baseline Issues,
+- Deferred Non-Blocker,
+- Open Blockers = 0,
+- Freeze Decision = PASS/FROZEN.
+
+## 50. Stop-the-Line Criteria
+
+Weiterwanderung stoppt bei:
+- Datenverlust/Warenverdopplung,
+- Resident-/Unit-Duplikation,
+- neuer SaveGame-Korruption,
+- Continue mit additiven Defaults,
+- Baufortschritt ohne Builder-Ankunft nach zuständigem Construction-Gate,
+- neuem Navigation-Hotloop,
+- unkontrolliert wachsendem Timer-/Subscription-/Job-/Reservation-State,
+- zweitem autoritativen Owner,
+- notwendigem undokumentiertem Runtime-Patch,
+- nicht reproduzierbarem Branch-/Parent-Stand,
+- erforderlichem Geräte-Gate FAIL.
+
+Letzter FROZEN-Commit bleibt verbindliche Basis.
+
+---
+
+# S2D-06D – Internal Consistency & Roadmap Freeze Gate
+
+## 51. Prüfumfang
+
+S2D-06A/B/C wurden geschlossen gegen S2D-00 bis S2D-05 geprüft.
+
+Geprüft wurden insbesondere:
+- Produktumfang / kleiner Wirtschaftskern,
+- reale Waren- und Transportlogik,
+- Construction Material-/Builder-Gate,
+- Unit-Identität, Home, Spezialisten und Gründerstart,
+- ein State / ein Owner,
+- Scheduler-/Lifecycle-Regeln,
+- SaveGame-/Continue-Trennung,
+- Navigation/Backoff,
+- Path/Wear Ownership,
+- Mobile-first UI/Touch-Gates,
+- Guidance-/Inspector Non-Ownership,
+- Contentgrenzen NOW/LATER,
+- Balance-Offenheit,
+- Legacy Exit Gates,
+- Branch-/Freeze-/Evidence-Regeln.
+
+## 52. Prüfergebnis
+
+| Prüfung | Ergebnis |
+|---|---|
+| Widersprüche zu S2D-00 Product Scope | 0 |
+| Widersprüche zu S2D-01 Game Design / Economy | 0 |
+| Widersprüche zu S2D-02 Unit & Workforce | 0 |
+| Widersprüche zu S2D-03 Technical Architecture | 0 |
+| Widersprüche zu S2D-04 UI / Mobile UX | 0 |
+| Widersprüche zu S2D-05 Content Catalog | 0 |
+| fehlende IM-Hauptblöcke für eingefrorene Ownerbereiche | 0 |
+| IM-Blöcke ohne Exit-/Acceptance-Gate | 0 |
+| ungeklärte Gerätepflicht | 0 |
+| Legacy-Removal ohne vorheriges Zielowner-Gate | 0 |
+| Save/Continue-Lifecycle-Widerspruch | 0 |
+| Navigation-/Path-Performance-Widerspruch | 0 |
+| vorgezogene LATER-Contentmechanik | 0 |
+| vorgezogene finale Balancezahlen | 0 |
+| produktive Gameplay-/Runtime-/UI-Codeänderungen während S2D-06 | 0 |
+| offene S2D-06-Blocker | **0** |
+
+## 53. Kritische Cross-Checks
+
+- S2D-06 übernimmt den verbindlichen Wirtschaftskern `HQ -> Häuser -> Bewohner -> Produktion -> lokaler Stock -> physischer Transport -> HQ -> Bau -> Expansion` ohne Scope-Erweiterung.
+- Goods One-Location wird durch IM-08/09, VAL-003 und Save/Recovery-Gates durchgehend geschützt.
+- Construction bleibt `WAIT_MATERIAL -> WAIT_BUILDER -> BUILDING -> COMPLETE`; IM-07/VAL-004/005 verhindern Bau vor Builder-Ankunft und Overdelivery.
+- Resident Identity und Capability-Modell bleiben in IM-05/06/09/10 erhalten; Resident Helper wird nie temporär Carrier-Typ.
+- S2D-05-Gründerroster wird nur in New Game erzeugt; Continue darf keine Gründer/Defaults addieren.
+- Ein Owner pro Zustand wird zuerst über Contracts/Validation und danach domainweise konsolidiert; UI/Renderer/Inspector bleiben Consumer.
+- Scheduler-Migration liegt vor Owner-Großumbauten; Feature-Timer werden nicht durch neue dauerhafte Feature-Timer ersetzt.
+- Navigation bleibt zunächst A*-basiert, wird aber über NavigationService, Reachability und Backoff zentralisiert; kein Pathfinder-Big-Bang.
+- Path/Wear wird erst nach Navigation migriert und besitzt separaten autoritativen Wear-State; Render Cache bleibt Darstellung.
+- SaveGame wird nach den Domainmigrationen owner-basiert konsolidiert und startet Scheduler erst nach vollständigem Restore-PASS.
+- Smartphone-Gates sind bei Navigation/Path/Save/UI/End-to-End explizit verankert; Desktop-PASS ersetzt sie nicht.
+- Legacy-Schichten werden nur nach zugehörigem Zielowner-PASS entfernt und danach mit denselben Regressionen erneut geprüft.
+- `main` wird durch S2D-06 nicht automatisch verändert oder freigegeben.
+- Known Baseline Issues legitimieren Altfehler nicht als Zielzustand; sie trennen nur vorhandene Altprobleme von neuen Regressionen.
+
+## 54. Freeze-Entscheidung
+
+S2D-06A – COMPLETE  
+S2D-06B – COMPLETE  
+S2D-06C – COMPLETE  
+S2D-06D – PASS / 0 BLOCKER
+
+**S2D-06 ROADMAP & VALIDATION V0.1 FROZEN – PASS / 0 BLOCKER**
+
+Änderungen an dieser Roadmap oder den eingefrorenen Produkt-/Architekturregeln erfolgen ab jetzt nur kontrolliert über `S2D-07 – DECISION & CHANGE LOG` bzw. einen ausdrücklich freigegebenen Roadmap-Revisionsblock.
+
+Der nächste zulässige technische Hauptblock ist **IM-00 – Baseline & Safety Harness**. Ein neuer Implementierungsbranch muss direkt vom finalen S2D-06-Frozen-Commit erzeugt werden.
