@@ -1,6 +1,7 @@
 # CR-04A – Transport Job Contract
 
 Stand: 2026-09-02
+Status: **COMPLETE**
 
 ## Ziel
 
@@ -9,7 +10,7 @@ CR-04A definiert ausschließlich den Datenvertrag eines Transportauftrags auf Ba
 Die Systemgrenze bleibt bewusst eng:
 
 - **CR-03 FROZEN:** Welche Ressource wird welchem Demand zugeordnet und dafür reserviert?
-- **CR-04A:** Welche Daten muss ein daraus später entstehender Transportauftrag verbindlich tragen und wann ist dieser Vertrag gültig?
+- **CR-04A COMPLETE:** Welche Daten muss ein daraus später entstehender Transportauftrag verbindlich tragen und wann ist dieser Vertrag gültig?
 - **CR-04B:** Erzeugt später kontrolliert TransportJobs aus Assignment-/Claim-Ergebnissen.
 
 CR-04A erzeugt selbst keine Jobs im DomainStore und enthält keine Runtime-Transportlogik.
@@ -88,28 +89,33 @@ Das Definieren oder Validieren eines TransportJob-Contracts darf insbesondere **
 - Claim-Splitting oder Job-Batching
 - physische Zielpunktauflösung hinter `targetId`
 
-## Tests
+## Tests und Integration
 
-`src/dev/cr-04a-self-test.js` prüft den Contract gegen einen echten CR-03-Matching-/Assignment-/Claim-Aufbau. Geprüft werden gültige Verknüpfungen, ungültige Mengen und Status, Demand-/Resource-/Source-/Target-Mismatches, freigegebene Claims sowie die Nebenwirkungsfreiheit.
+Die Contract-Tests liegen in `src/dev/cr-04a-self-test.js` und werden über `src/dev/cr-04a-self-test.node.js` ausführbar gemacht.
 
-`src/dev/cr-04a-self-test.node.js` stellt dafür einen ausführbaren Node-Runner mit echtem Exit-Code bereit:
+Die CR-03-Freeze-Regression besitzt zusätzlich den Node-Runner `src/dev/cr-03-freeze-gate.node.js`.
 
-```bash
-node src/dev/cr-04a-self-test.node.js
-```
+Das gemeinsame Gate `src/dev/cr-04a-integration-gate.node.js` führt CR-03 Regression und CR-04A Contract Tests zusammen. `npm run ci` führt davor außerdem Clean-Runtime-Syntax- und Strukturprüfung aus.
 
-Ergebnisziel:
+Verbindlicher Abschlusslauf:
 
-`CR-04A contract tests PASS / 0 Blocker`
+- GitHub Actions Workflow: `CI Baseline`
+- Run: `4199`
+- Head: `64e03900e86ae169398e5d5e0ee3bea12fedaca9`
+- Ergebnis: **PASS / 0 Blocker**
 
-## CR-04A Abschlusskriterium
+Damit sind gemeinsam bestätigt:
 
-CR-04A kann erst auf `COMPLETE` gesetzt werden, wenn:
+- Clean-Runtime-Syntaxgate PASS,
+- Clean-Runtime-Strukturgate PASS,
+- CR-03 Regression PASS,
+- CR-04A Contract Tests PASS,
+- keine Carrier-, Routing- oder Movement-Abhängigkeit in CR-04A.
 
-- Contract und Link-Validierung vollständig sind,
-- der CR-04A-Testlauf `PASS / 0 Blocker` liefert,
-- die CR-03-Regression weiterhin grün ist,
-- der neue Clean-Runtime-CI-Layer die CR-04A-Dateien ohne Syntax-/Strukturfehler akzeptiert,
-- weiterhin keine Carrier-, Routing- oder Movement-Abhängigkeit in CR-04A vorhanden ist.
+## Abschluss
 
-Bis dahin bleibt CR-04A **IN PROGRESS** und CR-04 als Gesamtblock ausdrücklich **nicht FROZEN**.
+**CR-04A – Transport Job Contract: COMPLETE**
+
+CR-04 als Gesamtblock bleibt **IN PROGRESS / NOT FROZEN**.
+
+Der nächste fachliche Schritt ist **CR-04B – Controlled Assignment → TransportJob Creation**. Dort darf erstmals kontrolliert aus einem bestehenden CR-03 Assignment/Claim ein persistierter TransportJob entstehen. Carrier-Auswahl, Wegfindung und Bewegung bleiben weiterhin außerhalb des Scopes.
