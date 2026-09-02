@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
   <title>Neue Siedler – CR-04B Controlled Transport Job Creation</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=cr04b-diag2">
+  <link rel="stylesheet" href="src/ui/app.css?v=cr04b-fix1">
 </head>
 <body>
   <main id="app" class="app-shell">
@@ -19,10 +19,10 @@
       <div class="foundation-card">
         <h1>CR-04B – Controlled Transport Job Creation</h1>
         <p>Aktueller Geräte-Teststand: Aus einer gültigen CR-03-Zuordnung bzw. ihren aktiven Claims werden kontrolliert echte persistierte TransportJobs erzeugt. Pro Claim entsteht höchstens ein Job; Wiederholung ist idempotent und ungültige oder freigegebene Claims dürfen nichts persistieren. CR-03 ist FROZEN, CR-04A COMPLETE und beide laufen nur als Regression mit. Noch keine Carrier-Auswahl, Wegfindung oder Bewegung.</p>
-        <output id="test-status">CR-04B Diagnose läuft …</output>
+        <output id="test-status">CR-04B Regression + Creation Gate läuft …</output>
       </div>
     </section>
   </main>
-  <script type="module" src="src/main.js?v=cr04b-diag2"></script>
+  <script type="module" src="src/main.js?v=cr04b-fix1"></script>
 </body>
 </html>
