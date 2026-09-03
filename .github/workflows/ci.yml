@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-08 carrier movement foundation freeze gate + frozen CR regression
+      - name: Run CR-09B deterministic grid pathfinding + frozen CR regression
         shell: bash
         run: |
           set -o pipefail
