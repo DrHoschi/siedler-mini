@@ -22,6 +22,7 @@ const MUST_HAVE = [
   "src/transport/transport-job-service.js",
   "src/transport/carrier-movement-contract.js",
   "src/transport/direct-target-movement-execution.js",
+  "src/transport/movement-transport-execution-integration.js",
   "src/render/renderer.js",
   "src/ui/app.css",
   "src/dev/self-test.js",
@@ -41,7 +42,9 @@ const MUST_HAVE = [
   "src/dev/cr-08a-self-test.js",
   "src/dev/cr-08a-self-test.node.js",
   "src/dev/cr-08b-self-test.js",
-  "src/dev/cr-08b-self-test.node.js"
+  "src/dev/cr-08b-self-test.node.js",
+  "src/dev/cr-08c-self-test.js",
+  "src/dev/cr-08c-self-test.node.js"
 ];
 
 let failures = 0;
