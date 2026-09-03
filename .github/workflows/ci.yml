@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-08B direct movement execution + frozen CR regression
+      - name: Run CR-08C movement transport integration + frozen CR regression
         shell: bash
         run: |
           set -o pipefail
