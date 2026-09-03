@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Neue Siedler – Asset Audit</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#1b1b1b;background:#f4f4f4}
+*{box-sizing:border-box}
+body{margin:0}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ccc;padding:12px 16px}
+h1{font-size:20px;margin:0 0 8px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,select,input{font:inherit;padding:7px 9px}
+.wrap{padding:16px;max-width:1600px;margin:auto}
+.note{background:#fff;border:1px solid #ddd;padding:12px;margin-bottom:14px}
+.section{margin:24px 0}
+.section h2{border-bottom:2px solid #333;padding-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:12px}
+.card{background:#fff;border:1px solid #ccc;border-radius:8px;overflow:hidden;break-inside:avoid}
+.preview{height:190px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 50%/20px 20px}
+.preview img{max-width:100%;max-height:100%;object-fit:contain}
+.body{padding:10px}
+.path{font-size:12px;word-break:break-all;margin-bottom:8px}
+.decision{display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:12px}
+.decision label{border:1px solid #ddd;padding:5px;border-radius:4px}
+.notes{width:100%;margin-top:7px;min-height:58px}
+.meta{font-size:11px;color:#666;margin-top:5px}
+.hidden{display:none!important}
+.status{font-size:13px;margin-top:7px}
+.badge{display:inline-block;padding:2px 6px;border:1px solid #bbb;border-radius:999px;font-size:11px;background:#fafafa}
+@media print{
+  header{position:static}.controls,.screenonly{display:none!important}
+  body{background:#fff}.wrap{max-width:none;padding:0}
+  .grid{grid-template-columns:repeat(3,1fr);gap:7px}
+  .preview{height:130px}.card{border-radius:0}.notes{border:1px solid #aaa}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Neue Siedler – Asset Audit A–F</h1>
+  <div class="controls">
+    <label>Branch <input id="branch" value="main" style="width:170px"></label>
+    <button onclick="loadAssets()">Bestand laden</button>
+    <select id="filter" onchange="applyFilter()">
+      <option value="ALL">Alle Blöcke</option>
+      <option value="A">A – Icons & UI</option>
+      <option value="B">B – Gebäude</option>
+      <option value="C">C – Figuren</option>
+      <option value="D">D – Ressourcen/Weltobjekte</option>
+      <option value="E">E – Gelände/Wege/Flüsse/Deko</option>
+      <option value="F">F – Tiere/FX</option>
+    </select>
+    <input id="search" placeholder="Pfad / Dateiname suchen" oninput="applyFilter()">
+    <button onclick="exportJSON()">Entscheidungen JSON</button>
+    <button onclick="exportCSV()">Entscheidungen CSV</button>
+    <button onclick="window.print()">Drucken / PDF</button>
+  </div>
+  <div id="status" class="status">Noch nicht geladen.</div>
+</header>
+
+<div class="wrap">
+  <div class="note">
+    <b>Repo-interne Audit-Seite.</b> Diese Datei ist dafür gedacht, direkt im Entwicklungsbranch zu liegen.
+    Sie verändert keine Assets und keinen Code. Sie liest nur den aktuellen Branch-Bestand über GitHub aus,
+    zeigt die Bilder an und speichert deine Markierungen lokal im Browser.
+    <span class="screenonly"><br><b>Repo:</b> DrHoschi/siedler-mini · Branch oben eintragen.</span>
+  </div>
+  <div id="root"></div>
+</div>
+
+<script>
+const OWNER='DrHoschi';
+const REPO='siedler-mini';
+const decisions=['BEHALTEN','AUSWAHL','LEGACY','ENTFÄLLT'];
+
+function blockFor(p){
+  const s=p.toLowerCase();
+  if(s.startsWith('assets/icons/') || s.includes('/ui/')) return 'A';
+  if(s.startsWith('assets/buildings/')) return 'B';
+  if(s.startsWith('assets/characters/') || s.startsWith('assets/units/')) return 'C';
+  if(s.startsWith('assets/resources/') || s.includes('/resources/') || s.includes('world')) return 'D';
+  if(s.includes('terrain') || s.includes('road') || s.includes('river') || s.includes('path') || s.includes('vegetation') || s.includes('deco')) return 'E';
+  if(s.startsWith('assets/animals/') || s.startsWith('assets/fx/')) return 'F';
+  return null;
+}
+
+function blockTitle(b){
+  return {
+    A:'A – Icons & UI',
+    B:'B – Gebäude',
+    C:'C – Figuren',
+    D:'D – Ressourcen & Weltobjekte',
+    E:'E – Gelände, Wege, Flüsse & Deko',
+    F:'F – Tiere & FX'
+  }[b];
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function currentBranch(){
+  return document.getElementById('branch').value.trim() || 'main';
+}
+
+function storageKey(path){
+  return `ns_asset_audit:${OWNER}/${REPO}:${currentBranch()}:${path}`;
+}
+
+function readSaved(path){
+  try{return JSON.parse(localStorage.getItem(storageKey(path))||'{}')}catch{return {}}
+}
+
+function saveCard(path){
+  const card=[...document.querySelectorAll('.card')].find(c=>c.dataset.path===path);
+  if(!card) return;
+  const checked=card.querySelector('input[type=radio]:checked');
+  localStorage.setItem(storageKey(path),JSON.stringify({
+    decision:checked?checked.value:'',
+    notes:card.querySelector('textarea').value,
+    updatedAt:new Date().toISOString()
+  }));
+}
+
+function rawUrl(path){
+  return `https://raw.githubusercontent.com/${OWNER}/${REPO}/${encodeURIComponent(currentBranch()).replaceAll('%2F','/')}/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function repoUrl(path){
+  return `https://github.com/${OWNER}/${REPO}/blob/${encodeURIComponent(currentBranch()).replaceAll('%2F','/')}/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function cardHtml(a){
+  const saved=readSaved(a.path);
+  const radios=decisions.map(d =>
+    `<label><input type="radio" name="d_${a.sha}" value="${d}" ${saved.decision===d?'checked':''}> ${d}</label>`
+  ).join('');
+  return `<article class="card" data-block="${a.block}" data-path="${esc(a.path)}">
+    <div class="preview">
+      <a href="${repoUrl(a.path)}" target="_blank" title="Auf GitHub öffnen">
+        <img loading="lazy" src="${rawUrl(a.path)}" alt="${esc(a.path)}">
+      </a>
+    </div>
+    <div class="body">
+      <div class="path"><b>${esc(a.path.split('/').pop())}</b><br>${esc(a.path)}</div>
+      <div class="decision">${radios}</div>
+      <textarea class="notes" placeholder="Bewertung / zukünftige Verwendung / neuer Zielpfad …">${esc(saved.notes||'')}</textarea>
+      <div class="meta">${a.size?Math.round(a.size/1024)+' KB · ':''}<span class="badge">${a.block}</span> · SHA ${a.sha.slice(0,10)}</div>
+    </div>
+  </article>`;
+}
+
+function bindCardEvents(){
+  document.querySelectorAll('.card').forEach(card=>{
+    card.querySelectorAll('input[type=radio]').forEach(x=>x.addEventListener('change',()=>saveCard(card.dataset.path)));
+    card.querySelector('textarea').addEventListener('input',()=>saveCard(card.dataset.path));
+  });
+}
+
+async function loadAssets(){
+  const status=document.getElementById('status');
+  const branch=currentBranch();
+  localStorage.setItem('ns_asset_audit:lastBranch',branch);
+  status.textContent=`Lade ${OWNER}/${REPO} · ${branch} …`;
+  try{
+    const api=`https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
+    const r=await fetch(api,{headers:{'Accept':'application/vnd.github+json'}});
+    if(!r.ok) throw new Error(`GitHub API ${r.status}`);
+    const j=await r.json();
+    if(j.truncated) status.textContent='Warnung: GitHub-Baum ist abgeschnitten.';
+    const imageExt=/\.(png|jpg|jpeg|webp|gif|svg)$/i;
+    const assets=j.tree
+      .filter(x=>x.type==='blob' && imageExt.test(x.path))
+      .map(x=>({...x,block:blockFor(x.path)}))
+      .filter(x=>x.block);
+
+    const groups={A:[],B:[],C:[],D:[],E:[],F:[]};
+    assets.forEach(a=>groups[a.block].push(a));
+
+    document.getElementById('root').innerHTML=Object.entries(groups).map(([b,arr])=>
+      `<section class="section" data-section="${b}">
+        <h2>${blockTitle(b)} <small>(${arr.length})</small></h2>
+        <div class="grid">${arr.sort((x,y)=>x.path.localeCompare(y.path)).map(cardHtml).join('')}</div>
+      </section>`
+    ).join('');
+
+    bindCardEvents();
+    applyFilter();
+    status.textContent=`${assets.length} Bilddateien geladen · Branch ${branch} · ${new Date().toLocaleString('de-DE')}`;
+  }catch(e){
+    status.textContent=`Fehler: ${e.message}. Branchname und Internetzugriff prüfen.`;
+  }
+}
+
+function applyFilter(){
+  const f=document.getElementById('filter').value;
+  const q=document.getElementById('search').value.toLowerCase();
+  document.querySelectorAll('.card').forEach(c=>{
+    const visible=(f==='ALL'||c.dataset.block===f) && c.dataset.path.toLowerCase().includes(q);
+    c.classList.toggle('hidden',!visible);
+  });
+  document.querySelectorAll('.section').forEach(s=>{
+    const visible=[...s.querySelectorAll('.card')].some(c=>!c.classList.contains('hidden'));
+    s.classList.toggle('hidden',!visible);
+  });
+}
+
+function collect(){
+  return [...document.querySelectorAll('.card')].map(card=>{
+    const checked=card.querySelector('input[type=radio]:checked');
+    return {
+      block:card.dataset.block,
+      path:card.dataset.path,
+      decision:checked?checked.value:'',
+      notes:card.querySelector('textarea').value
+    };
+  }).filter(x=>x.decision||x.notes);
+}
+
+function download(name,text,type){
+  const blob=new Blob([text],{type});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+function exportJSON(){
+  const out={
+    repository:`${OWNER}/${REPO}`,
+    branch:currentBranch(),
+    exportedAt:new Date().toISOString(),
+    items:collect()
+  };
+  download(`asset-audit-${currentBranch().replaceAll('/','-')}.json`,JSON.stringify(out,null,2),'application/json');
+}
+
+function exportCSV(){
+  const rows=[['Block','Pfad','Entscheidung','Notiz'],...collect().map(x=>[x.block,x.path,x.decision,x.notes])];
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(';')).join('\n');
+  download(`asset-audit-${currentBranch().replaceAll('/','-')}.csv`,'\ufeff'+csv,'text/csv;charset=utf-8');
+}
+
+document.getElementById('branch').value=localStorage.getItem('ns_asset_audit:lastBranch')||'main';
+</script>
+</body>
+</html>
