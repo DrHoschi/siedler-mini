@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – CR-05 Carrier Assignment Foundation Freeze Gate</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=cr05-freeze-1">
+  <title>Neue Siedler – CR-06A Transport Execution State Contract</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=cr06a-1">
 </head>
 <body>
   <main id="app" class="app-shell">
@@ -14,12 +14,12 @@
     <section class="stage" aria-label="Spielbereich">
       <canvas id="game-canvas"></canvas>
       <div class="foundation-card">
-        <h1>CR-05 – Carrier Assignment Foundation Freeze Gate</h1>
-        <p>Abschlussprüfung von CR-05A bis CR-05C: Carrier-Contract, deterministische Carrier→TransportJob-Zuweisung und kontrollierte Freigabe werden gemeinsam regressiert. Geprüft werden insbesondere keine Doppelbelegung, genau ein OCCUPIED Carrier je aktiver Zuweisung, zuverlässige Rückkehr auf AVAILABLE und weiterhin 0 Pathfinding, 0 Routing und 0 Bewegung.</p>
-        <output id="test-status">CR-05 Freeze Gate läuft …</output>
+        <h1>CR-06A – Transport Execution State Contract</h1>
+        <p>Definiert ausschließlich den Ausführungszustand eines bereits zugewiesenen TransportJobs: TO_PICKUP → PICKED_UP → TO_DROPOFF → DELIVERED. CR-05 bleibt als eingefrorene Carrier-Assignment-Grenze vollständig regressiert. Weiterhin 0 Pathfinding, 0 Routing und 0 Bewegung.</p>
+        <output id="test-status">CR-06A State Contract läuft …</output>
       </div>
     </section>
   </main>
-  <script type="module" src="src/main.js?v=cr05-freeze-1"></script>
+  <script type="module" src="src/main.js?v=cr06a-1"></script>
 </body>
 </html>
