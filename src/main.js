@@ -18,6 +18,7 @@ import { runCr04FreezeGate } from './dev/cr-04-freeze-gate.js';
 import { runCr05aSelfTest } from './dev/cr-05a-self-test.js';
 import { runCr05bSelfTest } from './dev/cr-05b-self-test.js';
 import { runCr05cSelfTest } from './dev/cr-05c-self-test.js';
+import { runCr05FreezeGate } from './dev/cr-05-freeze-gate.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -29,7 +30,7 @@ import { ResourceAssignment } from './resources/resource-assignment.js';
 
 const statusEl=document.querySelector('#runtime-status'),testEl=document.querySelector('#test-status'),canvas=document.querySelector('#game-canvas');
 const runtime=new Runtime(RuntimeConfig),renderer=new Renderer(canvas,RuntimeConfig),world=new WorldStore();
-const map=new MapStructure(world,{name:'CR-05C Carrier Assignment Release Availability Recovery',width:8,height:8,cellSize:1,metadata:{foundation:'CR-05C-CARRIER-RELEASE-RECOVERY'}});
+const map=new MapStructure(world,{name:'CR-05 Carrier Assignment Foundation Freeze Gate',width:8,height:8,cellSize:1,metadata:{foundation:'CR-05-CARRIER-ASSIGNMENT-FOUNDATION-FREEZE'}});
 const domains=new CoreDomainStores(),resources=new ResourceState({world,resourceStore:domains.resources}),resourceClaims=new ResourceClaims({resourceState:resources}),resourceDemands=new ResourceDemands({resourceState:resources,claims:resourceClaims}),resourceMatching=new ResourceMatching({resourceState:resources,claims:resourceClaims,demands:resourceDemands}),resourceAssignment=new ResourceAssignment({resourceState:resources,claims:resourceClaims,demands:resourceDemands});
 runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); renderer.render(); window.addEventListener('resize',()=>renderer.render(),{passive:true});
 
@@ -37,11 +38,11 @@ const reports={
   foundation:runFoundationSelfTest(RuntimeConfig),
   cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),
   cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),
-  cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest(),cr05c:runCr05cSelfTest()
+  cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest(),cr05c:runCr05cSelfTest(),cr05Freeze:runCr05FreezeGate()
 };
 const failedLayers=Object.entries(reports).filter(([,r])=>!r.pass||('blockerCount'in r&&r.blockerCount!==0)).map(([n])=>n);
-const cr05cFailures=reports.cr05c.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
+const freezeFailures=reports.cr05Freeze.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
 const pass=failedLayers.length===0;
-if(testEl)testEl.textContent=pass?'CR-05C CARRIER RELEASE / AVAILABILITY RECOVERY: PASS / 0 BLOCKER':`CR-05C GATE: FAIL — ${[...failedLayers,...cr05cFailures].join(' | ')}`;
-window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr05cSelfTest()});
-console.info('[CR-05C] Carrier Assignment Release / Availability Recovery',{build:RuntimeConfig.build,cr03Regression:reports.cr03Freeze,cr04Regression:reports.cr04Freeze,cr05aRegression:reports.cr05a,cr05bRegression:reports.cr05b,cr05c:reports.cr05c,failedLayers,cr05cFailures,overallPass:pass});
+if(testEl)testEl.textContent=pass?'CR-05 CARRIER ASSIGNMENT FOUNDATION: FROZEN / PASS / 0 BLOCKER':`CR-05 FREEZE GATE: FAIL — ${[...failedLayers,...freezeFailures].join(' | ')}`;
+window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr05FreezeGate()});
+console.info('[CR-05] Carrier Assignment Foundation freeze gate',{build:RuntimeConfig.build,cr03Regression:reports.cr03Freeze,cr04Regression:reports.cr04Freeze,cr05aRegression:reports.cr05a,cr05bRegression:reports.cr05b,cr05cRegression:reports.cr05c,freeze:reports.cr05Freeze,failedLayers,freezeFailures,overallPass:pass});
