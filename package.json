@@ -10,7 +10,8 @@
     "test:cr04b": "node src/dev/cr-04b-self-test.node.js",
     "test:cr04c": "node src/dev/cr-04c-self-test.node.js",
     "test:cr04": "node src/dev/cr-04-freeze-gate.node.js",
-    "test:domain": "npm run test:cr03 && npm run test:cr04a && npm run test:cr04b && npm run test:cr04c && npm run test:cr04",
+    "test:cr05a": "node src/dev/cr-05a-self-test.node.js",
+    "test:domain": "npm run test:cr03 && npm run test:cr04a && npm run test:cr04b && npm run test:cr04c && npm run test:cr04 && npm run test:cr05a",
     "ci": "npm run check:syntax && npm run verify && npm run test:domain",
     "events": "node tools/gen-event-doc.js"
   }
