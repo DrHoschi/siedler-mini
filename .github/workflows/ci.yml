@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-04A integration/regression gate
+      - name: Run CR-06A transport execution contract + frozen CR regression
         shell: bash
         run: |
           set -o pipefail
