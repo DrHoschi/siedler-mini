@@ -19,33 +19,35 @@ export function runCr10FreezeGate() {
   const world=new WorldStore();
   const map=new MapStructure(world,{name:'CR-10 Freeze Gate',width:6,height:6,cellSize:1});
   const start={x:0,y:0}, target={x:4,y:3};
-  const neutralResolver=new TraversalCostResolver({typeAt:()=> 'NEUTRAL'});
+  const neutralResolver=new TraversalCostResolver();
+  const neutralCostAt=neutralResolver.costAt({typeAt:()=> 'NEUTRAL'});
 
   check('neutral-costs-preserve-cr09-route',()=>{
     const cr09=DeterministicGridPathfinder.find({map,startPosition:start,targetPosition:target});
-    const cr10=DeterministicCostAwarePathfinder.find({map,startPosition:start,targetPosition:target,costAt:position=>neutralResolver.resolve(position)});
+    const cr10=DeterministicCostAwarePathfinder.find({map,startPosition:start,targetPosition:target,costAt:neutralCostAt});
     return JSON.stringify(cr09)===JSON.stringify(cr10);
   });
 
   check('resolved-costs-drive-cost-aware-selection',()=>{
     const resolver=new TraversalCostResolver({
-      typeAt:({x,y}) => (x===1&&y===0)||(x===2&&y===0)?'PATH':'NEUTRAL',
       profiles:{NEUTRAL:{baseCost:1,costMultiplier:1},PATH:{baseCost:1,costMultiplier:5},ROAD:{baseCost:1,costMultiplier:1}}
     });
-    const route=DeterministicCostAwarePathfinder.find({map,startPosition:{x:0,y:0},targetPosition:{x:3,y:0},costAt:position=>resolver.resolve(position)});
+    const costAt=resolver.costAt({
+      typeAt:({x,y}) => (x===1&&y===0)||(x===2&&y===0)?'PATH':'NEUTRAL'
+    });
+    const route=DeterministicCostAwarePathfinder.find({map,startPosition:{x:0,y:0},targetPosition:{x:3,y:0},costAt});
     return route.waypoints.some(p=>p.y!==0);
   });
 
   check('equal-cost-resolution-is-deterministic',()=>{
-    const x=DeterministicCostAwarePathfinder.find({map,startPosition:start,targetPosition:target,costAt:p=>neutralResolver.resolve(p)});
-    const y=DeterministicCostAwarePathfinder.find({map,startPosition:start,targetPosition:target,costAt:p=>neutralResolver.resolve(p)});
+    const x=DeterministicCostAwarePathfinder.find({map,startPosition:start,targetPosition:target,costAt:neutralCostAt});
+    const y=DeterministicCostAwarePathfinder.find({map,startPosition:start,targetPosition:target,costAt:neutralCostAt});
     return JSON.stringify(x)===JSON.stringify(y);
   });
 
   check('freeze-scope-has-no-automatic-road-preference',()=>{
-    const neutral=neutralResolver.resolve({x:1,y:1});
-    const roadResolver=new TraversalCostResolver({typeAt:()=> 'ROAD'});
-    const road=roadResolver.resolve({x:1,y:1});
+    const neutral=neutralResolver.resolve({traversalType:'NEUTRAL'});
+    const road=neutralResolver.resolve({traversalType:'ROAD'});
     return neutral.traversalCost===road.traversalCost;
   });
 
