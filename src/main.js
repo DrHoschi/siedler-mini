@@ -32,6 +32,7 @@ import { runCr08bSelfTest } from './dev/cr-08b-self-test.js';
 import { runCr08cSelfTest } from './dev/cr-08c-self-test.js';
 import { runCr08FreezeGate } from './dev/cr-08-freeze-gate.js';
 import { runCr09aSelfTest } from './dev/cr-09a-self-test.js';
+import { runCr09bSelfTest } from './dev/cr-09b-self-test.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -43,14 +44,14 @@ import { ResourceAssignment } from './resources/resource-assignment.js';
 
 const statusEl=document.querySelector('#runtime-status'),testEl=document.querySelector('#test-status'),canvas=document.querySelector('#game-canvas');
 const runtime=new Runtime(RuntimeConfig),renderer=new Renderer(canvas,RuntimeConfig),world=new WorldStore();
-const map=new MapStructure(world,{name:'CR-09A Route Contract',width:8,height:8,cellSize:1,metadata:{foundation:'CR-09A-ROUTE-CONTRACT'}});
+const map=new MapStructure(world,{name:'CR-09B Deterministic Grid Pathfinding',width:8,height:8,cellSize:1,metadata:{foundation:'CR-09B-DETERMINISTIC-GRID-PATHFINDING'}});
 const domains=new CoreDomainStores(),resources=new ResourceState({world,resourceStore:domains.resources}),resourceClaims=new ResourceClaims({resourceState:resources}),resourceDemands=new ResourceDemands({resourceState:resources,claims:resourceClaims}),resourceMatching=new ResourceMatching({resourceState:resources,claims:resourceClaims,demands:resourceDemands}),resourceAssignment=new ResourceAssignment({resourceState:resources,claims:resourceClaims,demands:resourceDemands});
 runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); renderer.render(); window.addEventListener('resize',()=>renderer.render(),{passive:true});
 
-const reports={foundation:runFoundationSelfTest(RuntimeConfig),cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest(),cr05c:runCr05cSelfTest(),cr05Freeze:runCr05FreezeGate(),cr06a:runCr06aSelfTest(),cr06b:runCr06bSelfTest(),cr06c:runCr06cSelfTest(),cr06Freeze:runCr06FreezeGate(),cr07a:runCr07aSelfTest(),cr07b:runCr07bSelfTest(),cr07c:runCr07cSelfTest(),cr07Freeze:runCr07FreezeGate(),cr08a:runCr08aSelfTest(),cr08b:runCr08bSelfTest(),cr08c:runCr08cSelfTest(),cr08Freeze:runCr08FreezeGate(),cr09a:runCr09aSelfTest()};
+const reports={foundation:runFoundationSelfTest(RuntimeConfig),cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest(),cr05c:runCr05cSelfTest(),cr05Freeze:runCr05FreezeGate(),cr06a:runCr06aSelfTest(),cr06b:runCr06bSelfTest(),cr06c:runCr06cSelfTest(),cr06Freeze:runCr06FreezeGate(),cr07a:runCr07aSelfTest(),cr07b:runCr07bSelfTest(),cr07c:runCr07cSelfTest(),cr07Freeze:runCr07FreezeGate(),cr08a:runCr08aSelfTest(),cr08b:runCr08bSelfTest(),cr08c:runCr08cSelfTest(),cr08Freeze:runCr08FreezeGate(),cr09a:runCr09aSelfTest(),cr09b:runCr09bSelfTest()};
 const failedLayers=Object.entries(reports).filter(([,r])=>!r.pass||('blockerCount'in r&&r.blockerCount!==0)).map(([n])=>n);
-const cr09aFailures=reports.cr09a.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
+const cr09bFailures=reports.cr09b.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
 const pass=failedLayers.length===0;
-if(testEl)testEl.textContent=pass?'CR-09A ROUTE CONTRACT: PASS / 0 BLOCKER':`CR-09A ROUTE CONTRACT: FAIL — ${[...failedLayers,...cr09aFailures].join(' | ')}`;
-window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr09aSelfTest()});
-console.info('[CR-09A] Route Contract',{build:RuntimeConfig.build,cr08Regression:reports.cr08Freeze,cr09a:reports.cr09a,failedLayers,cr09aFailures,overallPass:pass});
+if(testEl)testEl.textContent=pass?'CR-09B DETERMINISTIC GRID PATHFINDING: PASS / 0 BLOCKER':`CR-09B DETERMINISTIC GRID PATHFINDING: FAIL — ${[...failedLayers,...cr09bFailures].join(' | ')}`;
+window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr09bSelfTest()});
+console.info('[CR-09B] Deterministic Grid Pathfinding',{build:RuntimeConfig.build,cr08Regression:reports.cr08Freeze,cr09aRegression:reports.cr09a,cr09b:reports.cr09b,failedLayers,cr09bFailures,overallPass:pass});
