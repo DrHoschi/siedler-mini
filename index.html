@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – CR-07A Delivery Settlement Contract</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=cr07a-1">
+  <title>Neue Siedler – CR-07B Resource / Claim / Demand Settlement Commit</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=cr07b-1">
 </head>
 <body>
   <main id="app" class="app-shell">
@@ -14,12 +14,12 @@
     <section class="stage" aria-label="Spielbereich">
       <canvas id="game-canvas"></canvas>
       <div class="foundation-card">
-        <h1>CR-07A – Delivery Settlement Contract</h1>
-        <p>Definiert ausschließlich, wann eine DELIVERED Transport-Execution fachlich abschließbar ist: TransportJob, Execution, Delivered Cargo, Claim, Demand und Ressource müssen exakt zusammenpassen. Noch keine Consumption, keine Job-Freigabe und keine Carrier-Freigabe. CR-06 bleibt eingefroren regressiert. Weiterhin 0 Pathfinding, 0 Routing und 0 reale Bewegung.</p>
-        <output id="test-status">CR-07A Delivery Settlement Contract läuft …</output>
+        <h1>CR-07B – Resource / Claim / Demand Settlement Commit</h1>
+        <p>Committet ausschließlich eine bereits durch CR-07A validierte Lieferung: Claim ACTIVE → CONSUMED, die bestehende Ressourcenbilanz wird synchronisiert und der Demand-Fortschritt übernimmt die erfüllte Menge. TransportJob bleibt PENDING, Carrier bleibt unangetastet; deren Abschluss gehört erst zu CR-07C. CR-06 und CR-07A bleiben regressiert. Weiterhin 0 Pathfinding, 0 Routing und 0 reale Bewegung.</p>
+        <output id="test-status">CR-07B Settlement Commit läuft …</output>
       </div>
     </section>
   </main>
-  <script type="module" src="src/main.js?v=cr07a-1"></script>
+  <script type="module" src="src/main.js?v=cr07b-1"></script>
 </body>
 </html>
