@@ -30,6 +30,7 @@ import { runCr07FreezeGate } from './dev/cr-07-freeze-gate.js';
 import { runCr08aSelfTest } from './dev/cr-08a-self-test.js';
 import { runCr08bSelfTest } from './dev/cr-08b-self-test.js';
 import { runCr08cSelfTest } from './dev/cr-08c-self-test.js';
+import { runCr08FreezeGate } from './dev/cr-08-freeze-gate.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -41,14 +42,14 @@ import { ResourceAssignment } from './resources/resource-assignment.js';
 
 const statusEl=document.querySelector('#runtime-status'),testEl=document.querySelector('#test-status'),canvas=document.querySelector('#game-canvas');
 const runtime=new Runtime(RuntimeConfig),renderer=new Renderer(canvas,RuntimeConfig),world=new WorldStore();
-const map=new MapStructure(world,{name:'CR-08C Movement ↔ Transport Execution Integration',width:8,height:8,cellSize:1,metadata:{foundation:'CR-08C-MOVEMENT-TRANSPORT-EXECUTION-INTEGRATION'}});
+const map=new MapStructure(world,{name:'CR-08 Carrier Movement Foundation Freeze Gate',width:8,height:8,cellSize:1,metadata:{foundation:'CR-08-CARRIER-MOVEMENT-FOUNDATION-FREEZE-GATE'}});
 const domains=new CoreDomainStores(),resources=new ResourceState({world,resourceStore:domains.resources}),resourceClaims=new ResourceClaims({resourceState:resources}),resourceDemands=new ResourceDemands({resourceState:resources,claims:resourceClaims}),resourceMatching=new ResourceMatching({resourceState:resources,claims:resourceClaims,demands:resourceDemands}),resourceAssignment=new ResourceAssignment({resourceState:resources,claims:resourceClaims,demands:resourceDemands});
 runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); renderer.render(); window.addEventListener('resize',()=>renderer.render(),{passive:true});
 
-const reports={foundation:runFoundationSelfTest(RuntimeConfig),cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest(),cr05c:runCr05cSelfTest(),cr05Freeze:runCr05FreezeGate(),cr06a:runCr06aSelfTest(),cr06b:runCr06bSelfTest(),cr06c:runCr06cSelfTest(),cr06Freeze:runCr06FreezeGate(),cr07a:runCr07aSelfTest(),cr07b:runCr07bSelfTest(),cr07c:runCr07cSelfTest(),cr07Freeze:runCr07FreezeGate(),cr08a:runCr08aSelfTest(),cr08b:runCr08bSelfTest(),cr08c:runCr08cSelfTest()};
+const reports={foundation:runFoundationSelfTest(RuntimeConfig),cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest(),cr05c:runCr05cSelfTest(),cr05Freeze:runCr05FreezeGate(),cr06a:runCr06aSelfTest(),cr06b:runCr06bSelfTest(),cr06c:runCr06cSelfTest(),cr06Freeze:runCr06FreezeGate(),cr07a:runCr07aSelfTest(),cr07b:runCr07bSelfTest(),cr07c:runCr07cSelfTest(),cr07Freeze:runCr07FreezeGate(),cr08a:runCr08aSelfTest(),cr08b:runCr08bSelfTest(),cr08c:runCr08cSelfTest(),cr08Freeze:runCr08FreezeGate()};
 const failedLayers=Object.entries(reports).filter(([,r])=>!r.pass||('blockerCount'in r&&r.blockerCount!==0)).map(([n])=>n);
-const cr08cFailures=reports.cr08c.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
+const cr08Failures=reports.cr08Freeze.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
 const pass=failedLayers.length===0;
-if(testEl)testEl.textContent=pass?'CR-08C MOVEMENT ↔ TRANSPORT EXECUTION INTEGRATION: PASS / 0 BLOCKER':`CR-08C MOVEMENT ↔ TRANSPORT EXECUTION INTEGRATION: FAIL — ${[...failedLayers,...cr08cFailures].join(' | ')}`;
-window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr08cSelfTest()});
-console.info('[CR-08C] Movement ↔ Transport Execution Integration',{build:RuntimeConfig.build,cr03Regression:reports.cr03Freeze,cr04Regression:reports.cr04Freeze,cr05Regression:reports.cr05Freeze,cr06Regression:reports.cr06Freeze,cr07Regression:reports.cr07Freeze,cr08aRegression:reports.cr08a,cr08bRegression:reports.cr08b,cr08c:reports.cr08c,failedLayers,cr08cFailures,overallPass:pass});
+if(testEl)testEl.textContent=pass?'CR-08 CARRIER MOVEMENT FOUNDATION FREEZE GATE: PASS / 0 BLOCKER':`CR-08 CARRIER MOVEMENT FOUNDATION FREEZE GATE: FAIL — ${[...failedLayers,...cr08Failures].join(' | ')}`;
+window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr08FreezeGate()});
+console.info('[CR-08] Carrier Movement Foundation Freeze Gate',{build:RuntimeConfig.build,cr03Regression:reports.cr03Freeze,cr04Regression:reports.cr04Freeze,cr05Regression:reports.cr05Freeze,cr06Regression:reports.cr06Freeze,cr07Regression:reports.cr07Freeze,cr08aRegression:reports.cr08a,cr08bRegression:reports.cr08b,cr08cRegression:reports.cr08c,cr08Freeze:reports.cr08Freeze,failedLayers,cr08Failures,overallPass:pass});
