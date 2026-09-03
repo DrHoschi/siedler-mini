@@ -18,6 +18,13 @@ function asTransportJobId(value) {
   return id;
 }
 
+function isTerminalTransportJob(job) {
+  if (!job || typeof job !== 'object') return false;
+  if (String(job.kind || '').trim() !== 'transport-job') return false;
+  const status = String(job.status || '').trim().toUpperCase();
+  return status === 'CANCELLED' || status === 'RELEASED';
+}
+
 export class CarrierAssignmentService {
   #carriers = new Map();
   #assignments = new Map();
@@ -46,6 +53,39 @@ export class CarrierAssignmentService {
     this.#carriers.set(occupied.unitId, occupied);
     this.#assignments.set(jobId, occupied.unitId);
     return this.#result(jobId, occupied.unitId, true);
+  }
+
+  release(job) {
+    const jobId = asTransportJobId(job?.id);
+    if (!isTerminalTransportJob(job)) {
+      throw new Error(`carrier assignment can only release terminal transport job: ${jobId}`);
+    }
+
+    const unitId = this.#assignments.get(jobId);
+    if (!unitId) {
+      return deepFreeze({
+        source: 'CR-05C_CARRIER_ASSIGNMENT_RELEASE',
+        jobId,
+        unitId: null,
+        released: false,
+        carrier: null
+      });
+    }
+
+    const carrier = this.#carriers.get(unitId);
+    if (!carrier) throw new Error(`assigned carrier missing: ${unitId}`);
+
+    const available = CarrierContract.define({ ...carrier, state: 'AVAILABLE' });
+    this.#carriers.set(unitId, available);
+    this.#assignments.delete(jobId);
+
+    return deepFreeze({
+      source: 'CR-05C_CARRIER_ASSIGNMENT_RELEASE',
+      jobId,
+      unitId,
+      released: true,
+      carrier: this.getCarrier(unitId)
+    });
   }
 
   getCarrier(unitId) {
