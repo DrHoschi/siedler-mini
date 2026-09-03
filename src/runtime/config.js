@@ -1,6 +1,6 @@
 export const RuntimeConfig = Object.freeze({
   product: 'Neue Siedler',
-  build: 'CR-10B-DETERMINISTIC-COST-AWARE-PATHFINDING',
+  build: 'CR-10C-TRAVERSAL-TYPE-COST-RESOLUTION',
   simulation: Object.freeze({
     fixedStepMs: 100,
     maxCatchUpSteps: 4,
