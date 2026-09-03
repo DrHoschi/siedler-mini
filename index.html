@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – CR-08C Movement ↔ Transport Execution Integration</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=cr08c-1">
+  <title>Neue Siedler – CR-08 Carrier Movement Foundation Freeze Gate</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=cr08-freeze-1">
 </head>
 <body>
   <main id="app" class="app-shell">
@@ -14,12 +14,12 @@
     <section class="stage" aria-label="Spielbereich">
       <canvas id="game-canvas"></canvas>
       <div class="foundation-card">
-        <h1>CR-08C – Movement ↔ Transport Execution Integration</h1>
-        <p>Kontrollierte Kopplung der eingefrorenen Transport-Execution-Zustände mit der direkten Carrier-Bewegung: TO_PICKUP bindet die bereits aufgelöste Abholposition, TO_DROPOFF die bereits aufgelöste Zielposition. Pickup bzw. Delivery werden erst nach tatsächlicher Ankunft des Carriers am erwarteten Punkt freigegeben. Die bestehenden CR-06-Services bleiben Eigentümer der Transportübergänge. Weiterhin kein Pathfinding, keine Routenwahl, keine Straßenlogik und keine Hindernisumgehung.</p>
-        <output id="test-status">CR-08C Movement ↔ Transport Execution Integration wird geprüft …</output>
+        <h1>CR-08 – Carrier Movement Foundation Freeze Gate</h1>
+        <p>Gemeinsame Abschlussregression für CR-08A, CR-08B und CR-08C: deterministische direkte Bewegung, exakte Zielankunft ohne Overshoot, Pickup und Delivery niemals vor tatsächlicher Ankunft, korrekte Movement-Targets je Transportzustand sowie keine versteckten Änderungen an Resource, Claim, Demand oder Assignment. Weiterhin kein Pathfinding, kein Routing, keine Straßenlogik und keine Hindernisumgehung.</p>
+        <output id="test-status">CR-08 Carrier Movement Foundation Freeze Gate wird geprüft …</output>
       </div>
     </section>
   </main>
-  <script type="module" src="src/main.js?v=cr08c-1"></script>
+  <script type="module" src="src/main.js?v=cr08-freeze-1"></script>
 </body>
 </html>
