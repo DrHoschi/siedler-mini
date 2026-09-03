@@ -16,6 +16,7 @@ import { runCr04bSelfTest } from './dev/cr-04b-self-test.js';
 import { runCr04cSelfTest } from './dev/cr-04c-self-test.js';
 import { runCr04FreezeGate } from './dev/cr-04-freeze-gate.js';
 import { runCr05aSelfTest } from './dev/cr-05a-self-test.js';
+import { runCr05bSelfTest } from './dev/cr-05b-self-test.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
 import { CoreDomainStores } from './domain/core-domain-stores.js';
@@ -27,7 +28,7 @@ import { ResourceAssignment } from './resources/resource-assignment.js';
 
 const statusEl=document.querySelector('#runtime-status'),testEl=document.querySelector('#test-status'),canvas=document.querySelector('#game-canvas');
 const runtime=new Runtime(RuntimeConfig),renderer=new Renderer(canvas,RuntimeConfig),world=new WorldStore();
-const map=new MapStructure(world,{name:'CR-05A Carrier Contract & Availability State',width:8,height:8,cellSize:1,metadata:{foundation:'CR-05A-CARRIER-CONTRACT-AVAILABILITY'}});
+const map=new MapStructure(world,{name:'CR-05B Carrier to TransportJob Assignment Foundation',width:8,height:8,cellSize:1,metadata:{foundation:'CR-05B-CARRIER-JOB-ASSIGNMENT'}});
 const domains=new CoreDomainStores(),resources=new ResourceState({world,resourceStore:domains.resources}),resourceClaims=new ResourceClaims({resourceState:resources}),resourceDemands=new ResourceDemands({resourceState:resources,claims:resourceClaims}),resourceMatching=new ResourceMatching({resourceState:resources,claims:resourceClaims,demands:resourceDemands}),resourceAssignment=new ResourceAssignment({resourceState:resources,claims:resourceClaims,demands:resourceDemands});
 runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); renderer.render(); window.addEventListener('resize',()=>renderer.render(),{passive:true});
 
@@ -35,11 +36,11 @@ const reports={
   foundation:runFoundationSelfTest(RuntimeConfig),
   cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),
   cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),
-  cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest()
+  cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest()
 };
 const failedLayers=Object.entries(reports).filter(([,r])=>!r.pass||('blockerCount'in r&&r.blockerCount!==0)).map(([n])=>n);
-const cr05aFailures=reports.cr05a.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
+const cr05bFailures=reports.cr05b.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[];
 const pass=failedLayers.length===0;
-if(testEl)testEl.textContent=pass?'CR-05A CARRIER CONTRACT & AVAILABILITY: PASS / 0 BLOCKER':`CR-05A GATE: FAIL — ${[...failedLayers,...cr05aFailures].join(' | ')}`;
-window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr05aSelfTest()});
-console.info('[CR-05A] Carrier Contract & Availability State',{build:RuntimeConfig.build,cr03Regression:reports.cr03Freeze,cr04Regression:reports.cr04Freeze,cr05a:reports.cr05a,failedLayers,cr05aFailures,overallPass:pass});
+if(testEl)testEl.textContent=pass?'CR-05B CARRIER → TRANSPORTJOB ASSIGNMENT: PASS / 0 BLOCKER':`CR-05B GATE: FAIL — ${[...failedLayers,...cr05bFailures].join(' | ')}`;
+window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr05bSelfTest()});
+console.info('[CR-05B] Carrier to TransportJob Assignment Foundation',{build:RuntimeConfig.build,cr03Regression:reports.cr03Freeze,cr04Regression:reports.cr04Freeze,cr05aRegression:reports.cr05a,cr05b:reports.cr05b,failedLayers,cr05bFailures,overallPass:pass});
