@@ -21,18 +21,41 @@ function validate(route, movement) {
   return { route: currentRoute, movement: currentMovement };
 }
 
-function nextTarget(route, currentPosition) {
+function routeTargetIndex(targets, position) {
+  return targets.findIndex((target) => samePosition(target, position));
+}
+
+function nextTarget(route, movement) {
   const targets = routeTargets(route);
-  for (const target of targets) {
-    if (!samePosition(currentPosition, target)) return target;
+
+  if (samePosition(movement.currentPosition, route.targetPosition)) return null;
+
+  if (movement.state === 'MOVING' && movement.targetPosition !== null) {
+    const activeTargetIndex = routeTargetIndex(targets, movement.targetPosition);
+    if (activeTargetIndex < 0) {
+      throw new Error('MOVING route movement target must belong to route targets');
+    }
+    if (!samePosition(movement.currentPosition, movement.targetPosition)) {
+      return targets[activeTargetIndex];
+    }
   }
-  return null;
+
+  if (samePosition(movement.currentPosition, route.startPosition)) {
+    return targets[0] || null;
+  }
+
+  const reachedTargetIndex = routeTargetIndex(targets, movement.currentPosition);
+  if (reachedTargetIndex >= 0) {
+    return targets[reachedTargetIndex + 1] || null;
+  }
+
+  throw new Error('route movement can only resume from route start, reached route point, or active segment');
 }
 
 export class RouteMovementIntegration {
   static bind({ route, movement } = {}) {
     const pair = validate(route, movement);
-    const target = nextTarget(pair.route, pair.movement.currentPosition);
+    const target = nextTarget(pair.route, pair.movement);
     if (target === null) {
       return CarrierMovementContract.define({
         unitId: pair.movement.unitId,
@@ -56,7 +79,7 @@ export class RouteMovementIntegration {
     if (!Number.isFinite(remaining) || !(remaining > 0)) throw new TypeError('maxDistance must be a finite number > 0');
 
     while (remaining > 0) {
-      const target = nextTarget(pair.route, current.currentPosition);
+      const target = nextTarget(pair.route, current);
       if (target === null) {
         return CarrierMovementContract.define({unitId:current.unitId,currentPosition:pair.route.targetPosition,state:'IDLE',targetPosition:null});
       }
