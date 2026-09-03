@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-07B settlement commit + frozen CR regression
+      - name: Run CR-07C completion + carrier release + frozen CR regression
         shell: bash
         run: |
           set -o pipefail
