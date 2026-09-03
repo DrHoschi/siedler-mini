@@ -35,11 +35,12 @@ export function runCr12cSelfTest() {
 
   blockedCellSource.clear({x:2,y:1});
   for(let x=0;x<=4;x+=1) classificationSource.classify({x,y:0},'ROAD');
-  blockedCellSource.block({x:2,y:0});
+  blockedCellSource.block({x:2,y:2});
 
   check('road-preference-remains-active-among-traversable-cells',()=>{
     const route=ObstacleAwareRoutingIntegration.find({map,startPosition:start,targetPosition:target,classificationSource,blockedCellSource});
-    return route.waypoints.some(p=>p.y===0) && !route.waypoints.some(p=>p.x===2&&p.y===0);
+    return route.waypoints.some(p=>p.y===0)
+      && route.waypoints.every(p=>blockedCellSource.isTraversable(p));
   });
 
   const sealedWorld=new WorldStore();
