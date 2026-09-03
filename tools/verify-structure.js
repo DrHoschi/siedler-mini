@@ -10,7 +10,7 @@ const MUST_HAVE = [
   "src/dev/cr-04a-self-test.js", "src/dev/cr-04a-self-test.node.js", "src/dev/cr-04a-integration-gate.node.js", "src/dev/cr-04b-self-test.js", "src/dev/cr-04b-self-test.node.js", "src/dev/cr-04c-self-test.js", "src/dev/cr-04c-self-test.node.js", "src/dev/cr-04-freeze-gate.js", "src/dev/cr-04-freeze-gate.node.js",
   "src/dev/cr-08a-self-test.js", "src/dev/cr-08a-self-test.node.js", "src/dev/cr-08b-self-test.js", "src/dev/cr-08b-self-test.node.js", "src/dev/cr-08c-self-test.js", "src/dev/cr-08c-self-test.node.js", "src/dev/cr-08-freeze-gate.js", "src/dev/cr-08-freeze-gate.node.js",
   "src/dev/cr-09a-self-test.js", "src/dev/cr-09a-self-test.node.js", "src/dev/cr-09b-self-test.js", "src/dev/cr-09b-self-test.node.js", "src/dev/cr-09c-self-test.js", "src/dev/cr-09c-self-test.node.js", "src/dev/cr-09-freeze-gate.js", "src/dev/cr-09-freeze-gate.node.js",
-  "src/dev/cr-10a-self-test.js", "src/dev/cr-10a-self-test.node.js", "src/dev/cr-10b-self-test.js", "src/dev/cr-10b-self-test.node.js", "src/dev/cr-10c-self-test.js", "src/dev/cr-10c-self-test.node.js"
+  "src/dev/cr-10a-self-test.js", "src/dev/cr-10a-self-test.node.js", "src/dev/cr-10b-self-test.js", "src/dev/cr-10b-self-test.node.js", "src/dev/cr-10c-self-test.js", "src/dev/cr-10c-self-test.node.js", "src/dev/cr-10-freeze-gate.js", "src/dev/cr-10-freeze-gate.node.js"
 ];
 
 let failures=0; const fail=msg=>{failures+=1;console.error("❌",msg);}; const ok=msg=>console.log("✅",msg);
