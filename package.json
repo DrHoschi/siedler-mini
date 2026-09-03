@@ -21,7 +21,8 @@
     "test:cr07a": "node src/dev/cr-07a-self-test.node.js",
     "test:cr07b": "node src/dev/cr-07b-self-test.node.js",
     "test:cr07c": "node src/dev/cr-07c-self-test.node.js",
-    "test:domain": "npm run test:cr03 && npm run test:cr04a && npm run test:cr04b && npm run test:cr04c && npm run test:cr04 && npm run test:cr05a && npm run test:cr05b && npm run test:cr05c && npm run test:cr05 && npm run test:cr06a && npm run test:cr06b && npm run test:cr06c && npm run test:cr06 && npm run test:cr07a && npm run test:cr07b && npm run test:cr07c",
+    "test:cr07": "node src/dev/cr-07-freeze-gate.node.js",
+    "test:domain": "npm run test:cr03 && npm run test:cr04a && npm run test:cr04b && npm run test:cr04c && npm run test:cr04 && npm run test:cr05a && npm run test:cr05b && npm run test:cr05c && npm run test:cr05 && npm run test:cr06a && npm run test:cr06b && npm run test:cr06c && npm run test:cr06 && npm run test:cr07a && npm run test:cr07b && npm run test:cr07c && npm run test:cr07",
     "ci": "npm run check:syntax && npm run verify && npm run test:domain",
     "events": "node tools/gen-event-doc.js"
   }
