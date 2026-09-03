@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – CR-08A Carrier Movement Contract</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=cr08a-1">
+  <title>Neue Siedler – CR-08B Direct Target Movement Execution</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=cr08b-1">
 </head>
 <body>
   <main id="app" class="app-shell">
@@ -14,12 +14,12 @@
     <section class="stage" aria-label="Spielbereich">
       <canvas id="game-canvas"></canvas>
       <div class="foundation-card">
-        <h1>CR-08A – Carrier Movement Contract</h1>
-        <p>Foundation für den reinen Carrier-Movement-Datenvertrag: aktuelle Position, Bewegungsziel und Movement-State werden kontrolliert und invariant definiert. MOVING besitzt genau ein gültiges Ziel, IDLE besitzt kein Bewegungsziel. Noch keine reale Bewegung, keine Geschwindigkeit oder Interpolation, kein Pathfinding, kein Routing und keine Änderung an TransportJob-, Claim-, Demand-, Assignment- oder Settlement-Zuständen.</p>
-        <output id="test-status">CR-08A Carrier Movement Contract wird geprüft …</output>
+        <h1>CR-08B – Direct Target Movement Execution</h1>
+        <p>Erste echte, deterministische Carrier-Bewegung auf Basis des CR-08A-Movement-Vertrags: Ein MOVING-Carrier wird geradlinig um eine vorgegebene Distanz in Richtung targetPosition fortgeschrieben. Teilstrecken bleiben MOVING; bei Erreichen oder Überschreiten der Restdistanz wird exakt auf das Ziel gesetzt und auf IDLE zurückgekehrt. Noch kein Pathfinding, kein Routing, keine Straßenlogik und keine Hindernisumgehung.</p>
+        <output id="test-status">CR-08B Direct Target Movement Execution wird geprüft …</output>
       </div>
     </section>
   </main>
-  <script type="module" src="src/main.js?v=cr08a-1"></script>
+  <script type="module" src="src/main.js?v=cr08b-1"></script>
 </body>
 </html>
