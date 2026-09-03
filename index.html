@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – CR-07C TransportJob Completion & Carrier Release</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=cr07c-1">
+  <title>Neue Siedler – CR-07 Transport Completion & Settlement Freeze Gate</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=cr07-freeze-1">
 </head>
 <body>
   <main id="app" class="app-shell">
@@ -14,12 +14,12 @@
     <section class="stage" aria-label="Spielbereich">
       <canvas id="game-canvas"></canvas>
       <div class="foundation-card">
-        <h1>CR-07C – TransportJob Completion & Carrier Release</h1>
-        <p>Schließt ausschließlich einen erfolgreich durch CR-07B gesettelten Transport ab: Der PENDING TransportJob wechselt kontrolliert auf RELEASED und erst danach gibt die eingefrorene CR-05C-Grenze den zugewiesenen Carrier von OCCUPIED auf AVAILABLE frei. Keine neue Ressourcen-, Claim- oder Demand-Logik. CR-06, CR-07A und CR-07B bleiben regressiert. Weiterhin 0 Pathfinding, 0 Routing und 0 reale Bewegung.</p>
-        <output id="test-status">CR-07C Transport Completion läuft …</output>
+        <h1>CR-07 – Transport Completion & Settlement Freeze Gate</h1>
+        <p>Gemeinsame Abschlussregression von CR-07A bis CR-07C: Eine Lieferung darf erst nach DELIVERED validiert, dann genau einmal als Resource / Claim / Demand Settlement committed und erst danach als TransportJob abgeschlossen werden. Anschließend muss die eingefrorene CR-05C-Grenze den Carrier zuverlässig von OCCUPIED auf AVAILABLE freigeben. Die eingefrorene Kette CR-02 bis CR-06 bleibt vollständig regressiert. Weiterhin 0 Pathfinding, 0 Routing und 0 reale Bewegung.</p>
+        <output id="test-status">CR-07 Freeze Gate läuft …</output>
       </div>
     </section>
   </main>
-  <script type="module" src="src/main.js?v=cr07c-1"></script>
+  <script type="module" src="src/main.js?v=cr07-freeze-1"></script>
 </body>
 </html>
