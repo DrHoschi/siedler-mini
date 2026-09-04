@@ -16,7 +16,9 @@ Repository state outranks chat memory. Read this file plus the actual branch/HEA
 - CR-21 frozen SHA: `4cb7261dc2325767070177a68f951df69b7523fd`
 - Dedicated rollback branch: `frozen/cr-21-reservation-controlled-traffic-execution-foundation`
 - Pre-CR22 file/architecture cleanup gate: **PASS / 0 BLOCKER**, GitHub Actions run `33909908758` / run #4787
-- `main` remains intentionally unchanged as historical old-game reference.
+- `main` remains intentionally unchanged **only as historical functional and visual old-game reference**. It is not the development basis, architecture basis, code source or integration target of the modular rebuild.
+- The new game is rebuilt completely on the modular CR line. Desired old-game behavior may be studied, but required functions are reimplemented through the new owners/contracts/runtime rather than restored by returning to legacy code.
+- Target relative to old `main`: **functional parity or better, not code parity**.
 - CR-22 remains LOCKED until the roadmap/integration audit, branch cleanup and final cleanup verification are fully PASS / 0 BLOCKER.
 
 ## 2. Current status
@@ -53,6 +55,7 @@ Rules:
 - CR-00…CR-21 have strongly advanced runtime/resources/logistics/navigation/traffic foundations, but major product areas remain open: buildings, persons/housing/workforce, construction, production/BuildingStock, economy, path wear, SaveGame, UI, Inspector and V1 end-to-end integration.
 - Future CRs continue the modular implementation and must state which open IM capability objectives they advance.
 - Exact future CR titles are defined one whole CR at a time after the cleanup gate; do not invent or freeze a long CR-number list prematurely.
+- Historical `main` behavior is a product reference only. Never plan a future CR as a migration back into the old monolith; reproduce desired capability cleanly in the modular line.
 
 ## 5. File / architecture cleanup – verified
 
@@ -100,7 +103,7 @@ Not safe to delete blindly:
 
 Branches that must be retained during this transition:
 
-- `main` – historical old-game reference,
+- `main` – historical functional/visual old-game reference only; not an integration target,
 - `gh-pages` – deployment,
 - `frozen/cr-21-reservation-controlled-traffic-execution-foundation` – current verified rollback point,
 - `maintenance/pre-cr22-repository-cleanup` – active cleanup/audit branch.
@@ -140,13 +143,16 @@ Before CR-22 may start, all of the following must be true:
 11. Cleanup regression/CI is green.
 12. Browser/device/visual status is synchronized with the cleaned baseline.
 13. Resulting cleaned commit is recorded as the baseline from which the CR-22 whole-system branch is created.
-14. Only after all of the above: **Pre-CR22 Repository Cleanup / Roadmap Integration Gate = PASS / 0 BLOCKER**.
+14. The final documentation explicitly preserves the rule: old `main` is reference only; the new game is a clean modular rebuild targeting functional parity or better, never legacy-code parity.
+15. Only after all of the above: **Pre-CR22 Repository Cleanup / Roadmap Integration Gate = PASS / 0 BLOCKER**.
 
 File/architecture requirements are already verified. Roadmap reconciliation is now implemented. Branch classification/reduction and the final integrated gate remain open; therefore CR-22 remains locked.
 
 ## 9. Source-of-truth / branch rules
 
 Before every write verify repository, target branch, actual HEAD, active action, frozen predecessor, scope, tests and CI. Keep current modular work off `main` until the planned running-game integration point.
+
+The phrase "running-game integration point" never means merging the new architecture into the old monolith. Any eventual branch/default-branch transition must preserve the new modular architecture as authoritative; old `main` remains reference history unless an explicit repository-level transition is separately decided.
 
 For future CRs use one branch per overall CR; A/B/C normally run sequentially on that same branch. Additional branches require a concrete risk justification.
 
@@ -160,8 +166,9 @@ For future CRs use one branch per overall CR; A/B/C normally run sequentially on
 - Do not mark cleanup complete while branch classification/reduction is still pending.
 - Do not start CR-22 before the final cleanup/roadmap integration gate is PASS / 0 BLOCKER.
 - Do not turn the future Inspector into a second gameplay owner or patch layer.
+- Do not use old `main` code/architecture as the implementation target for new CR work; use it only to understand historical behavior/visual scope.
 - Keep browser/device text synchronized with the actual cleanup state.
 
 ---
 
-**Updated:** 2026-09-04 after creation of the current IM ↔ CR roadmap reconciliation. File/architecture cleanup is PASS / 0 BLOCKER. Branch unique-content classification/reduction is the next required work before the final Pre-CR22 gate.
+**Updated:** 2026-09-04 after synchronization of the clean-rebuild / reference-only `main` rule. File/architecture cleanup is PASS / 0 BLOCKER. Branch unique-content classification/reduction is the next required work before the final Pre-CR22 gate.
