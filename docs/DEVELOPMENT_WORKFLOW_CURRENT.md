@@ -8,10 +8,9 @@ Repository state outranks chat memory. Read this file plus the actual branch/HEA
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main`
-- Current development branch: `feature/cr-21b-deterministic-reservation-execution-cycle`
-- Current completed block: **CR-21B – Deterministic Reservation Execution Cycle**
-- CR-21B formal freeze gate candidate SHA: `d55cbfc304e4b1e12da50a5ea048667c479926ee`
-- CR-21B CI: **PASS / 0 BLOCKER**, GitHub Actions run `33905542765` / run #4761
+- Current development branch: `feature/cr-21c-reservation-controlled-step-movement-integration`
+- Current active block: **CR-21C – Reservation-Controlled Step Movement Integration**
+- CR-21C base SHA: `75dc7915adf51a8f34bf804f2bf47ba2267ab112`
 - Frozen baselines: **CR-20 – Reservation Lifecycle Foundation**, **CR-21A – Next Cell Reservation Intent Contract**, **CR-21B – Deterministic Reservation Execution Cycle**
 - `main` remains intentionally unmerged until a new running game/integration state is ready.
 
@@ -22,7 +21,7 @@ Repository state outranks chat memory. Read this file plus the actual branch/HEA
 | 1 | CR-20 – Reservation Lifecycle Foundation | FROZEN | Regression only |
 | 2 | CR-21A – Next Cell Reservation Intent Contract | FROZEN / PASS / 0 BLOCKER | Regression only |
 | 3 | CR-21B – Deterministic Reservation Execution Cycle | FROZEN / PASS / 0 BLOCKER | Regression only |
-| 4 | CR-21C – Reservation-Controlled Step Movement Integration | NEXT / PERMITTED | Establish exact scope, create dedicated branch from the final green CR-21B HEAD, then implement only CR-21C |
+| 4 | CR-21C – Reservation-Controlled Step Movement Integration | ACTIVE | Implement and test only CR-21C |
 | 5 | CR-21 overall freeze | LOCKED | Do not run until CR-21C is formally completed/frozen |
 
 ## 3. Frozen CR-21B contract
@@ -38,57 +37,42 @@ Frozen behavior:
 - Non-winners remain reservation lifecycle state `REQUESTED` and the cycle reports `WAITING`.
 - Same inputs produce the same winner/waiting result.
 
-Frozen exclusions:
+Frozen exclusions remain unchanged.
 
-- no movement or cell entry,
-- no `CONSUMED` transition,
-- no reservation release after movement,
-- no next-cycle chaining,
-- no pathfinding or rerouting,
-- no multi-cell lookahead,
-- no change to CR-19 arbitration policy,
-- no change to CR-20 lifecycle semantics.
+## 4. Active CR-21C scope
 
-## 4. Formal CR-21B freeze evidence
+CR-21C may only integrate the already frozen reservation decision with one successful movement step:
 
-The formal CR-21B completion/freeze gate regressions include:
+- accept only the CR-21B winner with lifecycle state `GRANTED`,
+- allow that carrier to enter exactly the cell held by that granted reservation and no other route cell,
+- after successful arrival at that exact cell transition the reservation `GRANTED → CONSUMED`,
+- apply existing CR-20 lifecycle/blocking integration so the consumed reservation loses its own blocking effect,
+- return the carrier at the reached route point in a state from which a later next-cell intent may be expressed.
 
-1. CR-21B self-test PASS / 0 BLOCKER.
-2. CR-21A formal freeze gate PASS / 0 BLOCKER.
-3. CR-20 frozen regression PASS / 0 BLOCKER.
-4. REQUESTED → arbitration → exactly one GRANTED winner, remaining REQUESTED/WAITING.
-5. Deterministic same-input result.
-6. Existing CR-19 arbitration policy remains delegated and unchanged.
-7. Scope exclusions remain intact: no movement, cell entry, consumption, release-after-movement, next-cycle chaining, pathfinding, rerouting or lookahead.
+CR-21C must not:
 
-GitHub Actions run `33905542765` completed successfully with the explicit step:
+- alter CR-19 arbitration,
+- alter CR-20 lifecycle semantics,
+- move a WAITING/non-winner carrier,
+- enter a cell other than the granted reservation cell,
+- chain another reservation cycle automatically,
+- add multi-cell lookahead,
+- add pathfinding or rerouting policy,
+- expand unrelated transport or game-loop behavior.
 
-`Run CR-21B completion/freeze gate + CR-21A/CR-20 frozen regression`
+## 5. Required CR-21C evidence
 
-## 5. Next permitted block: CR-21C
+Before CR-21C can be marked complete:
 
-Before any CR-21C write:
-
-1. Re-read this file from the current final green branch HEAD.
-2. Confirm actual CR-21B branch HEAD and CI are green.
-3. Create a dedicated CR-21C branch from that exact final green CR-21B HEAD.
-4. Update this file in the CR-21C branch to mark CR-21C ACTIVE and CR-21B FROZEN.
-5. Implement only **CR-21C – Reservation-Controlled Step Movement Integration**.
-
-Planned CR-21C boundary from the established CR-21 plan:
-
-- a carrier with the winning `GRANTED` reservation may enter exactly that reserved next route cell,
-- after successful entry the reservation may become `CONSUMED`,
-- CR-20 lifecycle/blocking semantics then remove that reservation's blocking effect,
-- the carrier may only after that completed step be ready to express intent for the following route cell.
-
-Still excluded until explicitly scoped inside CR-21C implementation:
-
-- multi-cell lookahead,
-- changing CR-19 arbitration,
-- changing CR-20 lifecycle semantics,
-- new pathfinding or rerouting policy,
-- unrelated transport/game-loop expansion.
+1. Only a `GRANTED` CR-21B winner can execute the step.
+2. Movement target equals the granted reservation cell exactly.
+3. Successful entry reaches exactly one route cell and does not continue to another route point in the same call.
+4. Successful entry transitions lifecycle `GRANTED → CONSUMED`.
+5. Applying existing CR-20 traffic integration removes only this reservation's blocking effect.
+6. WAITING / REQUESTED outcomes cannot move.
+7. Wrong-cell or mismatched-carrier inputs are rejected.
+8. CR-21B, CR-21A and CR-20 frozen regressions remain green.
+9. No automatic next-cycle chaining, lookahead, pathfinding, rerouting or arbitration change is introduced.
 
 ## 6. Source-of-truth / branch rules
 
@@ -105,4 +89,4 @@ Before every write verify repository, target branch, actual HEAD, active CR, fro
 
 ---
 
-**Updated:** 2026-09-04 after formal CR-21B completion/freeze gate PASS / 0 BLOCKER.
+**Updated:** 2026-09-04 when CR-21C was activated from final green CR-21B HEAD `75dc7915adf51a8f34bf804f2bf47ba2267ab112`.
