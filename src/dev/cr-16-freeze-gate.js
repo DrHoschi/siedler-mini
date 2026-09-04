@@ -44,7 +44,7 @@ export function runCr16FreezeGate() {
       dep('unit:00000003','unit:00000004',3),dep('unit:00000004','unit:00000005',4),dep('unit:00000005','unit:00000003',5)
     ]);
     const decisions=detection.deadlocks.map(d=>DeterministicDeadlockResolutionPolicy.decide(d));
-    return detection.deadlockCount===2&&decisions.length===2&&decisions.every(d=>typeof d.yieldingCarrierId==='string'&&d.retainedCarrierIds.length===d.carrierIds.length-1);
+    return detection.deadlockCount===2&&decisions.length===2&&decisions.every((d,i)=>typeof d.yieldingCarrierId==='string'&&d.retainedCarrierIds.length===detection.deadlocks[i].carrierIds.length-1&&!d.retainedCarrierIds.includes(d.yieldingCarrierId));
   });
 
   check('cr16-freeze-boundary-adds-no-movement-semantics',()=>{
