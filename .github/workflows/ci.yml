@@ -1,10 +1,10 @@
 name: CI Baseline
 on:
   push:
-    paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", "docs/DEVELOPMENT_WORKFLOW_CURRENT.md"]
+    paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", "docs/**", "README.md", "core/**", "data/**", "demo/**", "qa/**", "schemas/**", "ui/**"]
   pull_request:
     branches: [main]
-    paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", "docs/DEVELOPMENT_WORKFLOW_CURRENT.md"]
+    paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", "docs/**", "README.md", "core/**", "data/**", "demo/**", "qa/**", "schemas/**", "ui/**"]
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -23,11 +23,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-21 overall completion/freeze gate + CR-20 frozen regression
+      - name: Run Pre-CR22 file/architecture cleanup gate + CR-21 frozen regression
         shell: bash
         run: |
           set -o pipefail
-          (npm run ci && node src/dev/cr-21-freeze-gate.node.js && node src/dev/cr-20-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
+          (npm run ci && node src/dev/cr-21-freeze-gate.node.js && node src/dev/pre-cr22-cleanup-file-gate.node.js) 2>&1 | tee ci-baseline.log
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
