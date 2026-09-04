@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-20A Reservation Lifecycle State Contract gate + CR-19 frozen regression
+      - name: Run CR-20B Deterministic Reservation Expiry gate + CR-20A/CR-19 regression
         shell: bash
         run: |
           set -o pipefail
