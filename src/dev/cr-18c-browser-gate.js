@@ -1,0 +1,1 @@
+import { runCr18cSelfTest } from './cr-18c-self-test.js?v=cr18c-1';const report=runCr18cSelfTest();const el=document.querySelector('#test-status');if(el)el.textContent=report.pass?'CR-18C CONTROLLED POST-RECOVERY REROUTE INTEGRATION: PASS / 0 BLOCKER':`CR-18C CONTROLLED POST-RECOVERY REROUTE INTEGRATION: FAIL / ${report.blockerCount} BLOCKER`;console.info('[CR-18C]',report);
