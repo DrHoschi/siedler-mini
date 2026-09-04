@@ -1,0 +1,1 @@
+Legacy runtime content was removed from the modular CR-22 baseline during the verified pre-CR22 cleanup. Historical material remains available through repository history and the historical main branch.
