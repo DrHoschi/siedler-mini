@@ -1,0 +1,1 @@
+import { runCr20bSelfTest } from './cr-20b-self-test.js?v=cr20b-1';const report=runCr20bSelfTest();const el=document.querySelector('#test-status');if(el)el.textContent=report.pass?'CR-20B DETERMINISTIC RESERVATION EXPIRY: PASS / 0 BLOCKER':`CR-20B DETERMINISTIC RESERVATION EXPIRY: FAIL / ${report.blockerCount} BLOCKER`;console.info('[CR-20B]',report);
