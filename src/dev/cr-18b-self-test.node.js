@@ -1,0 +1,1 @@
+import { runCr18bSelfTest } from './cr-18b-self-test.js';const report=runCr18bSelfTest();console.log(`CR-18B DETERMINISTIC ROUTE REJOIN DECISION: ${report.pass?'PASS':'FAIL'} / ${report.blockerCount} BLOCKER`);if(!report.pass){for(const r of report.results.filter(x=>!x.pass))console.error(r);process.exitCode=1;}
