@@ -23,11 +23,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-20C Reservation Lifecycle Traffic Integration gate + CR-20A/B and CR-19 frozen regression
+      - name: Run CR-20 Reservation Lifecycle Foundation freeze gate + CR-19 frozen regression
         shell: bash
         run: |
           set -o pipefail
-          (npm run ci && node src/dev/cr-18-freeze-gate.node.js && node src/dev/cr-19-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
+          (npm run ci && node src/dev/cr-18-freeze-gate.node.js && node src/dev/cr-19-freeze-gate.node.js && node src/dev/cr-20-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
