@@ -1,0 +1,11 @@
+import { RouteContract } from '../transport/route-contract.js';
+import { RouteContinuationStateContract } from '../transport/route-continuation-state-contract.js';
+export function runCr18aSelfTest(){const results=[];const check=(name,fn)=>{try{results.push({name,pass:!!fn()});}catch(error){results.push({name,pass:false,error:String(error?.message||error)});}};const rejects=fn=>{try{fn();return false;}catch{return true;}};
+ const prior=RouteContract.define({startPosition:{x:0,y:0},targetPosition:{x:4,y:0},waypoints:[{x:1,y:0},{x:2,y:0},{x:3,y:0},{x:4,y:0}],state:'ACTIVE'});
+ const recovered=Object.freeze({kind:'controlled-recovery-result',status:'RECOVERED',carrierId:'unit:00000002',currentCell:Object.freeze({x:1,y:1}),releaseWaitDependency:true,returnToTrafficControl:true});
+ check('captures-post-recovery-continuation-state',()=>{const s=RouteContinuationStateContract.define({recoveryResult:recovered,previousRoute:prior});return s.kind==='route-continuation-state'&&s.status==='CONTINUATION_REQUIRED'&&s.carrierId==='unit:00000002'&&s.currentRecoveryPosition.x===1&&s.currentRecoveryPosition.y===1&&s.originalTransportTarget.x===4&&s.originalTransportTarget.y===0;});
+ check('preserves-previous-route-without-recalculation',()=>{const s=RouteContinuationStateContract.define({recoveryResult:recovered,previousRoute:prior});return s.previousRoute.waypoints.length===4&&s.previousRoute.waypoints[2].x===3&&Object.isFrozen(s)&&Object.isFrozen(s.previousRoute);});
+ check('requires-completed-cr17c-recovery',()=>rejects(()=>RouteContinuationStateContract.define({recoveryResult:{...recovered,status:'MOVING'},previousRoute:prior})));
+ check('requires-existing-route-contract',()=>rejects(()=>RouteContinuationStateContract.define({recoveryResult:recovered,previousRoute:null})));
+ check('cr18a-adds-no-rejoin-reroute-or-pathfinding-decision',()=>{const text=RouteContinuationStateContract.toString().toLowerCase();return !text.includes('pathfind')&&!text.includes('reroute')&&!text.includes('rejoin')&&!text.includes('selecttarget')&&!text.includes('calculate');});
+ const blockerCount=results.filter(r=>!r.pass).length;return Object.freeze({pass:blockerCount===0,blockerCount,results:Object.freeze(results.map(Object.freeze))});}
