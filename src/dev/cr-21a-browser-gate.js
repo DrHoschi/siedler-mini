@@ -1,0 +1,1 @@
+import { runCr21aSelfTest } from './cr-21a-self-test.js?v=cr21a-1';const report=runCr21aSelfTest();const el=document.querySelector('#test-status');if(el)el.textContent=report.pass?'CR-21A NEXT CELL RESERVATION INTENT CONTRACT: PASS / 0 BLOCKER':`CR-21A NEXT CELL RESERVATION INTENT CONTRACT: FAIL / ${report.blockerCount} BLOCKER`;console.info('[CR-21A]',report);
