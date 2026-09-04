@@ -18,7 +18,7 @@ await check('legacy-root-snapshots-removed',async()=>!(await exists('filelist-au
 await check('legacy-root-docs-relocated',async()=>!(await exists('Projekt_Masterliste.md'))&&!(await exists('STRUKTUR_SPICKZETTEL.md'))&&!(await exists('STRUKTUR_SPICKZETTEL.mmd'))&&await exists('docs/legacy/Projekt_Masterliste.md')&&await exists('docs/legacy/STRUKTUR_SPICKZETTEL.md')&&await exists('docs/legacy/STRUKTUR_SPICKZETTEL.mmd'));
 await check('visual-assets-preserved',async()=>{const entries=await fs.readdir('assets');return entries.length>0&&await exists('assets/Logo.PNG');});
 await check('readme-describes-modular-not-legacy-runtime',async()=>{const text=(await fs.readFile('README.md','utf8')).toLowerCase();return text.includes('aktuelle modulare baseline')&&text.includes('src/runtime/')&&!text.includes('der inspector ist ein fester bestandteil des projekts');});
-await check('workflow-keeps-cr22-locked-during-branch-cleanup',async()=>{const text=await fs.readFile('docs/DEVELOPMENT_WORKFLOW_CURRENT.md','utf8');return text.includes('Pre-CR22 branch cleanup | ACTIVE / PENDING')&&text.includes('CR-22 | LOCKED');});
+await check('workflow-keeps-cr22-locked-until-final-gate',async()=>{const text=await fs.readFile('docs/DEVELOPMENT_WORKFLOW_CURRENT.md','utf8');return text.includes('Pre-CR22 branch classification / reduction | PASS / 0 BLOCKER')&&text.includes('Pre-CR22 final cleanup / roadmap integration gate | ACTIVE / CI + DEVICE PENDING')&&text.includes('CR-22 | LOCKED');});
 
 const blockerCount=results.filter(r=>!r.pass).length;
 console.log(`PRE-CR22 FILE / ARCHITECTURE CLEANUP GATE: ${blockerCount===0?'PASS':'FAIL'} / ${blockerCount} BLOCKER`);
