@@ -1,0 +1,1 @@
+import { runCr19bSelfTest } from './cr-19b-self-test.js?v=cr19b-1';const report=runCr19bSelfTest();const el=document.querySelector('#test-status');if(el)el.textContent=report.pass?'CR-19B DETERMINISTIC RESERVATION ARBITRATION: PASS / 0 BLOCKER':`CR-19B DETERMINISTIC RESERVATION ARBITRATION: FAIL / ${report.blockerCount} BLOCKER`;console.info('[CR-19B]',report);
