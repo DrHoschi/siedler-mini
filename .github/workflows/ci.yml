@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-20 Reservation Lifecycle Foundation freeze gate + CR-19 frozen regression
+      - name: Run CR-21A Next Cell Reservation Intent Contract gate + CR-20 frozen regression
         shell: bash
         run: |
           set -o pipefail
