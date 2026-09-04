@@ -23,11 +23,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-18 Post-Recovery Route Continuation Foundation freeze gate + CR-18A/B/C and CR-17 frozen regression
+      - name: Run CR-19A Cell Reservation Contract gate + CR-18 frozen regression
         shell: bash
         run: |
           set -o pipefail
-          (npm run ci && node src/dev/cr-17-freeze-gate.node.js && node src/dev/cr-18a-self-test.node.js && node src/dev/cr-18b-self-test.node.js && node src/dev/cr-18c-self-test.node.js && node src/dev/cr-18-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
+          (npm run ci && node src/dev/cr-18-freeze-gate.node.js && node src/dev/cr-19a-self-test.node.js) 2>&1 | tee ci-baseline.log
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
