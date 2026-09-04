@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-14C Occupancy-Aware Movement Integration gate + frozen CR regression
+      - name: Run CR-14 Cell Occupancy & Entry Arbitration Foundation freeze gate + frozen CR regression
         shell: bash
         run: |
           set -o pipefail
