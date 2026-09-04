@@ -1,4 +1,4 @@
-import { runCr16FreezeGate } from './cr-16-freeze-gate.js';
+import { runCr16FreezeGate } from './cr-16-freeze-gate.js?v=cr16-freeze-2';
 
 const report=runCr16FreezeGate();
 const testEl=document.querySelector('#test-status');
