@@ -1,184 +1,81 @@
-📖 Neue Siedler – README
+# Neue Siedler / Siedler-Mini
 
-Version: v1.0.1
-Projekt: Neue Siedler (Siedler-Mini)
-Stand: 2025-09-30
+Dieses Repository enthält derzeit zwei bewusst getrennte Linien:
 
-🚀 Projektüberblick
+- `main` bleibt vorerst die historische Referenz des alten Spiels.
+- Die aktuelle modulare Neuentwicklung lebt auf der CR-Linie und basiert auf dem vollständig eingefrorenen **CR-21 – Reservation-Controlled Traffic Execution Foundation**.
 
-Neue Siedler ist eine 2D-Top-Down Aufbau- und Wirtschaftssimulation.
-Die Spieler:innen starten mit einer kleinen Siedlergruppe, erschließen Rohstoffe, bauen erste Produktionsketten auf und entwickeln ihre Siedlung über 10 Epochen zu einer Hochkultur.
+## Aktuelle modulare Baseline
 
-	repo-root/
-	│
-	├── index.html              # Einstiegspunkt (Startpanel zuerst sichtbar)
-	├── core/                   # Kernlogik (Engine, Assets, Game, Registry)
-	│   ├── boot.js
-	│   ├── asset.js
-	│   ├── game.js
-	│   ├── registry.js
-	│   ├── path-overlay.js
-	│   └── … 
-	│
-	├── ui/                     # Benutzeroberfläche
-	│   ├── ui-start.js         # Startpanel
-	│   ├── ui-hud.js           # Ressourcenanzeige
-	│   ├── ui-build.js         # Bau-Menü
-	│   ├── ui-dialog.js        # Dialogsystem
-	│   ├── ui-inspector.js     # Inspector-Overlay (Logs, Tests, Ressourcen, Pfade, Editor)
-	│   └── …
-	│
-	├── data/                   # Spieldaten (JSON, Schema-konform)
-	│   ├── buildings.json
-	│   ├── units.json
-	│   ├── balance.json
-	│   ├── campaign.json
-	│   ├── maps/
-	│   └── save.json
-	│
-	├── assets/                 # Grafiken & Ressourcen
-	│   ├── icons/
-	│   ├── tiles/
-	│   ├── buildings/
-	│   ├── characters/
-	│   ├── paths/
-	│   └── ui/
-	│
-	├── docs/                   # Dokumentation
-	│   ├── Lastenheft_NeueSiedler_v1.0.pdf
-	│   ├── Lastenheft_NeueSiedler_Registry_Patch.pdf
-	│   ├── Code_Struktur_Vorgaben.pdf
-	│   ├── Inspektor_Struktur_Vorgaben.pdf
-	│   ├── CODE_STYLE.md
-	│   ├── INSPECTOR_GUIDE.md
-	│   └── …
-	│
-	└── schemas/                # Diagramme & Mermaid-Dateien
-    	├── Epoche1.mmd
-   		├── Produktionsketten.mmd
- 		├── Projektstruktur.mmd
-		└── …
-    
-🔑 Kernmodule & Schnittstellen
+Verbindlicher eingefrorener Stand vor dem Pre-CR22-Cleanup:
 
-	•	core/boot.js → Initialisierung, 
-		Events (cb:assets-ready, cb:game:start)
-	•	core/asset.js → Asset-Verwaltung 
-		(Sprites, Sounds, Tiles), immer singular
-	•	core/game.js → Spielloop, 
-		World-State, Kollisionslogik
-	•	core/registry.js → Zentrale Sammlung aller IDs 
-		(Gebäude, Figuren, Ressourcen) ￼
-	•	ui/ui-inspector.js → Inspector mit Tabs: 
-		Logs, Tests, Ressourcen, Pfade, Editor ￼
+`4cb7261dc2325767070177a68f951df69b7523fd`
 
-🧩 Inspector
+Rollback-Branch:
 
-Der Inspector ist ein fester Bestandteil des Projekts (niemals entfernen).
-Funktionen:
+`frozen/cr-21-reservation-controlled-traffic-execution-foundation`
 
-	•	Logs → Fehler, Warnung, Info, OK
-	•	Tests → AI-Simulation, Warenfluss, Pfadfindung
-	•	Ressourcen → Werte ändern, auffüllen, resetten
-	•	Pfade → Overlays, Heatmap, Kollisionszonen
-	•	Editor → Karten erstellen, speichern, exportieren, testen
+Aktiver Cleanup-Branch:
 
-Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
+`maintenance/pre-cr22-repository-cleanup`
 
-🗄️ Datenformate (JSON)
+Der veränderliche operative Entwicklungsstatus steht ausschließlich in:
 
-	•	buildings.json → Gebäude mit Kosten, 
-		Inputs/Outputs, Zykluszeit, Epoche ￼
-	•	units.json → Figuren/Rollen mit Speed, 
-		Capacity, Epoche ￼
-	•	balance.json → Globale Parameter, 
-		Produktionsmultiplikatoren ￼
-	•	campaign.json → Kampagnenkapitel, 
-		Ziele, Freischaltungen ￼
-	•	maps/ → Karten im Editor-kompatiblen Format ￼
-	•	save.json → Savegames, versionssicher ￼
+`docs/DEVELOPMENT_WORKFLOW_CURRENT.md`
 
- 🏗️ Entwicklungsstandards
- 
-	•	Einheitliche Dateistruktur: 
-		Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports ￼
-	•	Jedes Modul loggt beim Laden seine Version:
-   		 js [boot] Modul geladen (v1.0.0)
- 	•	Events immer mit Prefix 
-		cb:* (z. B. cb:build:place, cb:res:change) ￼
-	•	Inspector & Debug-Tools sind Pflichtbestandteile.
+## Aktive Struktur
 
-📜 Setup & Start
+Die modulare Runtime verwendet die Struktur unter `src/`:
 
-	1.	Repo clonen oder ZIP entpacken
-	2.	Lokalen Server starten (z. B. npx http-server)
-	3.	Im Browser http://localhost:8080 öffnen
-	4.	Startpanel → Neues Spiel wählen
+- `src/runtime/` – Runtime-Grundlagen
+- `src/domain/` – Domain Stores und Kernverträge
+- `src/world/` – Welt-, Map- und Stable-ID-Grundlagen
+- `src/resources/` – Ressourcen-, Demand-, Matching- und Assignment-Systeme
+- `src/transport/` – Transport, Routing, Traffic, Reservation und Movement
+- `src/render/` – Rendering-Grundlage
+- `src/ui/` – aktuelle UI-Basis
+- `src/dev/` – Self-Tests, Regressionen und Freeze-Gates
+- `tools/` – Struktur-/CI-Hilfen
+- `assets/` – visuelle Assets; diese werden beim Cleanup ausdrücklich bewahrt
+- `docs/` – aktuelle CR- und Entwicklungsdokumentation
+- `docs/legacy/` – historische, für die aktive Architektur nicht mehr verbindliche Dokumentation
 
-⸻
+`index.html` lädt die modulare Runtime über `src/main.js` und das aktuelle Stylesheet `src/ui/app.css`.
 
-📘 Begleitdokumente
+## Legacy-Abgrenzung
 
-	•	Lastenheft_NeueSiedler_v1.0.pdf – Vollständige Anforderungen ￼
-	•	Registry_Patch.pdf – Ergänzung zur Registry ￼
-	•	CODE_STYLE.md – Einheitliche Code- und Kommentarregeln ￼
-	•	INSPECTOR_GUIDE.md – Design- und Funktionsvorgaben für den Inspector ￼
+Die alte Monolith-Struktur mit Root-Verzeichnissen wie `core/`, `ui/`, `data/`, `demo/`, `qa/` und `schemas/` ist **keine aktive Architektur mehr**. Ihre historischen Inhalte bleiben über Git-Historie und `main` nachvollziehbar, werden aber nicht in die bereinigte CR-22-Baseline übernommen.
 
-⸻
+Alte Root-Strukturunterlagen wurden nach `docs/legacy/` verschoben. Aussagen dort besitzen keine operative Verbindlichkeit für die modulare CR-Linie.
 
-✅ Abnahmekriterien (v1)
+## Aktueller Frozen-Vertrag
 
-	•	Startpanel zuerst sichtbar
-	•	Engine lädt Assets, Registry prüft IDs
-	•	Inspector vollständig integriert
-	•	JSON-Dateien Schema-konform
-	•	Mobile: Back-Button-Flow, 
-				Safe-Areas, 
-				Performance ≥30 FPS
+CR-21 schließt für genau eine Routenzelle die Kette:
 
-⸻
+`Next-Cell Intent → REQUESTED Reservation → deterministische CR-19 Arbitration → GRANTED / WAITING → genau ein reservierter Zelleneintritt → CONSUMED → CR-20 Blocking-Freigabe → Bereitschaft für einen späteren nächsten Intent`
 
-👉 Empfehlung: 
+Nicht Bestandteil von CR-21 sind insbesondere automatisches Chaining eines zweiten Reservation-Zyklus, Multi-Cell-Lookahead, neue Arbitration, neues Pathfinding oder Rerouting.
 
-Den Inspector kannst du später nach tools/ verschieben, solange die Einbindung in index.html und Events (cb:insp:*) bestehen bleibt.
+## Entwicklung und Prüfung
 
-Ziel-Struktur (Standard)
+Installationsschritt ist aktuell nicht erforderlich; die Tests laufen mit Node über die vorhandenen npm-Skripte.
 
-So soll es am Ende aussehen (Code/JSON sauber getrennt; Bilder bleiben in assets/):
+```bash
+npm run ci
+```
 
-	/index.html
-	/boot.js
-	/core/                      # Laufzeit-Engine & Systems (nur .js)
-		asset.js
-		registry.js
-		registry.type-aliases.js
-		render.js
-		ui-build.data-bridge.js
-		ui-build.js
-		... (weitere Core-Module)
-	/ui/                        # UI-Skripte & CSS
-		ui-start.js
-		ui-hud.js
-		ui-build.js
-		css/
-		ui-build.css
-		inspector/
-		ui-inspector.js
-		...
-	/data/                      # Gameplay-Daten (nur .json/.jsonc)
-		buildings.json
-		buildings.jsonc
-		characters/
-		*.json
-		maps/
-		*.json
-		...
-	/tools/                     # Editor/Dev-Tools (optional)
-		editor/
-		editor.js
-	/assets/                    # NUR Medien (Bilder/Audio/Fonts/Icons)
-		buildings/*.png
-		characters/*.png
-		tiles/*.png
-		ui/*.png
-		icons/** (nur .png/.svg …)
+Der vollständige CR-21-Freeze-Gate bleibt zusätzlich als Regression verfügbar.
+
+Vor jedem neuen CR muss `docs/DEVELOPMENT_WORKFLOW_CURRENT.md` gelesen und der tatsächliche Branch/HEAD geprüft werden.
+
+## Pre-CR22-Cleanup
+
+CR-22 darf erst beginnen, wenn der verpflichtende Repository-Cleanup vollständig verifiziert ist. Dazu gehören:
+
+- alte Monolith-Inhalte aus der modularen Baseline entfernen,
+- Assets erhalten,
+- irreführende Legacy-Dokumentation klar abgrenzen,
+- obsolete Arbeits-/Patch-/Temp-Branches nach Sicherheitsprüfung bereinigen,
+- Cleanup-Verifikationsgate mit `PASS / 0 BLOCKER` abschließen.
+
+`main` bleibt bis zu einem späteren neuen laufenden Spiel-/Integrationsstand unverändert.
