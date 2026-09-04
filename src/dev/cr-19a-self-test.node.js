@@ -1,0 +1,1 @@
+import { runCr19aSelfTest } from './cr-19a-self-test.js';const report=runCr19aSelfTest();console.log(`CR-19A CELL RESERVATION CONTRACT: ${report.pass?'PASS':'FAIL'} / ${report.blockerCount} BLOCKER`);if(!report.pass){for(const r of report.results.filter(x=>!x.pass))console.error(r);process.exitCode=1;}
