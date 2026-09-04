@@ -8,101 +8,91 @@ Repository state outranks chat memory. Read this file plus the actual branch/HEA
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main`
-- Current development branch: `feature/cr-21c-reservation-controlled-step-movement-integration`
-- Current completed system block: **CR-21 – Reservation-Controlled Traffic Execution Foundation**
-- CR-21 formal freeze gate candidate SHA: `98efc367d90827e61785d0627680ede73f68b491`
-- CR-21 CI: **PASS / 0 BLOCKER**, GitHub Actions run `33908668767` / run #4781
-- Frozen baselines: **CR-20 – Reservation Lifecycle Foundation**, **CR-21 – Reservation-Controlled Traffic Execution Foundation**
-- CR-21 contains the completed sub-blocks CR-21A, CR-21B and CR-21C.
-- `main` remains intentionally unmerged until a new running game/integration state is ready.
+- Current development branch: `maintenance/pre-cr22-repository-cleanup`
+- Current active action: **Pre-CR22 Repository Cleanup**
+- Frozen baseline: **CR-21 – Reservation-Controlled Traffic Execution Foundation**
+- CR-21 frozen SHA: `4cb7261dc2325767070177a68f951df69b7523fd`
+- Dedicated rollback branch: `frozen/cr-21-reservation-controlled-traffic-execution-foundation`
+- `main` remains intentionally unchanged as historical old-game reference.
+- CR-22 remains LOCKED until the cleanup verification is fully PASS / 0 BLOCKER.
 
 ## 2. Current status
 
 | Order | Block / Gate | Status | Permitted action |
 |---:|---|---|---|
-| 1 | CR-20 – Reservation Lifecycle Foundation | FROZEN | Regression only |
-| 2 | CR-21A – Next Cell Reservation Intent Contract | COMPLETE within CR-21 | Regression only |
-| 3 | CR-21B – Deterministic Reservation Execution Cycle | COMPLETE within CR-21 | Regression only |
-| 4 | CR-21C – Reservation-Controlled Step Movement Integration | COMPLETE within CR-21 | Regression only |
-| 5 | CR-21 – Reservation-Controlled Traffic Execution Foundation | FROZEN / PASS / 0 BLOCKER | Immutable baseline unless explicitly reopened |
-| 6 | Repository cleanup before CR-22 | NEXT / REQUIRED | Perform branch/legacy/docs cleanup and dedicated verification gate |
-| 7 | CR-22 | LOCKED | Do not start until required cleanup gate passes |
+| 1 | CR-21 – Reservation-Controlled Traffic Execution Foundation | FROZEN / PASS / 0 BLOCKER | Regression only |
+| 2 | Pre-CR22 file / architecture cleanup | IMPLEMENTED | Verify modular baseline and legacy separation |
+| 3 | Pre-CR22 documentation cleanup | IMPLEMENTED | Verify current README and legacy relocation |
+| 4 | Pre-CR22 branch cleanup | ACTIVE / PENDING | Classify and remove obsolete branches safely |
+| 5 | Pre-CR22 cleanup verification gate | LOCKED until branch cleanup complete | Run final cleanup gate only after all cleanup dimensions pass |
+| 6 | CR-22 | LOCKED | Do not start before cleanup PASS / 0 BLOCKER |
 
 ## 3. Frozen CR-21 contract
 
-CR-21 establishes the closed reservation-controlled traffic execution chain for one route cell at a time:
+CR-21 remains immutable and establishes the one-cell reservation-controlled traffic execution chain:
 
-- a carrier at a reached route point may express intent only for the immediate next route cell,
-- CR-21B converts valid intents to existing CR-19 `REQUESTED` reservations,
-- frozen CR-19 arbitration remains unchanged and deterministically selects exactly one winner,
-- the winner becomes CR-20 lifecycle state `GRANTED`; non-winners remain `REQUESTED` / `WAITING`,
-- only the `GRANTED` winner may enter exactly the reserved immediate next route cell,
-- the movement call stops at that single cell and cannot continue to another route point,
-- after successful entry lifecycle transitions `GRANTED → CONSUMED`,
-- existing CR-20 lifecycle/blocking integration removes that reservation's own blocking effect,
-- the reached carrier is ready to express a later intent for the following route cell, but no new reservation cycle starts automatically.
+`Next-Cell Intent → REQUESTED Reservation → frozen CR-19 Arbitration → GRANTED / WAITING → exactly one reserved-cell entry → CONSUMED → CR-20 Blocking release → readiness for a later next intent`
 
-Frozen exclusions:
+The cleanup may not alter this behavior.
 
-- no automatic second reservation cycle,
-- no multi-cell lookahead,
-- no CR-19 arbitration change,
-- no CR-20 lifecycle semantics change,
-- no new pathfinding or rerouting policy,
-- no unrelated transport/game-loop expansion.
+## 4. File / architecture cleanup already performed
 
-## 4. Formal CR-21 freeze evidence
+On `maintenance/pre-cr22-repository-cleanup`:
 
-The overall CR-21 Abschluss-/Regression-/Freeze-Gate verifies:
+- the historical root monolith directories `core/`, `data/`, `demo/`, `qa/`, `schemas/` and `ui/` no longer carry their old runtime contents in the modular baseline,
+- each former legacy runtime directory contains only a `LEGACY_REMOVED.md` marker explaining that history remains available through Git and `main`,
+- the active runtime remains exclusively under `src/`,
+- visual/art assets under `assets/` were preserved,
+- generated root snapshots `filelist-audit.txt`, `filelist.json` and `filelist.txt` were removed,
+- old root structure documents were relocated to `docs/legacy/`,
+- the root README was replaced with a current modular-baseline README.
 
-1. CR-21A self-test PASS / 0 BLOCKER.
-2. CR-21B self-test PASS / 0 BLOCKER.
-3. CR-21C self-test PASS / 0 BLOCKER.
-4. CR-20 frozen baseline regression PASS / 0 BLOCKER.
-5. Closed chain: next-cell intent → REQUESTED → frozen arbitration → GRANTED/WAITING → exactly one reserved-cell entry → CONSUMED → reservation blocking release.
-6. The reached winner can express a later next-cell intent without CR-21 automatically starting another cycle.
-7. WAITING loser remains REQUESTED and unmoved.
-8. Same inputs remain deterministic.
-9. No automatic second cycle, lookahead, pathfinding, rerouting or new arbitration was introduced.
+This cleanup must not be declared final until its dedicated verification passes.
 
-GitHub Actions run `33908668767` / run #4781 completed the explicit step:
+## 5. Branch cleanup rules
 
-`Run CR-21 overall completion/freeze gate + CR-20 frozen regression`
+The repository currently contains many historical CR-A/B/C, freeze, patch, temp, migration/design and infrastructure branches.
 
-with **PASS / 0 BLOCKER**.
+Branch cleanup must:
 
-## 5. Next required action: repository cleanup before CR-22
+- keep `main`,
+- keep `gh-pages` because it serves deployment,
+- keep `frozen/cr-21-reservation-controlled-traffic-execution-foundation` as the current rollback point,
+- keep `maintenance/pre-cr22-repository-cleanup` while cleanup is active,
+- preserve a branch only when it has a concrete special purpose or unique content not safely represented elsewhere,
+- remove obsolete CR-A/B/C, old freeze, patch and temp branches once containment or obsolescence is verified,
+- inspect special branches such as `Assets`, old S2D/SA/IM and infrastructure branches before deletion rather than deleting them blindly.
 
-Do not create CR-22 yet.
+## 6. Cleanup verification requirements
 
-The project guide requires a cleanup after fully FROZEN CR-21 and before CR-22. The cleanup must preserve the modular development line and the current CR-21 frozen baseline while reducing obsolete branches and legacy confusion.
+Before CR-22 may start, all of the following must be true:
 
-Required cleanup principles:
+1. CR-21 freeze regression remains PASS / 0 BLOCKER.
+2. Active modular runtime is still `src/main.js` + `src/**`.
+3. Historical monolith runtime is not present in the cleaned modular baseline.
+4. Assets remain present and unchanged by destructive cleanup.
+5. Misleading root documentation is removed or clearly relocated to `docs/legacy/`.
+6. Current README describes the modular architecture, not the old Inspector/monolith architecture.
+7. Obsolete branch set is reduced to a small justified set of active/frozen/special branches.
+8. Cleanup CI and browser/device status are synchronized.
+9. Only after all of the above: **Pre-CR22 Repository Cleanup = PASS / 0 BLOCKER**.
 
-- keep the modular development line and meaningful current frozen rollback point(s),
-- inspect and remove obsolete A/B/C, patch, temporary and superseded working branches where safely contained in the frozen line,
-- keep `main` as historical old-game reference for now,
-- do not pull the old monolith into the cleaned modular baseline,
-- preserve visual/art assets and reorganize rather than destructively delete them,
-- remove or clearly relocate misleading legacy documentation,
-- close cleanup with its own verification gate,
-- only the verified cleaned modular baseline may become the base for CR-22.
-
-## 6. Source-of-truth / branch rules
+## 7. Source-of-truth / branch rules
 
 Before every write verify repository, target branch, actual HEAD, active action, frozen predecessor, scope, tests and CI. Keep current modular work off `main` until the planned running-game integration point.
 
-For future CRs, the durable project method uses one branch per overall CR; A/B/C normally run sequentially on that same branch. Additional branches require a concrete risk justification.
+For future CRs use one branch per overall CR; A/B/C normally run sequentially on that same branch. Additional branches require a concrete risk justification.
 
-## 7. Known process traps
+## 8. Known process traps
 
-- Do not infer the active CR from chat history.
-- Keep browser/device text synchronized with actual branch state.
-- Do not reopen CR-21 silently after FROZEN.
-- Do not start CR-22 before the mandatory cleanup verification passes.
-- Do not treat old root/monolith documentation as current architecture.
-- Preserve assets during cleanup unless an item is explicitly verified disposable.
+- Do not infer current state from chat history.
+- Do not reopen CR-21 while cleaning the repository.
+- Do not delete assets as part of legacy cleanup.
+- Do not delete special branches without first checking whether they contain unique material.
+- Do not mark cleanup complete while branch cleanup is still pending.
+- Do not start CR-22 before the final cleanup gate is PASS / 0 BLOCKER.
+- Keep browser/device text synchronized with the actual cleanup state.
 
 ---
 
-**Updated:** 2026-09-04 after formal CR-21 overall Abschluss-/Regression-/Freeze-Gate PASS / 0 BLOCKER; repository cleanup before CR-22 is now NEXT / REQUIRED.
+**Updated:** 2026-09-04 during the mandatory Pre-CR22 repository cleanup. File/architecture and root-document cleanup are implemented; branch cleanup remains active/pending.
