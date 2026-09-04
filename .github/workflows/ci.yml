@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   baseline:
-    name: Clean Runtime + CR Regression
+    name: Pre-CR22 Final Cleanup Regression
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -23,11 +23,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run Pre-CR22 file/architecture cleanup gate + CR-21 frozen regression
+      - name: Run full modular regression and Pre-CR22 cleanup gates
         shell: bash
         run: |
           set -o pipefail
-          (npm run ci && node src/dev/cr-21-freeze-gate.node.js && node src/dev/pre-cr22-cleanup-file-gate.node.js) 2>&1 | tee ci-baseline.log
+          (npm run ci && node src/dev/cr-21-freeze-gate.node.js && node src/dev/pre-cr22-cleanup-file-gate.node.js && node src/dev/pre-cr22-final-cleanup-gate.node.js) 2>&1 | tee ci-baseline.log
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
