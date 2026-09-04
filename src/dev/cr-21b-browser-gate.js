@@ -1,0 +1,1 @@
+import { runCr21bSelfTest } from './cr-21b-self-test.js?v=cr21b-1';const report=runCr21bSelfTest();const el=document.querySelector('#test-status');if(el)el.textContent=report.pass?'CR-21B DETERMINISTIC RESERVATION EXECUTION CYCLE: PASS / 0 BLOCKER':`CR-21B DETERMINISTIC RESERVATION EXECUTION CYCLE: FAIL / ${report.blockerCount} BLOCKER`;console.info('[CR-21B]',report);
