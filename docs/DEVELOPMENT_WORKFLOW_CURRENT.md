@@ -9,14 +9,17 @@ Repository state outranks chat memory. Read this file plus the actual branch/HEA
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main`
 - Current development branch: `maintenance/pre-cr22-repository-cleanup`
-- Current active action: **Pre-CR22 Final Cleanup / Roadmap Integration Gate**
+- Current active action: **Pre-CR22 Repository Cleanup / Roadmap Integration Gate – FINALIZATION**
 - Current roadmap: `docs/ROADMAP_CURRENT.md`
 - Frozen gameplay baseline: **CR-21 – Reservation-Controlled Traffic Execution Foundation**
 - CR-21 frozen SHA: `4cb7261dc2325767070177a68f951df69b7523fd`
 - Dedicated rollback branch: `frozen/cr-21-reservation-controlled-traffic-execution-foundation`
 - `main` remains intentionally unchanged only as **historical functional and visual old-game reference**. It is not development basis, architecture basis, code source or integration target.
 - Target relative to old `main`: **functional parity or better, not code parity**.
-- CR-22 remains LOCKED until final regression/CI plus browser/device verification are PASS / 0 BLOCKER.
+- Branch cleanup target: exactly `main`, `gh-pages`, CR-21 rollback and current maintenance branch.
+- Browser/device verification: **PASS**, manually confirmed on iPad/Safari on 2026-09-04.
+- Integrated candidate CI: GitHub Actions run `33919957496` / run #4800 = **SUCCESS**.
+- Final documentation/browser synchronization is being committed and must receive one final green CI before the cleaned baseline is frozen for CR-22.
 
 ## 2. Current status
 
@@ -25,10 +28,11 @@ Repository state outranks chat memory. Read this file plus the actual branch/HEA
 | 1 | CR-21 – Reservation-Controlled Traffic Execution Foundation | FROZEN / PASS / 0 BLOCKER | Regression only |
 | 2 | Pre-CR22 file / architecture cleanup | PASS / 0 BLOCKER | Keep frozen cleanup boundary |
 | 3 | Pre-CR22 documentation cleanup | PASS / 0 BLOCKER | Keep README / Legacy separation |
-| 4 | IM ↔ CR roadmap reconciliation | PASS / 0 BLOCKER | Use `ROADMAP_CURRENT.md` as current bridge |
+| 4 | IM ↔ CR roadmap reconciliation | PASS / 0 BLOCKER | `ROADMAP_CURRENT.md` is current bridge |
 | 5 | Pre-CR22 branch classification / reduction | PASS / 0 BLOCKER | Retain only justified four-branch set |
-| 6 | Pre-CR22 final cleanup / roadmap integration gate | ACTIVE / CI + DEVICE PENDING | Run integrated regression, CI and browser/device verification |
-| 7 | CR-22 | LOCKED | Create only from recorded cleaned baseline after final PASS / 0 BLOCKER |
+| 6 | Pre-CR22 browser / device verification | PASS / 0 BLOCKER | Final status synchronized |
+| 7 | Pre-CR22 final cleanup / roadmap integration gate | FINAL CI PENDING | Freeze cleaned baseline after final green CI |
+| 8 | CR-22 | LOCKED UNTIL BASELINE FREEZE | Create only from recorded cleaned baseline |
 
 ## 3. Frozen CR-21 contract
 
@@ -38,7 +42,7 @@ CR-21 remains immutable and establishes:
 
 Cleanup may not alter this behavior.
 
-## 4. File / architecture cleanup – verified
+## 4. File / architecture cleanup – PASS / 0 BLOCKER
 
 On `maintenance/pre-cr22-repository-cleanup`:
 
@@ -49,48 +53,45 @@ On `maintenance/pre-cr22-repository-cleanup`:
 - historical structure documents are under `docs/legacy/`,
 - README describes the modular baseline.
 
-The file/architecture cleanup gate previously passed with GitHub Actions run `33909908758` / run #4787.
+The file/architecture cleanup gate passed with GitHub Actions run `33909908758` / run #4787.
 
-## 5. Roadmap reconciliation – verified
+## 5. Roadmap reconciliation – PASS / 0 BLOCKER
 
 `docs/ROADMAP_CURRENT.md` is the current bridge between historical IM capability planning and actual CR implementation.
 
-Rules:
+Binding rules:
 
 - IM and CR are not 1:1.
 - Old IM branches are not automatically integrated.
 - CR-00…CR-21 establish major runtime/resources/logistics/navigation/traffic foundations.
 - Open product areas remain buildings, persons/housing/workforce, construction, production/BuildingStock, economy, path wear, SaveGame, UI, Inspector and V1 end-to-end integration.
-- Exact future CR titles are defined one whole CR at a time after the cleanup gate.
+- Exact future CR titles are defined one whole CR at a time after this cleanup gate.
 - Old `main` behavior is product reference only; desired functions are reimplemented through the modular architecture.
 
 ## 6. Branch cleanup – PASS / 0 BLOCKER
 
-Historical branches were classified before deletion using:
-
-- **KEEP**
-- **SAFE DELETE – CONTAINED**
-- **ARCHIVE/EXTRACT THEN DELETE**
-- **REVIEW REQUIRED**
+Historical branches were classified before deletion as KEEP, SAFE DELETE – CONTAINED, ARCHIVE/EXTRACT THEN DELETE or REVIEW REQUIRED.
 
 Useful unique content from divergent IM/CI branches was reviewed and captured in `docs/legacy/pre-cr22/BRANCH_EXTRACTION_SUMMARY.md`. The final deletion plan is recorded in `docs/legacy/pre-cr22/FINAL_BRANCH_DELETION_LIST.md`.
 
-Live remote verification on 2026-09-04 confirmed the repository is reduced to exactly four justified branches:
+Live remote verification on 2026-09-04 confirmed exactly four justified branches remain:
 
 - `main` – historical functional/visual reference only,
 - `gh-pages` – deployment/browser-device surface,
 - `frozen/cr-21-reservation-controlled-traffic-execution-foundation` – rollback point,
-- `maintenance/pre-cr22-repository-cleanup` – active final cleanup branch.
+- `maintenance/pre-cr22-repository-cleanup` – active cleanup/finalization branch.
 
 Therefore **Pre-CR22 branch classification / reduction = PASS / 0 BLOCKER**.
 
-## 7. Inspector / diagnostics direction
+## 7. Browser / device verification – PASS / 0 BLOCKER
 
-Inspector remains a later diagnostics, simulation and balancing facility. It is never a gameplay owner. Automated tests remain executable gate code; Inspector may later expose public snapshots/events, evidence and metrics without changing gameplay.
+On 2026-09-04 the deployed Pre-CR22 Final Cleanup Gate was opened and manually confirmed on the real iPad/Safari target surface. The page rendered correctly, runtime status showed READY and the synchronized cleanup status was visible without layout or deployment blocker.
+
+This closes the manual browser/device requirement.
 
 ## 8. Final Pre-CR22 verification requirements
 
-Before CR-22 may start, all must be true:
+Completed:
 
 1. CR-21 regression PASS / 0 BLOCKER.
 2. Modular runtime remains `src/**`.
@@ -99,13 +100,17 @@ Before CR-22 may start, all must be true:
 5. Legacy docs remain clearly separated.
 6. README remains aligned to modular architecture.
 7. `ROADMAP_CURRENT.md` remains current.
-8. Branch classification/reduction remains PASS with exactly the justified retained set.
-9. Extracted unique historical evidence remains archived.
-10. Cleanup regression/CI is green.
-11. Browser/device status is synchronized and manually confirmed.
-12. Resulting cleaned commit is recorded as the CR-22 parent baseline.
-13. Old `main` remains reference only; the new game remains a clean modular rebuild targeting functional parity or better, never legacy-code parity.
-14. Only then: **Pre-CR22 Repository Cleanup / Roadmap Integration Gate = PASS / 0 BLOCKER**.
+8. Branch classification/reduction PASS with exactly the justified retained set.
+9. Extracted unique historical evidence archived.
+10. Integrated cleanup candidate CI green: run #4800 / `33919957496` SUCCESS.
+11. Browser/device status synchronized and manually confirmed PASS.
+12. Old `main` remains reference only; the new game remains a clean modular rebuild targeting functional parity or better, never legacy-code parity.
+
+Remaining finalization step:
+
+13. This final synchronized documentation/browser commit receives green CI.
+14. Its exact commit SHA is frozen on a dedicated cleaned-baseline branch and becomes the only permitted parent for the next CR whole-system branch.
+15. Then: **Pre-CR22 Repository Cleanup / Roadmap Integration Gate = PASS / 0 BLOCKER** and CR-22 is unlocked.
 
 ## 9. Source-of-truth / branch rules
 
@@ -119,11 +124,11 @@ For future CRs use one branch per overall CR; A/B/C normally run sequentially on
 - Do not reopen CR-21 during cleanup.
 - Do not delete assets as legacy cleanup.
 - Do not equate old IM branches with current implementation completeness.
-- Do not start CR-22 before final cleanup gate PASS / 0 BLOCKER.
+- Do not start CR-22 before the cleaned baseline is frozen after final green CI.
 - Do not turn Inspector into a second gameplay owner.
 - Do not use old `main` code/architecture as implementation target.
 - Keep browser/device text synchronized with actual gate state.
 
 ---
 
-**Updated:** 2026-09-04 after live confirmation of the four-branch target state. Branch cleanup is PASS / 0 BLOCKER. Final integrated regression/CI and browser/device verification are now the only remaining Pre-CR22 steps.
+**Updated:** 2026-09-04 after manual browser/device PASS and integrated CI success. Final synchronized commit is awaiting its last CI run; after that exact SHA is frozen as the Pre-CR22 cleaned baseline.
