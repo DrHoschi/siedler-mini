@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-15C Waiting ↔ Entry Integration gate + CR-14 frozen regression
+      - name: Run CR-15 Deterministic Waiting & Fairness Foundation freeze gate + CR-14 frozen regression
         shell: bash
         run: |
           set -o pipefail
