@@ -1,0 +1,1 @@
+import { runCr18bSelfTest } from './cr-18b-self-test.js?v=cr18b-1';const report=runCr18bSelfTest();const el=document.querySelector('#test-status');if(el)el.textContent=report.pass?'CR-18B DETERMINISTIC ROUTE REJOIN DECISION: PASS / 0 BLOCKER':`CR-18B DETERMINISTIC ROUTE REJOIN DECISION: FAIL / ${report.blockerCount} BLOCKER`;console.info('[CR-18B]',report);
