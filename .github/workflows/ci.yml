@@ -23,11 +23,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-17C Controlled Recovery Movement Integration gate + CR-17A/B and CR-16 regression
+      - name: Run CR-17 Deadlock Recovery Foundation freeze gate + CR-17A/B/C and CR-16 regression
         shell: bash
         run: |
           set -o pipefail
-          (npm run ci && node src/dev/cr-16-freeze-gate.node.js && node src/dev/cr-17a-self-test.node.js && node src/dev/cr-17b-self-test.node.js && node src/dev/cr-17c-self-test.node.js) 2>&1 | tee ci-baseline.log
+          (npm run ci && node src/dev/cr-16-freeze-gate.node.js && node src/dev/cr-17a-self-test.node.js && node src/dev/cr-17b-self-test.node.js && node src/dev/cr-17c-self-test.node.js && node src/dev/cr-17-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
