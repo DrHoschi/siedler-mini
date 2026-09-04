@@ -15,6 +15,14 @@ This file is the **current roadmap reconciliation**. It does not rewrite or unfr
 
 The old IM roadmap remains the frozen product/migration planning reference. The current CR line is the actual modular implementation evidence.
 
+### Clean-rebuild rule – binding
+
+The old game on `main` is **historical functional and visual reference only**. It is not the architecture baseline, code baseline or integration target for the new game.
+
+The new game is rebuilt completely on the modular CR line with cleaner ownership, contracts, runtime boundaries and tests. When a useful function already exists in the old game, its behavior may be studied as product reference, but the function is implemented cleanly inside the new architecture instead of restoring or extending the legacy monolith.
+
+**Target: functional parity with old `main` or better – never code parity.** The roadmap may intentionally improve or extend historical behavior where the new design requires it.
+
 Therefore:
 
 - IM numbers describe **migration/product capability areas**.
@@ -23,6 +31,7 @@ Therefore:
 - An old IM branch is not automatically integrated merely because a newer CR covers related behavior.
 - A CR foundation may satisfy only part of an IM objective.
 - Old IM/SA/S2D branches may be deleted only after their unique content and continuing reference value are checked.
+- Historical `main` code is not something the CR line must merge back into; only desired product behavior and useful visual/art references are relevant.
 
 Status vocabulary in this reconciliation:
 
@@ -185,7 +194,7 @@ The largest product-level gaps remain:
 
 CR numbering now continues the real modular implementation. IM remains the higher-level capability map.
 
-Do **not** restart old IM branches. Instead every future CR should explicitly state which IM objectives it advances.
+Do **not** restart old IM branches. Do **not** return to the old `main` monolith. Instead every future CR should explicitly state which IM objectives it advances and should implement required behavior in the modular architecture.
 
 ### Phase A – Finish current Pre-CR22 cleanup and audit
 
@@ -201,11 +210,13 @@ Before CR-22:
 
 No branch is deleted merely because its name is old.
 
-### Phase B – Bring the simulation back to a visible closed economy
+### Phase B – Bring the new simulation to functional parity or better through clean implementation
 
 The next CR sequence should prioritize the missing product owners required for the frozen S2D-00 economy chain:
 
 `HQ → Häuser → Bewohner → Produktion → lokaler Bestand → Transport → HQ/Baustelle → Bau → Expansion`
+
+This chain is a product-capability target, not an instruction to migrate old `main` code. Each capability is rebuilt against authoritative modular state.
 
 Recommended capability order after cleanup:
 
@@ -282,7 +293,7 @@ Before deleting any historical branch, classify it as:
 
 Minimum retained branches during the transition:
 
-- `main` – old-game historical reference,
+- `main` – old-game historical functional/visual reference only; not a development or integration target,
 - `gh-pages` – deployment,
 - `frozen/cr-21-reservation-controlled-traffic-execution-foundation` – verified rollback baseline,
 - `maintenance/pre-cr22-repository-cleanup` – active transition branch until final cleanup gate.
@@ -306,6 +317,7 @@ CR-22 remains locked until all are true:
 9. Required regressions / CI are green.
 10. Browser/device/visual gate status matches the cleaned baseline.
 11. Resulting commit is recorded as the clean base for CR-22.
+12. The cleaned baseline explicitly preserves the clean-rebuild rule: old `main` is reference only and functional parity or better is achieved by modular reimplementation, not legacy-code integration.
 
 Only then:
 
@@ -316,4 +328,4 @@ and CR-22 may begin.
 ---
 
 **Updated:** 2026-09-04  
-**Current conclusion:** CR-21 is frozen; file/architecture cleanup has passed; branch cleanup must follow a full integration/unique-content audit; future development should use CR numbers while mapping each CR back to the still-open IM capability objectives.
+**Current conclusion:** CR-21 is frozen; file/architecture cleanup has passed; the clean-rebuild/reference-only `main` rule is explicit; branch cleanup must follow a full integration/unique-content audit; future development should use CR numbers while mapping each CR back to the still-open IM capability objectives.
