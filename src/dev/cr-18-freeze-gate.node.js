@@ -1,0 +1,1 @@
+import { runCr18FreezeGate } from './cr-18-freeze-gate.js';const report=runCr18FreezeGate();console.log(`CR-18 POST-RECOVERY ROUTE CONTINUATION FOUNDATION FREEZE GATE: ${report.pass?'PASS':'FAIL'} / ${report.blockerCount} BLOCKER`);if(!report.pass){for(const r of report.results.filter(x=>!x.pass))console.error(r);process.exitCode=1;}
