@@ -1,0 +1,1 @@
+import { runCr18aSelfTest } from './cr-18a-self-test.js?v=cr18a-1';const report=runCr18aSelfTest();const el=document.querySelector('#test-status');if(el)el.textContent=report.pass?'CR-18A ROUTE CONTINUATION STATE CONTRACT: PASS / 0 BLOCKER':`CR-18A ROUTE CONTINUATION STATE CONTRACT: FAIL / ${report.blockerCount} BLOCKER`;console.info('[CR-18A]',report);
