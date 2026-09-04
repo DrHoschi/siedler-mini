@@ -37,11 +37,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-16C Deterministic Deadlock Resolution Policy gate + CR-16B regression
+      - name: Run CR-16 Traffic Deadlock Foundation freeze gate + CR-16A/B/C regression
         shell: bash
         run: |
           set -o pipefail
-          npm run ci 2>&1 | tee ci-baseline.log
+          (npm run ci && node src/dev/cr-16c-self-test.node.js && node src/dev/cr-16-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
