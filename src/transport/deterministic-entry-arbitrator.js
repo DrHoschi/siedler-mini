@@ -13,6 +13,12 @@ function normalizeCarrierIds(value) {
   return ids;
 }
 
+function compareCarrierIds(a, b) {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 export class DeterministicEntryArbitrator {
   static decide({ occupancy = CellOccupancyContract.define(), carrierIds } = {}) {
     const normalizedOccupancy = CellOccupancyContract.define({
@@ -23,7 +29,7 @@ export class DeterministicEntryArbitrator {
       throw new Error('entry arbitration requires a FREE cell');
     }
 
-    const contenders = normalizeCarrierIds(carrierIds).slice().sort((a, b) => a.localeCompare(b, 'en'));
+    const contenders = normalizeCarrierIds(carrierIds).slice().sort(compareCarrierIds);
     const winnerCarrierId = contenders[0];
     const loserCarrierIds = Object.freeze(contenders.slice(1));
 
