@@ -1,0 +1,18 @@
+import { NextCellReservationIntentContract } from '../transport/next-cell-reservation-intent-contract.js';
+import { DeterministicReservationExecutionCycle } from '../transport/deterministic-reservation-execution-cycle.js';
+
+function route(){return {startPosition:{x:0,y:0},targetPosition:{x:2,y:0},waypoints:[{x:1,y:0}],state:'ACTIVE'};}
+function intent(carrierId='unit:00000002'){return NextCellReservationIntentContract.define({carrierId,route:route(),currentPosition:{x:0,y:0},nextCell:{x:1,y:0}});}
+
+export function runCr21bSelfTest(){
+ const results=[];const check=(name,fn)=>{try{results.push({name,pass:!!fn()});}catch(error){results.push({name,pass:false,error:String(error?.message||error)});}};const rejects=fn=>{try{fn();return false;}catch{return true;}};
+ check('single-intent-becomes-requested-then-granted',()=>{const r=DeterministicReservationExecutionCycle.run({intents:[intent()],validFromStep:10,validUntilStep:11});const o=r.outcomes[0];return r.status==='RESOLVED'&&r.decision.winnerCarrierId==='unit:00000002'&&o.status==='GRANTED'&&o.lifecycleState.status==='GRANTED'&&o.lifecycleState.reservation.status==='REQUESTED';});
+ check('competing-intents-use-existing-deterministic-arbitration',()=>{const r=DeterministicReservationExecutionCycle.run({intents:[intent('unit:00000002'),intent('unit:00000001')],validFromStep:10,validUntilStep:11});const winner=r.outcomes.find(o=>o.status==='GRANTED');const loser=r.outcomes.find(o=>o.status==='WAITING');return winner.carrierId==='unit:00000001'&&winner.lifecycleState.status==='GRANTED'&&loser.carrierId==='unit:00000002'&&loser.lifecycleState.status==='REQUESTED'&&r.decision.policy==='EARLIEST_WINDOW_THEN_LOWEST_STABLE_ID';});
+ check('same-inputs-produce-same-cycle-result',()=>{const args={intents:[intent('unit:00000002'),intent('unit:00000001')],validFromStep:10,validUntilStep:11};return JSON.stringify(DeterministicReservationExecutionCycle.run(args))===JSON.stringify(DeterministicReservationExecutionCycle.run(args));});
+ check('input-order-does-not-change-winner-or-outcome-order',()=>{const a=DeterministicReservationExecutionCycle.run({intents:[intent('unit:00000002'),intent('unit:00000001')],validFromStep:10,validUntilStep:11});const b=DeterministicReservationExecutionCycle.run({intents:[intent('unit:00000001'),intent('unit:00000002')],validFromStep:10,validUntilStep:11});return a.decision.winnerCarrierId===b.decision.winnerCarrierId&&JSON.stringify(a.outcomes)===JSON.stringify(b.outcomes);});
+ check('all-cycle-intents-must-target-same-next-cell',()=>rejects(()=>DeterministicReservationExecutionCycle.run({intents:[intent(),NextCellReservationIntentContract.define({carrierId:'unit:00000003',route:{startPosition:{x:0,y:1},targetPosition:{x:2,y:1},waypoints:[{x:1,y:1}],state:'ACTIVE'},currentPosition:{x:0,y:1},nextCell:{x:1,y:1}})],validFromStep:10,validUntilStep:11})));
+ check('duplicate-carrier-intent-is-rejected',()=>rejects(()=>DeterministicReservationExecutionCycle.run({intents:[intent(),intent()],validFromStep:10,validUntilStep:11})));
+ check('invalid-window-is-rejected',()=>rejects(()=>DeterministicReservationExecutionCycle.run({intents:[intent()],validFromStep:11,validUntilStep:10})));
+ check('cr21b-adds-no-movement-consumption-pathfinding-rerouting-or-new-arbitration-policy',()=>{const text=DeterministicReservationExecutionCycle.toString().toLowerCase();return !text.includes("'consumed'")&&!text.includes('move(')&&!text.includes('advance(')&&!text.includes('entercell')&&!text.includes('pathfind')&&!text.includes('rerout')&&!text.includes('earliest_window_then_lowest_stable_id');});
+ const blockerCount=results.filter(r=>!r.pass).length;return Object.freeze({pass:blockerCount===0,blockerCount,results:Object.freeze(results.map(Object.freeze))});
+}
