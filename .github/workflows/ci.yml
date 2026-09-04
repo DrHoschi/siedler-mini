@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-16A Wait Dependency Contract gate + CR-15 frozen regression
+      - name: Run CR-16B Deterministic Deadlock Detection gate + CR-16A regression
         shell: bash
         run: |
           set -o pipefail
