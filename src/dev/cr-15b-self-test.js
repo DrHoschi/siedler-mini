@@ -7,6 +7,7 @@ export function runCr15bSelfTest() {
 
   const freshA={carrierId:'unit:00000001',waitingCycles:0};
   const freshB={carrierId:'unit:00000002',waitingCycles:0};
+  const freshC={carrierId:'unit:00000003',waitingCycles:0};
   const waitedA={carrierId:'unit:00000001',waitingCycles:2};
   const waitedB={carrierId:'unit:00000002',waitingCycles:1};
 
@@ -14,8 +15,8 @@ export function runCr15bSelfTest() {
   check('repeated-waiting-outranks-shorter-waiting',()=>DeterministicWaitPriorityPolicy.decide({contenders:[waitedB,waitedA]}).winnerCarrierId==='unit:00000001');
   check('equal-waiting-uses-stable-carrier-id-tiebreak',()=>DeterministicWaitPriorityPolicy.decide({contenders:[freshB,freshA]}).winnerCarrierId==='unit:00000001');
   check('input-order-does-not-change-result',()=>{
-    const a=DeterministicWaitPriorityPolicy.decide({contenders:[waitedB,waitedA,freshA]});
-    const b=DeterministicWaitPriorityPolicy.decide({contenders:[freshA,waitedA,waitedB]});
+    const a=DeterministicWaitPriorityPolicy.decide({contenders:[waitedB,waitedA,freshC]});
+    const b=DeterministicWaitPriorityPolicy.decide({contenders:[freshC,waitedA,waitedB]});
     return JSON.stringify(a)===JSON.stringify(b);
   });
   check('decision-is-deeply-immutable',()=>{
