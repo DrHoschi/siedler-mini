@@ -82,7 +82,7 @@ export function runCr25cSelfTest() {
       && rejects(() => ProductionBuildingStockContract.define({ buildingId: 'building:00000010', inputs: [{ resourceTypeId: 'resource-type:00000001', quantity: 1 }], outputs: [] }))
       && rejects(() => ProductionBuildingStockContract.define({ buildingId: 'building:00000010', inputs: [{ resourceTypeId: 'resource-type:00000001', quantity: 0 }], outputs: [{ resourceTypeId: 'resource-type:00000003', quantity: 1 }] }))
       && rejects(() => ProductionBuildingStockContract.define({ buildingId: 'building:00000010', inputs: [{ resourceTypeId: 'resource-type:00000001', quantity: 1 }, { resourceTypeId: 'resource-type:00000001', quantity: 1 }], outputs: [{ resourceTypeId: 'resource-type:00000003', quantity: 1 }] }))
-      && rejects(() => ProductionBuildingStockContract.execute(production(), [BuildingStockContract.define({ buildingId: 'building:00000011', resourceTypeId: 'resource-type:00000001', quantity: 5 })]));
+      && rejects(() => ProductionBuildingStockContract.execute(production(), [BuildingStockContract.define({ buildingId: 'building:00000011', resourceTypeId: 'resource-type:00000001', quantity: 5 })]))
   );
 
   check('production-result-is-deterministic-and-immutable', () => {
