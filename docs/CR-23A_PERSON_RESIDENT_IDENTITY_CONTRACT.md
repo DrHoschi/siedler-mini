@@ -1,6 +1,6 @@
 # CR-23A – Person / Resident Identity Contract
 
-Status: **IMPLEMENTED – NOT FROZEN**
+Status: **PASS / FROZEN / 0 BLOCKER**
 
 ## Zweck
 
@@ -47,19 +47,21 @@ Ein CR-23A-Personenvertrag enthält ausschließlich:
 
 Eine reale Person soll später dieselbe physische Entität bleiben, unabhängig davon, ob sie Bewohner, Carrier oder Spezialist ist. CR-23A schafft deshalb keine getrennte Bewohner-Identität neben der allgemeinen Unit-Identität.
 
-## Prüfziel
+## Freeze-Nachweis
 
-`src/dev/cr-23a-self-test.js` prüft insbesondere:
+Der dedizierte CR-23A Abschluss-/Regression-/Freeze-Gate regressiert CR-23A gemeinsam gegen den eingefrorenen CR-22-Unterbau.
 
-- gültige `unit:`-PersonId,
-- Ablehnung anderer Stable-ID-Kinds und ungültiger IDs,
-- deterministische Vertragsbildung,
-- ausschließlich `EXISTS` als aktuellen CR-23A-Existenzzustand,
-- Immutability,
-- keine vorgezogene Home-, Housing-, Population-, Workforce-, Production-, Storage-, Construction- oder Transportlogik.
+Bestätigt:
+
+- Browser-/Device-Preview: **PASS / 0 BLOCKER**,
+- GitHub CI `CR-23A completion/freeze gate + CR-22 frozen regression`: **SUCCESS**,
+- stabile `personId` auf bestehender `unit:`-ID-Basis,
+- `EXISTS` als einziger CR-23A-Ausgangszustand,
+- Immutability und Determinismus,
+- keine vorgezogene Home-, Housing-, Population-, Workforce-, Production-, Storage-, Construction-, Transport- oder Bewegungslogik.
 
 ## Abgrenzung innerhalb CR-23
 
-- **CR-23A:** Person / Resident Identity Contract – **IMPLEMENTED / NOT FROZEN**
-- **CR-23B:** Resident ↔ Home Assignment Contract – noch nicht begonnen
+- **CR-23A:** Person / Resident Identity Contract – **PASS / FROZEN / 0 BLOCKER**
+- **CR-23B:** Resident ↔ Home Assignment Contract – nächster zu definierender Sub-Block
 - **CR-23C:** Housing Capacity & Occupancy Foundation – noch nicht begonnen
