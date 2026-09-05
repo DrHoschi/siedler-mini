@@ -1,11 +1,11 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – Post-CR22  
+**Status:** CURRENT – Post-CR23  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `maintenance/post-cr22-project-control-sync`  
-**Frozen gameplay baseline:** **CR-22 – Building Ownership / Lifecycle Foundation**  
-**Frozen implementation branch:** `frozen/cr-22c-building-registration-world-ownership-integration`  
-**Frozen implementation SHA:** `d507bf0797b8b4be4090cbca0d74cf20760500b5`
+**Current control branch:** `maintenance/post-cr23-project-control-sync`  
+**Frozen gameplay baseline:** **CR-23 – Person / Resident / Housing Foundation**  
+**Frozen implementation branch:** `frozen/cr-23c-housing-capacity-occupancy-foundation`  
+**Frozen implementation SHA:** `1a3a01c0973cd21c0375c8bc308311a774e30120`
 
 ## 1. Authority
 
@@ -17,27 +17,30 @@ IM numbers remain higher-level product/migration capability areas. CR numbers ar
 
 ## 2. Current frozen line
 
-CR-00 through CR-21 remain frozen predecessor foundations. The latest completed system block is:
+CR-00 through CR-22 remain frozen predecessor foundations. The latest completed system block is:
 
-### CR-22 – Building Ownership / Lifecycle Foundation — PASS / FROZEN / 0 BLOCKER
+### CR-23 – Person / Resident / Housing Foundation — PASS / FROZEN / 0 BLOCKER
 
-- **CR-22A – Building Identity & Ownership Contract — FROZEN**
-  - stable `BuildingId`
-  - building-definition reference
-  - stable Building owner anchor
-- **CR-22B – Building Lifecycle State Contract — FROZEN**
-  - existential lifecycle `EXISTS -> RETIRED`
-  - `RETIRED` terminal
-  - no Construction semantics
-- **CR-22C – Building Registration & World Ownership Integration — FROZEN**
-  - register the Building owner in the existing Building DomainStore
-  - deterministic lookup
-  - duplicate rejection
-  - controlled removal without automatic lifecycle transition
+- **CR-23A – Person / Resident Identity Contract — FROZEN**
+  - stable semantic Person/Resident identity
+  - uses the existing stable `unit:` ID basis
+  - minimal current existence state `EXISTS`
+- **CR-23B – Resident ↔ Home Assignment Contract — FROZEN**
+  - explicit Person → Home Building relationship
+  - `UNASSIGNED` or `ASSIGNED`
+  - exactly one `homeBuildingId` source of truth on the Person-side contract
+- **CR-23C – Housing Capacity & Occupancy Foundation — FROZEN**
+  - Building-scoped housing `capacity >= 0`
+  - `occupancy` derived deterministically from CR-23B `ASSIGNED` Home references
+  - `availableSlots = capacity - occupancy`
+  - exact capacity allowed; overflow rejected
+  - no independent mutable resident list or occupancy counter
 
-CR-22 deliberately does not contain residents, housing capacity, workforce, professions, construction, production, BuildingStock, storage, population growth or related timers.
+CR-23 deliberately does not contain Household/family simulation, automatic resident creation, BirthTimer, population growth/regeneration, profession/workforce, tools/clothing, production, BuildingStock/storage, construction execution, transport or movement.
 
-CR-22 advances **IM-01 Public Owner Boundaries & Runtime Contracts** and **IM-04 BuildingStore Ownership Consolidation**.
+The previously listed broader Person/Resident/Housing capability area included resident lifecycle / controlled resident creation rules as a future compatibility requirement. That capability was intentionally **not implemented in CR-23A/B/C** and is now explicitly **DEFERRED** to a later Population / Resident Creation block. It is not an open CR-23 blocker and must not be silently added to CR-23 after freeze.
+
+CR-23 advances **IM-05 + IM-10** by establishing stable person identity, Home ownership relation, housing capacity and occupancy consistency.
 
 ## 3. Product-capability direction
 
@@ -45,11 +48,11 @@ The authoritative product chain remains:
 
 `HQ -> Häuser -> Bewohner -> Produktion -> lokaler Bestand -> Transport -> HQ/Baustelle -> Bau -> Expansion`
 
-The capability priority established before CR-22 remains valid. CR-22 completed priority 1. Therefore the next priority is now:
+Current capability priority:
 
 1. ~~Building ownership / lifecycle foundation~~ — **CR-22 COMPLETE / FROZEN**
-2. **Person / Resident / Housing foundation — NEXT** — advances IM-05 + IM-10
-3. Construction foundation — advances IM-07
+2. ~~Person / Resident / Housing foundation~~ — **CR-23 COMPLETE / FROZEN**
+3. **Construction foundation — NEXT** — advances IM-07
 4. BuildingStock / Production foundation — advances IM-08
 5. Integrated workforce / job eligibility — advances the non-transport part of IM-06
 6. Game-facing logistics/navigation integration — advances IM-09 + IM-11
@@ -60,49 +63,50 @@ The capability priority established before CR-22 remains valid. CR-22 completed 
 11. Guidance + Inspector / diagnostics / balancing — IM-15
 12. Architecture closure + V1 Golden Path — finish IM-16 + IM-17
 
+Population / Resident Creation remains a deferred capability that may be scheduled when dependency and gameplay priority justify it. It must build on frozen CR-23 housing capacity rather than modifying CR-23.
+
 The exact future CR title is defined only when its scope contract is written. This roadmap fixes priority and dependency, not premature CR internals.
 
 ## 4. Next system-block planning boundary
 
-The next system block must address **Person / Resident / Housing foundation** and advance IM-05 + IM-10.
+The next system block must address **Construction Foundation** and advance IM-07.
 
-Required capability area from the reconciled roadmap:
+The planning goal is to establish the minimal modular contract for a Building to move through a construction process without changing the already frozen existential Building lifecycle from CR-22B.
 
-- real stable Person/Resident identity,
-- Home / housing relationship,
-- housing capacity,
-- resident lifecycle / controlled resident creation rules,
-- later compatibility with specialists/workforce and founder/start roster.
+Potential capability area to plan, not yet implement:
 
-This does **not** mean all of those capabilities belong in the first sub-step. The next CR must again be split into small contracts before implementation.
+- construction-specific state/phase contract separate from Building `EXISTS -> RETIRED`,
+- controlled construction progress/phase transition rules,
+- deterministic completion boundary that yields a completed usable Building state,
+- later compatibility with construction material demand / delivery and builders.
 
-The following remain outside the initial planning boundary unless explicitly introduced by a later sub-block:
+The first Construction sub-step must again be narrowly scoped before implementation.
 
-- profession assignment,
-- worker/job eligibility,
-- tools or clothing acquisition,
+The following remain outside the initial Construction planning boundary unless explicitly introduced by a later sub-block:
+
+- residents / housing changes,
+- population creation,
+- profession/workforce assignment,
 - production,
-- construction execution,
-- BuildingStock,
-- transport integration,
-- detailed birth/child simulation or balancing timers,
-- UI/rendering.
-
-The previously discussed design direction remains compatible with this roadmap: housing may later provide a bounded resident population, and residents may later become workers through explicit workforce/profession systems. CR-22 Buildings are now the stable owners those relationships can reference.
+- BuildingStock/storage ownership,
+- transport execution changes,
+- rendering/animation,
+- demolition/destruction unless separately defined,
+- balancing/UI/Inspector.
 
 ## 5. Inspector / diagnostics timing
 
-Inspector and balancing diagnostics remain later capabilities, not prerequisites for the next gameplay owner. Automated tests/freeze gates remain executable evidence; a later Inspector may display snapshots, metrics and diagnostics but must never become a gameplay owner.
+Inspector and balancing diagnostics remain later capabilities, not prerequisites for Construction. Automated tests/freeze gates remain executable evidence; a later Inspector may display snapshots, metrics and diagnostics but must never become a gameplay owner.
 
 ## 6. Branch / source-of-truth rules
 
 - `main` remains historical old-game reference.
-- `frozen/cr-22c-building-registration-world-ownership-integration` is the current immutable gameplay baseline.
-- Project-control synchronization occurs on `maintenance/post-cr22-project-control-sync`.
+- `frozen/cr-23c-housing-capacity-occupancy-foundation` is the current immutable gameplay baseline.
+- Project-control synchronization occurs on `maintenance/post-cr23-project-control-sync`.
 - Do not start the next feature CR until this project-control synchronization is reviewed and accepted.
-- The next feature CR must branch from the accepted synchronized baseline, not from an obsolete CR-22A/B/C working branch.
+- The next feature CR must branch from the accepted synchronized baseline, not from obsolete CR-23 working branches.
 - Browser/device text, docs, CI naming and actual branch state must stay synchronized.
 
 ---
 
-**Updated:** 2026-09-05 after CR-22A/B/C formal freeze. Next roadmap capability: **Person / Resident / Housing foundation (IM-05 + IM-10)**.
+**Updated:** 2026-09-05 after CR-23A/B/C formal freeze. Next roadmap capability: **Construction Foundation (IM-07)**.
