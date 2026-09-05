@@ -9,59 +9,66 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
 - Current development/control branch: `feature/cr-26-workforce-capability-job-eligibility-foundation`
-- Current immutable gameplay baseline: **CR-25 – BuildingStock / Production Foundation**
-- CR-25: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- Current immutable gameplay baseline: **CR-26A – Person Workforce Profile Contract**
+- CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current system block: **CR-26 – Workforce Capability & Job Eligibility Foundation**
-- Current sub-block: **CR-26A – Person Workforce Profile Contract**
-- CR-26A status: **IMPLEMENTED / NOT FROZEN**
+- CR-26A – Person Workforce Profile Contract: **PASS / FROZEN / 0 BLOCKER**
+- Current sub-block: **CR-26B – Workforce Availability & Assignment State Contract**
+- CR-26B status: **NEXT / NOT IMPLEMENTED**
 
 ## 2. Accepted CR-26 decomposition
 
-1. **CR-26A – Person Workforce Profile Contract**
+1. **CR-26A – Person Workforce Profile Contract — PASS / FROZEN / 0 BLOCKER**
    - specialization + capability set on existing `personId` / `unit:` identity,
    - no availability, assignment or job selection.
-2. **CR-26B – Workforce Availability & Assignment State Contract**
+2. **CR-26B – Workforce Availability & Assignment State Contract — NEXT / NOT IMPLEMENTED**
    - `FREE / ASSIGNED / UNAVAILABLE`,
    - at most one normal active assignment per person,
    - no automatic candidate selection.
-3. **CR-26C – Deterministic Job Eligibility & Assignment Selection**
+3. **CR-26C – Deterministic Job Eligibility & Assignment Selection — PLANNED / BLOCKED**
    - Capability + Availability + Preconditions + required Reachability,
    - deterministic single-person selection,
    - no transport-specific logistics rewrite.
 
-## 3. Implemented CR-26A boundary
+## 3. Frozen CR-26A boundary
 
-CR-26A defines one immutable `person-workforce-profile` for an existing Person:
+CR-26A owns one immutable `person-workforce-profile` for an existing Person:
 
-- stable `personId` using existing `unit:` ID kind,
+- stable `personId` on existing `unit:` identity,
 - explicit V1 specialization,
 - explicit non-empty deterministic capability set,
-- duplicate capabilities are canonicalized away and ordering is deterministic,
-- identity/Home from CR-23 remain unchanged.
+- duplicate capabilities canonicalized away,
+- deterministic ordering and immutability,
+- CR-23 Person/Home identity remains unchanged.
 
-CR-26A contains no Availability, Assignment, Job IDs, job queues, candidate selection, Reachability, pathfinding, movement, workforce execution, production timing, construction work, transport logistics, SaveGame ownership, rendering/UI or balancing.
+CR-26A contains no Availability, Assignment, Job IDs, queues, candidate selection, Reachability, pathfinding, movement or work execution.
 
-## 4. Frozen predecessor ownership
+The device/browser CR-26A Verification / Freeze Gate passed with **PASS / 0 BLOCKER** on 2026-09-05.
 
-- CR-22 owns Building identity/lifecycle/registration.
-- CR-23 owns Person identity, Home assignment and Housing capacity/occupancy.
-- CR-24 owns construction state/progress/completion.
-- CR-25 owns BuildingStock and minimal Production -> BuildingStock execution.
+## 4. CR-26B allowed boundary
 
-CR-26 extends Person workforce semantics without reopening those owners.
+CR-26B may add only the temporary workforce assignment-state boundary on top of the frozen CR-26A profile:
+
+- Availability states `FREE`, `ASSIGNED`, `UNAVAILABLE`,
+- explicit temporary Assignment ownership/reference,
+- at most one normal active Assignment per Person,
+- deterministic valid transitions into and out of assigned state,
+- identity, Home, specialization and capabilities remain unchanged.
+
+CR-26B must not add automatic candidate selection, job prioritization, Reachability/pathfinding, movement, production timing, builder execution, transport/logistics, SaveGame, rendering/UI or balancing.
 
 ## 5. Next allowed action
 
-Run focused **CR-26A Verification / Freeze Gate** against the frozen CR-25 predecessor line and the new Person Workforce Profile contract.
+Begin **CR-26B – Workforce Availability & Assignment State Contract** on the existing CR-26 development branch.
 
-Only after **PASS / 0 BLOCKER** may CR-26A be frozen and CR-26B begin.
+Do not create a separate CR-26B working branch. CR-26C remains blocked until CR-26B is implemented, verified and frozen.
 
 ## 6. Branch rule
 
-CR-26 uses one development branch: `feature/cr-26-workforce-capability-job-eligibility-foundation`.
+CR-26 continues on the single development branch `feature/cr-26-workforce-capability-job-eligibility-foundation`.
 
-Frozen branches are immutable markers only. No separate CR-26A/B/C working branches under normal conditions.
+Frozen branches are immutable markers only. No separate A/B/C working branches under normal conditions.
 
 ---
 
-**Updated:** 2026-09-05 after CR-26A implementation. Current next activity: **CR-26A focused verification / freeze gate**.
+**Updated:** 2026-09-05 after device/browser CR-26A Verification / Freeze Gate: **PASS / 0 BLOCKER**. Current next activity: **CR-26B – Workforce Availability & Assignment State Contract**.
