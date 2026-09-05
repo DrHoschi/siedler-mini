@@ -8,16 +8,15 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Current development/control branch: `feature/cr-24-construction-foundation`
+- Current development/control branch: `feature/cr-25-buildingstock-production-foundation`
 - Current immutable gameplay baseline: **CR-24 – Construction Foundation**
 - CR-24A – Building Construction State Contract: **PASS / FROZEN / 0 BLOCKER**
-- CR-24A frozen branch: `frozen/cr-24a-building-construction-state-contract`
 - CR-24B – Deterministic Construction Progress / Transition Contract: **PASS / FROZEN / 0 BLOCKER**
-- CR-24B frozen branch: `frozen/cr-24b-deterministic-construction-progress-transition-contract`
 - CR-24C – Construction Completion Boundary: **PASS / FROZEN / 0 BLOCKER**
-- CR-24C frozen branch: `frozen/cr-24c-construction-completion-boundary`
-- CR-24C frozen SHA: `c3986fbd810b1150d10d0945ed2f27c77c3eaa63`
 - CR-24 – Construction Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- Current system block: **CR-25 – BuildingStock / Production Foundation**
+- Current sub-block: **CR-25A – BuildingStock Contract**
+- CR-25A status: **IMPLEMENTED / NOT FROZEN**
 
 ## 2. Current status
 
@@ -25,47 +24,51 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 |---:|---|---|---|
 | 1 | CR-22 – Building Ownership / Lifecycle Foundation | COMPLETE / FROZEN | Regression only |
 | 2 | CR-23 – Person / Resident / Housing Foundation | COMPLETE / FROZEN | Regression only |
-| 3 | CR-24A – Building Construction State Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 4 | CR-24B – Deterministic Construction Progress / Transition Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 5 | CR-24C – Construction Completion Boundary | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 6 | CR-24 – Construction Foundation | COMPLETE / FROZEN / PASS / 0 BLOCKER | Regression only |
-| 7 | Next system block | PLANNING ONLY | Define BuildingStock / Production Foundation boundary |
+| 3 | CR-24 – Construction Foundation | COMPLETE / FROZEN / PASS / 0 BLOCKER | Regression only |
+| 4 | CR-25A – BuildingStock Contract | IMPLEMENTED / NOT FROZEN | Focused verification / freeze gate only |
+| 5 | CR-25B – Deterministic BuildingStock Mutation | PLANNED | Do not start before CR-25A acceptance/freeze |
+| 6 | CR-25C – Production -> BuildingStock Contract | PLANNED | Do not start before CR-25B |
 
-## 3. CR-24 frozen contract
+## 3. CR-25A contract boundary
 
-CR-24A -> CR-24B -> CR-24C jointly establish:
+CR-25A introduces exactly one immutable descriptive stock-entry value:
 
-- a construction-specific state contract separate from Building lifecycle,
-- only `PENDING`, `IN_PROGRESS`, `COMPLETED`,
-- deterministic progress in `0.0 .. 1.0`,
-- `PENDING` at `0.0`, `IN_PROGRESS` strictly between `0.0` and `1.0`, `COMPLETED` at `1.0`,
-- forward-only progression with no `PENDING -> COMPLETED` skip,
-- terminal `COMPLETED`,
-- stable `buildingId`, immutable contract values,
-- `constructionComplete` derived as true only for `COMPLETED` with `progress = 1.0`.
+- `kind: building-stock`
+- stable `buildingId` of kind `building:`
+- stable `resourceTypeId` of kind `resource-type:`
+- `quantity`: non-negative safe integer
+- default quantity `0`
 
-The CR-24 completion boundary is descriptive only. It does not automatically activate another gameplay system.
+One value represents one Building + one ResourceType stock entry.
 
-## 4. Explicit frozen exclusions
+CR-25A does not introduce mutation, storage capacity, aggregation ownership, production execution, workforce or transport behavior.
 
-CR-24 contains no material consumption, builder/hammer/work-time behavior, detailed construction phases, production, resident/housing activation, profession/workforce assignment, BuildingStock/storage, transport generation/execution, demolition/destruction, rendering/animation or UI behavior.
+## 4. Explicit exclusions
 
-These exclusions are part of the frozen boundary and must not be silently added during later work.
+CR-25A contains no:
+
+- add/deposit/remove/withdraw behavior,
+- reservation/consumption mutation,
+- storage capacity or slots,
+- production recipes or input/output execution,
+- production timing,
+- profession/workforce assignment,
+- transport generation/execution,
+- construction material consumption,
+- rendering/animation/UI/Inspector/balancing.
 
 ## 5. Next allowed action
 
-Do **not** begin CR-25 code yet.
+Run focused CR-25A verification against the new contract and regress the frozen predecessor baseline. Only after **PASS / 0 BLOCKER** may CR-25A receive an immutable frozen marker.
 
-The next action is planning against `docs/ROADMAP_CURRENT.md`: inspect the existing IM-08/product requirements and define the next minimal system block for **BuildingStock / Production Foundation**. Its exact CR title and A/B/C decomposition must be explicitly accepted before implementation.
+Do not start CR-25B while CR-25A is still `IMPLEMENTED / NOT FROZEN`.
 
 ## 6. Branch simplification rule
 
-Use one development branch per system block.
+CR-25 continues on the single development branch `feature/cr-25-buildingstock-production-foundation`.
 
-A completed sub-block or whole block may receive a `frozen/...` branch solely as an immutable marker. Do not create extra temporary, implementation, final or gate branches unless a concrete technical risk requires isolation.
-
-For the next system block, create one new development branch only after its planning boundary has been accepted, using the current accepted frozen gameplay baseline as predecessor.
+A completed sub-block may receive a `frozen/...` branch solely as an immutable marker. Do not create extra temporary, implementation, final or gate branches unless a concrete technical risk requires isolation.
 
 ---
 
-**Updated:** 2026-09-05 after CR-24A/B/C formal freeze and CR-24 Construction Foundation system-block closure. Next permitted activity: **BuildingStock / Production Foundation planning (IM-08)**.
+**Updated:** 2026-09-05 after CR-25A BuildingStock Contract implementation. Current next activity: **CR-25A focused verification / freeze gate**.
