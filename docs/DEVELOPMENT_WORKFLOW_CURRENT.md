@@ -12,8 +12,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current immutable predecessor: **CR-23 – Person / Resident / Housing Foundation**
 - CR-24A – Building Construction State Contract: **PASS / FROZEN / 0 BLOCKER**
 - CR-24A frozen branch: `frozen/cr-24a-building-construction-state-contract`
-- CR-24B – Deterministic Construction Progress / Transition Contract: **FREEZE GATE / NOT FROZEN**
-- CR-24C – Construction Completion Boundary: **NOT STARTED**
+- CR-24B – Deterministic Construction Progress / Transition Contract: **PASS / FROZEN / 0 BLOCKER**
+- CR-24B frozen branch: `frozen/cr-24b-deterministic-construction-progress-transition-contract`
+- CR-24C – Construction Completion Boundary: **IMPLEMENTED / NOT FROZEN**
 
 ## 2. Current status
 
@@ -22,29 +23,27 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 | 1 | CR-22 – Building Ownership / Lifecycle Foundation | FROZEN / PASS / 0 BLOCKER | Regression only |
 | 2 | CR-23 – Person / Resident / Housing Foundation | COMPLETE / FROZEN | Regression only |
 | 3 | CR-24A – Building Construction State Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 4 | CR-24B – Deterministic Construction Progress / Transition Contract | FREEZE GATE / NOT FROZEN | Completion regression only |
-| 5 | CR-24C – Construction Completion Boundary | NOT STARTED | Forbidden until CR-24B frozen |
+| 4 | CR-24B – Deterministic Construction Progress / Transition Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
+| 5 | CR-24C – Construction Completion Boundary | IMPLEMENTED / NOT FROZEN | Test and review only |
 
-## 3. CR-24B freeze-gate contract
+## 3. CR-24C contract
 
-The completion gate must regress CR-24A + CR-24B together and confirm:
+CR-24C exposes only a deterministic completion boundary derived from the existing CR-24B construction contract:
 
-- `progress` remains constrained to `0.0 .. 1.0`,
-- deterministic mapping remains `0 -> PENDING`, `0 < progress < 1 -> IN_PROGRESS`, `1 -> COMPLETED`,
-- progress may stay equal or increase, never decrease,
-- direct `PENDING -> COMPLETED` remains rejected,
-- `COMPLETED` remains terminal,
-- stable `buildingId` is preserved,
-- values remain immutable and deterministic,
-- CR-24A and all frozen predecessors still pass unchanged.
+- stable `buildingId`,
+- `constructionComplete = false` for `PENDING`,
+- `constructionComplete = false` for `IN_PROGRESS`,
+- `constructionComplete = true` only for `COMPLETED` with `progress = 1.0`,
+- immutable/deterministic derived result,
+- no independent stored completion truth.
 
 ## 4. Explicit exclusions
 
-The gate must confirm CR-24B still adds no construction material demand/consumption, hammer/action simulation, builders/workforce/profession assignment, automatic work-time progression, detailed named construction phases, production, BuildingStock/storage, transport changes, usability/activation policy, demolition/destruction or rendering/animation/UI logic.
+CR-24C does not activate or add production, resident/housing usability, workforce/profession assignment, BuildingStock/storage, transport generation/execution, materials/builders/work-time logic, demolition/destruction or rendering/animation/UI behavior.
 
 ## 5. Next allowed action
 
-Run focused node regression, CI and browser/device preview on this same whole-system branch. Only after **PASS / 0 BLOCKER** may CR-24B receive its immutable frozen marker. CR-24C is planned only afterwards.
+Verify CR-24C with focused node tests, browser/device preview and CI regression against frozen CR-24B plus all predecessor gates. Then run the CR-24C completion/regression/freeze gate on this same development branch. Only after **PASS / 0 BLOCKER** may CR-24C be frozen and CR-24 as a whole be considered for completion.
 
 ## 6. Branch simplification rule
 
@@ -54,4 +53,4 @@ A completed sub-block may receive a `frozen/...` branch solely as an immutable m
 
 ---
 
-**Updated:** 2026-09-05 for CR-24B completion/regression/freeze gate.
+**Updated:** 2026-09-05 after CR-24C implementation.
