@@ -13,7 +13,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-25: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current system block: **CR-26 – Workforce Capability & Job Eligibility Foundation**
 - Current sub-block: **CR-26A – Person Workforce Profile Contract**
-- CR-26A status: **ACTIVE / NOT FROZEN**
+- CR-26A status: **IMPLEMENTED / NOT FROZEN**
 
 ## 2. Accepted CR-26 decomposition
 
@@ -29,16 +29,17 @@ Repository state outranks chat memory. Before every write read this file, `docs/
    - deterministic single-person selection,
    - no transport-specific logistics rewrite.
 
-## 3. CR-26A allowed boundary
+## 3. Implemented CR-26A boundary
 
-CR-26A may define only an immutable Workforce Profile for an existing Person:
+CR-26A defines one immutable `person-workforce-profile` for an existing Person:
 
-- stable `personId` using the existing `unit:` ID kind,
-- one explicit specialization,
-- an explicit deterministic capability set,
+- stable `personId` using existing `unit:` ID kind,
+- explicit V1 specialization,
+- explicit non-empty deterministic capability set,
+- duplicate capabilities are canonicalized away and ordering is deterministic,
 - identity/Home from CR-23 remain unchanged.
 
-CR-26A must not add Availability, Assignment, Job IDs, job queues, candidate selection, Reachability, pathfinding, movement, workforce execution, production timing, construction work, transport logistics, SaveGame ownership, rendering/UI or balancing.
+CR-26A contains no Availability, Assignment, Job IDs, job queues, candidate selection, Reachability, pathfinding, movement, workforce execution, production timing, construction work, transport logistics, SaveGame ownership, rendering/UI or balancing.
 
 ## 4. Frozen predecessor ownership
 
@@ -51,9 +52,9 @@ CR-26 extends Person workforce semantics without reopening those owners.
 
 ## 5. Next allowed action
 
-Implement and directly test **CR-26A – Person Workforce Profile Contract** on the current CR-26 branch.
+Run focused **CR-26A Verification / Freeze Gate** against the frozen CR-25 predecessor line and the new Person Workforce Profile contract.
 
-CR-26B remains blocked until CR-26A is implemented, verified and frozen.
+Only after **PASS / 0 BLOCKER** may CR-26A be frozen and CR-26B begin.
 
 ## 6. Branch rule
 
@@ -63,4 +64,4 @@ Frozen branches are immutable markers only. No separate CR-26A/B/C working branc
 
 ---
 
-**Updated:** 2026-09-05 after explicit acceptance of CR-26 A/B/C and creation of the single CR-26 development branch.
+**Updated:** 2026-09-05 after CR-26A implementation. Current next activity: **CR-26A focused verification / freeze gate**.
