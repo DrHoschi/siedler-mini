@@ -14,7 +14,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current system block: **CR-25 – BuildingStock / Production Foundation**
 - CR-25A – BuildingStock Contract: **PASS / FROZEN / 0 BLOCKER**
 - Current sub-block: **CR-25B – Deterministic BuildingStock Mutation**
-- CR-25B status: **NEXT / NOT IMPLEMENTED**
+- CR-25B status: **IMPLEMENTED / NOT FROZEN**
 
 ## 2. Current status
 
@@ -24,8 +24,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 | 2 | CR-23 – Person / Resident / Housing Foundation | COMPLETE / FROZEN | Regression only |
 | 3 | CR-24 – Construction Foundation | COMPLETE / FROZEN / PASS / 0 BLOCKER | Regression only |
 | 4 | CR-25A – BuildingStock Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 5 | CR-25B – Deterministic BuildingStock Mutation | NEXT / NOT IMPLEMENTED | May begin on current CR-25 branch |
-| 6 | CR-25C – Production -> BuildingStock Contract | PLANNED | Do not start before CR-25B |
+| 5 | CR-25B – Deterministic BuildingStock Mutation | IMPLEMENTED / NOT FROZEN | Focused verification / freeze gate only |
+| 6 | CR-25C – Production -> BuildingStock Contract | PLANNED | Do not start before CR-25B freeze |
 
 ## 3. Frozen CR-25A contract boundary
 
@@ -39,26 +39,41 @@ CR-25A owns exactly one immutable descriptive stock-entry value:
 
 One value represents one Building + one ResourceType stock entry.
 
-CR-25A introduces no mutation, storage capacity, aggregation ownership, production execution, workforce or transport behavior.
+## 4. CR-25B implemented boundary
 
-## 4. CR-25B allowed boundary
+CR-25B adds only deterministic value mutation on top of CR-25A:
 
-CR-25B may add controlled deterministic stock mutation on top of the frozen CR-25A value contract:
+- `add(current, amount)` returns a new immutable BuildingStock value,
+- `remove(current, amount)` returns a new immutable BuildingStock value,
+- mutation amount must be a positive safe integer,
+- Building and ResourceType identity remain unchanged,
+- over-withdrawal is rejected,
+- negative stock cannot be produced,
+- Safe-Integer overflow is rejected,
+- the input value is never mutated.
 
-- addition/deposit of quantity,
-- removal/withdrawal of quantity,
-- deterministic rejection of invalid mutation,
-- no negative resulting stock and no over-withdrawal.
+## 5. Explicit exclusions
 
-CR-25B must not add production recipes/execution, capacity/slots, workforce, transport, construction material integration, SaveGame ownership, rendering/UI or balancing.
+CR-25B contains no:
 
-## 5. Next allowed action
+- storage capacity or slots,
+- production recipes/input-output execution/timing,
+- workforce/profession assignment,
+- transport generation/execution,
+- construction material consumption,
+- reservation policy,
+- SaveGame ownership,
+- rendering/animation/UI/Inspector/balancing.
 
-Begin **CR-25B – Deterministic BuildingStock Mutation** on the existing development branch `feature/cr-25-buildingstock-production-foundation`.
+## 6. Next allowed action
 
-Do not create a separate CR-25B working branch. CR-25C remains blocked until CR-25B is implemented, verified and frozen.
+Run focused **CR-25B Verification / Freeze Gate** against frozen CR-25A and the new mutation contract.
 
-## 6. Branch simplification rule
+Only after **PASS / 0 BLOCKER** may CR-25B receive an immutable frozen marker and CR-25C become the next permitted implementation step.
+
+Do not start CR-25C while CR-25B is `IMPLEMENTED / NOT FROZEN`.
+
+## 7. Branch simplification rule
 
 CR-25 continues on the single development branch `feature/cr-25-buildingstock-production-foundation`.
 
@@ -66,4 +81,4 @@ A completed sub-block may receive a `frozen/...` branch solely as an immutable m
 
 ---
 
-**Updated:** 2026-09-05 after device/browser CR-25A Verification / Freeze Gate: **PASS / 0 BLOCKER**. Current next activity: **CR-25B – Deterministic BuildingStock Mutation**.
+**Updated:** 2026-09-05 after CR-25B implementation. Current next activity: **CR-25B focused verification / freeze gate**.
