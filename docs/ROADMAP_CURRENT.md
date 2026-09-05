@@ -1,11 +1,11 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – Post-CR23  
+**Status:** CURRENT – Post-CR24  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `maintenance/post-cr23-project-control-sync`  
-**Frozen gameplay baseline:** **CR-23 – Person / Resident / Housing Foundation**  
-**Frozen implementation branch:** `frozen/cr-23c-housing-capacity-occupancy-foundation`  
-**Frozen implementation SHA:** `1a3a01c0973cd21c0375c8bc308311a774e30120`
+**Current control branch:** `feature/cr-24-construction-foundation`  
+**Frozen gameplay baseline:** **CR-24 – Construction Foundation**  
+**Frozen implementation branch:** `frozen/cr-24c-construction-completion-boundary`  
+**Frozen implementation SHA:** `c3986fbd810b1150d10d0945ed2f27c77c3eaa63`
 
 ## 1. Authority
 
@@ -17,30 +17,28 @@ IM numbers remain higher-level product/migration capability areas. CR numbers ar
 
 ## 2. Current frozen line
 
-CR-00 through CR-22 remain frozen predecessor foundations. The latest completed system block is:
+CR-00 through CR-23 remain frozen predecessor foundations. The latest completed system block is:
 
-### CR-23 – Person / Resident / Housing Foundation — PASS / FROZEN / 0 BLOCKER
+### CR-24 – Construction Foundation — PASS / FROZEN / 0 BLOCKER
 
-- **CR-23A – Person / Resident Identity Contract — FROZEN**
-  - stable semantic Person/Resident identity
-  - uses the existing stable `unit:` ID basis
-  - minimal current existence state `EXISTS`
-- **CR-23B – Resident ↔ Home Assignment Contract — FROZEN**
-  - explicit Person → Home Building relationship
-  - `UNASSIGNED` or `ASSIGNED`
-  - exactly one `homeBuildingId` source of truth on the Person-side contract
-- **CR-23C – Housing Capacity & Occupancy Foundation — FROZEN**
-  - Building-scoped housing `capacity >= 0`
-  - `occupancy` derived deterministically from CR-23B `ASSIGNED` Home references
-  - `availableSlots = capacity - occupancy`
-  - exact capacity allowed; overflow rejected
-  - no independent mutable resident list or occupancy counter
+- **CR-24A – Building Construction State Contract — FROZEN**
+  - construction-specific state is strictly separate from CR-22 Building lifecycle `EXISTS -> RETIRED`
+  - allowed states: `PENDING`, `IN_PROGRESS`, `COMPLETED`
+  - stable `buildingId`, immutable and deterministic contract values
+- **CR-24B – Deterministic Construction Progress / Transition Contract — FROZEN**
+  - progress range `0.0 .. 1.0`
+  - `PENDING` = `0.0`, `IN_PROGRESS` = `0 < progress < 1`, `COMPLETED` = `1.0`
+  - forward-only progression; no regression, no `PENDING -> COMPLETED` skip
+  - `COMPLETED` is terminal
+- **CR-24C – Construction Completion Boundary — FROZEN**
+  - `constructionComplete = false` for `PENDING` and `IN_PROGRESS`
+  - `constructionComplete = true` only for `COMPLETED` with `progress = 1.0`
+  - completion is deterministically derived, not independently stored
+  - completion itself activates no downstream gameplay system
 
-CR-23 deliberately does not contain Household/family simulation, automatic resident creation, BirthTimer, population growth/regeneration, profession/workforce, tools/clothing, production, BuildingStock/storage, construction execution, transport or movement.
+CR-24 deliberately contains no material consumption, builders/work-time behavior, detailed construction phases, production, resident/housing activation, workforce/profession assignment, BuildingStock/storage, transport generation/execution, demolition/destruction, rendering/animation or UI logic.
 
-The previously listed broader Person/Resident/Housing capability area included resident lifecycle / controlled resident creation rules as a future compatibility requirement. That capability was intentionally **not implemented in CR-23A/B/C** and is now explicitly **DEFERRED** to a later Population / Resident Creation block. It is not an open CR-23 blocker and must not be silently added to CR-23 after freeze.
-
-CR-23 advances **IM-05 + IM-10** by establishing stable person identity, Home ownership relation, housing capacity and occupancy consistency.
+CR-24 advances **IM-07 – Construction Foundation** while preserving the frozen CR-22 Building lifecycle and CR-23 Person / Resident / Housing contracts unchanged.
 
 ## 3. Product-capability direction
 
@@ -52,8 +50,8 @@ Current capability priority:
 
 1. ~~Building ownership / lifecycle foundation~~ — **CR-22 COMPLETE / FROZEN**
 2. ~~Person / Resident / Housing foundation~~ — **CR-23 COMPLETE / FROZEN**
-3. **Construction foundation — NEXT** — advances IM-07
-4. BuildingStock / Production foundation — advances IM-08
+3. ~~Construction foundation~~ — **CR-24 COMPLETE / FROZEN** — advances IM-07
+4. **BuildingStock / Production foundation — NEXT** — advances IM-08
 5. Integrated workforce / job eligibility — advances the non-transport part of IM-06
 6. Game-facing logistics/navigation integration — advances IM-09 + IM-11
 7. Visible world/render integration
@@ -69,44 +67,41 @@ The exact future CR title is defined only when its scope contract is written. Th
 
 ## 4. Next system-block planning boundary
 
-The next system block must address **Construction Foundation** and advance IM-07.
+The next prioritized capability area is **BuildingStock / Production Foundation**, advancing IM-08.
 
-The planning goal is to establish the minimal modular contract for a Building to move through a construction process without changing the already frozen existential Building lifecycle from CR-22B.
+No CR-25 implementation is authorized merely by this roadmap synchronization. The next step is planning: inspect the existing IM-08/product requirements and define the minimal next CR boundary before creating new code.
 
-Potential capability area to plan, not yet implement:
+The planning must preserve these frozen ownership boundaries:
 
-- construction-specific state/phase contract separate from Building `EXISTS -> RETIRED`,
-- controlled construction progress/phase transition rules,
-- deterministic completion boundary that yields a completed usable Building state,
-- later compatibility with construction material demand / delivery and builders.
+- CR-22 owns Building identity/lifecycle/registration,
+- CR-23 owns Person/Home/housing capacity and derived occupancy,
+- CR-24 owns construction state/progress/completion only.
 
-The first Construction sub-step must again be narrowly scoped before implementation.
+The next block may establish the minimal modular ownership/contracts required for local BuildingStock and/or Production, but their exact A/B/C decomposition must be decided explicitly before implementation.
 
-The following remain outside the initial Construction planning boundary unless explicitly introduced by a later sub-block:
+The following remain outside scope until explicitly introduced by the planned block or a later CR:
 
-- residents / housing changes,
-- population creation,
+- automatic population creation / Household / BirthTimer,
 - profession/workforce assignment,
-- production,
-- BuildingStock/storage ownership,
 - transport execution changes,
+- movement/pathfinding changes,
+- demolition/destruction,
 - rendering/animation,
-- demolition/destruction unless separately defined,
 - balancing/UI/Inspector.
 
 ## 5. Inspector / diagnostics timing
 
-Inspector and balancing diagnostics remain later capabilities, not prerequisites for Construction. Automated tests/freeze gates remain executable evidence; a later Inspector may display snapshots, metrics and diagnostics but must never become a gameplay owner.
+Inspector and balancing diagnostics remain later capabilities, not prerequisites for BuildingStock / Production. Automated tests/freeze gates remain executable evidence; a later Inspector may display snapshots, metrics and diagnostics but must never become a gameplay owner.
 
 ## 6. Branch / source-of-truth rules
 
 - `main` remains historical old-game reference.
-- `frozen/cr-23c-housing-capacity-occupancy-foundation` is the current immutable gameplay baseline.
-- Project-control synchronization occurs on `maintenance/post-cr23-project-control-sync`.
-- Do not start the next feature CR until this project-control synchronization is reviewed and accepted.
-- The next feature CR must branch from the accepted synchronized baseline, not from obsolete CR-23 working branches.
+- `frozen/cr-24c-construction-completion-boundary` is the current immutable gameplay baseline at `c3986fbd810b1150d10d0945ed2f27c77c3eaa63`.
+- `feature/cr-24-construction-foundation` contains the completed CR-24 working line and synchronized control documents.
+- Do not start CR-25 code until the BuildingStock / Production Foundation scope is explicitly planned and accepted.
+- Continue the simplified branch policy: one development branch per system block; `frozen/...` branches are immutable completion markers, not additional working branches.
 - Browser/device text, docs, CI naming and actual branch state must stay synchronized.
 
 ---
 
-**Updated:** 2026-09-05 after CR-23A/B/C formal freeze. Next roadmap capability: **Construction Foundation (IM-07)**.
+**Updated:** 2026-09-05 after CR-24A/B/C formal freeze. Next roadmap capability: **BuildingStock / Production Foundation (IM-08)**.
