@@ -1,94 +1,73 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – Post-CR25 planning  
+**Status:** CURRENT – CR-26A active  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `feature/cr-25-buildingstock-production-foundation`  
+**Current control branch:** `feature/cr-26-workforce-capability-job-eligibility-foundation`  
 **Frozen gameplay baseline:** **CR-25 – BuildingStock / Production Foundation**
 
-## 1. Authority
+## 1. Current frozen line
 
-This file is the current implementation-priority roadmap for the clean modular rebuild. Repository state, frozen CR evidence and this file outrank chat memory.
+CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-The old game on `main` remains historical functional and visual reference only. It is not an architecture baseline or integration target. Target: functional parity or better, never legacy-code parity.
+CR-25 provides immutable local BuildingStock, deterministic add/remove mutation and minimal Production -> BuildingStock execution. It intentionally excludes workforce/professions/assignments.
 
-IM numbers remain higher-level product/migration capability areas. CR numbers are the actual modular system blocks. They are not a 1:1 numbering scheme.
+## 2. Current system block
 
-## 2. Current frozen line
+### CR-26 – Workforce Capability & Job Eligibility Foundation — ACTIVE
 
-CR-00 through CR-24 remain frozen predecessor foundations.
+CR-26 advances the non-transport part of **IM-06 – JobEngine / Assignment Contract Migration** and builds on the frozen S2D-02 workforce model.
 
-### CR-25 – BuildingStock / Production Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER
+Accepted decomposition:
 
-CR-25 advances **IM-08** and is fully frozen:
+- **CR-26A – Person Workforce Profile Contract — ACTIVE / NOT FROZEN**
+  - existing `personId` / `unit:` identity,
+  - specialization,
+  - deterministic capability set,
+  - no Availability/Assignment/selection.
+- **CR-26B – Workforce Availability & Assignment State Contract — PLANNED**
+  - `FREE / ASSIGNED / UNAVAILABLE`,
+  - at most one normal active assignment,
+  - temporary assignment must not change identity/specialization/capabilities.
+- **CR-26C – Deterministic Job Eligibility & Assignment Selection — PLANNED**
+  - Capability + Availability + Preconditions + required Reachability,
+  - deterministic selection of exactly one eligible person,
+  - no transport-specific logistics rewrite.
 
-- **CR-25A – BuildingStock Contract — PASS / FROZEN / 0 BLOCKER**
-- **CR-25B – Deterministic BuildingStock Mutation — PASS / FROZEN / 0 BLOCKER**
-- **CR-25C – Production -> BuildingStock Contract — PASS / FROZEN / 0 BLOCKER**
-- **CR-25 whole-system Completion / Regression / Freeze Gate — PASS / 0 BLOCKER**
+## 3. Product/workforce invariant
 
-The complete device/browser system gate passed on 2026-09-05.
+A real Person remains the same Person while working:
 
-## 3. Frozen CR-25 capability
+`Person identity + Home + specialization + capabilities + temporary assignment`
 
-CR-25 provides:
+A temporary task must never transform a resident into a different permanent unit type and must not spontaneously create capabilities.
 
-- immutable local BuildingStock entry values,
-- deterministic add/remove mutation,
-- guards against invalid mutation, over-withdrawal and Safe-Integer overflow,
-- minimal deterministic Production -> BuildingStock input/output execution,
-- atomic rejection when required local input is insufficient,
-- immutable deterministic stock results.
+## 4. CR-26A explicit exclusions
 
-CR-25 intentionally does not own production timing/state, workforce/professions, storage capacity/slots, transport execution, construction-material integration, SaveGame ownership, rendering/animation, UI/Inspector or balancing.
+No:
 
-## 4. Product-capability direction
+- Availability state,
+- Assignment state/IDs,
+- JobEngine queue or automatic job generation,
+- candidate prioritization/selection,
+- Reachability/pathfinding/movement,
+- job completion/cancel/recovery,
+- production timing/worker execution,
+- builder execution,
+- transport/logistics changes,
+- Population creation,
+- SaveGame, rendering/UI/Inspector/balancing.
 
-The authoritative product chain remains:
+## 5. Next allowed action
 
-`HQ -> Häuser -> Bewohner -> Produktion -> lokaler Bestand -> Transport -> HQ/Baustelle -> Bau -> Expansion`
+Implement and verify **CR-26A – Person Workforce Profile Contract** only. CR-26B stays blocked until CR-26A reaches **PASS / FROZEN / 0 BLOCKER**.
 
-Current capability priority after CR-25:
-
-1. ~~Building ownership / lifecycle foundation~~ — **CR-22 COMPLETE / FROZEN**
-2. ~~Person / Resident / Housing foundation~~ — **CR-23 COMPLETE / FROZEN**
-3. ~~Construction foundation~~ — **CR-24 COMPLETE / FROZEN** — advances IM-07
-4. ~~BuildingStock / Production foundation~~ — **CR-25 COMPLETE / FROZEN** — advances IM-08
-5. Integrated workforce / job eligibility — advances the non-transport part of IM-06
-6. Game-facing logistics/navigation integration — advances IM-09 + IM-11
-7. Visible world/render integration
-8. SaveGame owner snapshots / Continue — IM-13
-9. Mobile UI runtime integration — IM-14
-10. Path/Wear presentation — IM-12
-11. Guidance + Inspector / diagnostics / balancing — IM-15
-12. Architecture closure + V1 Golden Path — finish IM-16 + IM-17
-
-Population / Resident Creation remains deferred and must build on frozen CR-23 housing capacity rather than modifying CR-23.
-
-## 5. Next-system planning boundary
-
-No new CR number/title is authorized yet.
-
-The next step is repository-based planning against the remaining IM/product requirements. The next system block must preserve all frozen ownership boundaries, especially:
-
-- CR-22 Building identity/lifecycle/registration,
-- CR-23 Person/Home/housing capacity/derived occupancy,
-- CR-24 construction state/progress/completion,
-- CR-25 BuildingStock and minimal Production -> BuildingStock behavior.
-
-The exact next CR title and A/B/C decomposition must be explicitly accepted before implementation or branch creation.
-
-## 6. Next allowed action
-
-Reconcile the live repository against the remaining capability priorities, with particular attention to the next product dependency after frozen BuildingStock/Production. Define the smallest coherent next system boundary and its scope/non-scope. Do not create a new development branch until that boundary is accepted.
-
-## 7. Branch / source-of-truth rules
+## 6. Branch/source-of-truth rule
 
 - `main` remains historical old-game reference.
-- `feature/cr-25-buildingstock-production-foundation` remains CR-25 development history.
-- The whole CR-25 frozen marker is the new immutable gameplay baseline.
-- Frozen sub-block/system branches are immutable markers only.
-- A future system block receives one development branch after explicit boundary acceptance.
+- `frozen/cr-25-buildingstock-production-foundation` is the immutable predecessor baseline.
+- `feature/cr-26-workforce-capability-job-eligibility-foundation` is the single CR-26 development branch.
+- No additional A/B/C working branch unless a concrete technical risk requires isolation.
 
 ---
 
-**Updated:** 2026-09-05 after CR-25 device/browser whole-system Completion / Regression / Freeze Gate: **PASS / 0 BLOCKER**. Current next step: **next-system planning / IM ↔ CR reconciliation**.
+**Updated:** 2026-09-05 after repository-based IM ↔ CR reconciliation and explicit CR-26 boundary acceptance.
