@@ -9,9 +9,9 @@ export function runCr25aFreezeGate() {
   const results = Object.freeze([
     Object.freeze({ name: 'cr24-frozen-baseline-regression', pass: !!cr24c.pass && cr24c.blockerCount === 0 }),
     Object.freeze({ name: 'cr25a-buildingstock-contract-regression', pass: !!cr25a.pass && cr25a.blockerCount === 0 }),
-    Object.freeze({ name: 'cr25a-stable-building-ownership', pass: find('defines-building-scoped-resource-stock') && find('requires-stable-building-id') }),
-    Object.freeze({ name: 'cr25a-resource-type-contract', pass: find('requires-resource-type-id') }),
-    Object.freeze({ name: 'cr25a-nonnegative-safe-integer-quantity', pass: find('quantity-is-nonnegative-safe-integer') }),
+    Object.freeze({ name: 'cr25a-building-stock-shape-and-zero-default', pass: find('defines-building-scoped-resource-stock-with-zero-default') }),
+    Object.freeze({ name: 'cr25a-stable-building-and-resource-type-ids', pass: find('requires-stable-building-and-resource-type-ids') }),
+    Object.freeze({ name: 'cr25a-nonnegative-safe-integer-quantity', pass: find('accepts-non-negative-safe-integer-quantity') && find('rejects-negative-fractional-or-unsafe-quantity') }),
     Object.freeze({ name: 'cr25a-deterministic-immutable-value', pass: find('contract-value-is-deterministic-and-immutable') }),
     Object.freeze({ name: 'cr25a-scope-remains-clean', pass: find('cr25a-does-not-add-mutation-capacity-production-workforce-or-transport') })
   ]);
