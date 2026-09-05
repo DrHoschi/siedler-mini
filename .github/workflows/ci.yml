@@ -23,11 +23,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run CR-24B completion/freeze gate + CR-24A frozen regression
+      - name: Run CR-24C completion boundary + CR-24B frozen regression
         shell: bash
         run: |
           set -o pipefail
-          (npm run ci && node src/dev/cr-24b-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
+          (npm run ci && node src/dev/cr-24c-self-test.node.js && node src/dev/cr-24b-freeze-gate.node.js) 2>&1 | tee ci-baseline.log
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
