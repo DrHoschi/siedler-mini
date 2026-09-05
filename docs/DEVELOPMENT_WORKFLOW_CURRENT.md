@@ -11,10 +11,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current development branch: `feature/cr-24-construction-foundation`
 - Current immutable predecessor: **CR-23 – Person / Resident / Housing Foundation**
 - Frozen predecessor branch: `frozen/cr-23c-housing-capacity-occupancy-foundation`
-- Frozen predecessor SHA: `1a3a01c0973cd21c0375c8bc308311a774e30120`
-- Current system block: **CR-24 – Construction Foundation**
 - CR-24A – Building Construction State Contract: **PASS / FROZEN / 0 BLOCKER**
-- CR-24B – Deterministic Construction Progress / Transition Contract: **NEXT / NOT STARTED**
+- CR-24A frozen branch: `frozen/cr-24a-building-construction-state-contract`
+- CR-24B – Deterministic Construction Progress / Transition Contract: **IMPLEMENTED / NOT FROZEN**
 - CR-24C – Construction Completion Boundary: **NOT STARTED**
 
 ## 2. Current status
@@ -24,68 +23,72 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 | 1 | CR-22 – Building Ownership / Lifecycle Foundation | FROZEN / PASS / 0 BLOCKER | Regression only |
 | 2 | CR-23 – Person / Resident / Housing Foundation | COMPLETE / FROZEN | Regression only |
 | 3 | CR-24A – Building Construction State Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 4 | CR-24B – Deterministic Construction Progress / Transition Contract | NEXT / NOT STARTED | Plan scope before code |
+| 4 | CR-24B – Deterministic Construction Progress / Transition Contract | IMPLEMENTED / NOT FROZEN | Test and review only |
 | 5 | CR-24C – Construction Completion Boundary | NOT STARTED | Forbidden until CR-24B frozen |
 
 ## 3. Frozen CR-24A contract
 
-CR-24A adds a construction-specific Building state axis:
+CR-24A owns only the Construction state vocabulary for a stable Building:
 
-- `buildingId`: stable `building:` ID,
-- `state`: `PENDING`, `IN_PROGRESS`, or `COMPLETED`,
-- default state `PENDING`,
-- immutable/deterministic contract values.
+- `PENDING`
+- `IN_PROGRESS`
+- `COMPLETED`
 
-CR-24A is deliberately separate from CR-22B existential Building lifecycle:
+This remains strictly separate from CR-22 Building lifecycle `EXISTS -> RETIRED`.
 
-- CR-22B: `EXISTS -> RETIRED`
-- CR-24A: `PENDING | IN_PROGRESS | COMPLETED`
+## 4. CR-24B contract
 
-A Building may therefore be `EXISTS` and simultaneously `PENDING`, `IN_PROGRESS`, or `COMPLETED` in Construction.
+CR-24B adds only deterministic Construction progress / transition validation:
 
-CR-24A defines valid state values only. It does not define allowed Construction transitions or progress.
+- `progress` is constrained to `0.0 .. 1.0`,
+- `progress = 0` -> `PENDING`,
+- `0 < progress < 1` -> `IN_PROGRESS`,
+- `progress = 1` -> `COMPLETED`,
+- progress may stay equal or increase, never decrease,
+- direct `PENDING -> COMPLETED` is rejected,
+- `COMPLETED` is terminal,
+- stable `buildingId` is preserved,
+- values remain immutable and deterministic.
 
-## 4. Freeze evidence
+CR-24B decides only whether a requested progress/transition is valid. It does not decide why progress occurs.
 
-CR-24A passed the dedicated completion/regression/freeze gate with **PASS / 0 BLOCKER**.
+## 5. Explicit exclusions
 
-The gate verified:
-
-- CR-23/CR-22 frozen predecessor regression,
-- stable `building:` ID,
-- exactly `PENDING`, `IN_PROGRESS`, `COMPLETED`,
-- strict separation from CR-22 Building lifecycle,
-- immutable/deterministic contract values,
-- no transition/progress/material/builder/workforce/production/BuildingStock/transport/demolition leakage,
-- browser/device preview: PASS / 0 BLOCKER,
-- GitHub CI `Run CR-24A completion/freeze gate + CR-23 frozen regression`: SUCCESS.
-
-## 5. Next allowed action
-
-Do not extend or reopen CR-24A.
-
-The next step is **planning CR-24B – Deterministic Construction Progress / Transition Contract** on top of the frozen CR-24A boundary. CR-24B may define controlled transitions/progress, but must not change CR-24A's state vocabulary or merge Construction state into CR-22 Building lifecycle.
-
-Still do not prematurely include:
+CR-24B adds no:
 
 - construction material demand/consumption,
+- hammer/action simulation,
 - builders/workforce/profession assignment,
+- automatic work-time or elapsed-time progression,
+- detailed named construction phases,
 - production,
 - BuildingStock/storage,
-- transport execution changes,
-- resident/population changes,
+- transport changes,
+- usability/activation policy,
 - demolition/destruction,
 - rendering/animation/UI.
 
-## 6. Source-of-truth / branch rules
+## 6. Next allowed action
+
+Do not begin CR-24C yet.
+
+First verify CR-24B with focused node tests, browser/device preview and CI regression against frozen CR-24A plus frozen predecessors. Then run the CR-24B completion/regression/freeze gate on the same whole-system branch workflow. Only after **PASS / 0 BLOCKER** may CR-24B be frozen and CR-24C planned.
+
+## 7. Branch simplification rule
+
+CR-24 continues on one development branch only:
+
+- `feature/cr-24-construction-foundation`
+
+A completed sub-block may receive a `frozen/...` branch solely as an immutable marker. Do not create extra temporary, implementation, final or gate branches unless a concrete technical risk requires isolation.
+
+## 8. Source-of-truth rules
 
 - `main` remains historical functional/visual reference only.
-- CR-22 and CR-23 remain immutable predecessor baselines.
-- CR-24A is now an immutable sub-block baseline.
-- CR-24 continues on the whole-system branch `feature/cr-24-construction-foundation` after that branch is advanced to the confirmed CR-24A freeze commit.
+- CR-22, CR-23 and frozen CR-24A remain immutable.
 - Keep browser/device text, docs, CI naming and actual branch state synchronized.
 - Do not conflate Building existential lifecycle with Construction state.
 
 ---
 
-**Updated:** 2026-09-05 after formal CR-24A completion/freeze gate. Next allowed step: **CR-24B planning**.
+**Updated:** 2026-09-05 after CR-24B implementation. Current allowed action: **CR-24B verification only**.
