@@ -15,7 +15,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-26A – Person Workforce Profile Contract: **PASS / FROZEN / 0 BLOCKER**
 - CR-26B – Workforce Availability & Assignment State Contract: **PASS / FROZEN / 0 BLOCKER**
 - Current sub-block: **CR-26C – Deterministic Job Eligibility & Assignment Selection**
-- CR-26C status: **NEXT / NOT IMPLEMENTED**
+- CR-26C status: **IMPLEMENTED / NOT FROZEN**
 
 ## 2. Accepted CR-26 decomposition
 
@@ -27,9 +27,10 @@ Repository state outranks chat memory. Before every write read this file, `docs/
    - at most one normal active assignment per person,
    - explicit stable temporary `assignment:` reference only while assigned,
    - no automatic candidate selection.
-3. **CR-26C – Deterministic Job Eligibility & Assignment Selection — NEXT / NOT IMPLEMENTED**
+3. **CR-26C – Deterministic Job Eligibility & Assignment Selection — IMPLEMENTED / NOT FROZEN**
    - Capability + Availability + Preconditions + required Reachability,
    - deterministic single-person selection,
+   - selected Person receives exactly one normal assignment through CR-26B,
    - no transport-specific logistics rewrite.
 
 ## 3. Frozen CR-26A boundary
@@ -43,8 +44,6 @@ CR-26A owns one immutable `person-workforce-profile` for an existing Person:
 - deterministic ordering and immutability,
 - CR-23 Person/Home identity remains unchanged.
 
-The device/browser CR-26A Verification / Freeze Gate passed with **PASS / 0 BLOCKER** on 2026-09-05.
-
 ## 4. Frozen CR-26B boundary
 
 CR-26B owns one immutable `workforce-assignment-state` value:
@@ -55,32 +54,40 @@ CR-26B owns one immutable `workforce-assignment-state` value:
 - `ASSIGNED` requires exactly one stable `assignment:` ID,
 - only `FREE` may accept a normal assignment,
 - already `ASSIGNED` cannot accept a second normal assignment,
-- `ASSIGNED -> FREE` releases the assignment,
-- `FREE -> UNAVAILABLE -> FREE` is controlled and deterministic,
-- all transitions preserve `personId`, create new immutable values and leave inputs unchanged.
+- controlled immutable transitions preserve `personId` and leave inputs unchanged.
 
 The device/browser CR-26B Verification / Freeze Gate passed with **PASS / 0 BLOCKER** on 2026-09-05.
 
-CR-26B does not mutate identity, Home, specialization or capabilities and contains no automatic candidate selection, job prioritization, Eligibility calculation, Reachability/pathfinding, movement, work execution, production timing, builder execution, transport/logistics, SaveGame, rendering/UI or balancing.
+## 5. Implemented CR-26C boundary
 
-## 5. CR-26C allowed boundary
+CR-26C introduces one immutable `workforce-job-eligibility-request`:
 
-CR-26C may now add deterministic job eligibility and assignment selection using the frozen CR-26A/B contracts:
+- stable `assignmentId`,
+- exactly one required CR-26A Capability,
+- explicit boolean `preconditionsPassed`,
+- explicit `requiresReachability`,
+- `reachable` is required only when Reachability is required.
 
-- required capability match,
-- Person must be `FREE`,
-- explicit Preconditions must pass,
-- required Reachability input must pass when the job requires it,
-- deterministic selection of exactly one eligible Person,
-- selected Person receives exactly one normal assignment through the frozen CR-26B transition.
+A candidate consists only of a valid CR-26A Profile plus a valid CR-26B Assignment-State with identical `personId`.
 
-CR-26C must not add transport-specific logistics, pathfinding/movement implementation, production timing/worker execution, builder execution, population creation, SaveGame, rendering/UI/Inspector or balancing.
+Eligibility requires all of:
+
+- required Capability present,
+- Availability exactly `FREE`,
+- Preconditions pass,
+- required Reachability input passes when applicable.
+
+If multiple candidates are eligible, CR-26C deterministically chooses exactly one by stable `personId`, independent of input order.
+
+`selectAndAssign(...)` delegates the state change exclusively to frozen `WorkforceAssignmentStateContract.assign(...)`; Profile and input State remain unchanged.
+
+CR-26C does not implement Jobpriorisierung, JobEngine queue/generation, Reachability calculation, pathfinding/routes/movement, production timing/execution, builder execution, transport/logistics rewrite, completion/cancel/recovery orchestration, SaveGame, rendering/UI/Inspector or balancing.
 
 ## 6. Next allowed action
 
-Begin **CR-26C – Deterministic Job Eligibility & Assignment Selection** on the existing CR-26 development branch.
+Run focused **CR-26C Verification / Freeze Gate** against frozen CR-26A/B and the full predecessor line.
 
-Do not create a separate CR-26C working branch. After implementation, CR-26C requires its own Verification / Freeze Gate before the CR-26 whole-system completion gate.
+Only after **PASS / 0 BLOCKER** may CR-26C be frozen. After that, run the common **CR-26 Completion / Regression / Freeze Gate** before CR-26 as a whole may become COMPLETE / FROZEN.
 
 ## 7. Branch rule
 
@@ -90,4 +97,4 @@ Frozen branches are immutable markers only. No separate A/B/C working branches u
 
 ---
 
-**Updated:** 2026-09-05 after device/browser CR-26B Verification / Freeze Gate: **PASS / 0 BLOCKER**. Current next activity: **CR-26C – Deterministic Job Eligibility & Assignment Selection**.
+**Updated:** 2026-09-05 after CR-26C implementation. Current next activity: **CR-26C focused verification / freeze gate**.
