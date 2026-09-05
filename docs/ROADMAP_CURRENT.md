@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-25C next  
+**Status:** CURRENT – CR-25C active  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-25-buildingstock-production-foundation`  
 **Frozen gameplay baseline:** **CR-25B – Deterministic BuildingStock Mutation**
@@ -27,7 +27,7 @@ CR-25A establishes the immutable descriptive local BuildingStock entry contract.
 
 ### CR-25B – Deterministic BuildingStock Mutation — PASS / FROZEN / 0 BLOCKER
 
-CR-25B adds deterministic add/remove mutation on top of CR-25A while preserving Building/ResourceType identity and immutability. Over-withdrawal, invalid mutation amounts and Safe-Integer overflow are rejected. Device/browser Verification / Freeze Gate passed with **PASS / 0 BLOCKER** on 2026-09-05.
+CR-25B adds deterministic add/remove mutation on top of CR-25A while preserving Building/ResourceType identity and immutability. Over-withdrawal, invalid mutation amounts and Safe-Integer overflow are rejected.
 
 ## 3. Current system block
 
@@ -37,12 +37,18 @@ CR-25 advances **IM-08** and is implemented sequentially on one development bran
 
 - **CR-25A – BuildingStock Contract — PASS / FROZEN / 0 BLOCKER**
 - **CR-25B – Deterministic BuildingStock Mutation — PASS / FROZEN / 0 BLOCKER**
-- **CR-25C – Production -> BuildingStock Contract — NEXT / NOT IMPLEMENTED**
-  - minimal deterministic input/output integration on top of BuildingStock,
-  - consume required local input stock,
-  - add produced output stock,
-  - reject insufficient input stock,
-  - no timing/workforce/transport behavior.
+- **CR-25C – Production -> BuildingStock Contract — IMPLEMENTED / NOT FROZEN**
+  - one production definition belongs to one stable Building,
+  - deterministic non-empty input/output resource-quantity lists,
+  - all inputs validated before execution,
+  - insufficient input rejects the entire attempt,
+  - consume inputs through frozen CR-25B remove,
+  - add outputs through frozen CR-25B add,
+  - create zero stock for previously absent output ResourceTypes,
+  - immutable deterministic result ordering,
+  - no production timing/workforce/transport behavior.
+
+After CR-25C passes its own freeze gate, the complete CR-25 A/B/C system block still requires one combined completion/regression/freeze gate before another CR begins.
 
 ## 4. Product-capability direction
 
@@ -75,14 +81,14 @@ The active block preserves these frozen ownership boundaries:
 - CR-23 owns Person/Home/housing capacity and derived occupancy,
 - CR-24 owns construction state/progress/completion only,
 - existing resource definitions own stable `resource-type:` identity,
-- CR-25A owns the immutable BuildingStock entry value contract,
+- CR-25A owns immutable BuildingStock entry values,
 - CR-25B owns deterministic stock add/remove mutation behavior.
 
-CR-25C may add minimal Production -> BuildingStock input/output behavior only. The following remain outside CR-25C:
+CR-25C adds minimal Production -> BuildingStock input/output execution only. The following remain outside CR-25C:
 
 - automatic population creation / Household / BirthTimer,
 - profession/workforce assignment,
-- production timing/ticks,
+- production timing/ticks/state,
 - storage capacity/slots,
 - transport execution changes,
 - construction material consumption,
@@ -94,7 +100,7 @@ CR-25C may add minimal Production -> BuildingStock input/output behavior only. T
 
 ## 6. Next allowed action
 
-Begin **CR-25C – Production -> BuildingStock Contract** on the existing CR-25 development branch. After CR-25C has passed its own verification/freeze gate, perform the whole CR-25 completion/regression/freeze gate before advancing to a new system block.
+Run the focused **CR-25C Verification / Freeze Gate**. Only after **PASS / 0 BLOCKER** may CR-25C receive its immutable frozen marker. Then run the full **CR-25 completion/regression/freeze gate** before planning a new system block.
 
 ## 7. Branch / source-of-truth rules
 
@@ -105,4 +111,4 @@ Begin **CR-25C – Production -> BuildingStock Contract** on the existing CR-25 
 
 ---
 
-**Updated:** 2026-09-05 after CR-25B device/browser Verification / Freeze Gate: **PASS / 0 BLOCKER**. Current next step: **CR-25C – Production -> BuildingStock Contract**.
+**Updated:** 2026-09-05 after CR-25C Production -> BuildingStock implementation. Current next step: **CR-25C verification / freeze gate**.
