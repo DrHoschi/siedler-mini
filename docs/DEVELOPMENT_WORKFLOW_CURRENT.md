@@ -14,7 +14,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-24A frozen branch: `frozen/cr-24a-building-construction-state-contract`
 - CR-24B – Deterministic Construction Progress / Transition Contract: **PASS / FROZEN / 0 BLOCKER**
 - CR-24B frozen branch: `frozen/cr-24b-deterministic-construction-progress-transition-contract`
-- CR-24C – Construction Completion Boundary: **IMPLEMENTED / NOT FROZEN**
+- CR-24C – Construction Completion Boundary: **FREEZE GATE / NOT FROZEN**
 
 ## 2. Current status
 
@@ -24,26 +24,27 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 | 2 | CR-23 – Person / Resident / Housing Foundation | COMPLETE / FROZEN | Regression only |
 | 3 | CR-24A – Building Construction State Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
 | 4 | CR-24B – Deterministic Construction Progress / Transition Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 5 | CR-24C – Construction Completion Boundary | IMPLEMENTED / NOT FROZEN | Test and review only |
+| 5 | CR-24C – Construction Completion Boundary | FREEZE GATE / NOT FROZEN | Completion regression only |
 
-## 3. CR-24C contract
+## 3. CR-24C freeze-gate contract
 
-CR-24C exposes only a deterministic completion boundary derived from the existing CR-24B construction contract:
+The completion gate must regress CR-24A -> CR-24B -> CR-24C together and confirm:
 
-- stable `buildingId`,
 - `constructionComplete = false` for `PENDING`,
 - `constructionComplete = false` for `IN_PROGRESS`,
 - `constructionComplete = true` only for `COMPLETED` with `progress = 1.0`,
-- immutable/deterministic derived result,
-- no independent stored completion truth.
+- stable `buildingId` is preserved,
+- the result remains deterministic and immutable,
+- completion remains derived rather than independently stored,
+- CR-24A, CR-24B and all frozen predecessors still pass unchanged.
 
 ## 4. Explicit exclusions
 
-CR-24C does not activate or add production, resident/housing usability, workforce/profession assignment, BuildingStock/storage, transport generation/execution, materials/builders/work-time logic, demolition/destruction or rendering/animation/UI behavior.
+The gate must confirm CR-24C still adds no usability activation, production, resident/housing activation, workforce/profession assignment, BuildingStock/storage, transport generation/execution, material/builders/work-time behavior, demolition/destruction or rendering/animation/UI logic.
 
 ## 5. Next allowed action
 
-Verify CR-24C with focused node tests, browser/device preview and CI regression against frozen CR-24B plus all predecessor gates. Then run the CR-24C completion/regression/freeze gate on this same development branch. Only after **PASS / 0 BLOCKER** may CR-24C be frozen and CR-24 as a whole be considered for completion.
+Run focused node regression, CI and browser/device preview on this same whole-system branch. Only after **PASS / 0 BLOCKER** may CR-24C receive its immutable frozen marker. After that, close CR-24 – Construction Foundation as a complete system block and synchronize `ROADMAP_CURRENT.md` plus this workflow before choosing the next CR.
 
 ## 6. Branch simplification rule
 
@@ -53,4 +54,4 @@ A completed sub-block may receive a `frozen/...` branch solely as an immutable m
 
 ---
 
-**Updated:** 2026-09-05 after CR-24C implementation.
+**Updated:** 2026-09-05 for CR-24C completion/regression/freeze gate.
