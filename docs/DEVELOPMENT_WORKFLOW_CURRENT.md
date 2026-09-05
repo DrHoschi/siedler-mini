@@ -15,7 +15,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current system block: **CR-23 – Person / Resident / Housing Foundation**
 - Completed sub-block: **CR-23A – Person / Resident Identity Contract**
 - CR-23A status: **PASS / FROZEN / 0 BLOCKER**
-- Next sub-block: **CR-23B – Resident ↔ Home Assignment Contract — PLAN NEXT**
+- Current sub-block: **CR-23B – Resident ↔ Home Assignment Contract**
+- CR-23B status: **IMPLEMENTED – NOT FROZEN**
 - CR-23C: **NOT STARTED**
 
 ## 2. Current status
@@ -23,29 +24,31 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 | Order | Block / Gate | Status | Permitted action |
 |---:|---|---|---|
 | 1 | CR-22 – Building Ownership / Lifecycle Foundation | FROZEN / PASS / 0 BLOCKER | Regression only |
-| 2 | Post-CR22 project-control synchronization | COMPLETE | Reference only |
-| 3 | CR-23A – Person / Resident Identity Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 4 | CR-23B – Resident ↔ Home Assignment Contract | NEXT / PLAN FIRST | Define scope before code |
-| 5 | CR-23C – Housing Capacity & Occupancy Foundation | LOCKED | Do not start before CR-23B completion |
+| 2 | CR-23A – Person / Resident Identity Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
+| 3 | CR-23B – Resident ↔ Home Assignment Contract | IMPLEMENTED / NOT FROZEN | Test and review only |
+| 4 | CR-23C – Housing Capacity & Occupancy Foundation | LOCKED | Do not start before CR-23B freeze |
 
 ## 3. Frozen CR-23A contract
 
-CR-23A introduces only the stable identity of a Person / Resident:
+CR-23A keeps the stable Person / Resident identity on the existing `unit:` ID basis and remains immutable.
 
-- semantic `personId`, backed by the existing stable `unit:` ID kind,
-- `kind: person-resident-identity`,
-- minimal starting `existenceState: EXISTS`,
+## 4. Current CR-23B contract
+
+CR-23B adds only the explicit Person → Home Building relationship:
+
+- `personId`: stable `unit:` ID,
+- `state`: `UNASSIGNED` or `ASSIGNED`,
+- `homeBuildingId`: exactly `null` for `UNASSIGNED`, exactly one stable `building:` ID for `ASSIGNED`,
 - immutable and deterministic contract values.
 
-A person is intentionally not given a second parallel ID system. Later Resident, Carrier and specialist behavior may refer to the same physical Unit identity.
+The Person references its Home. CR-23B does not add a Building-side resident list or counter, so there is still only one source of truth for the relationship.
 
-CR-23A explicitly does **not** add:
+CR-23B explicitly does **not** add:
 
-- Unit-store registration,
-- Home / Building assignment,
-- housing capacity or occupancy,
+- housing capability/type checks,
+- Housing Capacity,
+- Occupancy / resident counts / Building resident lists,
 - Household / parents / children / population growth,
-- age / gender / names,
 - birth timers,
 - profession / workforce / job assignment,
 - tools / clothing,
@@ -55,32 +58,20 @@ CR-23A explicitly does **not** add:
 - movement / position / route,
 - UI / rendering.
 
-## 4. Freeze evidence
-
-CR-23A completion/freeze gate has passed:
-
-- browser/device preview: **PASS / 0 BLOCKER**,
-- GitHub CI `Run CR-23A completion/freeze gate + CR-22 frozen regression`: **SUCCESS**,
-- corrected gate contract names verified against the actual CR-23A self-test names,
-- no gameplay scope expansion introduced by the gate repair.
-
 ## 5. Next allowed action
 
-Do not implement CR-23B immediately.
+Do not start CR-23C yet.
 
-First define **CR-23B – Resident ↔ Home Assignment Contract** on top of the frozen CR-23A contract and frozen CR-22 Building owner. CR-23B must remain separate from housing capacity/occupancy, population growth, workforce, profession, production and construction.
-
-After CR-23B scope is accepted, continue on the same whole-CR branch `feature/cr-23-person-resident-housing-foundation` from the exact CR-23A frozen baseline.
+First verify CR-23B through focused node test, browser/device preview and CI regression against frozen CR-23A/CR-22. Then run a dedicated CR-23B completion/freeze gate. Only after **PASS / 0 BLOCKER** may CR-23C begin.
 
 ## 6. Source-of-truth / branch rules
 
 - `main` is historical functional/visual reference only.
-- CR-22 remains immutable predecessor baseline.
-- CR-23 uses one whole-system feature branch; A/B/C proceed sequentially on it unless a concrete risk requires otherwise.
-- CR-23A frozen branch is an immutable sub-block evidence point.
+- CR-22 and CR-23A remain immutable predecessor baselines.
+- CR-23 continues on the same whole-system feature branch.
 - Keep browser/device text, docs, CI naming and actual branch state synchronized.
-- Do not silently expand CR-23B into housing capacity or workforce behavior.
+- Do not silently expand CR-23B into housing capacity, population or workforce behavior.
 
 ---
 
-**Updated:** 2026-09-05 after CR-23A completion/freeze gate PASS.
+**Updated:** 2026-09-05 after CR-23B implementation.
