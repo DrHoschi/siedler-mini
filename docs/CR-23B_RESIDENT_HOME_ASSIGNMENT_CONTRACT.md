@@ -1,6 +1,6 @@
 # CR-23B – Resident ↔ Home Assignment Contract
 
-Status: **IMPLEMENTED – NOT FROZEN**
+Status: **PASS / FROZEN / 0 BLOCKER**
 
 ## Zweck
 
@@ -46,8 +46,24 @@ Die Person referenziert ihr Home. CR-23B erzeugt ausdrücklich keine zweite Bewo
 
 Die fachliche Housing-Eignung und Kapazitätsgrenze werden erst in CR-23C definiert.
 
+## Freeze-Nachweis
+
+Das dedizierte CR-23B Abschluss-/Regression-/Freeze-Gate regressiert gemeinsam:
+
+- den eingefrorenen CR-22-Unterbau,
+- CR-23A als eingefrorene Personenidentität,
+- `UNASSIGNED` ohne Home,
+- `ASSIGNED` mit genau einer stabilen `building:`-ID,
+- strikte `personId`-/`homeBuildingId`-Kinds,
+- konsistente State-/Home-Referenzen,
+- deterministische und immutable Contract-Werte,
+- explizite Neuzuordnung ohne Mutation des alten Contract-Werts,
+- die Scope-Grenze gegen Capacity, Occupancy, Population, Workforce und Bewegung.
+
+Ergebnis: **PASS / 0 BLOCKER**.
+
 ## Abgrenzung innerhalb CR-23
 
 - **CR-23A:** Person / Resident Identity Contract – **PASS / FROZEN / 0 BLOCKER**
-- **CR-23B:** Resident ↔ Home Assignment Contract – **IMPLEMENTED / NOT FROZEN**
+- **CR-23B:** Resident ↔ Home Assignment Contract – **PASS / FROZEN / 0 BLOCKER**
 - **CR-23C:** Housing Capacity & Occupancy Foundation – noch nicht begonnen
