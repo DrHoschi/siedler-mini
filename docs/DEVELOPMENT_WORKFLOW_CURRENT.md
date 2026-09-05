@@ -9,14 +9,13 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
 - Current development/control branch: `feature/cr-25-buildingstock-production-foundation`
-- Current immutable gameplay baseline: **CR-25C – Production -> BuildingStock Contract**
+- Current immutable gameplay baseline: **CR-25 – BuildingStock / Production Foundation**
 - CR-24 – Construction Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- Current system block: **CR-25 – BuildingStock / Production Foundation**
 - CR-25A – BuildingStock Contract: **PASS / FROZEN / 0 BLOCKER**
 - CR-25B – Deterministic BuildingStock Mutation: **PASS / FROZEN / 0 BLOCKER**
 - CR-25C – Production -> BuildingStock Contract: **PASS / FROZEN / 0 BLOCKER**
-- Current gate: **CR-25 system-block completion / regression / freeze gate**
-- CR-25 status: **COMPLETE_NOT_FROZEN**
+- CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- Current activity: **NEXT SYSTEM BLOCK PLANNING ONLY**
 
 ## 2. Current status
 
@@ -28,8 +27,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 | 4 | CR-25A – BuildingStock Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
 | 5 | CR-25B – Deterministic BuildingStock Mutation | PASS / FROZEN / 0 BLOCKER | Regression only |
 | 6 | CR-25C – Production -> BuildingStock Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 7 | CR-25 system-block completion gate | ACTIVE | Run combined A/B/C regression/freeze gate |
-| 8 | Next CR system block | BLOCKED | Only after CR-25 whole-block freeze |
+| 7 | CR-25 whole-system Completion / Regression / Freeze Gate | PASS / 0 BLOCKER | CR-25 frozen |
+| 8 | Next CR system block | PLANNING ONLY | Reconcile live roadmap and define exact boundary before implementation |
 
 ## 3. Frozen CR-25 contract boundary
 
@@ -49,6 +48,8 @@ CR-25C owns the minimal deterministic Production -> BuildingStock boundary:
 - immutable deterministic result ordering,
 - no production timing/workforce/transport behavior.
 
+The complete device/browser CR-25 Completion / Regression / Freeze Gate passed with **PASS / 0 BLOCKER** on 2026-09-05.
+
 ## 4. Explicit frozen exclusions
 
 CR-25 as a whole contains no:
@@ -64,18 +65,18 @@ CR-25 as a whole contains no:
 
 ## 5. Next allowed action
 
-Run the complete **CR-25 A/B/C Completion / Regression / Freeze Gate**.
+Do not begin implementation of a new CR yet.
 
-The gate must regress the frozen CR-24 predecessor, CR-25A, CR-25B and CR-25C together and verify that the CR-25 scope boundary remains clean.
-
-Only after **PASS / 0 BLOCKER** may CR-25 as a whole become **COMPLETE / FROZEN** and a new CR system block be planned.
+Reconcile `docs/ROADMAP_CURRENT.md` and the live repository against the remaining IM/product capability priorities, then define the minimal next system boundary, exact CR title and any A/B/C decomposition. Only after explicit acceptance may a new development branch be created from the frozen CR-25 baseline.
 
 ## 6. Branch simplification rule
 
-CR-25 remains on the single development branch `feature/cr-25-buildingstock-production-foundation`.
+The completed CR-25 implementation remains on `feature/cr-25-buildingstock-production-foundation` as development history.
 
 Frozen branches are immutable markers only. Do not create extra temporary, implementation, final or gate working branches unless a concrete technical risk requires isolation.
 
+A future system block gets one development branch only after its boundary has been explicitly accepted.
+
 ---
 
-**Updated:** 2026-09-05 after device/browser CR-25C Verification / Freeze Gate: **PASS / 0 BLOCKER**. Current next activity: **CR-25 whole-system completion / regression / freeze gate**.
+**Updated:** 2026-09-05 after device/browser CR-25 whole-system Completion / Regression / Freeze Gate: **PASS / 0 BLOCKER**. Current next activity: **next-system planning / IM ↔ CR reconciliation only**.
