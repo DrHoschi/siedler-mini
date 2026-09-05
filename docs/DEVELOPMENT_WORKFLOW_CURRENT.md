@@ -9,13 +9,14 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
 - Current development/control branch: `feature/cr-25-buildingstock-production-foundation`
-- Current immutable gameplay baseline: **CR-25B – Deterministic BuildingStock Mutation**
+- Current immutable gameplay baseline: **CR-25C – Production -> BuildingStock Contract**
 - CR-24 – Construction Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current system block: **CR-25 – BuildingStock / Production Foundation**
 - CR-25A – BuildingStock Contract: **PASS / FROZEN / 0 BLOCKER**
 - CR-25B – Deterministic BuildingStock Mutation: **PASS / FROZEN / 0 BLOCKER**
-- Current sub-block: **CR-25C – Production -> BuildingStock Contract**
-- CR-25C status: **IMPLEMENTED / NOT FROZEN**
+- CR-25C – Production -> BuildingStock Contract: **PASS / FROZEN / 0 BLOCKER**
+- Current gate: **CR-25 system-block completion / regression / freeze gate**
+- CR-25 status: **COMPLETE_NOT_FROZEN**
 
 ## 2. Current status
 
@@ -26,34 +27,31 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 | 3 | CR-24 – Construction Foundation | COMPLETE / FROZEN / PASS / 0 BLOCKER | Regression only |
 | 4 | CR-25A – BuildingStock Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
 | 5 | CR-25B – Deterministic BuildingStock Mutation | PASS / FROZEN / 0 BLOCKER | Regression only |
-| 6 | CR-25C – Production -> BuildingStock Contract | IMPLEMENTED / NOT FROZEN | Focused verification / freeze gate only |
-| 7 | CR-25 system-block completion gate | BLOCKED | Only after CR-25C freeze |
+| 6 | CR-25C – Production -> BuildingStock Contract | PASS / FROZEN / 0 BLOCKER | Regression only |
+| 7 | CR-25 system-block completion gate | ACTIVE | Run combined A/B/C regression/freeze gate |
+| 8 | Next CR system block | BLOCKED | Only after CR-25 whole-block freeze |
 
-## 3. Frozen CR-25A / CR-25B boundary
+## 3. Frozen CR-25 contract boundary
 
 CR-25A owns immutable BuildingStock entry values with stable Building/ResourceType identity and non-negative safe-integer quantity.
 
 CR-25B owns deterministic `add` / `remove` value mutation, preserves identity and immutability, rejects over-withdrawal, invalid mutation amounts and Safe-Integer overflow.
 
-## 4. CR-25C implemented boundary
+CR-25C owns the minimal deterministic Production -> BuildingStock boundary:
 
-CR-25C adds only minimal deterministic Production -> BuildingStock behavior:
+- one production definition belongs to one stable Building,
+- deterministic non-empty input/output resource-quantity lists,
+- all inputs validated before execution,
+- insufficient input rejects the entire attempt,
+- inputs consumed through frozen CR-25B remove,
+- outputs added through frozen CR-25B add,
+- absent output stock starts from a CR-25A zero-quantity value,
+- immutable deterministic result ordering,
+- no production timing/workforce/transport behavior.
 
-- one production definition belongs to one stable `building:` ID,
-- non-empty deterministic `inputs[]` and `outputs[]`,
-- every production entry uses one stable `resource-type:` ID and positive safe-integer quantity,
-- all required inputs are validated before any result is produced,
-- insufficient input rejects the complete production attempt,
-- input quantities are consumed through frozen CR-25B `remove`,
-- output quantities are added through frozen CR-25B `add`,
-- absent output stock begins from a CR-25A zero-quantity value,
-- same ResourceType may appear once in inputs and once in outputs and resolves deterministically,
-- the returned stock list is immutable and sorted by ResourceType,
-- supplied stock values are never mutated.
+## 4. Explicit frozen exclusions
 
-## 5. Explicit exclusions
-
-CR-25C contains no:
+CR-25 as a whole contains no:
 
 - production duration/ticks/timers/automatic repetition,
 - active/running/paused production state,
@@ -64,20 +62,20 @@ CR-25C contains no:
 - SaveGame ownership,
 - rendering/animation/UI/Inspector/balancing.
 
-## 6. Next allowed action
+## 5. Next allowed action
 
-Run focused **CR-25C Verification / Freeze Gate** against frozen CR-25B and the new Production -> BuildingStock contract.
+Run the complete **CR-25 A/B/C Completion / Regression / Freeze Gate**.
 
-Only after **PASS / 0 BLOCKER** may CR-25C receive an immutable frozen marker. Then run the whole **CR-25 completion/regression/freeze gate** before defining or implementing a new CR system block.
+The gate must regress the frozen CR-24 predecessor, CR-25A, CR-25B and CR-25C together and verify that the CR-25 scope boundary remains clean.
 
-Do not start any later system block while CR-25C is `IMPLEMENTED / NOT FROZEN`.
+Only after **PASS / 0 BLOCKER** may CR-25 as a whole become **COMPLETE / FROZEN** and a new CR system block be planned.
 
-## 7. Branch simplification rule
+## 6. Branch simplification rule
 
-CR-25 continues on the single development branch `feature/cr-25-buildingstock-production-foundation`.
+CR-25 remains on the single development branch `feature/cr-25-buildingstock-production-foundation`.
 
-A completed sub-block may receive a `frozen/...` branch solely as an immutable marker. Do not create extra temporary, implementation, final or gate branches unless a concrete technical risk requires isolation.
+Frozen branches are immutable markers only. Do not create extra temporary, implementation, final or gate working branches unless a concrete technical risk requires isolation.
 
 ---
 
-**Updated:** 2026-09-05 after CR-25C implementation. Current next activity: **CR-25C focused verification / freeze gate**.
+**Updated:** 2026-09-05 after device/browser CR-25C Verification / Freeze Gate: **PASS / 0 BLOCKER**. Current next activity: **CR-25 whole-system completion / regression / freeze gate**.
