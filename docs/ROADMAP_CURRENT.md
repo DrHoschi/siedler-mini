@@ -1,9 +1,9 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-25 completion gate active  
+**Status:** CURRENT – Post-CR25 planning  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-25-buildingstock-production-foundation`  
-**Frozen gameplay baseline:** **CR-25C – Production -> BuildingStock Contract**
+**Frozen gameplay baseline:** **CR-25 – BuildingStock / Production Foundation**
 
 ## 1. Authority
 
@@ -17,30 +17,29 @@ IM numbers remain higher-level product/migration capability areas. CR numbers ar
 
 CR-00 through CR-24 remain frozen predecessor foundations.
 
-### CR-25A – BuildingStock Contract — PASS / FROZEN / 0 BLOCKER
+### CR-25 – BuildingStock / Production Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-Immutable local BuildingStock entry contract.
-
-### CR-25B – Deterministic BuildingStock Mutation — PASS / FROZEN / 0 BLOCKER
-
-Deterministic add/remove mutation with identity/immutability preservation and guards against invalid mutation, over-withdrawal and overflow.
-
-### CR-25C – Production -> BuildingStock Contract — PASS / FROZEN / 0 BLOCKER
-
-Minimal deterministic production input/output execution on local BuildingStock. Device/browser Verification / Freeze Gate passed with **PASS / 0 BLOCKER** on 2026-09-05.
-
-## 3. Current system block
-
-### CR-25 – BuildingStock / Production Foundation — COMPLETE_NOT_FROZEN
-
-CR-25 advances **IM-08**.
+CR-25 advances **IM-08** and is fully frozen:
 
 - **CR-25A – BuildingStock Contract — PASS / FROZEN / 0 BLOCKER**
 - **CR-25B – Deterministic BuildingStock Mutation — PASS / FROZEN / 0 BLOCKER**
 - **CR-25C – Production -> BuildingStock Contract — PASS / FROZEN / 0 BLOCKER**
-- **CR-25 whole-system Completion / Regression / Freeze Gate — ACTIVE**
+- **CR-25 whole-system Completion / Regression / Freeze Gate — PASS / 0 BLOCKER**
 
-A new CR system block must not begin until this whole-block gate passes.
+The complete device/browser system gate passed on 2026-09-05.
+
+## 3. Frozen CR-25 capability
+
+CR-25 provides:
+
+- immutable local BuildingStock entry values,
+- deterministic add/remove mutation,
+- guards against invalid mutation, over-withdrawal and Safe-Integer overflow,
+- minimal deterministic Production -> BuildingStock input/output execution,
+- atomic rejection when required local input is insufficient,
+- immutable deterministic stock results.
+
+CR-25 intentionally does not own production timing/state, workforce/professions, storage capacity/slots, transport execution, construction-material integration, SaveGame ownership, rendering/animation, UI/Inspector or balancing.
 
 ## 4. Product-capability direction
 
@@ -48,12 +47,12 @@ The authoritative product chain remains:
 
 `HQ -> Häuser -> Bewohner -> Produktion -> lokaler Bestand -> Transport -> HQ/Baustelle -> Bau -> Expansion`
 
-Current capability priority:
+Current capability priority after CR-25:
 
 1. ~~Building ownership / lifecycle foundation~~ — **CR-22 COMPLETE / FROZEN**
 2. ~~Person / Resident / Housing foundation~~ — **CR-23 COMPLETE / FROZEN**
 3. ~~Construction foundation~~ — **CR-24 COMPLETE / FROZEN** — advances IM-07
-4. **BuildingStock / Production foundation — CR-25 COMPLETE_NOT_FROZEN** — advances IM-08
+4. ~~BuildingStock / Production foundation~~ — **CR-25 COMPLETE / FROZEN** — advances IM-08
 5. Integrated workforce / job eligibility — advances the non-transport part of IM-06
 6. Game-facing logistics/navigation integration — advances IM-09 + IM-11
 7. Visible world/render integration
@@ -63,29 +62,33 @@ Current capability priority:
 11. Guidance + Inspector / diagnostics / balancing — IM-15
 12. Architecture closure + V1 Golden Path — finish IM-16 + IM-17
 
-The exact next CR title and decomposition remain undefined until CR-25 is fully frozen and the next system boundary is planned against the live repository.
+Population / Resident Creation remains deferred and must build on frozen CR-23 housing capacity rather than modifying CR-23.
 
-## 5. CR-25 ownership boundary
+## 5. Next-system planning boundary
 
-- CR-25A owns immutable BuildingStock entry values.
-- CR-25B owns deterministic stock add/remove mutation.
-- CR-25C owns minimal deterministic Production -> BuildingStock input/output execution.
+No new CR number/title is authorized yet.
 
-CR-25 contains no production timing/state, workforce/professions, capacity/slots, transport execution, construction-material integration, SaveGame ownership, rendering/animation, UI/Inspector or balancing.
+The next step is repository-based planning against the remaining IM/product requirements. The next system block must preserve all frozen ownership boundaries, especially:
+
+- CR-22 Building identity/lifecycle/registration,
+- CR-23 Person/Home/housing capacity/derived occupancy,
+- CR-24 construction state/progress/completion,
+- CR-25 BuildingStock and minimal Production -> BuildingStock behavior.
+
+The exact next CR title and A/B/C decomposition must be explicitly accepted before implementation or branch creation.
 
 ## 6. Next allowed action
 
-Run the complete **CR-25 A/B/C Completion / Regression / Freeze Gate** against the frozen predecessor line and the entire CR-25 contract chain.
-
-Only at **PASS / 0 BLOCKER** may CR-25 become **COMPLETE / FROZEN**. After that, reconcile IM ↔ CR against the live repository and plan the next system block before creating any new implementation branch.
+Reconcile the live repository against the remaining capability priorities, with particular attention to the next product dependency after frozen BuildingStock/Production. Define the smallest coherent next system boundary and its scope/non-scope. Do not create a new development branch until that boundary is accepted.
 
 ## 7. Branch / source-of-truth rules
 
 - `main` remains historical old-game reference.
-- `feature/cr-25-buildingstock-production-foundation` remains the single CR-25 development branch through the whole-system gate.
-- Frozen sub-block branches are immutable markers only.
-- Do not create a next-system development branch before CR-25 whole-block freeze and explicit next-boundary acceptance.
+- `feature/cr-25-buildingstock-production-foundation` remains CR-25 development history.
+- The whole CR-25 frozen marker is the new immutable gameplay baseline.
+- Frozen sub-block/system branches are immutable markers only.
+- A future system block receives one development branch after explicit boundary acceptance.
 
 ---
 
-**Updated:** 2026-09-05 after CR-25C device/browser Verification / Freeze Gate: **PASS / 0 BLOCKER**. Current next step: **CR-25 whole-system completion / regression / freeze gate**.
+**Updated:** 2026-09-05 after CR-25 device/browser whole-system Completion / Regression / Freeze Gate: **PASS / 0 BLOCKER**. Current next step: **next-system planning / IM ↔ CR reconciliation**.
