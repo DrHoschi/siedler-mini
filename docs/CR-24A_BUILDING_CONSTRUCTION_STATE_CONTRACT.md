@@ -1,6 +1,6 @@
 # CR-24A – Building Construction State Contract
 
-**Status:** IMPLEMENTED / NOT FROZEN  
+**Status:** PASS / FROZEN / 0 BLOCKER  
 **System block:** CR-24 – Construction Foundation  
 **Predecessor baseline:** CR-23 – Person / Resident / Housing Foundation — FROZEN
 
@@ -32,7 +32,7 @@ CR-24A adds a separate axis:
 
 Therefore a Building may simultaneously be `EXISTS` in the existential lifecycle and `PENDING`, `IN_PROGRESS`, or `COMPLETED` in Construction.
 
-CR-24A does not define transitions between construction states. It only defines valid state values. Controlled transitions/progress belong to a later CR-24 sub-block.
+CR-24A does not define transitions between construction states. It only defines valid state values. Controlled transitions/progress belong to CR-24B.
 
 ## Explicit exclusions
 
@@ -49,11 +49,21 @@ CR-24A adds no:
 - demolition/destruction,
 - rendering/animation/UI.
 
-## Acceptance checks
+## Freeze evidence
 
-- stable `building:` ID required,
-- only `PENDING`, `IN_PROGRESS`, `COMPLETED` accepted,
-- construction contract remains independent from CR-22 lifecycle contract,
+CR-24A passed its dedicated completion/regression/freeze gate with **PASS / 0 BLOCKER**.
+
+Verified together:
+
+- frozen CR-23/CR-22 predecessor regression,
+- stable `building:` ID requirement,
+- exactly `PENDING`, `IN_PROGRESS`, `COMPLETED`,
+- strict separation from CR-22 `EXISTS -> RETIRED`,
 - immutable/deterministic values,
-- scope exclusions remain absent,
-- CR-23/CR-22 frozen regressions remain green.
+- no transition/progress/material/builder/production/transport scope leakage,
+- browser/device preview: PASS / 0 BLOCKER,
+- GitHub CI `Run CR-24A completion/freeze gate + CR-23 frozen regression`: SUCCESS.
+
+## Frozen boundary
+
+CR-24A is immutable unless explicitly reopened by a separate corrective change. CR-24B must build on this contract without changing its state vocabulary or introducing Construction semantics into the CR-22 Building lifecycle.
