@@ -1,6 +1,6 @@
 # CR-22C – Building Registration & World Ownership Integration
 
-Status: **IMPLEMENTED – NOT FROZEN**
+Status: **PASS / FROZEN / 0 BLOCKER**
 
 ## Zweck
 
@@ -38,7 +38,7 @@ Eine vollständige Building-Instanz wird unter exakt ihrer stabilen `buildingId`
 
 ## Prüfziel
 
-`src/dev/cr-22c-self-test.js` prüft insbesondere:
+`src/dev/cr-22c-self-test.js` und `src/dev/cr-22c-freeze-gate.js` prüfen insbesondere:
 
 - Registrierung im vorhandenen Building-DomainStore,
 - exakte Identity-/Lifecycle-ID-Kohärenz,
@@ -48,10 +48,15 @@ Eine vollständige Building-Instanz wird unter exakt ihrer stabilen `buildingId`
 - deterministische ID-Reihenfolge,
 - gezieltes Removal ohne Seiteneffekte auf andere Buildings,
 - kein automatisches Lifecycle-Policy-Verhalten,
-- keine vorgezogenen Construction-, Population-, Workforce-, Production-, Storage- oder Transport-Zustände.
+- keine vorgezogenen Construction-, Population-, Workforce-, Production-, Storage- oder Transport-Zustände,
+- gemeinsame Regression der eingefrorenen CR-22A-/CR-22B-Basis mit CR-22C.
+
+## Freeze-Nachweis
+
+Das CR-22C Abschluss-/Regression-/Freeze-Gate wurde mit **PASS / 0 BLOCKER** abgeschlossen. Der CI-Schritt `Run CR-22C completion/freeze gate + CR-22B frozen regression` war erfolgreich.
 
 ## Abgrenzung innerhalb CR-22
 
 - **CR-22A:** Building Identity & Ownership Contract – **FROZEN**
 - **CR-22B:** Building Lifecycle State Contract – **FROZEN**
-- **CR-22C:** Building Registration & World Ownership Integration – **IMPLEMENTED / NOT FROZEN**
+- **CR-22C:** Building Registration & World Ownership Integration – **PASS / FROZEN / 0 BLOCKER**
