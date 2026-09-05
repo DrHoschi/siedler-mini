@@ -1,6 +1,10 @@
 # CR-22B – Building Lifecycle State Contract
 
-Status: **IMPLEMENTED – NOT FROZEN**
+Status: **PASS / FROZEN**
+
+Freeze-Gate: **PASS / 0 BLOCKER**  
+Frozen-Basis: CR-22A `58ffd58ac423171ad80b6ff7f29c7271a10d3090`  
+CR-22B Gate-CI: `a78975a2ead0dcc760d0a48df4f92c981b4b71c9` – SUCCESS
 
 ## Zweck
 
@@ -34,9 +38,9 @@ CR-22B beschreibt **keinen Bauzustand**. Zustände wie `PLANNED`, `CONSTRUCTING`
 - Transport- oder Job-Erzeugung,
 - Rendering oder UI-Gameplay.
 
-## Prüfziel
+## Prüfziel und Freeze-Ergebnis
 
-`src/dev/cr-22b-self-test.js` prüft insbesondere:
+`src/dev/cr-22b-self-test.js` und `src/dev/cr-22b-freeze-gate.js` prüfen insbesondere:
 
 - Defaultzustand `EXISTS`,
 - exakt die Zustände `EXISTS` und `RETIRED`,
@@ -44,4 +48,7 @@ CR-22B beschreibt **keinen Bauzustand**. Zustände wie `PLANNED`, `CONSTRUCTING`
 - terminales `RETIRED`,
 - Ablehnung von No-op-, Rückwärts- und fremden Übergängen,
 - Immutability,
-- keine Registry-, Construction-, Population-, Workforce-, Production- oder Storage-Side-Effects.
+- keine Registry-, Construction-, Population-, Workforce-, Production- oder Storage-Side-Effects,
+- Regression der eingefrorenen CR-22A-Basis.
+
+Ergebnis: **PASS / 0 BLOCKER – CR-22B FROZEN.**
