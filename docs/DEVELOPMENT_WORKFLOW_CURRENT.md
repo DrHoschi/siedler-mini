@@ -19,8 +19,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-29B – Deterministic World-to-Screen Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-29C – Controlled Pan & Zoom Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Post-freeze visible-label correction: **COMPLETE / PASS / 0 BLOCKER**.
-- Corrected CR-29 frozen marker: `frozen/cr-29-camera-world-view-foundation` -> `5ef4ba7f59070bfb392ed8c48abb6f8351788fc5`.
-- Next allowed action: **select the next system block explicitly from the current roadmap; no successor CR is implicitly authorized**.
+- Permanent visible CR/build identity synchronization rule: **ACTIVE**.
+- Rule-introduction regression: GitHub Actions run `34055621142` on commit `7ddd7d7c892e59f94cf6607e3d62ffe6e39abdde`: **PASS / 0 BLOCKER**.
+- Next allowed action: **after this documentation-only verification record itself passes exact-state CI, advance `frozen/cr-29-camera-world-view-foundation` to that verified HEAD; then select the next system block explicitly from the current roadmap. No successor CR is implicitly authorized**.
 
 ## 2. Frozen predecessor baseline
 
@@ -126,9 +127,7 @@ The correction changed only visible test-page metadata/text:
 
 No camera state, projection, Canvas rendering, browser input, gameplay owner or ownership contract changed.
 
-The corrected exact state passed the full CR-29 CI/freeze-gate chain, and the frozen marker was advanced to:
-
-`frozen/cr-29-camera-world-view-foundation` -> `5ef4ba7f59070bfb392ed8c48abb6f8351788fc5`.
+The corrected exact state passed the full CR-29 CI/freeze-gate chain.
 
 ## 6. Frozen CR-29 invariants
 
@@ -163,11 +162,9 @@ Current frozen marker:
 
 `frozen/cr-29-camera-world-view-foundation`
 
-Current corrected frozen commit:
+It must always be advanced only to an exact-state-CI-verified documentation-complete CR-29 HEAD. No successor branch may be based on an older marker when a newer verified control-file state exists.
 
-`5ef4ba7f59070bfb392ed8c48abb6f8351788fc5`
-
-After the corrected marker is in place, **no CR-30 or other successor implementation is automatically authorized**. The next system block must be selected explicitly from the current roadmap and started from the corrected CR-29 frozen marker.
+After the rule-recording exact-state CI succeeds and the marker is advanced, **no CR-30 or other successor implementation is automatically authorized**. The next system block must be selected explicitly from the current roadmap and started from the then-current CR-29 frozen marker.
 
 ## 9. Permanent visible CR / build identity synchronization rule
 
@@ -192,4 +189,4 @@ When a new CR/substep begins, visible identity synchronization belongs to that s
 
 ---
 
-**Updated:** 2026-09-06 after successful CR-29 visible-label correction and user-confirmed iPad view. Permanent visible CR/build identity synchronization rule added to prevent stale predecessor labels in future browser/device gates.
+**Updated:** 2026-09-06 after successful CR-29 visible-label correction and user-confirmed iPad view. Permanent visible CR/build identity synchronization rule added and regression-verified; final exact-state CI of this verification record is required before advancing the CR-29 frozen marker.
