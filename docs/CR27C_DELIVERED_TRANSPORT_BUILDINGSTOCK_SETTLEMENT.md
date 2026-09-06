@@ -1,7 +1,7 @@
 # CR-27C – Delivered Transport -> BuildingStock Settlement
 
 **Parent:** CR-27 – Game-Facing Logistics Integration Foundation  
-**Status:** IMPLEMENTED / BROWSER FREEZE GATE EXPOSED / AWAITING DEVICE PASS / NOT FROZEN  
+**Status:** PASS / FROZEN / 0 BLOCKER  
 **Branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen predecessors:** `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`, `frozen/cr-27b-workforce-aware-transport-dispatch-integration`
 
@@ -38,40 +38,31 @@ Committed successor owner states (`RELEASED` / `FREE`) cannot be settled again.
 
 CR-27C does not decide arrival, create delivery evidence, perform pickup/delivery movement, support partial/multi-trip delivery, implement cancel/failure/recovery settlement, redispatch, redesign TransportJob lifecycle, mutate legacy Claim/Demand/ResourceState stores, use Carrier availability, add pathfinding/routes/movement/traffic/deadlock behavior, add priority/scoring, alter production/construction, or add SaveGame/rendering/gameplay UI/Inspector/balancing.
 
-## 5. Implemented files
+## 5. Frozen implementation files
 
 - `src/domain/delivered-transport-building-stock-settlement.js`
 - `src/dev/cr-27c-self-test.js`
 - `src/dev/cr-27c-self-test.node.js`
 - `src/dev/cr-27c-freeze-gate.js`
 - `docs/CR27C_DELIVERED_TRANSPORT_BUILDINGSTOCK_SETTLEMENT.md`
-- `index.html` exposes the CR-27C browser gate.
+- `index.html` exposes the accepted CR-27C browser gate.
 
-## 6. Direct test matrix
+## 6. Verification
 
 The direct self-test covers valid settlement, all delivery identity/amount mismatches, reservation/workforce owner-state validation, source/target identity validation, source underflow, target overflow, release successors, duplicate prevention via committed successor owner state, quantity conservation, byte-for-byte input immutability and strict ownership/scope guards.
 
-## 7. Browser Verification / Freeze Gate
+`src/dev/cr-27c-freeze-gate.js` additionally regresses frozen CR-27B (and therefore CR-27A) and the integrated settlement boundary.
 
-`src/dev/cr-27c-freeze-gate.js` regresses frozen CR-27B (and therefore CR-27A), all direct CR-27C tests and additional end-to-end settlement invariants.
-
-It verifies:
-
-- confirmed delivery settles exact source -> target quantity,
-- reservation becomes `RELEASED`, workforce becomes `FREE`,
-- total BuildingStock quantity is conserved,
-- delivery linkage cannot be bypassed,
-- owner-state, source underflow and target overflow guards cannot be bypassed,
-- committed successor states reject another settlement,
-- all inputs remain unchanged,
-- no post-scope transport/legacy-store/Carrier ownership leaks into settlement.
-
-Required browser/device result:
+Device/browser result accepted on 2026-09-06:
 
 `CR-27C DELIVERED TRANSPORT → BUILDINGSTOCK SETTLEMENT VERIFICATION / FREEZE GATE: PASS / 0 BLOCKER`
 
-## 8. Freeze condition
+## 7. Freeze result
 
-CR-27C remains **NOT FROZEN** until the dedicated browser Verification / Freeze Gate passes with **PASS / 0 BLOCKER**, control documents are synchronized and the immutable CR-27C marker is created.
+CR-27C is **PASS / FROZEN / 0 BLOCKER**.
 
-Only after CR-27C freezes may the whole CR-27 Completion / Regression / Freeze Gate be built and executed.
+Immutable marker:
+
+`frozen/cr-27c-delivered-transport-buildingstock-settlement`
+
+Only after this sub-block freeze may the whole **CR-27 Completion / Regression / Freeze Gate** be built and executed. CR-27 as a whole remains ACTIVE / NOT FROZEN until that combined gate passes.
