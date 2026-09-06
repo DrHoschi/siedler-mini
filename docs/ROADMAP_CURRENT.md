@@ -1,8 +1,8 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – Post-CR27 planning  
+**Status:** CURRENT – CR-28 active  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
+**Current control branch:** `feature/cr-28-visible-world-runtime-integration-foundation`  
 **Frozen gameplay baseline:** **CR-27 – Game-Facing Logistics Integration Foundation**
 
 ## 1. Current frozen line
@@ -13,60 +13,70 @@ CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN
 
 CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Sub-blocks:
+Whole-system frozen marker:
 
-- CR-27A – BuildingStock Transport Intent & Reservation Bridge: **PASS / FROZEN / 0 BLOCKER**
-- CR-27B – Workforce-Aware Transport Dispatch Integration: **PASS / FROZEN / 0 BLOCKER**
-- CR-27C – Delivered Transport -> BuildingStock Settlement: **PASS / FROZEN / 0 BLOCKER**
+`frozen/cr-27-game-facing-logistics-integration-foundation`
 
-Frozen markers:
+Baseline commit:
 
-- `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`
-- `frozen/cr-27b-workforce-aware-transport-dispatch-integration`
-- `frozen/cr-27c-delivered-transport-buildingstock-settlement`
-- `frozen/cr-27-game-facing-logistics-integration-foundation`
+`c821784264c846d00f15f018011eb13f817d13b5`
 
-## 2. Frozen CR-27 integrated capability
+## 2. Authorized next system block
 
-The frozen game-facing logistics chain is:
+**CR-28 – Visible World Runtime Integration Foundation**
 
-`CR-25 BuildingStock -> CR-27A ACTIVE Reservation -> CR-26 CAN_SIMPLE_TRANSPORT Workforce -> CR-27B Dispatch -> existing confirmed delivery evidence -> CR-27C Settlement -> CR-25 successor BuildingStock + CR-27A RELEASED + CR-26 FREE`
+Question answered by CR-28:
 
-Whole-system device/browser Completion / Regression / Freeze Gate passed **PASS / 0 BLOCKER** on 2026-09-06.
+> How are already-frozen gameplay owners projected deterministically into a visible, read-only game world?
 
-CR-27 now guarantees:
+Authorized decomposition:
 
-- source availability protection before physical transfer,
-- CR-26-authoritative workforce dispatch,
-- reuse of the selected Person as execution `unitId`,
-- no second Carrier availability truth,
-- physical stock unchanged through reservation/dispatch,
-- settlement only from correctly linked confirmed delivery,
-- exact source decrement / target increment,
-- quantity conservation,
-- reservation closure and workforce release only after successful settlement,
-- no partial result on linkage/state/underflow/overflow failure,
-- no legacy Claim/Demand/ResourceState gameplay ownership.
+- **CR-28A – Game-State Render Projection Contract** — immutable/read-only renderer-neutral projection for at least Map, Buildings and Persons, including position and deliberately exposed visible base state. No drawing or interaction.
+- **CR-28B – Deterministic World Canvas Rendering** — deterministic prototype/debug rendering of the CR-28A projection. No gameplay ownership or write-back.
+- **CR-28C – Live Runtime -> Render Integration** — current runtime state -> CR-28A projection -> CR-28B renderer -> Canvas update, with a real visible miniworld as browser-gate evidence.
 
-## 3. Frozen CR-27 global non-scope
+After A+B+C, run the whole CR-28 Completion / Regression / Freeze Gate.
 
-CR-27 did not add new pathfinding, route, movement, traffic, reservation-traffic, deadlock, Carrier-AI, production timing, construction work, job priority/scoring, graphics, Inspector, balancing or SaveGame ownership.
+## 3. CR-28 architectural boundary
 
-## 4. Next required activity
+CR-28 is visibility integration, not a new gameplay system. Existing gameplay owners remain authoritative. Renderer/UI may only consume projected data and must never become a gameplay owner or mutate frozen source state.
 
-No next CR number/title is authorized yet.
+Hard non-scope across CR-28:
 
-The next activity is a short **live-repository IM ↔ CR reconciliation** against this frozen CR-27 baseline. It must inspect current migration/IM documents, remaining roadmap priorities and actual owner/runtime gaps before proposing the next minimal system block.
+- Save/Load/Continue,
+- Gameplay HUD,
+- Build menu,
+- Inspector,
+- touch controls,
+- new camera mechanics,
+- mandatory new assets,
+- new pathfinding/movement/traffic,
+- changes to BuildingStock/Workforce/Logistics ownership,
+- new production/construction/simulation semantics.
 
-The resulting next CR and its A/B/C boundaries must be explicitly accepted before creating any new development branch or implementation.
+## 4. Current active step
+
+**CR-28A – Game-State Render Projection Contract** is authorized and active.
+
+Required proof:
+
+- pure projection tests,
+- immutability of all inputs,
+- deterministic output/order for equal source state,
+- Map/Buildings/Persons minimum coverage,
+- no Canvas dependency,
+- no gameplay write-back path.
+
+CR-28B is not yet authorized for implementation.
 
 ## 5. Branch / gate policy
 
-- The whole CR-27 frozen baseline is `frozen/cr-27-game-facing-logistics-integration-foundation`.
-- The completed feature branch remains historical working context only.
-- Frozen branches are immutable markers.
-- Do not move into another system block based solely on prior chat assumptions.
+- Active whole-system branch: `feature/cr-28-visible-world-runtime-integration-foundation`.
+- It was created directly from `frozen/cr-27-game-facing-logistics-integration-foundation` at commit `c821784264c846d00f15f018011eb13f817d13b5`.
+- A/B/C normally continue sequentially on this one CR-28 branch.
+- Frozen CR-27 markers remain immutable.
+- CR-28 becomes FROZEN only after its final whole-system gate passes PASS / 0 BLOCKER.
 
 ---
 
-**Updated:** 2026-09-06 after whole CR-27 Completion / Regression / Freeze Gate: **PASS / 0 BLOCKER**. Next step: post-CR27 live IM ↔ CR reconciliation.
+**Updated:** 2026-09-06 after post-CR27 reconciliation and explicit authorization of **CR-28 – Visible World Runtime Integration Foundation**. Current active step: **CR-28A – Game-State Render Projection Contract**.
