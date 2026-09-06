@@ -25,9 +25,11 @@ Frozen CR-28 commit:
 
 `1ca2997a3933b312737dda5a220f1026d149bdf1`
 
-CR-29 frozen marker to create after final exact-state CI verification:
+Current CR-29 frozen marker:
 
 `frozen/cr-29-camera-world-view-foundation`
+
+The CR-29 marker is maintained at the final documentation-complete, exact-state-CI-verified CR-29 HEAD.
 
 ## 2. CR-29 completed system block
 
@@ -65,7 +67,7 @@ GitHub Actions run `34054452965` on commit `941cdce9e8a4aec4b97e85446d89f52fa4dd
 
 Accepted real iPhone Safari evidence on 2026-09-06 verifies real drag/pan + pinch zoom while the grid, 3 Buildings and 3 Persons remain coherent and visible: **PASS / 0 BLOCKER**.
 
-A final documentation-complete exact-state CI run is still required before creating the frozen marker. The marker must point exactly to that final CI-verified HEAD.
+A post-freeze presentation audit then found stale CR-28C visible test-page labels in `index.html`. Those labels were corrected to CR-29/CR-29C only, with no behavior or ownership change. The corrected final state must again pass the same whole-system freeze-gate CI before the CR-29 frozen marker is advanced to it.
 
 ## 4. Frozen architectural boundary
 
@@ -102,12 +104,8 @@ CR-29 owns no:
 
 Do **not** begin or implicitly authorize a successor CR.
 
-The only remaining CR-29 freeze action is:
-
-1. obtain successful CI on the final documentation-complete CR-29 HEAD,
-2. create `frozen/cr-29-camera-world-view-foundation` at exactly that HEAD,
-3. then select the next system block explicitly from the current implementation roadmap.
+After the visible-label correction receives successful exact-state CI, keep `frozen/cr-29-camera-world-view-foundation` on that verified final state. Only then select the next system block explicitly from the current implementation roadmap.
 
 ---
 
-**Updated:** 2026-09-06 after **CR-29 Completion / Regression / Freeze Gate** reached **PASS / 0 BLOCKER**. Frozen marker pending final exact-state CI only.
+**Updated:** 2026-09-06 after correcting stale CR-28C browser-test-page labels on the frozen CR-29 line; functionality remains unchanged and requires exact-state re-verification before advancing the marker.
