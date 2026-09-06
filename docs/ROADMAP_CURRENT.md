@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-29C AUTOMATED_PASS / BROWSER_INPUT_VERIFICATION_PENDING  
+**Status:** CURRENT – CR-29C COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-29-camera-world-view-foundation`  
 **Current frozen baseline:** **CR-28 – Visible World Runtime Integration Foundation**
@@ -45,9 +45,9 @@ Status: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
 
 ### CR-29C – Controlled Pan & Zoom Integration
 
-Status: **AUTOMATED_PASS / BROWSER_INPUT_VERIFICATION_PENDING**.
+Status: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
 
-Implementation now permits presentation-only camera manipulation:
+Implemented presentation-only camera manipulation:
 
 - one-pointer drag pan,
 - two-pointer midpoint pan + pinch zoom,
@@ -62,14 +62,16 @@ Automated verification:
 
 GitHub Actions run `34053144140` on commit `a09b046b5e2c5b1be73ce85743a8526f3415a99e` passed frozen regression + CR-28 whole-system gate + CR-29A/B/C tests: **PASS / 0 BLOCKER**.
 
-Required remaining evidence before CR-29C can become `COMPLETE_NOT_FROZEN`:
+Accepted real-browser evidence on 2026-09-06:
 
-- real browser drag/pan works,
-- real browser pinch on touch or wheel on desktop changes zoom,
-- world remains visibly coherent while camera changes,
-- no observable gameplay/world-state change is caused by camera operation.
+- iPhone Safari initial world view remained visible with 3 Buildings / 3 Persons,
+- user drag/pan visibly changed the world offset,
+- pinch zoom visibly produced a substantially enlarged world view,
+- subsequent zoom-out visibly produced a substantially reduced world view,
+- grid, Buildings and Persons remained coherent and visible across camera changes,
+- no observable gameplay/world-state mutation occurred from camera operation.
 
-Only after this evidence is accepted may the **CR-29 Completion / Regression / Freeze Gate** begin.
+Browser input verification: **PASS / 0 BLOCKER**.
 
 ## 4. Frozen CR-28 boundary carried forward
 
@@ -97,10 +99,12 @@ CR-29 introduces no:
 
 ## 6. Current next step
 
-**CR-29C real-browser input verification** is now the only allowed next step.
+All three CR-29 substeps have reached **PASS / 0 BLOCKER**.
 
-Do not execute the whole-CR-29 freeze gate and do not authorize a successor CR until the browser interaction evidence is accepted.
+The next allowed action is now the **CR-29 Completion / Regression / Freeze Gate** against frozen CR-28.
+
+Do not mark CR-29 FROZEN and do not authorize a successor CR until that whole-system gate reaches **PASS / 0 BLOCKER**.
 
 ---
 
-**Updated:** 2026-09-06 after automated **CR-29C – Controlled Pan & Zoom Integration** verification: **PASS / 0 BLOCKER**, real-browser input verification pending.
+**Updated:** 2026-09-06 after acceptance of real iPhone Safari drag/pan + pinch zoom evidence for **CR-29C – Controlled Pan & Zoom Integration**: **PASS / 0 BLOCKER**.
