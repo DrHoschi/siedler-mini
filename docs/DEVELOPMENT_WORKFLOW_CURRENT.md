@@ -9,70 +9,66 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
 - Current development/control branch: `feature/cr-27-game-facing-logistics-integration-foundation`
-- Current immutable gameplay baseline: **CR-26 – Workforce Capability & Job Eligibility Foundation**
+- Current immutable gameplay baseline: **CR-27 – Game-Facing Logistics Integration Foundation**
 - CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- CR-27 – Game-Facing Logistics Integration Foundation: **A/B/C FROZEN / WHOLE-SYSTEM BROWSER FREEZE GATE EXPOSED / AWAITING DEVICE PASS / NOT FROZEN**
+- CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-27A – BuildingStock Transport Intent & Reservation Bridge: **PASS / FROZEN / 0 BLOCKER**
 - CR-27B – Workforce-Aware Transport Dispatch Integration: **PASS / FROZEN / 0 BLOCKER**
 - CR-27C – Delivered Transport -> BuildingStock Settlement: **PASS / FROZEN / 0 BLOCKER**
 
-## 2. Frozen CR-27 chain
+## 2. Frozen CR-27 owner chain
 
-CR-27A freezes the ACTIVE/RELEASED BuildingStock transport reservation boundary and source availability protection.
+The frozen integrated chain is:
 
-Frozen marker: `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`.
+`CR-25 BuildingStock -> CR-27A ACTIVE reservation -> CR-26 CAN_SIMPLE_TRANSPORT workforce -> CR-27B dispatch -> existing confirmed delivery evidence -> CR-27C settlement -> CR-25 successor BuildingStock + CR-27A RELEASED + CR-26 FREE`
 
-CR-27B freezes the dispatch chain:
+Frozen sub-block markers:
 
-`ACTIVE CR-27A reservation -> frozen CR-26 CAN_SIMPLE_TRANSPORT eligibility/assignment -> legacy-compatible pending TransportJob projection -> {jobId, unitId} execution assignment -> existing TransportExecutionContract begin`
+- `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`
+- `frozen/cr-27b-workforce-aware-transport-dispatch-integration`
+- `frozen/cr-27c-delivered-transport-buildingstock-settlement`
 
-Frozen marker: `frozen/cr-27b-workforce-aware-transport-dispatch-integration`.
+Whole-system frozen marker:
 
-CR-27C freezes the settlement chain:
+`frozen/cr-27-game-facing-logistics-integration-foundation`
 
-`confirmed delivered-cargo + frozen CR-27B dispatch + current source/target CR-25 BuildingStock + current ACTIVE reservation + current ASSIGNED workforce -> source remove + target add + reservation RELEASED + workforce FREE`
+## 3. Whole CR-27 accepted invariants
 
-Frozen marker: `frozen/cr-27c-delivered-transport-buildingstock-settlement`.
+The whole CR-27 Completion / Regression / Freeze Gate passed **PASS / 0 BLOCKER** on device/browser on 2026-09-06.
 
-## 3. Whole CR-27 Completion / Regression / Freeze Gate
+The frozen system guarantees:
 
-The combined gate is now exposed through `index.html` and `src/dev/cr-27-freeze-gate.js`.
+- CR-27A reservation protects available source quantity without mutating physical BuildingStock,
+- CR-26 alone owns transport workforce eligibility/selection/assignment,
+- selected `personId` is reused as execution `unitId`,
+- CR-27B enters the existing transport execution foundation without Carrier AVAILABLE/OCCUPIED becoming a second gameplay truth,
+- reservation remains ACTIVE and physical stock unchanged through reservation/dispatch,
+- only correctly linked confirmed delivery may settle,
+- CR-27C moves exactly the reserved quantity source -> target,
+- total source + target quantity is conserved,
+- successful settlement alone returns reservation RELEASED and workforce FREE,
+- linkage/owner-state/underflow/overflow failure cannot create a partial settlement result,
+- legacy Claim/Demand/ResourceState stores remain compatibility-only and are not gameplay owners,
+- all frozen inputs remain immutable.
 
-It regresses frozen CR-27A + CR-27B + CR-27C and adds a coherent owner-chain verification:
+## 4. Frozen CR-27 global non-scope
 
-`CR-25 BuildingStock -> CR-27A reservation protection -> CR-26 workforce authority -> CR-27B dispatch -> confirmed delivery evidence -> CR-27C settlement -> CR-25 successor stock + RELEASED reservation + FREE workforce`
+CR-27 added no new pathfinding algorithm, route algorithm, movement algorithm, traffic algorithm, traffic reservation semantics, deadlock logic, Carrier AI, production timing, construction work, job prioritization/scoring, graphics, Inspector, balancing or SaveGame ownership.
 
-The gate additionally verifies:
+## 5. Branch / Pages rule after CR-27
 
-- reservation reduces game-facing available source amount before settlement without mutating physical stock,
-- deterministic CR-26-selected Person is reused as execution `unitId`,
-- reservation stays ACTIVE and physical stock unchanged through reservation/dispatch,
-- only correctly linked confirmed delivery settles,
-- exact source decrement / target increment and total quantity conservation,
-- successful settlement alone returns RELEASED reservation + FREE workforce,
-- failure paths produce no partial owner state,
-- Carrier AVAILABLE/OCCUPIED and legacy Claim/Demand/ResourceState stores do not become gameplay owners,
-- CR-27 global non-scope remains intact.
-
-Required device/browser result:
-
-`CR-27 GAME-FACING LOGISTICS INTEGRATION FOUNDATION COMPLETION / REGRESSION / FREEZE GATE: PASS / 0 BLOCKER`
-
-## 4. CR-27 global non-scope
-
-No new pathfinding, route algorithm, movement algorithm, traffic algorithm, traffic reservation semantics, deadlock logic, Carrier AI, production timing, construction work, job prioritization/scoring, graphics, Inspector, balancing or SaveGame ownership.
-
-## 5. Branch / Pages rule
-
-- Whole CR-27 gate remains on `feature/cr-27-game-facing-logistics-integration-foundation`.
-- Frozen A/B/C markers remain immutable markers only.
-- GitHub Pages remains pointed at the active CR-27 branch for this combined browser gate.
+- `feature/cr-27-game-facing-logistics-integration-foundation` remains the historical development line for the completed block.
+- `frozen/cr-27-game-facing-logistics-integration-foundation` is the immutable whole-system baseline marker.
+- Frozen markers must not be modified.
+- No next CR branch may be created from chat memory alone.
 
 ## 6. Next allowed action
 
-Run the combined CR-27 browser/device gate. Do not create a whole CR-27 frozen marker and do not begin any next CR until the combined gate passes **PASS / 0 BLOCKER** and final control documents are synchronized.
+**POST-CR27 IM ↔ CR RECONCILIATION / PLANNING ONLY.**
+
+Before naming or creating the next CR, inspect the live current roadmap, relevant IM/migration documents, the frozen CR-27 boundary and remaining integration gaps. The next CR number/title and A/B/C decomposition must be explicitly accepted before any new development branch or implementation is created.
 
 ---
 
-**Updated:** 2026-09-06 after exposing the whole CR-27 Completion / Regression / Freeze Gate. CR-27 remains NOT FROZEN pending device/browser PASS / 0 BLOCKER.
+**Updated:** 2026-09-06 after whole CR-27 Completion / Regression / Freeze Gate: **PASS / 0 BLOCKER**. CR-27 is **COMPLETE / FROZEN**. Next activity is live-repository IM ↔ CR reconciliation only.
