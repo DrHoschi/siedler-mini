@@ -1,9 +1,9 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-29C COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – CR-29 COMPLETE / FROZEN / PASS / 0 BLOCKER  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-29-camera-world-view-foundation`  
-**Current frozen baseline:** **CR-28 – Visible World Runtime Integration Foundation**
+**Latest freeze decision:** **CR-29 – Camera & World View Foundation**
 
 ## 1. Frozen line
 
@@ -15,7 +15,9 @@ CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PA
 
 CR-28 – Visible World Runtime Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Current frozen marker:
+CR-29 – Camera & World View Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+
+Frozen CR-28 predecessor marker:
 
 `frozen/cr-28-visible-world-runtime-integration-foundation`
 
@@ -23,88 +25,89 @@ Frozen CR-28 commit:
 
 `1ca2997a3933b312737dda5a220f1026d149bdf1`
 
-## 2. Active system block
+CR-29 frozen marker to create after final exact-state CI verification:
 
-**CR-29 – Camera & World View Foundation** — **AUTHORIZED / IN_PROGRESS**
+`frozen/cr-29-camera-world-view-foundation`
 
-Whole-CR branch:
+## 2. CR-29 completed system block
+
+**CR-29 – Camera & World View Foundation** — **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+
+Whole-CR development branch:
 
 `feature/cr-29-camera-world-view-foundation`
 
 The branch was created directly from frozen CR-28 at `1ca2997a3933b312737dda5a220f1026d149bdf1`.
 
-## 3. CR-29 decomposition and status
-
 ### CR-29A – World View / Camera State Contract
 
-Status: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 ### CR-29B – Deterministic World-to-Screen Projection
 
-Status: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 ### CR-29C – Controlled Pan & Zoom Integration
 
-Status: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Implemented presentation-only camera manipulation:
+## 3. Whole-system completion / regression / freeze evidence
 
-- one-pointer drag pan,
-- two-pointer midpoint pan + pinch zoom,
-- desktop wheel zoom,
-- zoom anchored at the interaction point,
-- controlled zoom range `0.5 .. 3`,
-- immutable CR-29A camera successor states,
-- deterministic CR-29B projection remains the rendering path,
-- no gameplay/world owner mutation.
+Whole-system gate:
 
-Automated verification:
+`src/dev/cr-29-freeze-gate.node.js`
 
-GitHub Actions run `34053144140` on commit `a09b046b5e2c5b1be73ce85743a8526f3415a99e` passed frozen regression + CR-28 whole-system gate + CR-29A/B/C tests: **PASS / 0 BLOCKER**.
+Completion report:
 
-Accepted real-browser evidence on 2026-09-06:
+`docs/CR-29_COMPLETION_REGRESSION_FREEZE_GATE.md`
 
-- iPhone Safari initial world view remained visible with 3 Buildings / 3 Persons,
-- user drag/pan visibly changed the world offset,
-- pinch zoom visibly produced a substantially enlarged world view,
-- subsequent zoom-out visibly produced a substantially reduced world view,
-- grid, Buildings and Persons remained coherent and visible across camera changes,
-- no observable gameplay/world-state mutation occurred from camera operation.
+GitHub Actions run `34054452965` on commit `941cdce9e8a4aec4b97e85446d89f52fa4ddf01b` executed the frozen predecessor regression plus the whole CR-29 gate successfully: **PASS / 0 BLOCKER**.
 
-Browser input verification: **PASS / 0 BLOCKER**.
+Accepted real iPhone Safari evidence on 2026-09-06 verifies real drag/pan + pinch zoom while the grid, 3 Buildings and 3 Persons remain coherent and visible: **PASS / 0 BLOCKER**.
 
-## 4. Frozen CR-28 boundary carried forward
+A final documentation-complete exact-state CI run is still required before creating the frozen marker. The marker must point exactly to that final CI-verified HEAD.
 
-`gameplay/world owners -> CR-28A immutable projection -> CR-28B deterministic rendering -> CR-28C browser-visible Canvas`
+## 4. Frozen architectural boundary
 
-CR-29 presentation extension:
+Frozen presentation chain:
 
-`CR-28 render commands -> CR-29A immutable camera state -> CR-29B deterministic screen projection -> CR-29C controlled input updates camera only -> Canvas`
+`gameplay/world owners -> CR-28A immutable projection -> CR-28B deterministic world render commands -> CR-29A immutable camera/view state -> CR-29B deterministic screen-space projection -> CR-29C controlled camera-only input -> Canvas`
 
-CR-29 must not become gameplay authority.
+Frozen invariants include:
 
-## 5. CR-29 hard global non-scope
+- gameplay/world owners remain authoritative,
+- camera/view state is presentation-only and immutable,
+- screen-space transformation remains deterministic,
+- camera input mutates only camera/view presentation state,
+- zoom remains controlled in the CR-29C range `0.5 .. 3`,
+- no camera input write-back exists to Map, Buildings, Persons, Logistics, Workforce, BuildingStock or other gameplay owners,
+- frozen CR-28 identities and read-only render ownership remain intact,
+- `main` remains historical reference only.
 
-CR-29 introduces no:
+## 5. Frozen CR-29 non-scope
 
-- Save/Load/Continue ownership,
+CR-29 owns no:
+
+- Save/Load/Continue,
 - Gameplay HUD,
-- Build menu,
+- Build Menu,
 - Inspector,
-- gameplay selection or orders,
-- new pathfinding/movement/traffic,
-- BuildingStock/Workforce/Logistics ownership changes,
+- gameplay selection or commands,
+- new pathfinding/movement/traffic behavior,
+- BuildingStock/Workforce/Logistics changes,
 - new production/construction/simulation semantics,
 - mandatory new assets.
 
 ## 6. Current next step
 
-All three CR-29 substeps have reached **PASS / 0 BLOCKER**.
+Do **not** begin or implicitly authorize a successor CR.
 
-The next allowed action is now the **CR-29 Completion / Regression / Freeze Gate** against frozen CR-28.
+The only remaining CR-29 freeze action is:
 
-Do not mark CR-29 FROZEN and do not authorize a successor CR until that whole-system gate reaches **PASS / 0 BLOCKER**.
+1. obtain successful CI on the final documentation-complete CR-29 HEAD,
+2. create `frozen/cr-29-camera-world-view-foundation` at exactly that HEAD,
+3. then select the next system block explicitly from the current implementation roadmap.
 
 ---
 
-**Updated:** 2026-09-06 after acceptance of real iPhone Safari drag/pan + pinch zoom evidence for **CR-29C – Controlled Pan & Zoom Integration**: **PASS / 0 BLOCKER**.
+**Updated:** 2026-09-06 after **CR-29 Completion / Regression / Freeze Gate** reached **PASS / 0 BLOCKER**. Frozen marker pending final exact-state CI only.
