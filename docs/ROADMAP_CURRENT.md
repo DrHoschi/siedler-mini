@@ -1,8 +1,8 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – Post-CR26 planning  
+**Status:** CURRENT – CR-27A technical preparation  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `feature/cr-26-workforce-capability-job-eligibility-foundation`  
+**Current control branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen gameplay baseline:** **CR-26 – Workforce Capability & Job Eligibility Foundation**
 
 ## 1. Current frozen line
@@ -11,56 +11,68 @@ CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 
 
 CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-### CR-26A – Person Workforce Profile Contract — PASS / FROZEN / 0 BLOCKER
+The whole CR-26 frozen marker is:
 
-Immutable specialization + capability profile on the existing Person identity.
+`frozen/cr-26-workforce-capability-job-eligibility-foundation`
 
-### CR-26B – Workforce Availability & Assignment State Contract — PASS / FROZEN / 0 BLOCKER
+CR-27 starts from frozen CR-26 HEAD `8b06aa4a14793628c608a7fcf822cb9576bbf5b5`.
 
-Separate temporary `FREE / ASSIGNED / UNAVAILABLE` state, exactly one stable assignment reference while assigned, controlled immutable transitions and no normal parallel assignment.
+## 2. Accepted next system block
 
-### CR-26C – Deterministic Job Eligibility & Assignment Selection — PASS / FROZEN / 0 BLOCKER
+# CR-27 – Game-Facing Logistics Integration Foundation
 
-Pure deterministic Eligibility from Capability + FREE + Preconditions + required Reachability input, deterministic single-person selection by stable `personId`, and assignment exclusively through frozen CR-26B.
+Purpose: connect the frozen game-facing owners to the already existing transport runtime instead of building a second logistics/pathfinding stack.
 
-The device/browser **CR-26 whole-system Completion / Regression / Freeze Gate** passed with **PASS / 0 BLOCKER** on 2026-09-06.
+System chain:
 
-## 2. Frozen CR-26 system invariant
+`CR-25 BuildingStock → Logistics Intent/Reservation → CR-26 Workforce → existing transport runtime → Delivery → CR-25 BuildingStock`
 
-A real Person remains the same Person while workforce semantics are layered on:
+### CR-27A – BuildingStock Transport Intent & Reservation Bridge
 
-`Person identity + Home + specialization + capabilities + temporary assignment state`
+Create a game-facing transport intent between stable Buildings for one resource type and amount. Reserve source availability separately from CR-25 physical stock mutation so the same quantity cannot be committed twice. No Carrier, Person, TransportJob, movement or destination settlement yet.
 
-The frozen system preserves these boundaries end-to-end:
+### CR-27B – Workforce-Aware Transport Dispatch Integration
 
-- Profile owns specialization/capabilities,
-- Assignment State owns temporary availability/assignment,
-- Eligibility only reads those inputs and explicit Preconditions/Reachability inputs,
-- deterministic selection does not depend on input order,
-- selected Person is assigned through CR-26B only,
-- no assignment creates capabilities or rewrites identity/Profile.
+Later bridge an accepted intent into the existing transport runtime and use frozen CR-26 as the authoritative workforce eligibility/assignment owner. Required capability: `CAN_SIMPLE_TRANSPORT`. Existing `CarrierContract AVAILABLE/OCCUPIED` must not become a second gameplay availability truth.
 
-## 3. Explicit frozen CR-26 exclusions
+### CR-27C – Delivered Transport → BuildingStock Settlement
 
-No JobEngine queue/generation, priority/weighting/scoring, Reachability calculation, pathfinding/routes/movement, production timing/worker execution, builder execution, transport/logistics rewrite, completion/cancel/recovery orchestration, Population creation, SaveGame, rendering/UI/Inspector/balancing.
+Later use confirmed delivery evidence to settle source/target BuildingStock exactly once, close the intent/reservation and release the temporary workforce assignment.
 
-## 4. Next planning boundary
+After A/B/C, run a whole **CR-27 Completion / Regression / Freeze Gate**.
 
-No next CR number/title is authorized yet.
+## 3. Current active sub-block
 
-The next required activity is a short **IM ↔ CR reconciliation against the live repository**. It must identify which remaining product/system boundary should follow frozen CR-26 and define the minimal next A/B/C decomposition without reopening frozen owners.
+**CR-27A – BuildingStock Transport Intent & Reservation Bridge**  
+Status: **TECHNICAL PREPARATION / NOT IMPLEMENTED / NOT FROZEN**
 
-The result must be explicitly accepted before implementation or creation of the next feature branch.
+Required properties:
 
-## 5. Branch/source-of-truth rule
+- source and target are stable `building:` IDs,
+- resource is a stable `resource-type:` ID,
+- amount is a positive safe integer,
+- reservation never mutates frozen CR-25 stock merely by being created,
+- active reserved quantity for a source Building/resource type can never exceed its supplied BuildingStock quantity,
+- multiple reservations for the same source/resource are accounted deterministically,
+- ended reservations stop blocking availability,
+- immutable inputs and deterministic results,
+- direct tests plus browser Verification / Freeze Gate.
 
-- `main` remains historical old-game reference.
-- `frozen/cr-25-buildingstock-production-foundation` remains the frozen predecessor system marker.
-- `frozen/cr-26a-person-workforce-profile-contract`, `frozen/cr-26b-workforce-availability-assignment-state-contract` and `frozen/cr-26c-deterministic-job-eligibility-assignment-selection` remain immutable sub-block markers.
-- `feature/cr-26-workforce-capability-job-eligibility-foundation` remains the completed CR-26 control branch until the next system block is explicitly accepted.
-- A whole CR-26 frozen marker is created from the accepted whole-system PASS state.
-- GitHub Pages browser gates should remain on the active whole-CR development branch during development; frozen marker creation does not itself change the intended Pages source.
+## 4. CR-27 global non-scope
+
+No new pathfinding, routes, traffic algorithms, reservation traffic semantics, deadlock logic, Carrier AI, production timing, construction work, job prioritization/scoring, graphics, Inspector, balancing or SaveGame ownership.
+
+CR-27 integrates existing owners; it does not replace frozen CR-25/CR-26 or rebuild the mature `src/transport/*` foundation.
+
+## 5. Branch / gate policy
+
+- One CR-27 development branch: `feature/cr-27-game-facing-logistics-integration-foundation`.
+- A/B/C proceed sequentially on that branch.
+- Each sub-block gets direct tests and a browser Verification / Freeze Gate.
+- Only PASS / 0 BLOCKER may create its immutable frozen marker.
+- Frozen sub-block markers do not become the GitHub Pages development source; Pages remains on the active CR-27 branch during the whole CR-27 cycle.
+- Whole CR-27 becomes FROZEN only after the final combined regression/invariant/scope gate passes.
 
 ---
 
-**Updated:** 2026-09-06 after CR-26 device/browser Completion / Regression / Freeze Gate: **PASS / 0 BLOCKER**. CR-26 is **COMPLETE / FROZEN**. Current next step: **IM ↔ CR reconciliation / planning only**.
+**Updated:** 2026-09-06 after explicit acceptance of CR-27 and creation of its development branch from the frozen CR-26 baseline.
