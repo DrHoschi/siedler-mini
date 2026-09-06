@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-28 whole-system gate pending  
+**Status:** CURRENT – CR-28C browser visual repair verification pending  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-28-visible-world-runtime-integration-foundation`  
 **Frozen gameplay baseline:** **CR-27 – Game-Facing Logistics Integration Foundation**
@@ -29,15 +29,15 @@ Question answered by CR-28:
 
 > How are already-frozen gameplay owners projected deterministically into a visible, read-only game world?
 
-Completed decomposition:
+Current decomposition:
 
 - **CR-28A – Game-State Render Projection Contract** — **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
-- **CR-28B – Deterministic World Canvas Rendering** — **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
-- **CR-28C – Live Runtime -> Render Integration** — **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
+- **CR-28B – Deterministic World Canvas Rendering** — automated contract/regression **PASS / 0 BLOCKER**; explicit deterministic visible Canvas role styles added during CR-28C browser repair.
+- **CR-28C – Live Runtime -> Render Integration** — **BROWSER_VISUAL_REPAIR_PENDING** after real iPhone evidence showed a black Canvas despite correct entity counts.
 
-Next allowed step: **CR-28 Completion / Regression / Freeze Gate**.
+The whole CR-28 Completion / Regression / Freeze Gate is on hold until real browser re-verification succeeds.
 
-## 3. CR-28 implementation result
+## 3. CR-28 implementation and repair result
 
 CR-28A:
 
@@ -48,34 +48,23 @@ CR-28B:
 
 - `src/render/world-canvas-rendering.js`
 - `src/dev/cr-28b-self-test.node.js`
+- deterministic render commands now include explicit visible role styles for world ground, grid, Buildings and Persons
+- Canvas execution applies those explicit styles rather than relying on default black Canvas state
 
 CR-28C:
 
 - `src/render/live-runtime-render-integration.js`
 - `src/dev/cr-28c-self-test.node.js`
-- `src/main.js` now composes current Map/Building/Person owners and renders them through CR-28A/B
-- `index.html` exposes the CR-28C browser-visible miniworld gate
+- `src/main.js` composes current Map/Building/Person owners and renders through CR-28A/B
+- `index.html` exposes the browser miniworld and now cache-busts the repaired browser entry revision
 
-Accepted A/B/C properties:
-
-- source owners remain authoritative and unchanged by rendering,
-- projection and render-command outputs are immutable,
-- deterministic ordering by stable source identity,
-- Map/Buildings/Persons coverage,
-- world ground/grid plus simple Building/Person prototype representation,
-- same projection/options -> same ordered render commands and Canvas calls,
-- current owner state -> new projection -> visible next render,
-- no Canvas-driven gameplay mutation,
-- obsolete CR-16A browser composition removed from `main.js`,
-- no new gameplay semantics or CR-28 non-scope ownership.
-
-GitHub Actions run `34039684167` at commit `1daccb6ff0302014cfc0b72c95fbf0852c762ec9` completed existing CR regression + CR-28A + CR-28B + CR-28C successfully: **PASS / 0 BLOCKER**.
+Automated integration had passed before the repair, but the required visible-world evidence failed on real iPhone Safari: the Canvas was black while the page reported `3 Buildings / 3 Persons sichtbar`. This is therefore treated as a visual gate blocker, not ignored as a cosmetic issue.
 
 ## 4. CR-28 architectural boundary
 
-CR-28 is visibility integration, not a new gameplay system. Existing gameplay owners remain authoritative. Renderer/UI only consume projected data and never become gameplay owners or mutate frozen source state.
+CR-28 remains visibility integration, not a new gameplay system. Existing gameplay owners remain authoritative. Renderer/UI only consume projected data and never become gameplay owners or mutate frozen source state.
 
-Hard non-scope across CR-28 remains:
+Hard non-scope remains:
 
 - Save/Load/Continue,
 - Gameplay HUD,
@@ -90,20 +79,28 @@ Hard non-scope across CR-28 remains:
 
 ## 5. Current next step
 
-**CR-28 – Visible World Runtime Integration Foundation Completion / Regression / Freeze Gate**.
+**CR-28C browser visual re-verification after deployment of the deterministic style repair.**
 
-The gate must jointly prove A+B+C, preserve the read-only renderer boundary, regress the frozen baseline and confirm the browser-visible miniworld. Only **PASS / 0 BLOCKER** may authorize a whole-system frozen marker.
+The real browser must visibly show:
 
-No CR-29 implementation is authorized before the CR-28 whole-system gate.
+- world/ground area,
+- grid,
+- distinguishable Buildings,
+- distinguishable Persons.
+
+A PASS label or entity count alone does not satisfy this gate.
+
+Only after successful real-browser evidence may CR-28C return to **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER** and the whole **CR-28 Completion / Regression / Freeze Gate** resume.
 
 ## 6. Branch / gate policy
 
 - Active whole-system branch: `feature/cr-28-visible-world-runtime-integration-foundation`.
 - It was created directly from `frozen/cr-27-game-facing-logistics-integration-foundation` at commit `c821784264c846d00f15f018011eb13f817d13b5`.
-- A/B/C were implemented sequentially on this one CR-28 branch.
+- The CR-28C repair remains on this same whole-CR branch.
 - Frozen CR-27 markers remain immutable.
-- CR-28 becomes FROZEN only after its final whole-system gate passes PASS / 0 BLOCKER.
+- CR-28 cannot become FROZEN while browser visual verification is pending.
+- No CR-29 implementation is authorized yet.
 
 ---
 
-**Updated:** 2026-09-06 after **CR-28C – Live Runtime -> Render Integration** passed full GitHub CI with **PASS / 0 BLOCKER**. Next allowed step: **CR-28 Completion / Regression / Freeze Gate**.
+**Updated:** 2026-09-06 after iPhone browser evidence exposed the black-Canvas visibility blocker. Deterministic Canvas-style repair applied; browser re-verification is the next allowed step.
