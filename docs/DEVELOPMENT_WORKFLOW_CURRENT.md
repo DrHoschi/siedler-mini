@@ -17,7 +17,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Active system block: **CR-29 – Camera & World View Foundation**
 - CR-29A – World View / Camera State Contract: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**
 - CR-29B – Deterministic World-to-Screen Projection: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**
-- Next allowed action: **CR-29C – Controlled Pan & Zoom Integration**
+- CR-29C – Controlled Pan & Zoom Integration: **AUTOMATED_PASS / BROWSER_INPUT_VERIFICATION_PENDING**
+- Next allowed action: **verify CR-29C real browser drag/pan + pinch or wheel zoom; no whole-CR freeze yet**
 
 ## 2. Frozen CR-28 baseline
 
@@ -56,8 +57,7 @@ Contract boundary:
 - viewport dimensions and zoom must be positive finite numbers,
 - offsets must be finite numbers,
 - equal inputs produce equal immutable state,
-- no gameplay/world owner references,
-- no input/gesture behavior.
+- no gameplay/world owner references.
 
 ### CR-29B – Deterministic World-to-Screen Projection
 
@@ -68,7 +68,7 @@ Implementation:
 - `src/render/world-to-screen-projection.js`
 - `src/render/camera-world-rendering.js`
 - `src/dev/cr-29b-self-test.node.js`
-- `src/main.js` now composes the existing CR-28 world projection/render path with an immutable CR-29A camera state.
+- `src/main.js` composes CR-28 rendering through CR-29A/B before Canvas execution.
 
 Deterministic screen-space contract:
 
@@ -77,25 +77,46 @@ Deterministic screen-space contract:
 - command order, role, source identity and visible state are preserved,
 - source CR-28 render commands remain unchanged,
 - projected screen commands are deeply immutable,
-- same CR-28 world/render commands + same CR-29A camera state -> same screen-space commands,
-- changing only camera state changes presentation only,
-- viewport dimensions define the Canvas clear/execute boundary,
-- no gameplay/world mutation or ownership change,
-- no browser control, gesture, pan or zoom input exists yet.
-
-Verification:
-
-GitHub Actions run `34052011986` on commit `3c8aa07bb523a61c0a75f22a3f3d465ae1b04a7b` ran frozen regression + CR-28 whole-system gate + CR-29A + CR-29B successfully: **PASS / 0 BLOCKER**.
+- same CR-28 commands + same CR-29A state -> same screen-space commands,
+- viewport dimensions define the Canvas execute boundary.
 
 ### CR-29C – Controlled Pan & Zoom Integration
 
-Now the next authorized step. It may add controlled user manipulation of the already-defined CR-29A state using the deterministic CR-29B projection. Camera changes affect presentation only and must never mutate Map, Buildings, Persons, Logistics, Workforce, BuildingStock or other gameplay owners.
+**AUTOMATED_PASS / BROWSER_INPUT_VERIFICATION_PENDING**.
 
-After A/B/C, CR-29 requires a whole-system Completion / Regression / Freeze Gate against frozen CR-28.
+Implementation:
+
+- `src/render/world-view-camera-control.js`
+- `src/dev/cr-29c-self-test.node.js`
+- `src/main.js` now binds pointer/wheel input only to CR-29 camera state.
+
+Controlled presentation behavior:
+
+- one active pointer drag pans by producing a new immutable CR-29A camera state,
+- two active pointers pan by midpoint movement and zoom by distance ratio,
+- wheel zoom is anchored at the pointer position,
+- zoom is clamped to the controlled range `0.5 .. 3`,
+- anchored zoom preserves the selected screen anchor,
+- viewport resize changes only camera viewport dimensions,
+- no input path mutates Map, Buildings, Persons, Logistics, Workforce, BuildingStock or other gameplay owners,
+- CR-29B remains the only world-to-screen projection path.
+
+Automated verification:
+
+GitHub Actions run `34053144140` on commit `a09b046b5e2c5b1be73ce85743a8526f3415a99e` ran frozen regression + CR-28 whole-system gate + CR-29A/B/C tests successfully: **PASS / 0 BLOCKER**.
+
+Manual evidence still required before CR-29C may be marked `COMPLETE_NOT_FROZEN`:
+
+- real browser drag changes only the visible camera offset,
+- real browser pinch (touch) or wheel (desktop) changes zoom,
+- zoom remains controlled and the world remains visible/usable,
+- gameplay/world owner state remains unaffected from the user's observable behavior.
+
+After this browser verification, execute **CR-29 Completion / Regression / Freeze Gate** against frozen CR-28.
 
 ## 4. CR-29 hard global non-scope
 
-Until explicitly introduced by later authorized blocks, CR-29 adds no:
+CR-29 adds no:
 
 - Save/Load/Continue ownership,
 - Gameplay HUD,
@@ -120,10 +141,10 @@ CR-29 is a presentation/view foundation only.
 
 ## 6. Next allowed action
 
-**CR-29C – Controlled Pan & Zoom Integration** may now begin on this same whole-CR-29 branch.
+Perform **CR-29C real-browser input verification** on the deployed whole-CR-29 branch.
 
-CR-29C may manipulate only CR-29 camera/view presentation state. Do not add HUD, Build Menu, Inspector, gameplay selection/orders or gameplay ownership changes.
+Do not begin the CR-29 Completion / Regression / Freeze Gate until real drag/pan and pinch/wheel zoom behavior has been confirmed. Do not begin any successor CR.
 
 ---
 
-**Updated:** 2026-09-06 after **CR-29B – Deterministic World-to-Screen Projection** verification: **PASS / 0 BLOCKER**.
+**Updated:** 2026-09-06 after automated **CR-29C – Controlled Pan & Zoom Integration** verification: **PASS / 0 BLOCKER**, browser input verification still pending.
