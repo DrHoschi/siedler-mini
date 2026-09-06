@@ -1,7 +1,7 @@
 # CR-28A – Game-State Render Projection Contract
 
 **Parent system block:** CR-28 – Visible World Runtime Integration Foundation  
-**Status:** ACTIVE / PREPARED  
+**Status:** COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER  
 **Branch:** `feature/cr-28-visible-world-runtime-integration-foundation`  
 **Baseline:** `frozen/cr-27-game-facing-logistics-integration-foundation` @ `c821784264c846d00f15f018011eb13f817d13b5`
 
@@ -15,55 +15,97 @@ It answers only:
 
 CR-28A does not render anything itself.
 
-## 2. Minimum source scope
+## 2. Implemented projection boundary
 
-The projection must initially be able to represent:
+Implemented in `src/render/game-state-render-projection.js`:
 
-- Map / world structure needed for later basic world/grid display,
-- Buildings with stable identity, position and deliberately exposed visible base state,
-- Persons with stable identity, position and deliberately exposed visible base state.
+- `projectMap(mapSnapshot)`
+- `projectBuildings(buildingSnapshot)`
+- `projectPersons(personSnapshot)`
+- `projectGameState({ map, buildings, persons })`
 
-Existing source owners remain authoritative. CR-28A may read them but must not mutate, replace or duplicate their ownership.
+The result is renderer-neutral and deeply frozen. Source records are read only and deliberately reduced to explicit visible fields.
 
-## 3. Projection contract
+### Map projection
 
-The output must be renderer-neutral and suitable for deterministic consumption by a later renderer.
+Projects:
 
-Each projected entry must contain only data deliberately needed for visual representation, such as:
+- stable map ID,
+- width / height,
+- cell size,
+- origin,
+- deterministically ordered cells,
+- per-cell stable ID, grid position, world position and tile ID.
 
-- stable source identity,
-- projection/entity kind,
-- position or equivalent world placement,
-- minimal visible base state explicitly derived from existing owners.
+### Building projection
 
-The exact data shape may be refined during implementation, but it must not expose mutable gameplay objects by reference.
+Projects only:
 
-## 4. Required invariants
+- stable building ID,
+- `kind: building`,
+- definition ID when present,
+- world position,
+- deliberately exposed visible lifecycle/base state when present.
 
-CR-28A must guarantee:
+### Person projection
+
+Projects only:
+
+- stable person/unit ID,
+- `kind: person`,
+- world position,
+- deliberately exposed visible base/existence state when present.
+
+No complete gameplay record, mutable gameplay object, Canvas object or DOM object is exposed.
+
+## 3. Required invariants
+
+CR-28A guarantees:
 
 1. **Read-only source access** — no source gameplay state is changed by projection.
-2. **Immutable projection result** — consumers cannot use returned projection data to mutate gameplay truth.
-3. **Determinism** — equal source state produces equal projection content and stable ordering.
-4. **Renderer neutrality** — no Canvas API, DOM drawing primitive or renderer-owned object belongs in the projection contract.
-5. **No gameplay ownership transfer** — Render/UI remains a consumer only.
-6. **Stable identity preservation** — projected entities retain traceable stable IDs from their authoritative sources.
-7. **Explicit visible-state selection** — projection does not simply leak whole gameplay records.
+2. **Immutable projection result** — returned projection data is deeply frozen.
+3. **No mutable aliases** — projection data is newly constructed and cannot mutate gameplay truth.
+4. **Determinism** — equal source state yields deeply equal projection output.
+5. **Stable ordering** — cells, buildings and persons are ordered by stable ID.
+6. **Renderer neutrality** — no Canvas API, DOM drawing primitive or renderer-owned object is present.
+7. **No gameplay ownership transfer** — Render/UI remains a consumer only.
+8. **Stable identity preservation** — projected entities retain traceable source IDs.
+9. **Explicit visible-state selection** — unrelated gameplay fields are omitted.
 
-## 5. Scope
+## 4. Direct test proof
 
-Allowed in CR-28A:
+Implemented in `src/dev/cr-28a-self-test.node.js`.
 
-- projection data types/contracts,
-- pure projector functions,
-- deterministic normalization/order,
-- safe copying/freezing as needed to enforce the contract,
-- direct unit/self-tests for projection behavior,
-- test fixtures composed from already-existing gameplay state contracts.
+The direct test proves:
 
-## 6. Non-scope
+- Map projection exists,
+- Map cells are deterministically ordered,
+- Building projection preserves stable ID / definition / position,
+- Person projection preserves stable ID / position,
+- equal state yields deeply equal ordered projection,
+- source inputs remain unchanged after projection,
+- projection output is deeply frozen,
+- mutation attempts through projection data fail,
+- projection output has no mutable alias back into source state,
+- deliberately projected position changes appear in the projection,
+- irrelevant/unexposed gameplay-field changes do not alter projection output,
+- unrelated building/person gameplay fields are not leaked.
 
-Forbidden in CR-28A:
+## 5. Verification result
+
+GitHub Actions run `34036947256` executed the existing CR regression plus the active CR-28A projection test.
+
+Result:
+
+**PASS / 0 BLOCKER**
+
+The step `Run CR regression + active CR-28A projection test` completed successfully on 2026-09-06.
+
+No Canvas rendering, runtime loop, UI control, gameplay write-back or owner change was introduced.
+
+## 6. Non-scope preserved
+
+CR-28A introduced none of the following:
 
 - Canvas rendering,
 - DOM rendering,
@@ -79,21 +121,8 @@ Forbidden in CR-28A:
 - changes to BuildingStock, Workforce, Logistics, Production or Construction semantics,
 - any renderer/UI write-back into gameplay owners.
 
-## 7. Test requirements
+## 7. Completion boundary
 
-CR-28A must include direct proof for at least:
+CR-28A is **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
 
-- Map projection exists and is deterministic,
-- Building projection exists and preserves stable ID/position,
-- Person projection exists and preserves stable ID/position,
-- source input objects remain unchanged after projection,
-- projection outputs do not expose mutable aliases back into source gameplay state,
-- repeated projection from equal state yields deeply equal ordered output,
-- changes in deliberately projected source fields produce the corresponding projection change,
-- irrelevant/unexposed source fields do not accidentally become part of renderer ownership.
-
-## 8. Completion boundary
-
-CR-28A is complete only when the projection contract and its direct tests pass with no blocker and no Canvas/render implementation has been introduced.
-
-Completion of CR-28A does **not** freeze CR-28 as a whole. CR-28B and CR-28C remain later same-branch steps, followed by one whole CR-28 Completion / Regression / Freeze Gate.
+This completes the A-step only. CR-28 as a whole is not frozen. The next same-branch step may be **CR-28B – Deterministic World Canvas Rendering**, followed later by CR-28C and the final whole-CR-28 Completion / Regression / Freeze Gate.
