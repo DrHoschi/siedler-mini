@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-27A technical preparation  
+**Status:** CURRENT – CR-27A implemented / browser gate pending  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen gameplay baseline:** **CR-26 – Workforce Capability & Job Eligibility Foundation**
@@ -11,17 +11,15 @@ CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 
 
 CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-The whole CR-26 frozen marker is:
+Whole CR-26 frozen marker:
 
 `frozen/cr-26-workforce-capability-job-eligibility-foundation`
 
 CR-27 starts from frozen CR-26 HEAD `8b06aa4a14793628c608a7fcf822cb9576bbf5b5`.
 
-## 2. Accepted next system block
+## 2. Accepted current system block
 
 # CR-27 – Game-Facing Logistics Integration Foundation
-
-Purpose: connect the frozen game-facing owners to the already existing transport runtime instead of building a second logistics/pathfinding stack.
 
 System chain:
 
@@ -29,38 +27,52 @@ System chain:
 
 ### CR-27A – BuildingStock Transport Intent & Reservation Bridge
 
-Create a game-facing transport intent between stable Buildings for one resource type and amount. Reserve source availability separately from CR-25 physical stock mutation so the same quantity cannot be committed twice. No Carrier, Person, TransportJob, movement or destination settlement yet.
+**IMPLEMENTED / DIRECT TESTS ADDED / NOT FROZEN**
+
+Implemented boundary:
+
+- stable `transport-reservation:` identity,
+- stable source and target `building:` IDs,
+- stable `resource-type:` ID,
+- positive safe-integer amount,
+- immutable `ACTIVE -> RELEASED` lifecycle,
+- deterministic active-reservation accumulation,
+- `available = physical stock - active reserved amount`,
+- deterministic over-reservation rejection,
+- released reservations no longer consume availability,
+- physical CR-25 BuildingStock remains unchanged by reserve/release.
+
+Direct self-test and Node runner are present. The dedicated browser Verification / Freeze Gate is still pending.
 
 ### CR-27B – Workforce-Aware Transport Dispatch Integration
 
-Later bridge an accepted intent into the existing transport runtime and use frozen CR-26 as the authoritative workforce eligibility/assignment owner. Required capability: `CAN_SIMPLE_TRANSPORT`. Existing `CarrierContract AVAILABLE/OCCUPIED` must not become a second gameplay availability truth.
+Not started. May begin only after CR-27A is **PASS / FROZEN / 0 BLOCKER**.
 
 ### CR-27C – Delivered Transport → BuildingStock Settlement
 
-Later use confirmed delivery evidence to settle source/target BuildingStock exactly once, close the intent/reservation and release the temporary workforce assignment.
+Not started. May begin only after CR-27B is frozen.
 
 After A/B/C, run a whole **CR-27 Completion / Regression / Freeze Gate**.
 
-## 3. Current active sub-block
+## 3. CR-27A current gate boundary
 
-**CR-27A – BuildingStock Transport Intent & Reservation Bridge**  
-Status: **TECHNICAL PREPARATION / NOT IMPLEMENTED / NOT FROZEN**
+The upcoming browser gate must regress the frozen CR-25 BuildingStock behavior together with CR-27A and verify:
 
-Required properties:
+- valid and exact-fit reservations,
+- aggregate over-commit rejection,
+- source/resource isolation,
+- release availability recovery,
+- unchanged physical BuildingStock,
+- deterministic input-order behavior,
+- stable-ID/amount validation,
+- duplicate reservation protection,
+- no Person/Carrier/TransportJob/path/movement/delivery/settlement leakage.
 
-- source and target are stable `building:` IDs,
-- resource is a stable `resource-type:` ID,
-- amount is a positive safe integer,
-- reservation never mutates frozen CR-25 stock merely by being created,
-- active reserved quantity for a source Building/resource type can never exceed its supplied BuildingStock quantity,
-- multiple reservations for the same source/resource are accounted deterministically,
-- ended reservations stop blocking availability,
-- immutable inputs and deterministic results,
-- direct tests plus browser Verification / Freeze Gate.
+Only browser **PASS / 0 BLOCKER** permits the immutable CR-27A marker.
 
 ## 4. CR-27 global non-scope
 
-No new pathfinding, routes, traffic algorithms, reservation traffic semantics, deadlock logic, Carrier AI, production timing, construction work, job prioritization/scoring, graphics, Inspector, balancing or SaveGame ownership.
+No new pathfinding, routes, traffic algorithms, traffic reservation semantics, deadlock logic, Carrier AI, production timing, construction work, job prioritization/scoring, graphics, Inspector, balancing or SaveGame ownership.
 
 CR-27 integrates existing owners; it does not replace frozen CR-25/CR-26 or rebuild the mature `src/transport/*` foundation.
 
@@ -75,4 +87,4 @@ CR-27 integrates existing owners; it does not replace frozen CR-25/CR-26 or rebu
 
 ---
 
-**Updated:** 2026-09-06 after explicit acceptance of CR-27 and creation of its development branch from the frozen CR-26 baseline.
+**Updated:** 2026-09-06 after CR-27A implementation and direct test addition. Next step: dedicated CR-27A browser Verification / Freeze Gate.
