@@ -16,9 +16,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-30A – Home & Housing Capacity Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-30A freeze marker: `frozen/cr-30a-home-housing-capacity-contract`
 - CR-30A frozen commit: `f74d6bc1399212650c11196f8f098a419eda6cbf`
-- CR-30B – Deterministic Housing & Population Integration: **IMPLEMENTED / DIRECT VERIFICATION PASS / 0 BLOCKER / NOT FROZEN**
+- CR-30B – Deterministic Housing & Population Integration: **IMPLEMENTED / AUTOMATED + REAL IPAD BROWSER VERIFIED / PASS / 0 BLOCKER / NOT YET FROZEN**
 - CR-30C: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
-- Next allowed action: browser/device verification of **CR-30B only**. Do not implement CR-30C yet.
+- Next allowed action: **CR-30B acceptance/freeze only**. Do not implement CR-30C until that freeze is completed and CR-30C is explicitly authorized.
 
 ## 2. CR-30A frozen boundary
 
@@ -28,7 +28,7 @@ Freeze marker: `frozen/cr-30a-home-housing-capacity-contract` @ `f74d6bc13992126
 
 ## 3. CR-30B – Deterministic Housing & Population Integration
 
-**IMPLEMENTED / DIRECT VERIFICATION PASS / 0 BLOCKER / NOT FROZEN**.
+**IMPLEMENTED / AUTOMATED + REAL IPAD BROWSER VERIFIED / PASS / 0 BLOCKER / NOT YET FROZEN**.
 
 Implemented boundary:
 
@@ -65,7 +65,21 @@ Visible/build identity synchronization for CR-30B is implemented:
 - console identity,
 - `RuntimeConfig.build = CR-30B-DETERMINISTIC-HOUSING-POPULATION-INTEGRATION`.
 
-The browser miniworld uses two valid Housing contracts with total capacity 3 for the existing 3 visible Persons. Therefore browser evidence should show Population 3, 3 Home Assignments, 0 generated General Residents, while the preserved 3 Buildings / 3 Persons visual world remains unchanged. The separate Node test proves the free-slot generation path with exactly one generated General Resident.
+Browser/device evidence accepted on 2026-09-06:
+
+- real iPad / Safari screenshot supplied by the user,
+- browser tab visibly identifies `Neue Siedler – CR-30B Determi…`,
+- visible panel heading identifies `CR-30B – Deterministic Housing & Population Integration`,
+- runtime is visibly `READY`,
+- status visibly reports `CR-30B ACTIVE`,
+- derived Population = 3,
+- Home Assignments = 3,
+- General Residents from free slots = 0,
+- preserved world visibly contains 3 Buildings / 3 Persons,
+- no stale CR-30A/CR-29 identity is presented as the current visible build,
+- result: **REAL IPAD / SAFARI BROWSER VERIFIED / PASS / 0 BLOCKER**.
+
+The browser miniworld uses two valid Housing contracts with total capacity 3 for the existing 3 visible Persons. The separate Node test proves the free-slot generation path with exactly one generated General Resident.
 
 Explicit non-scope remains:
 
@@ -78,16 +92,9 @@ Explicit non-scope remains:
 
 ## 4. Current CR-30B gate
 
-CR-30B is not frozen yet. The next allowed step is real browser/device verification of the deployed CR-30B page. Required visible evidence:
+Automated verification and real-device browser verification are both PASS / 0 BLOCKER. CR-30B has not yet been frozen solely because the acceptance/freeze marker step is still outstanding.
 
-- current page/heading/status identify **CR-30B**,
-- status reports derived Population 3,
-- status reports 3 Home Assignments,
-- status reports 0 General Residents generated in this full-capacity browser scenario,
-- 3 Buildings / 3 Persons remain visibly preserved,
-- no stale predecessor identity is presented as the current build.
-
-Only after browser PASS / 0 BLOCKER may CR-30B be accepted/frozen and CR-30C explicitly authorized.
+The sole next allowed action is to freeze CR-30B at the accepted implementation/control-document state. After that freeze, CR-30C may be explicitly authorized as a separate next step. No CR-30C implementation may occur before that authorization.
 
 ## 5. CR-30C – Gold Economy Integration
 
@@ -101,4 +108,4 @@ Before a browser/device gate, before declaring a visible substep PASS, and again
 
 ---
 
-**Updated:** 2026-09-06 — CR-30B implemented, integrated into the browser evidence page, and directly regressed at PASS / 0 BLOCKER. Browser/device verification is now the sole next gate; CR-30C remains locked.
+**Updated:** 2026-09-06 — CR-30B automated regression and real iPad/Safari browser evidence are PASS / 0 BLOCKER. The sole next action is CR-30B acceptance/freeze; CR-30C remains locked until explicitly authorized after that freeze.
