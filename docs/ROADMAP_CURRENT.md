@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-30 WHOLE-GATE AUTOMATED PASS / BROWSER GATE PENDING / NOT FROZEN  
+**Status:** CURRENT – CR-30 COMPLETION GATE PASS / 0 BLOCKER / WHOLE-CR FREEZE READY  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-30-housing-population-gold-integration-foundation`  
 **Latest whole-CR freeze:** **CR-29 – Camera & World View Foundation**  
@@ -28,7 +28,7 @@ CR-30C marker: `frozen/cr-30c-gold-economy-integration` @ `7248b7ad0cc20b60f5919
 - IM-14 – UI/Mobile,
 - IM-15 – Guidance/Inspector.
 
-CR-30 remains the active whole system block until its whole freeze completes. Later migration blocks remain locked.
+Later migration blocks remain locked until the whole CR-30 freeze marker is created.
 
 ## 3. CR-30 – Housing / Population / Gold Integration Foundation
 
@@ -45,7 +45,7 @@ The combined contract remains:
 
 ### CR-30 Completion / Regression / Freeze Gate
 
-Status: **AUTOMATED PASS / 0 BLOCKER — REAL BROWSER/DEVICE GATE PENDING — WHOLE CR-30 NOT FROZEN**.
+Status: **PASS / 0 BLOCKER — AUTOMATED + REAL BROWSER/DEVICE EVIDENCE ACCEPTED — WHOLE-CR FREEZE READY**.
 
 Automated whole-gate evidence:
 
@@ -54,25 +54,25 @@ Automated whole-gate evidence:
 - CI chain includes baseline + CR-24C + CR-28 + CR-30 whole gate,
 - visible/build source identity is synchronized to `CR-30 Completion / Regression / Freeze Gate` and `CR-30-COMPLETION-FREEZE-GATE`.
 
-Remaining final gate:
+Real iPad/Safari evidence accepted on 2026-09-06:
 
-- verify the deployed page on the real browser/device,
-- current title/heading/status must identify the CR-30 Completion / Regression / Freeze Gate,
-- runtime READY,
+- current heading: `CR-30 Completion / Regression / Freeze Gate`,
+- runtime: `READY`,
+- visible status: `CR-30 COMPLETION GATE ACTIVE — A+B+C`,
 - Population 3,
 - 3 Home Assignments,
 - Gold Income 3,
 - Gold Balance 3,
 - NON-PHYSICAL,
-- preserved 3 Buildings / 3 Persons,
-- no stale CR-30A/B/C identity presented as current.
+- 3 Buildings / 3 Persons visible,
+- no stale CR-30A/B/C substep identity presented as current.
 
-Only after browser/device **PASS / 0 BLOCKER** may whole CR-30 receive its freeze marker. No successor CR is implicitly authorized.
+Gate decision: **PASS / 0 BLOCKER**. Whole CR-30 is now freeze-ready.
 
 ## 4. Current next step
 
-Perform real browser/device verification of the deployed **CR-30 Completion / Regression / Freeze Gate** only. Do not start Navigation, Path/Wear, SaveGame, UI/Mobile or Inspector work.
+Create the whole-CR freeze marker for **CR-30 – Housing / Population / Gold Integration Foundation** from the accepted completion-gate baseline. Do not introduce functionality during the freeze action. Navigation, Path/Wear, SaveGame, UI/Mobile and Inspector remain locked, and no successor CR is implicitly authorized by the freeze.
 
 ---
 
-**Updated:** 2026-09-06 — automated CR-30 whole-block gate passed; browser/device verification is the sole remaining blocker before whole CR-30 freeze.
+**Updated:** 2026-09-06 — automated CR-30 whole-block gate plus real iPad/Safari completion-gate evidence accepted at PASS / 0 BLOCKER; whole CR-30 is freeze-ready.
