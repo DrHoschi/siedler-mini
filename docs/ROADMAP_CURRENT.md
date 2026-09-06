@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-27A implemented / browser gate pending  
+**Status:** CURRENT – CR-27A browser freeze gate exposed / device PASS pending  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen gameplay baseline:** **CR-26 – Workforce Capability & Job Eligibility Foundation**
@@ -27,7 +27,7 @@ System chain:
 
 ### CR-27A – BuildingStock Transport Intent & Reservation Bridge
 
-**IMPLEMENTED / DIRECT TESTS ADDED / NOT FROZEN**
+**IMPLEMENTED / BROWSER FREEZE GATE EXPOSED / AWAITING DEVICE PASS / NOT FROZEN**
 
 Implemented boundary:
 
@@ -42,7 +42,7 @@ Implemented boundary:
 - released reservations no longer consume availability,
 - physical CR-25 BuildingStock remains unchanged by reserve/release.
 
-Direct self-test and Node runner are present. The dedicated browser Verification / Freeze Gate is still pending.
+Direct self-test and Node runner are present. The dedicated browser Verification / Freeze Gate is now exposed.
 
 ### CR-27B – Workforce-Aware Transport Dispatch Integration
 
@@ -56,19 +56,22 @@ After A/B/C, run a whole **CR-27 Completion / Regression / Freeze Gate**.
 
 ## 3. CR-27A current gate boundary
 
-The upcoming browser gate must regress the frozen CR-25 BuildingStock behavior together with CR-27A and verify:
+The browser gate regressions cover:
 
-- valid and exact-fit reservations,
+- direct CR-27A self-test regression,
+- valid and exact-fit accumulated reservations,
 - aggregate over-commit rejection,
-- source/resource isolation,
 - release availability recovery,
 - unchanged physical BuildingStock,
-- deterministic input-order behavior,
-- stable-ID/amount validation,
-- duplicate reservation protection,
+- source/resource isolation and deterministic accounting through the direct tests,
+- stable-ID/amount validation and duplicate reservation protection through the direct tests,
 - no Person/Carrier/TransportJob/path/movement/delivery/settlement leakage.
 
-Only browser **PASS / 0 BLOCKER** permits the immutable CR-27A marker.
+Required browser/device result:
+
+`CR-27A BUILDINGSTOCK TRANSPORT INTENT & RESERVATION BRIDGE VERIFICATION / FREEZE GATE: PASS / 0 BLOCKER`
+
+Only that browser **PASS / 0 BLOCKER** permits the immutable CR-27A marker.
 
 ## 4. CR-27 global non-scope
 
@@ -87,4 +90,4 @@ CR-27 integrates existing owners; it does not replace frozen CR-25/CR-26 or rebu
 
 ---
 
-**Updated:** 2026-09-06 after CR-27A implementation and direct test addition. Next step: dedicated CR-27A browser Verification / Freeze Gate.
+**Updated:** 2026-09-06 after exposing the CR-27A browser Verification / Freeze Gate. Next step: device/browser verification; CR-27A remains NOT FROZEN until PASS / 0 BLOCKER.
