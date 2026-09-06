@@ -27,11 +27,25 @@ function sortById(entries) {
   return [...(entries ?? [])].sort((a, b) => String(a?.id ?? '').localeCompare(String(b?.id ?? '')));
 }
 
+const DEFAULT_PALETTE = Object.freeze({
+  worldGround: '#334a35',
+  gridCell: '#708070',
+  building: '#d09a52',
+  person: '#f0e7d2'
+});
+
+function color(value, fallback, name) {
+  const normalized = String(value ?? fallback).trim();
+  if (!normalized) throw new TypeError(`${name} required`);
+  return normalized;
+}
+
 export function buildWorldRenderCommands(projection, {
   cellPixels = 32,
   offset = { x: 16, y: 16 },
   buildingSize = 18,
-  personRadius = 5
+  personRadius = 5,
+  palette = DEFAULT_PALETTE
 } = {}) {
   if (!projection || typeof projection !== 'object') throw new TypeError('projection required');
   if (!projection.map || projection.map.kind !== 'map') throw new TypeError('projection.map required');
@@ -43,6 +57,12 @@ export function buildWorldRenderCommands(projection, {
   };
   const bSize = positive(buildingSize, 'buildingSize');
   const pRadius = positive(personRadius, 'personRadius');
+  const colors = {
+    worldGround: color(palette?.worldGround, DEFAULT_PALETTE.worldGround, 'palette.worldGround'),
+    gridCell: color(palette?.gridCell, DEFAULT_PALETTE.gridCell, 'palette.gridCell'),
+    building: color(palette?.building, DEFAULT_PALETTE.building, 'palette.building'),
+    person: color(palette?.person, DEFAULT_PALETTE.person, 'palette.person')
+  };
   const commands = [];
 
   const widthPx = projection.map.width * scale;
@@ -51,6 +71,7 @@ export function buildWorldRenderCommands(projection, {
   commands.push({
     type: 'fillRect',
     role: 'world-ground',
+    fillStyle: colors.worldGround,
     x: originOffset.x,
     y: originOffset.y,
     width: widthPx,
@@ -63,6 +84,7 @@ export function buildWorldRenderCommands(projection, {
       type: 'strokeRect',
       role: 'grid-cell',
       sourceId: cell.id,
+      strokeStyle: colors.gridCell,
       x: cellPoint.x,
       y: cellPoint.y,
       width: scale,
@@ -77,6 +99,7 @@ export function buildWorldRenderCommands(projection, {
       role: 'building',
       sourceId: building.id,
       visibleState: building.visibleState ?? null,
+      fillStyle: colors.building,
       x: buildingPoint.x - bSize / 2,
       y: buildingPoint.y - bSize / 2,
       width: bSize,
@@ -91,6 +114,7 @@ export function buildWorldRenderCommands(projection, {
       role: 'person',
       sourceId: person.id,
       visibleState: person.visibleState ?? null,
+      fillStyle: colors.person,
       x: personPoint.x,
       y: personPoint.y,
       radius: pRadius
@@ -120,12 +144,15 @@ export function executeWorldRenderCommands(ctx, commands, { width, height } = {}
         context.clearRect(0, 0, canvasWidth, canvasHeight);
         break;
       case 'fillRect':
+        if (command.fillStyle) context.fillStyle = command.fillStyle;
         context.fillRect(command.x, command.y, command.width, command.height);
         break;
       case 'strokeRect':
+        if (command.strokeStyle) context.strokeStyle = command.strokeStyle;
         context.strokeRect(command.x, command.y, command.width, command.height);
         break;
       case 'fillCircle':
+        if (command.fillStyle) context.fillStyle = command.fillStyle;
         context.beginPath();
         context.arc(command.x, command.y, command.radius, 0, Math.PI * 2);
         context.fill();
