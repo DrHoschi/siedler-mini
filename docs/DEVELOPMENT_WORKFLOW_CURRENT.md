@@ -10,63 +10,86 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Default branch: `main` — historical old-game reference only
 - Current development/control branch: `feature/cr-27-game-facing-logistics-integration-foundation`
 - Current immutable gameplay baseline: **CR-26 – Workforce Capability & Job Eligibility Foundation**
-- Frozen baseline branch: `frozen/cr-26-workforce-capability-job-eligibility-foundation`
 - CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-27 – Game-Facing Logistics Integration Foundation: **ACTIVE / NOT FROZEN**
 - CR-27A – BuildingStock Transport Intent & Reservation Bridge: **PASS / FROZEN / 0 BLOCKER**
-- CR-27B – Workforce-Aware Transport Dispatch Integration: **NEXT ALLOWED / NOT STARTED / NOT FROZEN**
+- CR-27B – Workforce-Aware Transport Dispatch Integration: **IMPLEMENTED / DIRECT TESTS ADDED / NOT FROZEN**
+- CR-27C – Delivered Transport -> BuildingStock Settlement: **NOT STARTED**
 
 ## 2. Frozen CR-27A boundary
 
-CR-27A freezes the game-facing BuildingStock transport reservation boundary:
+CR-27A owns immutable `building-stock-transport-reservation` values with stable `transport-reservation:` IDs, source/target `building:` IDs, `resource-type:` ID, positive amount and `ACTIVE -> RELEASED` lifecycle.
 
-- immutable `building-stock-transport-reservation` records,
-- stable `transport-reservation:` IDs,
-- stable source/target `building:` IDs,
-- stable `resource-type:` ID,
-- positive safe-integer amount,
-- lifecycle `ACTIVE -> RELEASED`,
-- deterministic reserved/available amount evaluation,
-- deterministic rejection of duplicate reservation IDs and over-reservation,
-- source/resource isolation,
-- release restoring transport availability without changing physical BuildingStock.
+Availability remains:
 
-Availability invariant:
+`physical BuildingStock - sum(ACTIVE reservations for the same source/resource)`
 
-`availableForNewTransport = physicalBuildingStockQuantity - sum(ACTIVE reservation amounts for the same source Building/resource type)`
+CR-27A device/browser Verification / Freeze Gate passed **PASS / 0 BLOCKER** on 2026-09-06.
 
-The device/browser **CR-27A Verification / Freeze Gate** passed with **PASS / 0 BLOCKER** on 2026-09-06.
+Frozen marker:
 
-## 3. Frozen CR-27A exclusions
+`frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`
 
-CR-27A contains no:
+## 3. Implemented CR-27B boundary
 
-- physical source withdrawal or target stock addition,
-- TransportJob creation,
-- Person/Carrier selection or assignment,
-- `CAN_SIMPLE_TRANSPORT` use,
-- Reachability calculation,
-- route/pathfinding/movement,
-- traffic/deadlock processing,
-- pickup/delivery/settlement,
-- priority/scoring,
-- production/construction/work execution,
-- SaveGame/rendering/gameplay UI/Inspector/balancing ownership.
+CR-27B now implements the dispatch adapter:
 
-CR-25, CR-26 and existing `src/transport/*` contracts remain semantically unchanged.
+`ACTIVE CR-27A reservation -> frozen CR-26 CAN_SIMPLE_TRANSPORT eligibility/assignment -> legacy-compatible pending TransportJob projection -> {jobId, unitId} execution assignment -> existing TransportExecutionContract begin`
 
-## 4. Branch / Pages rule
+Authoritative rules:
 
-- All CR-27A/B/C implementation stays on the single branch `feature/cr-27-game-facing-logistics-integration-foundation`.
-- `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge` is the immutable CR-27A marker.
-- Frozen sub-block markers are immutable and are not development branches.
-- GitHub Pages must remain pointed at the active CR-27 development branch during the CR-27 cycle.
+- reservation must remain `ACTIVE` during dispatch,
+- `RELEASED` reservation is rejected,
+- required workforce capability is always `CAN_SIMPLE_TRANSPORT`,
+- Person selection/assignment runs only through frozen CR-26 `WorkforceJobEligibilityContract.selectAndAssign(...)`,
+- `CarrierAssignmentService.assign()` is not used,
+- selected `personId` is projected as the same stable execution `unitId`,
+- legacy `claim:`, `demand:` and `resource:` IDs are explicit compatibility references only,
+- no Claim/Demand/ResourceState store is created or mutated,
+- projected TransportJob copies source Building, target Building, resource type and amount exactly from CR-27A,
+- existing `TransportExecutionContract.begin(...)` is used only as the execution entry point.
 
-## 5. Next allowed action
+Implemented files:
 
-The next allowed sub-block is **CR-27B – Workforce-Aware Transport Dispatch Integration** on the same CR-27 feature branch. Before implementation, define the exact CR-27B scope against frozen CR-27A, frozen CR-26 eligibility/assignment ownership and the existing transport runtime. Do not begin CR-27C.
+- `src/domain/workforce-aware-transport-dispatch-integration.js`
+- `src/dev/cr-27b-self-test.js`
+- `src/dev/cr-27b-self-test.node.js`
+- `docs/CR27B_WORKFORCE_AWARE_TRANSPORT_DISPATCH_INTEGRATION.md`
+
+## 4. CR-27B strict non-scope
+
+CR-27B does not:
+
+- release or mutate the CR-27A reservation,
+- physically remove source BuildingStock,
+- add target BuildingStock,
+- settle delivery,
+- release workforce assignment after delivery/cancel,
+- create/mutate legacy Claim/Demand/ResourceState stores,
+- select through Carrier `AVAILABLE/OCCUPIED`,
+- calculate Reachability,
+- add pathfinding/routes/movement algorithms/traffic/deadlock behavior,
+- execute pickup/delivery,
+- add job priority/scoring/JobEngine queue behavior,
+- alter production/construction,
+- add SaveGame/rendering/gameplay UI/Inspector/balancing.
+
+## 5. Direct CR-27B tests added
+
+The direct self-test covers ACTIVE/RELEASED reservation gating, mandatory `CAN_SIMPLE_TRANSPORT`, FREE/ASSIGNED/UNAVAILABLE behavior through CR-26, deterministic candidate order, no-eligible-person behavior, selected Person/execution unit identity, immutable reservation/Profile/state inputs, exact TransportJob projection, compatibility-ID validation, explicit Reachability input behavior and guards against Carrier/legacy-store/CR-27C ownership leakage.
+
+## 6. Branch / Pages rule
+
+- All CR-27A/B/C implementation stays on `feature/cr-27-game-facing-logistics-integration-foundation`.
+- Frozen sub-block markers remain immutable markers only.
+- GitHub Pages remains pointed at the active CR-27 branch during the whole CR-27 cycle.
+- The currently displayed CR-27A page remains unchanged until the dedicated CR-27B browser Verification / Freeze Gate is deliberately exposed.
+
+## 7. Next allowed action
+
+Build the dedicated **CR-27B browser Verification / Freeze Gate** around the implemented direct self-test and frozen predecessor regressions. Do not begin CR-27C and do not create a CR-27B frozen marker before browser **PASS / 0 BLOCKER**.
 
 ---
 
-**Updated:** 2026-09-06 after device/browser CR-27A Verification / Freeze Gate: **PASS / 0 BLOCKER**. CR-27A is **FROZEN**; CR-27B is the next allowed sub-block.
+**Updated:** 2026-09-06 after CR-27B technical specification, dispatch adapter implementation and direct self-test addition. CR-27B remains **NOT FROZEN** pending browser Verification / Freeze Gate.
