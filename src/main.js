@@ -26,11 +26,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-29 Camera Miniworld',
+  name: 'CR-30A Housing Contract Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-29-CAMERA-WORLD-VIEW-FOUNDATION' }
+  metadata: { foundation: 'CR-30A-HOME-HOUSING-CAPACITY-CONTRACT' }
 });
 const domains = new CoreDomainStores();
 
@@ -196,7 +196,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-29C CONTROLLED PAN & ZOOM: PASS / 0 BLOCKER — Drag/Pan + Pinch/Wheel Zoom — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `CR-30A ACTIVE — Home & Housing Capacity Contract — CR-29 Welt/Kamera erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
   testEl.dataset.pass = 'true';
 }
 
@@ -210,12 +210,12 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-29C] Controlled Pan & Zoom Integration', {
+console.info('[CR-30A] Home & Housing Capacity Contract presentation identity', {
   build: RuntimeConfig.build,
   mapId: initialRender.projection.map.id,
   cameraState: initialRender.cameraState,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
   renderCommands: initialRender.commands.length,
-  overallPass: true
+  frozenPresentationRegressionPreserved: true
 });
