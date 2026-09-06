@@ -1,9 +1,10 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-30 ACTIVE / CR-30A IMPLEMENTED + DIRECT VERIFICATION PASS / NOT FROZEN  
+**Status:** CURRENT – CR-30 ACTIVE / CR-30A FROZEN / CR-30B AUTHORIZED  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-30-housing-population-gold-integration-foundation`  
-**Latest freeze decision:** **CR-29 – Camera & World View Foundation**
+**Latest whole-CR freeze:** **CR-29 – Camera & World View Foundation**  
+**Latest substep freeze:** **CR-30A – Home & Housing Capacity Contract**
 
 ## 1. Frozen line
 
@@ -17,17 +18,17 @@ CR-28 – Visible World Runtime Integration Foundation: **COMPLETE / FROZEN / PA
 
 CR-29 – Camera & World View Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Current frozen predecessor marker:
+Whole-CR predecessor marker:
 
-`frozen/cr-29-camera-world-view-foundation`
+`frozen/cr-29-camera-world-view-foundation` @ `560334f6481aef0398b699d21100d0079ea429f1`
 
-Current frozen predecessor commit:
+CR-30A substep marker:
 
-`560334f6481aef0398b699d21100d0079ea429f1`
+`frozen/cr-30a-home-housing-capacity-contract` @ `f74d6bc1399212650c11196f8f098a419eda6cbf`
 
 ## 2. Binding migration order around the current boundary
 
-The current capability order remains:
+The capability order remains:
 
 - IM-09 – Logistics & Reservation Migration,
 - **IM-10 – Housing / Population / Gold Integration**,
@@ -37,9 +38,7 @@ The current capability order remains:
 - IM-14 – UI/Mobile,
 - IM-15 – Guidance/Inspector.
 
-CR-25 through CR-27 reached the BuildingStock / Workforce / Logistics boundary. CR-28 and CR-29 deliberately established visible-world runtime integration and controlled camera/world viewing without changing gameplay truth.
-
-With CR-29 frozen, IM-10 is assigned to CR-30. SaveGame, UI/Mobile and Guidance/Inspector remain later and are not authorized by this transition.
+CR-30 remains the active implementation block for IM-10. Later migration blocks remain locked.
 
 ## 3. IM-10 ↔ CR-30 reconciliation
 
@@ -59,34 +58,40 @@ Guiding question:
 
 ### CR-30A – Home & Housing Capacity Contract
 
-Status: **IMPLEMENTED / DIRECT VERIFICATION PASS / 0 BLOCKER / NOT FROZEN**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Implemented capability increment:
+Frozen capability:
 
-- a real stable Building identity can expose an immutable housing contract with deterministic capacity,
-- a real existing Person identity can receive one explicit immutable Home assignment,
-- duplicate active Home assignment for the same Person is rejected within the supplied assignment truth,
+- a real stable Building identity exposes immutable housing capacity,
+- a real existing Person identity may receive one immutable Home assignment,
+- duplicate active Home assignment is rejected,
 - exhausted housing capacity rejects further assignment,
-- stable Building/Person identities remain unchanged,
-- CR-23A Person identity remains free of Home/Housing fields,
-- no automatic residents, Population truth or Gold are introduced.
+- CR-23A Person identity remains unchanged,
+- no automatic residents, Population or Gold are introduced.
 
-Direct evidence:
+Evidence:
 
-- implementation: `src/domain/housing-home-capacity-integration-contract.js`
-- self-test: `src/dev/cr-30a-self-test.node.js`
-- GitHub Actions run `34057988131` on code HEAD `338db9bd3b91a3d664ea3f80919e43253da2a05f`
-- existing regression + CR-24C + CR-28 + whole CR-29 + CR-30A direct verification: **PASS / 0 BLOCKER**.
-
-Visible/build identity was also synchronized to CR-30A, including correction of the stale `RuntimeConfig.build` value that still named CR-16. No frozen presentation/gameplay behavior changed.
-
-Not yet allowed: automatic resident creation, Population integration, free-slot resident generation, Gold, SaveGame, UI/Inspector behavior, Navigation/Path/Wear changes.
+- `src/domain/housing-home-capacity-integration-contract.js`
+- `src/dev/cr-30a-self-test.node.js`
+- automated regression including whole CR-29 + CR-30A direct test: **PASS / 0 BLOCKER**,
+- real iPad/Safari browser evidence on 2026-09-06: current CR-30A title/heading/status visible, preserved 3 Buildings / 3 Persons world visible, stale build identity absent: **PASS / 0 BLOCKER**,
+- freeze marker: `frozen/cr-30a-home-housing-capacity-contract` @ `f74d6bc1399212650c11196f8f098a419eda6cbf`.
 
 ### CR-30B – Deterministic Housing & Population Integration
 
-Status: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
+Status: **AUTHORIZED / ACTIVE / NOT FROZEN**.
 
-Target boundary: controlled deterministic assignment of existing real Persons to houses; Population derived only from valid real residents; only genuinely free housing places may create general residents; no random specialists and no second Population truth.
+Allowed capability increment:
+
+- controlled deterministic assignment of existing real Persons to valid housing,
+- Population derived only from valid real resident/home truth,
+- no separate mutable Population counter or second Population truth,
+- only genuinely remaining free housing slots may create general residents,
+- a generated general resident must become a real stable Person before it contributes to Population,
+- no random specialist generation,
+- frozen CR-30A capacity and one-home invariants remain binding.
+
+Not yet allowed: Gold, SaveGame/restore, UI/Inspector features, Navigation/Path/Wear changes, or ownership changes to BuildingStock/Workforce/Logistics/camera/render beyond necessary read-only relationships.
 
 ### CR-30C – Gold Economy Integration
 
@@ -98,7 +103,7 @@ Target boundary: a clear economy owner derives/generates Gold from real valid re
 
 Status: **PLANNED**.
 
-A+B+C must be regressed together against frozen CR-29 and all relevant frozen predecessor contracts. CR-30 becomes FROZEN only at **PASS / 0 BLOCKER**.
+A+B+C must be regressed together against frozen CR-29 and relevant predecessor contracts. CR-30 becomes FROZEN only at **PASS / 0 BLOCKER**.
 
 ## 4. Frozen architectural boundaries preserved during CR-30
 
@@ -106,16 +111,16 @@ CR-29 presentation chain remains unchanged:
 
 `gameplay/world owners -> CR-28A immutable projection -> CR-28B deterministic world render commands -> CR-29A immutable camera/view state -> CR-29B deterministic screen-space projection -> CR-29C controlled camera-only input -> Canvas`
 
-CR-30 must preserve the frozen BuildingStock, Workforce, Logistics, world-render and camera/view owner boundaries. Gold remains an economy truth, not a physical BuildingStock quantity and not a Logistics resource.
+CR-30 must preserve BuildingStock, Workforce, Logistics, world-render and camera/view ownership boundaries. Gold remains an economy truth, not physical stock or cargo.
 
 ## 5. Current next step
 
-Review/accept the completed **CR-30A – Home & Housing Capacity Contract** boundary.
+Implement **CR-30B – Deterministic Housing & Population Integration** only on `feature/cr-30-housing-population-gold-integration-foundation`, building strictly on frozen CR-30A.
 
-Do **not** begin CR-30B automatically. CR-30B becomes implementation-authorized only after explicit authorization on this same whole-CR branch.
+Before using the browser page as CR-30B verification evidence, synchronize all visible/build identity surfaces to CR-30B. Do not implement CR-30C early.
 
 No successor CR is implicitly authorized.
 
 ---
 
-**Updated:** 2026-09-06 — CR-30A implemented and directly verified PASS / 0 BLOCKER; visible/build identity synchronized; CR-30B remains explicitly locked pending authorization.
+**Updated:** 2026-09-06 — CR-30A browser-verifiziert and frozen at PASS / 0 BLOCKER; CR-30B explicitly authorized as the next and only active implementation substep.
