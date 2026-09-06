@@ -15,9 +15,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-28 – Visible World Runtime Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Active system block: **CR-29 – Camera & World View Foundation**
-- Active substep: **CR-29A – World View / Camera State Contract**
-- CR-29A status: **AUTHORIZED / NOT_STARTED**
-- Next allowed action: **implement CR-29A only**
+- CR-29A – World View / Camera State Contract: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**
+- Next allowed action: **CR-29B – Deterministic World-to-Screen Projection**
 
 ## 2. Frozen CR-28 baseline
 
@@ -41,29 +40,39 @@ Question answered by CR-29:
 
 > How does the player view the already-visible world through a controlled, deterministic camera/view boundary without changing gameplay truth?
 
-Planned decomposition:
-
 ### CR-29A – World View / Camera State Contract
 
-Define only the renderer-facing state contract for the current world view, including the minimum stable values needed for viewport/world offset and zoom/scale.
+**COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
 
-Requirements:
+Implementation:
 
-- deterministic immutable camera/view state,
-- explicit finite numeric values,
-- no gameplay ownership,
-- no world mutation,
-- no Canvas drawing changes yet,
-- no user input or gestures yet,
-- no pan/zoom integration yet.
+- `src/render/world-view-camera-state.js`
+- `src/dev/cr-29a-self-test.node.js`
+
+Frozen-for-successor contract boundary inside the active CR-29 branch:
+
+- camera/view state contains only `viewportWidth`, `viewportHeight`, `offsetX`, `offsetY`, `zoom`,
+- viewport dimensions and zoom must be positive finite numbers,
+- offsets must be finite numbers,
+- equal inputs produce equal state,
+- returned state is immutable,
+- unowned/gameplay fields are not carried into the camera state,
+- no gameplay/world owner references are stored,
+- no world-to-screen transformation is performed,
+- no Canvas behavior changes,
+- no browser input, gestures, pan or zoom integration.
+
+Verification:
+
+GitHub Actions run `34051595342` on commit `5054684093499cc7f9b8f386c850b6d15e97e20e` ran the frozen regression, CR-28 whole-system freeze gate and active CR-29A contract test successfully: **PASS / 0 BLOCKER**.
 
 ### CR-29B – Deterministic World-to-Screen Projection
 
-After CR-29A is complete, apply the frozen camera/view state deterministically to the CR-28 visible-world representation. Same world + same view state must produce the same screen-space result. No player interaction yet.
+Next authorized step. Apply the CR-29A view state deterministically to the frozen CR-28 visible-world representation. Same world + same view state must produce the same screen-space result. Still no player interaction.
 
 ### CR-29C – Controlled Pan & Zoom Integration
 
-Only after CR-29B may player-controlled pan/zoom alter the camera/view state. Camera changes affect presentation only and must never mutate Map, Buildings, Persons, Logistics, Workforce, BuildingStock or other gameplay owners.
+Remains unauthorized until CR-29B reaches **PASS / 0 BLOCKER**. Camera changes affect presentation only and must never mutate Map, Buildings, Persons, Logistics, Workforce, BuildingStock or other gameplay owners.
 
 After A/B/C, CR-29 requires a whole-system Completion / Regression / Freeze Gate against frozen CR-28.
 
@@ -94,10 +103,10 @@ CR-29 is a presentation/view foundation only.
 
 ## 6. Next allowed action
 
-**CR-29A – World View / Camera State Contract** may now begin on this same whole-CR-29 branch.
+**CR-29B – Deterministic World-to-Screen Projection** may now begin on this same whole-CR-29 branch.
 
-CR-29A must stop at the state contract boundary. Do not add world-to-screen transformation, browser controls, pan gestures, pinch zoom, HUD, Build Menu or Inspector in CR-29A.
+CR-29B must stop at deterministic screen-space projection. Do not add browser controls, pan gestures, pinch/wheel zoom input, HUD, Build Menu or Inspector in CR-29B.
 
 ---
 
-**Updated:** 2026-09-06 after explicit authorization of **CR-29 – Camera & World View Foundation** and creation of its whole-CR branch directly from frozen CR-28.
+**Updated:** 2026-09-06 after **CR-29A – World View / Camera State Contract** verification: **PASS / 0 BLOCKER**.
