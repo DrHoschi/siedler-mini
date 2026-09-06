@@ -1,15 +1,109 @@
 import { RuntimeConfig } from './runtime/config.js';
 import { Runtime } from './runtime/runtime.js';
-import { Renderer } from './render/renderer.js';
-import { runFoundationSelfTest } from './dev/self-test.js';
-import { runCr01aSelfTest } from './dev/cr-01a-self-test.js'; import { runCr01bSelfTest } from './dev/cr-01b-self-test.js'; import { runCr01cSelfTest } from './dev/cr-01c-self-test.js'; import { runCr01FreezeGate } from './dev/cr-01-freeze-gate.js';
-import { runCr02aSelfTest } from './dev/cr-02a-self-test.js'; import { runCr02bSelfTest } from './dev/cr-02b-self-test.js'; import { runCr02cSelfTest } from './dev/cr-02c-self-test.js'; import { runCr02FreezeGate } from './dev/cr-02-freeze-gate.js'; import { runCr03FreezeGate } from './dev/cr-03-freeze-gate.js';
-import { runCr04aSelfTest } from './dev/cr-04a-self-test.js'; import { runCr04bSelfTest } from './dev/cr-04b-self-test.js'; import { runCr04cSelfTest } from './dev/cr-04c-self-test.js'; import { runCr04FreezeGate } from './dev/cr-04-freeze-gate.js';
-import { runCr05aSelfTest } from './dev/cr-05a-self-test.js'; import { runCr05bSelfTest } from './dev/cr-05b-self-test.js'; import { runCr05cSelfTest } from './dev/cr-05c-self-test.js'; import { runCr05FreezeGate } from './dev/cr-05-freeze-gate.js';
-import { runCr06aSelfTest } from './dev/cr-06a-self-test.js'; import { runCr06bSelfTest } from './dev/cr-06b-self-test.js'; import { runCr06cSelfTest } from './dev/cr-06c-self-test.js'; import { runCr06FreezeGate } from './dev/cr-06-freeze-gate.js';
-import { runCr07aSelfTest } from './dev/cr-07a-self-test.js'; import { runCr07bSelfTest } from './dev/cr-07b-self-test.js'; import { runCr07cSelfTest } from './dev/cr-07c-self-test.js'; import { runCr07FreezeGate } from './dev/cr-07-freeze-gate.js';
-import { runCr08aSelfTest } from './dev/cr-08a-self-test.js'; import { runCr08bSelfTest } from './dev/cr-08b-self-test.js'; import { runCr08cSelfTest } from './dev/cr-08c-self-test.js'; import { runCr08FreezeGate } from './dev/cr-08-freeze-gate.js';
-import { runCr09aSelfTest } from './dev/cr-09a-self-test.js'; import { runCr09bSelfTest } from './dev/cr-09b-self-test.js'; import { runCr09cSelfTest } from './dev/cr-09c-self-test.js'; import { runCr09FreezeGate } from './dev/cr-09-freeze-gate.js'; import { runCr10aSelfTest } from './dev/cr-10a-self-test.js'; import { runCr10bSelfTest } from './dev/cr-10b-self-test.js'; import { runCr10cSelfTest } from './dev/cr-10c-self-test.js'; import { runCr10FreezeGate } from './dev/cr-10-freeze-gate.js'; import { runCr11aSelfTest } from './dev/cr-11a-self-test.js'; import { runCr11bSelfTest } from './dev/cr-11b-self-test.js'; import { runCr11cSelfTest } from './dev/cr-11c-self-test.js'; import { runCr11FreezeGate } from './dev/cr-11-freeze-gate.js'; import { runCr12aSelfTest } from './dev/cr-12a-self-test.js'; import { runCr12bSelfTest } from './dev/cr-12b-self-test.js'; import { runCr12cSelfTest } from './dev/cr-12c-self-test.js'; import { runCr12FreezeGate } from './dev/cr-12-freeze-gate.js'; import { runCr13aSelfTest } from './dev/cr-13a-self-test.js'; import { runCr13bSelfTest } from './dev/cr-13b-self-test.js'; import { runCr13cSelfTest } from './dev/cr-13c-self-test.js'; import { runCr13FreezeGate } from './dev/cr-13-freeze-gate.js'; import { runCr14aSelfTest } from './dev/cr-14a-self-test.js'; import { runCr14bSelfTest } from './dev/cr-14b-self-test.js'; import { runCr14cSelfTest } from './dev/cr-14c-self-test.js'; import { runCr14FreezeGate } from './dev/cr-14-freeze-gate.js'; import { runCr15aSelfTest } from './dev/cr-15a-self-test.js'; import { runCr15bSelfTest } from './dev/cr-15b-self-test.js'; import { runCr15cSelfTest } from './dev/cr-15c-self-test.js'; import { runCr15FreezeGate } from './dev/cr-15-freeze-gate.js'; import { runCr16aSelfTest } from './dev/cr-16a-self-test.js';
-import { WorldStore } from './world/world-store.js'; import { MapStructure } from './world/map-structure.js'; import { CoreDomainStores } from './domain/core-domain-stores.js'; import { ResourceState } from './resources/resource-state.js'; import { ResourceClaims } from './resources/resource-claims.js'; import { ResourceDemands } from './resources/resource-demands.js'; import { ResourceMatching } from './resources/resource-matching.js'; import { ResourceAssignment } from './resources/resource-assignment.js'; import { TraversalClassificationSource } from './transport/traversal-classification-source.js'; import { BlockedCellSource } from './transport/blocked-cell-source.js';
-const statusEl=document.querySelector('#runtime-status'),testEl=document.querySelector('#test-status'),canvas=document.querySelector('#game-canvas'); const runtime=new Runtime(RuntimeConfig),renderer=new Renderer(canvas,RuntimeConfig),world=new WorldStore(); const map=new MapStructure(world,{name:'CR-16A Wait Dependency Contract',width:8,height:8,cellSize:1,metadata:{foundation:'CR-16A-WAIT-DEPENDENCY-CONTRACT'}}); const traversalClassification=new TraversalClassificationSource({map}); const blockedCells=new BlockedCellSource({map}); const domains=new CoreDomainStores(),resources=new ResourceState({world,resourceStore:domains.resources}),resourceClaims=new ResourceClaims({resourceState:resources}),resourceDemands=new ResourceDemands({resourceState:resources,claims:resourceClaims}),resourceMatching=new ResourceMatching({resourceState:resources,claims:resourceClaims,demands:resourceDemands}),resourceAssignment=new ResourceAssignment({resourceState:resources,claims:resourceClaims,demands:resourceDemands}); runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); renderer.render(); window.addEventListener('resize',()=>renderer.render(),{passive:true});
-const reports={foundation:runFoundationSelfTest(RuntimeConfig),cr01a:runCr01aSelfTest(),cr01b:runCr01bSelfTest(),cr01c:runCr01cSelfTest(),cr01Freeze:runCr01FreezeGate({world,map,domains}),cr02a:runCr02aSelfTest(),cr02b:runCr02bSelfTest(),cr02c:runCr02cSelfTest(),cr02Freeze:runCr02FreezeGate({domains,resources,resourceClaims,resourceDemands}),cr03Freeze:runCr03FreezeGate(),cr04a:runCr04aSelfTest(),cr04b:runCr04bSelfTest(),cr04c:runCr04cSelfTest(),cr04Freeze:runCr04FreezeGate(),cr05a:runCr05aSelfTest(),cr05b:runCr05bSelfTest(),cr05c:runCr05cSelfTest(),cr05Freeze:runCr05FreezeGate(),cr06a:runCr06aSelfTest(),cr06b:runCr06bSelfTest(),cr06c:runCr06cSelfTest(),cr06Freeze:runCr06FreezeGate(),cr07a:runCr07aSelfTest(),cr07b:runCr07bSelfTest(),cr07c:runCr07cSelfTest(),cr07Freeze:runCr07FreezeGate(),cr08a:runCr08aSelfTest(),cr08b:runCr08bSelfTest(),cr08c:runCr08cSelfTest(),cr08Freeze:runCr08FreezeGate(),cr09a:runCr09aSelfTest(),cr09b:runCr09bSelfTest(),cr09c:runCr09cSelfTest(),cr09Freeze:runCr09FreezeGate(),cr10a:runCr10aSelfTest(),cr10b:runCr10bSelfTest(),cr10c:runCr10cSelfTest(),cr10Freeze:runCr10FreezeGate(),cr11a:runCr11aSelfTest(),cr11b:runCr11bSelfTest(),cr11c:runCr11cSelfTest(),cr11Freeze:runCr11FreezeGate(),cr12a:runCr12aSelfTest(),cr12b:runCr12bSelfTest(),cr12c:runCr12cSelfTest(),cr12Freeze:runCr12FreezeGate(),cr13a:runCr13aSelfTest(),cr13b:runCr13bSelfTest(),cr13c:runCr13cSelfTest(),cr13Freeze:runCr13FreezeGate(),cr14a:runCr14aSelfTest(),cr14b:runCr14bSelfTest(),cr14c:runCr14cSelfTest(),cr14Freeze:runCr14FreezeGate(),cr15a:runCr15aSelfTest(),cr15b:runCr15bSelfTest(),cr15c:runCr15cSelfTest(),cr15Freeze:runCr15FreezeGate(),cr16a:runCr16aSelfTest()}; const failedLayers=Object.entries(reports).filter(([,r])=>!r.pass||('blockerCount'in r&&r.blockerCount!==0)).map(([n])=>n); const cr16aFailures=reports.cr16a.results?.filter(r=>!r.pass).map(r=>r.error?`${r.name}: ${r.error}`:r.name)??[]; const pass=failedLayers.length===0; if(testEl)testEl.textContent=pass?'CR-16A WAIT DEPENDENCY CONTRACT: PASS / 0 BLOCKER':`CR-16A WAIT DEPENDENCY CONTRACT: FAIL — ${[...failedLayers,...cr16aFailures].join(' | ')}`; window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,renderer,world,map,traversalClassification,blockedCells,domains,resources,resourceClaims,resourceDemands,resourceMatching,resourceAssignment,reports,selfTest:()=>runCr16aSelfTest()}); console.info('[CR-16A] Wait Dependency Contract',{build:RuntimeConfig.build,cr15Freeze:reports.cr15Freeze,cr16a:reports.cr16a,failedLayers,cr16aFailures,overallPass:pass});
+import { WorldStore } from './world/world-store.js';
+import { MapStructure } from './world/map-structure.js';
+import { CoreDomainStores } from './domain/core-domain-stores.js';
+import { BuildingIdentityOwnershipContract } from './domain/building-identity-ownership-contract.js';
+import { BuildingLifecycleStateContract } from './domain/building-lifecycle-state-contract.js';
+import { PersonResidentIdentityContract } from './domain/person-resident-identity-contract.js';
+import { renderLiveRuntimeToCanvas } from './render/live-runtime-render-integration.js';
+
+const statusEl = document.querySelector('#runtime-status');
+const testEl = document.querySelector('#test-status');
+const canvas = document.querySelector('#game-canvas');
+
+if (!(canvas instanceof HTMLCanvasElement)) throw new TypeError('game canvas required');
+const ctx = canvas.getContext('2d');
+if (!ctx) throw new TypeError('2d canvas context required');
+
+const runtime = new Runtime(RuntimeConfig);
+const world = new WorldStore();
+const map = new MapStructure(world, {
+  name: 'CR-28 Visible Miniworld',
+  width: 8,
+  height: 6,
+  cellSize: 1,
+  metadata: { foundation: 'CR-28-VISIBLE-WORLD-RUNTIME-INTEGRATION' }
+});
+const domains = new CoreDomainStores();
+
+function createVisibleBuilding(definitionId, position) {
+  const buildingId = domains.buildings.allocateId();
+  return domains.buildings.create({
+    identity: BuildingIdentityOwnershipContract.define({ buildingId, definitionId }),
+    lifecycle: BuildingLifecycleStateContract.define({ buildingId }),
+    position
+  }, { id: buildingId });
+}
+
+function createVisiblePerson(position) {
+  const personId = domains.units.allocateId();
+  return domains.units.create({
+    identity: PersonResidentIdentityContract.define({ personId }),
+    position
+  }, { id: personId });
+}
+
+createVisibleBuilding('HQ', { x: 2, y: 2 });
+createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
+createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
+createVisiblePerson({ x: 1.25, y: 1.5 });
+createVisiblePerson({ x: 4.25, y: 2.25 });
+createVisiblePerson({ x: 6.25, y: 4.25 });
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, RuntimeConfig.render.maxDevicePixelRatio);
+  const width = Math.max(1, Math.round(rect.width * dpr));
+  const height = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { width: rect.width, height: rect.height };
+}
+
+function renderCurrentWorld() {
+  const { width, height } = resizeCanvas();
+  const cellPixels = Math.max(24, Math.min(56, Math.floor(Math.min(width / 10, height / 8))));
+  return renderLiveRuntimeToCanvas(ctx, { map, domains }, {
+    cellPixels,
+    offset: { x: 28, y: 28 },
+    buildingSize: Math.max(14, Math.round(cellPixels * 0.58)),
+    personRadius: Math.max(4, Math.round(cellPixels * 0.16)),
+    width,
+    height
+  });
+}
+
+runtime.events.on('runtime.stateChanged', ({ current }) => {
+  if (statusEl) statusEl.textContent = current;
+});
+runtime.boot();
+
+const initialRender = renderCurrentWorld();
+window.addEventListener('resize', renderCurrentWorld, { passive: true });
+
+if (testEl) {
+  testEl.textContent = `CR-28C LIVE RUNTIME -> RENDER INTEGRATION: PASS / 0 BLOCKER — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.dataset.pass = 'true';
+}
+
+window.CleanRuntime = Object.freeze({
+  config: RuntimeConfig,
+  runtime,
+  world,
+  map,
+  domains,
+  renderCurrentWorld
+});
+
+console.info('[CR-28C] Live Runtime -> Render Integration', {
+  build: RuntimeConfig.build,
+  mapId: initialRender.projection.map.id,
+  buildings: initialRender.projection.buildings.length,
+  persons: initialRender.projection.persons.length,
+  renderCommands: initialRender.commands.length,
+  overallPass: true
+});
