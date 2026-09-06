@@ -13,67 +13,62 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-30 – Housing / Population / Gold Integration Foundation: **ACTIVE / NOT FROZEN**
 - CR-30A – Home & Housing Capacity Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `f74d6bc1399212650c11196f8f098a419eda6cbf`
 - CR-30B – Deterministic Housing & Population Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `e00fb5bbbde6f7f6e72b81ac77a44f0a263834a5`
-- CR-30C – Gold Economy Integration: **IMPLEMENTED / DIRECT VERIFICATION IN PROGRESS / NOT FROZEN**
-- Next allowed action: complete automated + browser/device verification of **CR-30C only**. Do not execute the whole-CR Completion/Freeze Gate yet.
+- CR-30C – Gold Economy Integration: **ACCEPTED / AUTOMATED + REAL IPAD BROWSER VERIFIED / PASS / 0 BLOCKER / FREEZE PENDING**
+- Next allowed action: **CR-30C Acceptance / Freeze only**. Do not execute the whole-CR Completion/Freeze Gate until CR-30C has a freeze marker.
 
 ## 2. Frozen CR-30A / CR-30B source truth
 
 CR-30A remains authoritative for Housing capacity and one-Home invariants. CR-30B remains authoritative for deterministic Housing/Population integration and produces the immutable `derived-population` truth from real valid assigned Persons. No independent mutable Population counter/store exists.
 
-CR-30C may consume that derived Population truth but must not replace, duplicate or mutate it.
+CR-30C consumes that derived Population truth but does not replace, duplicate or mutate it.
 
 ## 3. CR-30C – Gold Economy Integration
 
-**IMPLEMENTED / DIRECT VERIFICATION IN PROGRESS / NOT FROZEN**.
-
-Ownership inventory result:
-
-- no pre-existing Gold/economy owner exists in the active runtime tree,
-- `src/resources/*` is physical resource infrastructure and is not reused for Gold,
-- `CoreDomainStores.resources` and Logistics/Transport jobs remain physical-world stores and must remain untouched by Gold,
-- frozen CR-30B `derived-population` is the sole resident source for Gold derivation.
+**ACCEPTED / PASS / 0 BLOCKER / FREEZE PENDING**.
 
 Implemented boundary:
 
 - exactly one explicit `GoldEconomyOwner` owns mutable Gold balance,
-- Gold state is explicitly marked `physical: false`,
-- Gold income is derived only from a valid immutable `derived-population` contract,
-- `goldPerResident` must be supplied explicitly as a non-negative safe integer; CR-30C does not silently choose a game-balance default,
-- deriving income alone is pure and does not mutate balance,
-- applying/settling income mutates only the Gold owner,
-- no Resource-store record is created for Gold,
-- no Logistics/Transport job is created for Gold,
-- Population receives no Gold/balance field and remains a separate frozen truth,
-- no SaveGame/restore surcharge or restore behavior is introduced.
+- Gold state is explicitly `physical: false`,
+- Gold income derives only from valid immutable `derived-population`,
+- `goldPerResident` is supplied explicitly; no hidden gameplay balance default exists,
+- deriving income is pure; settlement mutates only the Gold owner,
+- Gold creates no Resource/BuildingStock record,
+- Gold creates no Logistics cargo, demand or TransportJob,
+- Population receives no Gold/balance field and remains the sole resident truth,
+- no SaveGame/restore surcharge or restore behavior exists.
 
 Implementation:
 
 - `src/domain/gold-economy-owner.js`
 - `src/dev/cr-30c-self-test.node.js`
-- CI chain extended to run frozen predecessors + CR-30A + CR-30B + CR-30C direct test.
 
-Visible/browser evidence page:
+Automated evidence:
 
-- all visible/build identity surfaces are synchronized to `CR-30C – Gold Economy Integration`,
-- the preserved CR-30B browser scenario still has Population 3 / 3 Buildings / 3 Persons,
-- browser evidence uses an explicitly named **test/evidence rate** `1 Gold / Resident` only to make the arithmetic visible; this is not a hidden production balance default,
-- expected visible result: Population 3, Gold Rate 1/Resident, Gold Income 3, Gold Balance 3, `NON-PHYSICAL`, 3 Buildings / 3 Persons visible.
+- GitHub Actions run `34061155533`: frozen regression + CR-30A + CR-30B + CR-30C direct verification = **PASS / 0 BLOCKER**.
 
-Explicit non-scope remains:
+Real browser/device evidence accepted on 2026-09-06:
 
-- no SaveGame/restore implementation,
-- no UI/Inspector feature work,
-- no Navigation/Path/Wear changes,
-- no physical Gold stock or cargo,
-- no change to BuildingStock/Workforce/Logistics ownership,
-- no second Population truth,
-- no whole-CR freeze until CR-30C itself is accepted.
+- real iPad / Safari screenshot supplied by the user,
+- current page/panel visibly identifies `CR-30C – Gold Economy Integration`,
+- runtime visibly `READY`,
+- status visibly reports `CR-30C ACTIVE`,
+- Population = 3,
+- explicit evidence Gold Rate = 1 / Resident,
+- Gold Income = 3,
+- Gold Balance = 3,
+- Gold visibly identified as `NON-PHYSICAL`,
+- preserved world visibly contains 3 Buildings / 3 Persons,
+- no stale predecessor identity is presented as the current build,
+- result: **REAL IPAD / SAFARI BROWSER VERIFIED / PASS / 0 BLOCKER**.
+
+The visible evidence rate `1 Gold / Resident` is only a deterministic arithmetic test value and is not a production gameplay-balance decision.
 
 ## 4. Current CR-30C gate
 
-Automated verification must pass the full frozen regression including the new CR-30C self-test. After that, real browser/device evidence must confirm the synchronized CR-30C identity and expected Gold values while the frozen visible world/camera remains intact.
+CR-30C has passed automated and real-device verification. The sole remaining action is to create the CR-30C freeze marker on this accepted state.
 
-Only after **PASS / 0 BLOCKER** may CR-30C be accepted/frozen. The CR-30 Completion / Regression / Freeze Gate is a separate later action and is not yet authorized for execution.
+Only after that marker exists may the separate **CR-30 Completion / Regression / Freeze Gate** be explicitly authorized. That whole-CR gate is not executed as part of CR-30C freeze.
 
 ## 5. Permanent visible CR / build identity synchronization rule
 
@@ -81,4 +76,4 @@ Before a browser/device gate, before declaring a visible substep PASS, and again
 
 ---
 
-**Updated:** 2026-09-06 — CR-30C Gold owner implemented with explicit non-physical ownership and derived-population input; visible identity synchronized; direct automated/browser verification remains the active gate.
+**Updated:** 2026-09-06 — CR-30C automated and real iPad/Safari verification accepted at PASS / 0 BLOCKER; CR-30C freeze marker is the sole next action.
