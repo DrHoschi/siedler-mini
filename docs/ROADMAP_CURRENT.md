@@ -32,32 +32,36 @@ Question answered by CR-28:
 Authorized decomposition:
 
 - **CR-28A – Game-State Render Projection Contract** — **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**. Immutable/read-only renderer-neutral projection for Map, Buildings and Persons with deterministic ordering, stable identity and direct immutability/determinism proof.
-- **CR-28B – Deterministic World Canvas Rendering** — next allowed same-branch step. Deterministic prototype/debug rendering of the CR-28A projection. No gameplay ownership or write-back.
-- **CR-28C – Live Runtime -> Render Integration** — later same-branch step. Current runtime state -> CR-28A projection -> CR-28B renderer -> Canvas update, with a real visible miniworld as browser-gate evidence.
+- **CR-28B – Deterministic World Canvas Rendering** — **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**. Deterministic world-ground/grid/building/person render commands and Canvas execution from CR-28A projection only. No gameplay ownership/write-back and no live runtime integration.
+- **CR-28C – Live Runtime -> Render Integration** — next allowed same-branch step. Current runtime state -> CR-28A projection -> CR-28B renderer -> Canvas update, with a real visible miniworld as browser-gate evidence.
 
 After A+B+C, run the whole CR-28 Completion / Regression / Freeze Gate.
 
-## 3. CR-28A result
+## 3. CR-28A/B result
 
-CR-28A is complete but not independently frozen.
-
-Implemented projection boundary:
+CR-28A implementation:
 
 - `src/render/game-state-render-projection.js`
 - `src/dev/cr-28a-self-test.node.js`
 
-Accepted properties:
+CR-28B implementation:
+
+- `src/render/world-canvas-rendering.js`
+- `src/dev/cr-28b-self-test.node.js`
+
+Accepted A/B properties:
 
 - source state remains unchanged,
-- returned projection is deeply immutable,
-- no mutable aliases into gameplay owners,
-- deterministic ordering by stable ID,
+- projection and render-command outputs are immutable,
+- deterministic ordering by stable source identity,
 - Map/Buildings/Persons coverage,
-- explicit visible-field selection only,
-- irrelevant gameplay fields remain outside renderer ownership,
-- no Canvas/DOM rendering and no write-back.
+- world ground/grid plus simple Building/Person prototype representation,
+- same projection/options -> same ordered render commands,
+- same command stream -> same Canvas call sequence,
+- no Canvas-driven gameplay mutation,
+- no `main.js` or live runtime composition change through CR-28B.
 
-GitHub Actions run `34036947256` completed existing CR regression plus the CR-28A projection test successfully: **PASS / 0 BLOCKER**.
+GitHub Actions run `34037847864` completed existing CR regression + CR-28A + CR-28B successfully: **PASS / 0 BLOCKER**.
 
 ## 4. CR-28 architectural boundary
 
@@ -78,9 +82,9 @@ Hard non-scope across CR-28:
 
 ## 5. Current next step
 
-**CR-28B – Deterministic World Canvas Rendering** is the next allowed implementation step on the same whole-CR branch.
+**CR-28C – Live Runtime -> Render Integration** is the next allowed implementation step on the same whole-CR branch.
 
-CR-28B must consume CR-28A projection data only and create a simple deterministic world/grid/building/person presentation. It must not perform CR-28C runtime integration or acquire gameplay ownership.
+CR-28C may connect current gameplay/runtime state -> CR-28A projection -> CR-28B deterministic rendering -> actual Canvas update. The completion evidence must include a real browser-visible miniworld while preserving the read-only renderer boundary.
 
 ## 6. Branch / gate policy
 
@@ -88,8 +92,8 @@ CR-28B must consume CR-28A projection data only and create a simple deterministi
 - It was created directly from `frozen/cr-27-game-facing-logistics-integration-foundation` at commit `c821784264c846d00f15f018011eb13f817d13b5`.
 - A/B/C continue sequentially on this one CR-28 branch.
 - Frozen CR-27 markers remain immutable.
-- CR-28 becomes FROZEN only after its final whole-system gate passes PASS / 0 BLOCKER.
+- CR-28 becomes FROZEN only after CR-28C and its final whole-system gate pass PASS / 0 BLOCKER.
 
 ---
 
-**Updated:** 2026-09-06 after **CR-28A – Game-State Render Projection Contract** passed direct test + existing CR regression with **PASS / 0 BLOCKER**. Next allowed step: **CR-28B – Deterministic World Canvas Rendering**.
+**Updated:** 2026-09-06 after **CR-28B – Deterministic World Canvas Rendering** passed existing regression + CR-28A + direct CR-28B test with **PASS / 0 BLOCKER**. Next allowed step: **CR-28C – Live Runtime -> Render Integration**.
