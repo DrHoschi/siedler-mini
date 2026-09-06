@@ -18,7 +18,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-29A – World View / Camera State Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-29B – Deterministic World-to-Screen Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-29C – Controlled Pan & Zoom Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- Next allowed action: **final exact-state CI verification, then create the CR-29 frozen marker; no successor CR is implicitly authorized**
+- Current correction: stale CR-28C browser-test-page labels were replaced by CR-29/CR-29C labels only; no behavior changed.
+- Next allowed action: **exact-state CI verification of this corrected documentation-complete CR-29 HEAD, then advance the existing CR-29 frozen marker to that verified HEAD; no successor CR is implicitly authorized**
 
 ## 2. Frozen predecessor baseline
 
@@ -109,7 +110,24 @@ Accepted real-browser evidence on 2026-09-06:
 
 Browser verification: **PASS / 0 BLOCKER**.
 
-## 5. Frozen CR-29 invariants
+## 5. Post-freeze visible-label correction
+
+A later visual check found that `index.html` still exposed the previous CR-28C test-page identity although CR-29C runtime status and behavior were already correct.
+
+The correction changes only visible test-page metadata/text:
+
+- document title -> **Neue Siedler – CR-29 Camera & World View Foundation**,
+- stage accessibility label -> CR-29 camera-view wording,
+- visible card heading -> **CR-29 – Camera & World View Foundation**,
+- descriptive text -> CR-29A/B/C presentation chain,
+- placeholder status -> **CR-29C Browser-Gate wird aufgebaut …**,
+- cache-busting identifiers -> CR-29.
+
+No camera state, projection, Canvas rendering, browser input, gameplay owner or ownership contract changed.
+
+Because this correction happened after the first marker creation, the existing frozen marker must be advanced only after the exact corrected, documentation-complete HEAD again passes the full CR-29 CI/freeze-gate chain.
+
+## 6. Frozen CR-29 invariants
 
 - gameplay/world owners remain authoritative,
 - camera/view state remains presentation state only,
@@ -122,7 +140,7 @@ Browser verification: **PASS / 0 BLOCKER**.
 - frozen CR-28 visibility/render ownership remains intact,
 - `main` remains historical old-game reference only and is not a development base or integration target.
 
-## 6. Frozen CR-29 non-scope
+## 7. Frozen CR-29 non-scope
 
 CR-29 adds no ownership for:
 
@@ -136,16 +154,16 @@ CR-29 adds no ownership for:
 - production/construction/new simulation semantics,
 - mandatory new visual assets.
 
-## 7. Final marker rule and next allowed action
+## 8. Final marker rule and next allowed action
 
-The intended frozen marker is:
+Current frozen marker:
 
 `frozen/cr-29-camera-world-view-foundation`
 
-It may be created only after this final documentation-complete HEAD receives successful CI verification. The marker must point exactly to that CI-verified HEAD.
+It is maintained at the final exact-state-CI-verified CR-29 HEAD. For this visible-label correction, advance it only after the corrected documentation-complete HEAD has a successful full CI run.
 
-After the marker exists, **no CR-30 or other successor implementation is automatically authorized**. The next system block must be selected explicitly from the current roadmap and started from the CR-29 frozen marker.
+After the corrected marker is in place, **no CR-30 or other successor implementation is automatically authorized**. The next system block must be selected explicitly from the current roadmap and started from the corrected CR-29 frozen marker.
 
 ---
 
-**Updated:** 2026-09-06 after **CR-29 Completion / Regression / Freeze Gate** reached **PASS / 0 BLOCKER**; final exact-state CI verification is the only remaining prerequisite for the frozen marker.
+**Updated:** 2026-09-06 after correction of stale CR-28C visible browser-test-page labels; final exact-state CI re-verification is required before advancing the CR-29 frozen marker.
