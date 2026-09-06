@@ -13,8 +13,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-30A – Home & Housing Capacity Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `f74d6bc1399212650c11196f8f098a419eda6cbf`
 - CR-30B – Deterministic Housing & Population Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `e00fb5bbbde6f7f6e72b81ac77a44f0a263834a5`
 - CR-30C – Gold Economy Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `7248b7ad0cc20b60f5919a422a261ab7cd2221d8`
-- CR-30 – Housing / Population / Gold Integration Foundation: **WHOLE-CR AUTOMATED GATE PASS / BROWSER GATE PENDING / NOT FROZEN**
-- Current allowed action: real browser/device verification of the **CR-30 Completion / Regression / Freeze Gate** only.
+- CR-30 – Housing / Population / Gold Integration Foundation: **COMPLETION GATE PASS / 0 BLOCKER — WHOLE-CR FREEZE READY**
+- Current allowed action: create the whole-CR freeze marker for CR-30 from the accepted completion-gate baseline only.
 
 ## 2. Frozen CR-30 source truth
 
@@ -24,7 +24,7 @@ No independent mutable Population counter/store exists. Gold is not Resource/Bui
 
 ## 3. CR-30 Completion / Regression / Freeze Gate
 
-**AUTOMATED PASS / 0 BLOCKER — REAL BROWSER/DEVICE GATE PENDING — WHOLE CR-30 NOT YET FROZEN**.
+**PASS / 0 BLOCKER — AUTOMATED + REAL BROWSER/DEVICE EVIDENCE ACCEPTED — WHOLE-CR FREEZE READY**.
 
 Whole-gate implementation:
 
@@ -39,21 +39,26 @@ Automated evidence:
 - GitHub Actions run `34061733270` on commit `67bf665b9cf0acf94c0ec1f70ca01a39322fefb5`: **SUCCESS / PASS / 0 BLOCKER**,
 - chain: `npm run ci` + CR-24C + CR-28 + CR-30 whole gate,
 - CR-30 whole gate internally covers frozen CR-29 + CR-30A + CR-30B + CR-30C,
-- Housing/Home, derived Population and non-physical Gold invariants therefore passed together with the frozen world/camera regression.
+- Housing/Home, derived Population and non-physical Gold invariants passed together with the frozen world/camera regression.
 
-Remaining mandatory final evidence before whole-CR freeze:
+Real browser/device evidence accepted on 2026-09-06 from iPad/Safari:
 
-- real iPad/Safari or equivalent browser/device verification of the deployed completion-gate page,
-- visible title/heading/status identify the CR-30 Completion / Regression / Freeze Gate,
-- runtime is READY,
-- evidence still shows Population 3, 3 Home Assignments, Gold Income 3, Gold Balance 3, NON-PHYSICAL and preserved 3 Buildings / 3 Persons,
-- no stale CR-30A/B/C identity is presented as the current build.
+- page heading visibly identifies `CR-30 Completion / Regression / Freeze Gate`,
+- runtime visibly reports `READY`,
+- evidence visibly reports `CR-30 COMPLETION GATE ACTIVE — A+B+C`,
+- Population = 3,
+- Home Assignments = 3,
+- Gold Income = 3,
+- Gold Balance = 3,
+- Gold = `NON-PHYSICAL`,
+- 3 Buildings / 3 Persons remain visible,
+- no CR-30A, CR-30B or CR-30C substep is presented as the current visible build.
 
-Only after this real browser gate is accepted at **PASS / 0 BLOCKER** may the whole-CR freeze marker be created.
+Gate decision: **PASS / 0 BLOCKER**. The completion gate has no remaining browser blocker. Whole CR-30 may now receive its freeze marker from this accepted baseline; no new gameplay functionality is authorized during that freeze action.
 
 ## 4. Locked later work
 
-Navigation, Path/Wear, SaveGame, UI/Mobile and Inspector remain locked until whole CR-30 is frozen. A successful CR-30 freeze does not implicitly authorize any successor CR.
+Navigation, Path/Wear, SaveGame, UI/Mobile and Inspector remain locked until the whole-CR freeze marker is created. A successful CR-30 freeze does not implicitly authorize any successor CR.
 
 ## 5. Permanent visible CR / build identity synchronization rule
 
@@ -61,4 +66,4 @@ Before a browser/device gate, before declaring a visible substep PASS, and again
 
 ---
 
-**Updated:** 2026-09-06 — CR-30 automated whole-block Completion / Regression / Freeze Gate passed at `67bf665b9cf0acf94c0ec1f70ca01a39322fefb5` / Actions run `34061733270`; real browser/device gate is the sole remaining blocker before whole CR-30 freeze.
+**Updated:** 2026-09-06 — CR-30 Completion / Regression / Freeze Gate accepted at PASS / 0 BLOCKER using automated run `34061733270` plus real iPad/Safari evidence. Whole CR-30 is freeze-ready; only creation of the whole-CR freeze marker remains authorized.
