@@ -17,8 +17,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Active system block: **CR-29 – Camera & World View Foundation**
 - CR-29A – World View / Camera State Contract: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**
 - CR-29B – Deterministic World-to-Screen Projection: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**
-- CR-29C – Controlled Pan & Zoom Integration: **AUTOMATED_PASS / BROWSER_INPUT_VERIFICATION_PENDING**
-- Next allowed action: **verify CR-29C real browser drag/pan + pinch or wheel zoom; no whole-CR freeze yet**
+- CR-29C – Controlled Pan & Zoom Integration: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**
+- Next allowed action: **CR-29 Completion / Regression / Freeze Gate**
 
 ## 2. Frozen CR-28 baseline
 
@@ -82,13 +82,13 @@ Deterministic screen-space contract:
 
 ### CR-29C – Controlled Pan & Zoom Integration
 
-**AUTOMATED_PASS / BROWSER_INPUT_VERIFICATION_PENDING**.
+**COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
 
 Implementation:
 
 - `src/render/world-view-camera-control.js`
 - `src/dev/cr-29c-self-test.node.js`
-- `src/main.js` now binds pointer/wheel input only to CR-29 camera state.
+- `src/main.js` binds pointer/wheel input only to CR-29 camera state.
 
 Controlled presentation behavior:
 
@@ -105,14 +105,18 @@ Automated verification:
 
 GitHub Actions run `34053144140` on commit `a09b046b5e2c5b1be73ce85743a8526f3415a99e` ran frozen regression + CR-28 whole-system gate + CR-29A/B/C tests successfully: **PASS / 0 BLOCKER**.
 
-Manual evidence still required before CR-29C may be marked `COMPLETE_NOT_FROZEN`:
+Accepted real-browser evidence on 2026-09-06:
 
-- real browser drag changes only the visible camera offset,
-- real browser pinch (touch) or wheel (desktop) changes zoom,
-- zoom remains controlled and the world remains visible/usable,
-- gameplay/world owner state remains unaffected from the user's observable behavior.
+- iPhone Safari initial world view showed the expected grid, 3 Buildings and 3 Persons,
+- real drag/pan visibly changed camera offset,
+- real pinch zoom visibly enlarged the world,
+- a subsequent zoom-out visibly reduced the world,
+- grid, Buildings and Persons remained coherent and visible through those view changes,
+- no observable gameplay/world-state mutation was caused by camera operation.
 
-After this browser verification, execute **CR-29 Completion / Regression / Freeze Gate** against frozen CR-28.
+Browser input verification: **PASS / 0 BLOCKER**.
+
+CR-29C is therefore complete for the current whole-CR branch, but CR-29 itself remains not frozen until its own whole-system gate passes.
 
 ## 4. CR-29 hard global non-scope
 
@@ -141,10 +145,12 @@ CR-29 is a presentation/view foundation only.
 
 ## 6. Next allowed action
 
-Perform **CR-29C real-browser input verification** on the deployed whole-CR-29 branch.
+Execute **CR-29 Completion / Regression / Freeze Gate** against the frozen CR-28 baseline.
 
-Do not begin the CR-29 Completion / Regression / Freeze Gate until real drag/pan and pinch/wheel zoom behavior has been confirmed. Do not begin any successor CR.
+The whole-system gate must include CR-29A + CR-29B + CR-29C together with the frozen predecessor regression and the accepted real-browser evidence. Only at **PASS / 0 BLOCKER** may CR-29 be marked FROZEN and receive its frozen marker.
+
+Do not begin or authorize a successor CR before that gate is complete.
 
 ---
 
-**Updated:** 2026-09-06 after automated **CR-29C – Controlled Pan & Zoom Integration** verification: **PASS / 0 BLOCKER**, browser input verification still pending.
+**Updated:** 2026-09-06 after accepted real iPhone Safari browser verification of **CR-29C – Controlled Pan & Zoom Integration**: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
