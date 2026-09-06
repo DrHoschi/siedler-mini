@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-27B browser freeze gate exposed / device PASS pending  
+**Status:** CURRENT – CR-27B frozen / CR-27C next  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen gameplay baseline:** **CR-26 – Workforce Capability & Job Eligibility Foundation**
@@ -13,9 +13,12 @@ CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN
 
 CR-27A – BuildingStock Transport Intent & Reservation Bridge: **PASS / FROZEN / 0 BLOCKER**.
 
-CR-27A frozen marker:
+CR-27B – Workforce-Aware Transport Dispatch Integration: **PASS / FROZEN / 0 BLOCKER**.
 
-`frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`
+Frozen markers:
+
+- `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`
+- `frozen/cr-27b-workforce-aware-transport-dispatch-integration`
 
 ## 2. Current system block
 
@@ -23,7 +26,7 @@ CR-27A frozen marker:
 
 System chain:
 
-`CR-25 BuildingStock -> CR-27A Reservation -> CR-26 Workforce -> existing transport runtime -> CR-27C Settlement -> CR-25 BuildingStock`
+`CR-25 BuildingStock -> CR-27A Reservation -> CR-26 Workforce -> CR-27B Dispatch -> existing transport runtime -> CR-27C Settlement -> CR-25 BuildingStock`
 
 ### CR-27A – BuildingStock Transport Intent & Reservation Bridge
 
@@ -33,15 +36,15 @@ The ACTIVE reservation remains the authoritative protection against double-dispo
 
 ### CR-27B – Workforce-Aware Transport Dispatch Integration
 
-**IMPLEMENTED / BROWSER FREEZE GATE EXPOSED / AWAITING DEVICE PASS / NOT FROZEN**
+**PASS / FROZEN / 0 BLOCKER**
 
-Dispatch chain:
+Frozen dispatch chain:
 
 `ACTIVE reservation -> CAN_SIMPLE_TRANSPORT eligibility -> CR-26 assignment -> legacy-compatible pending TransportJob projection -> execution assignment using the same unit/person identity -> TransportExecutionContract.begin`
 
-Key ownership rules:
+Frozen ownership rules:
 
-- frozen CR-26 is the sole workforce availability/selection/assignment owner,
+- CR-26 is the sole workforce availability/selection/assignment owner,
 - `CarrierAssignmentService.assign()` is not used,
 - Carrier `AVAILABLE/OCCUPIED` is not a second gameplay truth,
 - selected `personId` is reused as execution `unitId`,
@@ -50,43 +53,23 @@ Key ownership rules:
 - CR-27A reservation remains ACTIVE and unchanged,
 - source/target BuildingStock is not mutated.
 
-The dedicated browser gate is now exposed through `index.html` and `src/dev/cr-27b-freeze-gate.js`.
+The dedicated CR-27B device/browser Verification / Freeze Gate passed **PASS / 0 BLOCKER** on 2026-09-06.
 
 ### CR-27C – Delivered Transport -> BuildingStock Settlement
 
-**NOT STARTED**. May begin only after CR-27B is **PASS / FROZEN / 0 BLOCKER**.
+**NEXT ALLOWED / NOT STARTED / NOT FROZEN**.
 
-CR-27C will later own confirmed-delivery settlement, controlled BuildingStock transfer, reservation closure and temporary workforce release; none of those behaviors belong to CR-27B.
+Before implementation, define its exact settlement boundary against frozen CR-27A, frozen CR-27B, CR-25 BuildingStock mutation ownership and existing transport delivery evidence.
 
-After A/B/C, run a whole **CR-27 Completion / Regression / Freeze Gate**.
+The intended system responsibility remains: only a confirmed delivered transport may cause controlled source -> target BuildingStock transfer, reservation closure and controlled temporary workforce release. Exact lifecycle/evidence semantics must be inspected live before implementation.
 
-## 3. CR-27B current gate boundary
+After CR-27C passes its own gate, run a whole **CR-27 Completion / Regression / Freeze Gate**.
 
-The browser gate regresses frozen CR-27A and direct CR-27B tests together with additional end-to-end checks for:
-
-- ACTIVE required / RELEASED rejected,
-- mandatory `CAN_SIMPLE_TRANSPORT`,
-- CR-26 FREE/ASSIGNED/UNAVAILABLE semantics remaining authoritative,
-- deterministic Person selection independent of candidate order,
-- no eligible Person means no dispatch,
-- selected Person identity equals execution unit identity,
-- frozen reservation/Profile/input state remain unchanged,
-- TransportJob projection copies source/target/resource/amount exactly,
-- compatibility IDs validate without creating legacy stores,
-- no CarrierAssignmentService selection,
-- no physical BuildingStock mutation, delivery settlement, reservation release or workforce release.
-
-Required browser/device result:
-
-`CR-27B WORKFORCE-AWARE TRANSPORT DISPATCH INTEGRATION VERIFICATION / FREEZE GATE: PASS / 0 BLOCKER`
-
-Only that browser **PASS / 0 BLOCKER** permits the immutable CR-27B marker.
-
-## 4. CR-27 global non-scope
+## 3. CR-27 global non-scope
 
 No new pathfinding, route algorithm, traffic algorithm, traffic reservation semantics, deadlock logic, Carrier AI, production timing, construction work, job prioritization/scoring, graphics, Inspector, balancing or SaveGame ownership.
 
-## 5. Branch / gate policy
+## 4. Branch / gate policy
 
 - One CR-27 development branch: `feature/cr-27-game-facing-logistics-integration-foundation`.
 - A/B/C proceed sequentially on that branch.
@@ -95,6 +78,10 @@ No new pathfinding, route algorithm, traffic algorithm, traffic reservation sema
 - Pages remains on the active CR-27 branch during the whole CR-27 cycle.
 - Whole CR-27 becomes FROZEN only after final combined regression/invariant/scope gate passes.
 
+## 5. Next required activity
+
+Define the exact **CR-27C – Delivered Transport -> BuildingStock Settlement** boundary from the live repository. Do not implement settlement until the delivery evidence, CR-25 mutation contract, CR-27A release semantics and CR-26 workforce-release contract have been inspected together.
+
 ---
 
-**Updated:** 2026-09-06 after exposing the CR-27B browser Verification / Freeze Gate. Next step: device/browser verification; CR-27B remains NOT FROZEN until PASS / 0 BLOCKER.
+**Updated:** 2026-09-06 after CR-27B device/browser Verification / Freeze Gate: **PASS / 0 BLOCKER**. CR-27B is FROZEN; CR-27C is next.
