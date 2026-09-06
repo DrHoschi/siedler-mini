@@ -8,6 +8,7 @@ import { BuildingLifecycleStateContract } from './domain/building-lifecycle-stat
 import { PersonResidentIdentityContract } from './domain/person-resident-identity-contract.js';
 import { HousingHomeCapacityIntegrationContract } from './domain/housing-home-capacity-integration-contract.js';
 import { DeterministicHousingPopulationIntegration } from './domain/deterministic-housing-population-integration.js';
+import { GoldEconomyOwner } from './domain/gold-economy-owner.js';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import {
@@ -28,11 +29,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-30B Housing Population Miniworld',
+  name: 'CR-30C Gold Economy Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-30B-DETERMINISTIC-HOUSING-POPULATION-INTEGRATION' }
+  metadata: { foundation: 'CR-30C-GOLD-ECONOMY-INTEGRATION' }
 });
 const domains = new CoreDomainStores();
 
@@ -67,6 +68,13 @@ const housingPopulation = DeterministicHousingPopulationIntegration.integrate({
     HousingHomeCapacityIntegrationContract.defineHousing({ buildingIdentity: storehouse.identity, capacity: 1 }),
   ],
   assignments: [],
+});
+
+const goldEconomy = new GoldEconomyOwner({ initialGold: 0 });
+const browserEvidenceGoldPerResident = 1;
+const goldSettlement = goldEconomy.settle({
+  population: housingPopulation.population,
+  goldPerResident: browserEvidenceGoldPerResident,
 });
 
 let cameraState = createWorldViewCameraState({
@@ -197,7 +205,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-30B ACTIVE — Population ${housingPopulation.population.count} aus gültigen Bewohnern — ${housingPopulation.assignments.length} Home Assignments — ${housingPopulation.createdGeneralResidentIds.length} General Residents aus freien Plätzen — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `CR-30C ACTIVE — Population ${housingPopulation.population.count} — Gold Rate ${browserEvidenceGoldPerResident}/Resident — Gold Income ${goldSettlement.income.amount} — Gold Balance ${goldSettlement.state.balance} — NON-PHYSICAL — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
   testEl.dataset.pass = 'true';
 }
 
@@ -208,17 +216,22 @@ window.CleanRuntime = Object.freeze({
   map,
   domains,
   housingPopulation,
+  goldEconomy,
+  goldSettlement,
   renderCurrentWorld,
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-30B] Deterministic Housing & Population Integration', {
+console.info('[CR-30C] Gold Economy Integration', {
   build: RuntimeConfig.build,
   population: housingPopulation.population.count,
-  assignments: housingPopulation.assignments.length,
-  createdGeneralResidents: housingPopulation.createdGeneralResidentIds.length,
+  goldPerResident: browserEvidenceGoldPerResident,
+  goldIncome: goldSettlement.income.amount,
+  goldBalance: goldSettlement.state.balance,
+  goldPhysical: goldSettlement.state.physical,
+  physicalResourceCount: domains.resources.size,
+  logisticsJobCount: domains.jobs.size,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
   frozenPresentationRegressionPreserved: true,
-  goldIntroduced: false,
 });
