@@ -6,6 +6,8 @@ import { CoreDomainStores } from './domain/core-domain-stores.js';
 import { BuildingIdentityOwnershipContract } from './domain/building-identity-ownership-contract.js';
 import { BuildingLifecycleStateContract } from './domain/building-lifecycle-state-contract.js';
 import { PersonResidentIdentityContract } from './domain/person-resident-identity-contract.js';
+import { HousingHomeCapacityIntegrationContract } from './domain/housing-home-capacity-integration-contract.js';
+import { DeterministicHousingPopulationIntegration } from './domain/deterministic-housing-population-integration.js';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import {
@@ -26,11 +28,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-30A Housing Contract Miniworld',
+  name: 'CR-30B Housing Population Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-30A-HOME-HOUSING-CAPACITY-CONTRACT' }
+  metadata: { foundation: 'CR-30B-DETERMINISTIC-HOUSING-POPULATION-INTEGRATION' }
 });
 const domains = new CoreDomainStores();
 
@@ -51,12 +53,21 @@ function createVisiblePerson(position) {
   }, { id: personId });
 }
 
-createVisibleBuilding('HQ', { x: 2, y: 2 });
+const hq = createVisibleBuilding('HQ', { x: 2, y: 2 });
 createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
-createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
+const storehouse = createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
 createVisiblePerson({ x: 1.25, y: 1.5 });
 createVisiblePerson({ x: 4.25, y: 2.25 });
 createVisiblePerson({ x: 6.25, y: 4.25 });
+
+const housingPopulation = DeterministicHousingPopulationIntegration.integrate({
+  domains,
+  housings: [
+    HousingHomeCapacityIntegrationContract.defineHousing({ buildingIdentity: hq.identity, capacity: 2 }),
+    HousingHomeCapacityIntegrationContract.defineHousing({ buildingIdentity: storehouse.identity, capacity: 1 }),
+  ],
+  assignments: [],
+});
 
 let cameraState = createWorldViewCameraState({
   viewportWidth: 1,
@@ -100,10 +111,7 @@ function renderCurrentWorld() {
 
 function canvasPoint(event) {
   const rect = canvas.getBoundingClientRect();
-  return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
-  };
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 
 const activePointers = new Map();
@@ -122,7 +130,6 @@ function currentPinch() {
 }
 
 canvas.style.touchAction = 'none';
-
 canvas.addEventListener('pointerdown', event => {
   canvas.setPointerCapture?.(event.pointerId);
   const point = canvasPoint(event);
@@ -130,12 +137,10 @@ canvas.addEventListener('pointerdown', event => {
   previousSinglePointer = activePointers.size === 1 ? point : null;
   previousPinch = currentPinch();
 });
-
 canvas.addEventListener('pointermove', event => {
   if (!activePointers.has(event.pointerId)) return;
   const point = canvasPoint(event);
   activePointers.set(event.pointerId, point);
-
   if (activePointers.size === 1) {
     if (previousSinglePointer) {
       cameraState = panWorldViewCamera(cameraState, {
@@ -148,7 +153,6 @@ canvas.addEventListener('pointermove', event => {
     previousPinch = null;
     return;
   }
-
   const pinch = currentPinch();
   if (pinch && previousPinch && previousPinch.distance > 0 && pinch.distance > 0) {
     cameraState = panWorldViewCamera(cameraState, {
@@ -165,17 +169,14 @@ canvas.addEventListener('pointermove', event => {
   previousPinch = pinch;
   previousSinglePointer = null;
 });
-
 function releasePointer(event) {
   activePointers.delete(event.pointerId);
   const remaining = [...activePointers.values()];
   previousSinglePointer = remaining.length === 1 ? remaining[0] : null;
   previousPinch = currentPinch();
 }
-
 canvas.addEventListener('pointerup', releasePointer);
 canvas.addEventListener('pointercancel', releasePointer);
-
 canvas.addEventListener('wheel', event => {
   event.preventDefault();
   const point = canvasPoint(event);
@@ -196,7 +197,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-30A ACTIVE — Home & Housing Capacity Contract — CR-29 Welt/Kamera erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `CR-30B ACTIVE — Population ${housingPopulation.population.count} aus gültigen Bewohnern — ${housingPopulation.assignments.length} Home Assignments — ${housingPopulation.createdGeneralResidentIds.length} General Residents aus freien Plätzen — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
   testEl.dataset.pass = 'true';
 }
 
@@ -206,16 +207,18 @@ window.CleanRuntime = Object.freeze({
   world,
   map,
   domains,
+  housingPopulation,
   renderCurrentWorld,
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-30A] Home & Housing Capacity Contract presentation identity', {
+console.info('[CR-30B] Deterministic Housing & Population Integration', {
   build: RuntimeConfig.build,
-  mapId: initialRender.projection.map.id,
-  cameraState: initialRender.cameraState,
+  population: housingPopulation.population.count,
+  assignments: housingPopulation.assignments.length,
+  createdGeneralResidents: housingPopulation.createdGeneralResidentIds.length,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
-  renderCommands: initialRender.commands.length,
-  frozenPresentationRegressionPreserved: true
+  frozenPresentationRegressionPreserved: true,
+  goldIntroduced: false,
 });
