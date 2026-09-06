@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-30 ACTIVE / CR-30A FROZEN / CR-30B FROZEN / CR-30C IMPLEMENTED + VERIFICATION ACTIVE  
+**Status:** CURRENT – CR-30 ACTIVE / CR-30A FROZEN / CR-30B FROZEN / CR-30C ACCEPTED + FREEZE PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-30-housing-population-gold-integration-foundation`  
 **Latest whole-CR freeze:** **CR-29 – Camera & World View Foundation**  
@@ -44,43 +44,41 @@ Population remains the immutable derived truth from valid real housed Persons. N
 
 ### CR-30C – Gold Economy Integration
 
-Status: **IMPLEMENTED / DIRECT VERIFICATION ACTIVE / NOT FROZEN**.
+Status: **ACCEPTED / AUTOMATED + REAL IPAD BROWSER VERIFIED / PASS / 0 BLOCKER / FREEZE PENDING**.
 
-Implemented capability increment:
+Accepted capability:
 
 - one explicit `GoldEconomyOwner` is the sole mutable Gold-balance owner,
 - Gold is explicitly non-physical,
 - Gold income consumes only frozen CR-30B `derived-population`,
-- an explicit `goldPerResident` rate is required; CR-30C introduces no hidden production balance constant,
+- an explicit `goldPerResident` rate is required; no hidden gameplay balance constant exists,
 - pure income derivation and balance mutation are separated,
-- Gold is not placed in Resource/BuildingStock state,
-- Gold is not Logistics cargo and creates no Transport job,
-- Population is not mutated and no second Population truth is introduced,
-- no restore surcharge or SaveGame/restore behavior is introduced.
+- Gold is not Resource/BuildingStock state,
+- Gold is not Logistics cargo and creates no TransportJob,
+- Population is not mutated and no second Population truth exists,
+- no restore surcharge or SaveGame/restore behavior exists.
 
-Implementation/evidence files:
+Evidence:
 
 - `src/domain/gold-economy-owner.js`,
 - `src/dev/cr-30c-self-test.node.js`,
-- CI regression includes CR-30C after the frozen predecessor gates,
-- browser/build identity is synchronized to CR-30C.
+- GitHub Actions run `34061155533`: frozen predecessor regression + CR-30A/B + CR-30C = **PASS / 0 BLOCKER**,
+- real iPad/Safari evidence on 2026-09-06: current CR-30C identity, runtime READY, Population 3, explicit evidence Gold Rate 1/Resident, Gold Income 3, Gold Balance 3, NON-PHYSICAL, 3 Buildings / 3 Persons preserved = **PASS / 0 BLOCKER**.
 
-Browser evidence scenario intentionally uses explicit evidence rate `1 Gold / Resident` with frozen Population 3. Expected visible values are Gold Income 3 / Gold Balance 3 / NON-PHYSICAL while 3 Buildings / 3 Persons remain preserved. This evidence rate is not a gameplay balance decision.
-
-Not allowed yet: SaveGame/restore, UI/Inspector features, Navigation/Path/Wear changes, physical Gold stock/cargo, or unrelated ownership changes.
+The visible `1 Gold / Resident` rate is an evidence/test value only, not a production balancing decision.
 
 ### CR-30 Completion / Regression / Freeze Gate
 
 Status: **PLANNED / NOT YET AUTHORIZED FOR EXECUTION**.
 
-A+B+C may be regressed as a whole only after CR-30C itself is accepted/frozen. Whole CR-30 freezes only at **PASS / 0 BLOCKER**. No successor CR is implicitly authorized.
+A+B+C may be regressed as a whole only after the CR-30C freeze marker exists. Whole CR-30 freezes only at **PASS / 0 BLOCKER**. No successor CR is implicitly authorized.
 
 ## 4. Current next step
 
-Complete CR-30C automated verification and real browser/device verification only. Confirm current CR-30C identity, Population 3, Gold Rate 1/Resident, Gold Income 3, Gold Balance 3, NON-PHYSICAL, and preserved 3 Buildings / 3 Persons.
+Create the CR-30C freeze marker on the accepted PASS / 0 BLOCKER state. Only after that marker exists may the separate **CR-30 Completion / Regression / Freeze Gate** be explicitly authorized.
 
-Do not execute the whole-CR Completion/Freeze Gate yet.
+Do not execute the whole-CR gate as part of CR-30C freeze.
 
 ---
 
-**Updated:** 2026-09-06 — CR-30C implemented as a separate non-physical Gold economy owner consuming only frozen derived Population; direct/browser verification is the sole active gate.
+**Updated:** 2026-09-06 — CR-30C automated and real iPad/Safari verification accepted PASS / 0 BLOCKER; CR-30C freeze marker is the sole next action.
