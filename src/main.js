@@ -29,11 +29,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-30C Gold Economy Miniworld',
+  name: 'CR-30 Completion Freeze Gate Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-30C-GOLD-ECONOMY-INTEGRATION' }
+  metadata: { foundation: 'CR-30-COMPLETION-FREEZE-GATE' }
 });
 const domains = new CoreDomainStores();
 
@@ -205,7 +205,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-30C ACTIVE — Population ${housingPopulation.population.count} — Gold Rate ${browserEvidenceGoldPerResident}/Resident — Gold Income ${goldSettlement.income.amount} — Gold Balance ${goldSettlement.state.balance} — NON-PHYSICAL — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `CR-30 COMPLETION GATE ACTIVE — A+B+C — Population ${housingPopulation.population.count} — ${housingPopulation.assignments.length} Home Assignments — Gold Income ${goldSettlement.income.amount} — Gold Balance ${goldSettlement.state.balance} — NON-PHYSICAL — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
   testEl.dataset.pass = 'true';
 }
 
@@ -222,9 +222,10 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-30C] Gold Economy Integration', {
+console.info('[CR-30 COMPLETION GATE] Housing / Population / Gold Integration Foundation', {
   build: RuntimeConfig.build,
   population: housingPopulation.population.count,
+  homeAssignments: housingPopulation.assignments.length,
   goldPerResident: browserEvidenceGoldPerResident,
   goldIncome: goldSettlement.income.amount,
   goldBalance: goldSettlement.state.balance,
@@ -233,5 +234,8 @@ console.info('[CR-30C] Gold Economy Integration', {
   logisticsJobCount: domains.jobs.size,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
-  frozenPresentationRegressionPreserved: true,
+  frozenCR29PresentationRegressionPreserved: true,
+  cr30ARegressionIncluded: true,
+  cr30BRegressionIncluded: true,
+  cr30CRegressionIncluded: true,
 });
