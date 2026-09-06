@@ -14,7 +14,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Active system block: **CR-28 – Visible World Runtime Integration Foundation**
-- Active sub-block: **CR-28A – Game-State Render Projection Contract**
+- CR-28A – Game-State Render Projection Contract: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**
+- Next allowed sub-block: **CR-28B – Deterministic World Canvas Rendering**
 
 ## 2. Frozen CR-27 baseline
 
@@ -32,15 +33,17 @@ CR-28 was created directly from this immutable baseline. Frozen CR-27 owner and 
 
 ### CR-28A – Game-State Render Projection Contract
 
-Create a read-only, immutable projection boundary from existing gameplay owners into renderer-neutral visible-world entries. Initial minimum projection scope: Map, Buildings and Persons with stable identity, position and deliberately exposed visible base state. No Canvas drawing and no interaction.
+Status: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
+
+Implemented renderer-neutral read-only projection for Map, Buildings and Persons with explicit visible fields, stable IDs, deterministic ordering and deep immutability. Direct projection/immutability/determinism tests pass together with existing CR regression in GitHub Actions run `34036947256`.
 
 ### CR-28B – Deterministic World Canvas Rendering
 
-Render the CR-28A projection reproducibly as a simple prototype/debug world: world/grid, Buildings and Persons. Same projection must yield the same render commands / visible result. No gameplay writes.
+Next allowed same-branch step. Render the CR-28A projection reproducibly as a simple prototype/debug world: world/grid, Buildings and Persons. Same projection must yield the same render commands / visible result. No gameplay writes.
 
 ### CR-28C – Live Runtime -> Render Integration
 
-Connect current runtime state -> CR-28A projection -> CR-28B renderer -> Canvas update, replacing the obsolete test-shell composition with the current modular runtime composition. Rendering remains read-only.
+Later same-branch step. Connect current runtime state -> CR-28A projection -> CR-28B renderer -> Canvas update, replacing the obsolete test-shell composition with the current modular runtime composition. Rendering remains read-only.
 
 After CR-28C, run one whole CR-28 Completion / Regression / Freeze Gate. Only PASS / 0 BLOCKER may freeze CR-28.
 
@@ -50,32 +53,27 @@ CR-28 adds no Save/Load/Continue ownership, Gameplay HUD, Build menu, Inspector,
 
 CR-28 may only make already-owned gameplay truth visible.
 
-## 5. CR-28A active scope and invariants
+## 5. CR-28A accepted invariants
 
-CR-28A must:
+CR-28A now proves:
 
-- read existing frozen gameplay state without mutating it,
-- expose renderer-neutral immutable projection data,
-- initially cover Map, Buildings and Persons,
-- preserve stable identity and deterministic ordering/output,
-- expose only deliberately selected visible state,
-- ensure renderer/UI gains no gameplay ownership and no write-back path,
-- include projection, immutability and determinism tests.
-
-CR-28A must not:
-
-- draw to Canvas,
-- add controls or interaction,
-- add camera behavior,
-- add HUD/Inspector behavior,
-- change gameplay stores, owners or simulation semantics.
+- source gameplay state is read without mutation,
+- projection results are deeply immutable,
+- no mutable alias to gameplay owners is exposed,
+- Map, Buildings and Persons are covered,
+- stable identities and deterministic ordering are preserved,
+- only deliberately exposed visible fields enter the projection,
+- irrelevant gameplay fields do not become renderer ownership,
+- no Canvas/DOM rendering or gameplay write-back exists in A.
 
 ## 6. Next allowed action
 
-**Implement and test CR-28A only on `feature/cr-28-visible-world-runtime-integration-foundation`.**
+**Begin CR-28B – Deterministic World Canvas Rendering on `feature/cr-28-visible-world-runtime-integration-foundation`.**
 
-Do not begin CR-28B until CR-28A's contract and direct tests are accepted. No separate CR-28A branch is required under the normal whole-CR branch policy.
+CR-28B may consume the completed CR-28A projection and deterministically produce simple Canvas render commands / prototype world drawing. It must not modify gameplay owners, introduce runtime integration, camera comfort features, HUD/Inspector behavior or CR-28C behavior.
+
+CR-28 remains NOT FROZEN until A+B+C and the final whole-system gate pass.
 
 ---
 
-**Updated:** 2026-09-06 after authorization and branch creation for **CR-28 – Visible World Runtime Integration Foundation**. Active step: **CR-28A – Game-State Render Projection Contract**.
+**Updated:** 2026-09-06 after **CR-28A – Game-State Render Projection Contract** direct test + existing CR regression: **PASS / 0 BLOCKER**. Next allowed step: **CR-28B – Deterministic World Canvas Rendering**.
