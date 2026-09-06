@@ -1,7 +1,7 @@
 # CR-27B – Workforce-Aware Transport Dispatch Integration
 
 **Parent:** CR-27 – Game-Facing Logistics Integration Foundation  
-**Status:** IMPLEMENTED / BROWSER FREEZE GATE EXPOSED / AWAITING DEVICE PASS / NOT FROZEN  
+**Status:** PASS / FROZEN / 0 BLOCKER  
 **Branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen predecessor:** `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`
 
@@ -34,7 +34,7 @@ Workforce selection and assignment runs only through `WorkforceJobEligibilityCon
 
 CR-27B does not select a Person through Carrier state or any second availability source.
 
-## 3. Implemented legacy transport compatibility boundary
+## 3. Frozen legacy transport compatibility boundary
 
 `WorkforceAwareTransportDispatchIntegration.dispatch(...)` accepts stable compatibility `transport-job:`, `claim:`, `demand:`, `resource:` and workforce `assignment:` IDs and creates an immutable legacy-compatible `TransportJobContract` whose game-facing fields are copied exactly from CR-27A:
 
@@ -46,7 +46,7 @@ CR-27B does not select a Person through Carrier state or any second availability
 
 Those compatibility references do not become gameplay owners and no legacy Claim, Demand or ResourceState store is created or mutated.
 
-## 4. Implemented workforce / execution projection
+## 4. Frozen workforce / execution projection
 
 After frozen CR-26 selects and assigns the Person, CR-27B projects:
 
@@ -56,7 +56,7 @@ The same stable `unit:` identity is passed into `TransportExecutionContract.begi
 
 `CarrierAssignmentService.assign()` is not used.
 
-## 5. Required invariants
+## 5. Frozen invariants
 
 - input reservation is ACTIVE before dispatch,
 - reservation remains byte-for-byte unchanged and ACTIVE after dispatch,
@@ -74,27 +74,27 @@ The same stable `unit:` identity is passed into `TransportExecutionContract.begi
 
 CR-27B does not release/mutate CR-27A reservation, mutate BuildingStock, settle delivery, release workforce after delivery/cancel, create/mutate legacy Claim/Demand/ResourceState stores, call `CarrierAssignmentService.assign()`, calculate Reachability, add pathfinding/routes/movement algorithms/traffic/deadlock logic, perform pickup/delivery execution, add priority/scoring/JobEngine queue behavior, alter production/construction or add SaveGame/rendering/gameplay UI/Inspector/balancing.
 
-## 7. Implemented files
+## 7. Frozen implementation files
 
 - `src/domain/workforce-aware-transport-dispatch-integration.js`
 - `src/dev/cr-27b-self-test.js`
 - `src/dev/cr-27b-self-test.node.js`
 - `src/dev/cr-27b-freeze-gate.js`
 - `docs/CR27B_WORKFORCE_AWARE_TRANSPORT_DISPATCH_INTEGRATION.md`
-- `index.html` exposes the CR-27B browser gate.
+- `index.html` exposes the accepted CR-27B browser gate.
 
-## 8. Direct test matrix
+## 8. Verification
 
 The direct self-test covers ACTIVE/RELEASED gating, mandatory `CAN_SIMPLE_TRANSPORT`, ASSIGNED/UNAVAILABLE exclusion, deterministic selection, no-eligible-person behavior, selected Person/execution unit identity, immutable reservation/Profile/input state, exact TransportJob projection, compatibility-ID validation, explicit Reachability input and ownership-leakage guards.
 
-## 9. Browser Verification / Freeze Gate
+The dedicated browser gate also regresses frozen CR-27A and verifies the integrated dispatch entry end-to-end.
 
-`src/dev/cr-27b-freeze-gate.js` additionally regresses frozen CR-27A and verifies the integrated dispatch entry end-to-end.
-
-Required browser/device result:
+Device/browser result accepted on 2026-09-06:
 
 `CR-27B WORKFORCE-AWARE TRANSPORT DISPATCH INTEGRATION VERIFICATION / FREEZE GATE: PASS / 0 BLOCKER`
 
-## 10. Freeze condition
+## 9. Freeze result
 
-CR-27B remains **NOT FROZEN** until the dedicated browser Verification / Freeze Gate passes with **PASS / 0 BLOCKER**, control documents are synchronized and the immutable CR-27B marker is created. Only then may CR-27C begin.
+CR-27B is **PASS / FROZEN / 0 BLOCKER**. Its immutable marker is `frozen/cr-27b-workforce-aware-transport-dispatch-integration`.
+
+Only CR-27C may extend the CR-27 chain from this point, and only within its separately defined settlement boundary.
