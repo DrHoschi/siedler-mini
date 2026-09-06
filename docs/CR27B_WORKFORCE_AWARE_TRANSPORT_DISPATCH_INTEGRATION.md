@@ -1,7 +1,7 @@
 # CR-27B – Workforce-Aware Transport Dispatch Integration
 
 **Parent:** CR-27 – Game-Facing Logistics Integration Foundation  
-**Status:** IMPLEMENTED / DIRECT TESTS ADDED / NOT FROZEN  
+**Status:** IMPLEMENTED / BROWSER FREEZE GATE EXPOSED / AWAITING DEVICE PASS / NOT FROZEN  
 **Branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen predecessor:** `frozen/cr-27a-buildingstock-transport-intent-reservation-bridge`
 
@@ -36,14 +36,7 @@ CR-27B does not select a Person through Carrier state or any second availability
 
 ## 3. Implemented legacy transport compatibility boundary
 
-The existing `TransportJobContract` requires stable compatibility references:
-
-- `transport-job:` ID,
-- `claim:` ID,
-- `demand:` ID,
-- `resource:` ID.
-
-`WorkforceAwareTransportDispatchIntegration.dispatch(...)` accepts those stable IDs as explicit projection references and creates an immutable legacy-compatible `TransportJobContract` value whose game-facing fields are derived exactly from CR-27A:
+`WorkforceAwareTransportDispatchIntegration.dispatch(...)` accepts stable compatibility `transport-job:`, `claim:`, `demand:`, `resource:` and workforce `assignment:` IDs and creates an immutable legacy-compatible `TransportJobContract` whose game-facing fields are copied exactly from CR-27A:
 
 - `definitionId = reservation.resourceTypeId`,
 - `sourceLocation = { kind: 'owner', refId: reservation.sourceBuildingId }`,
@@ -51,17 +44,17 @@ The existing `TransportJobContract` requires stable compatibility references:
 - `amount = reservation.amount`,
 - `status = PENDING`.
 
-These compatibility references do **not** become gameplay owners. CR-27B creates or mutates no legacy Claim, Demand or ResourceState stores.
+Those compatibility references do not become gameplay owners and no legacy Claim, Demand or ResourceState store is created or mutated.
 
 ## 4. Implemented workforce / execution projection
 
-After frozen CR-26 selects and assigns the Person, CR-27B creates an immutable execution assignment projection:
+After frozen CR-26 selects and assigns the Person, CR-27B projects:
 
 `{ jobId: transportJob.id, unitId: selected personId }`
 
-The same stable `unit:` identity is then passed into the existing `TransportExecutionContract.begin(...)`, which produces the existing `TO_PICKUP` execution entry state.
+The same stable `unit:` identity is passed into `TransportExecutionContract.begin(...)`, producing the existing `TO_PICKUP` execution entry state.
 
-`CarrierAssignmentService.assign()` is not used because it independently selects by `CarrierContract AVAILABLE/OCCUPIED` and would bypass frozen CR-26 ownership.
+`CarrierAssignmentService.assign()` is not used.
 
 ## 5. Required invariants
 
@@ -69,63 +62,39 @@ The same stable `unit:` identity is then passed into the existing `TransportExec
 - reservation remains byte-for-byte unchanged and ACTIVE after dispatch,
 - required capability is always `CAN_SIMPLE_TRANSPORT`,
 - only frozen CR-26 decides which Person is eligible and selected,
-- no eligible Person returns `null` rather than inventing a Carrier,
+- no eligible Person returns `null`,
 - selected `personId` equals execution `unitId`,
 - CR-26 assigned state owns the dispatch assignment ID,
 - transport projection copies source/target/resource type/amount exactly from CR-27A,
-- projection compatibility IDs are stable and do not mutate legacy stores,
+- compatibility IDs are stable and do not mutate legacy stores,
 - Profile and input Assignment State values remain immutable,
 - no Carrier `AVAILABLE/OCCUPIED` state participates in selection.
 
 ## 6. Strict non-scope
 
-CR-27B does not:
-
-- release or otherwise mutate CR-27A reservation state,
-- remove physical source BuildingStock,
-- add target BuildingStock,
-- settle a delivery,
-- release workforce after delivery/cancel,
-- create or mutate legacy Claim/Demand/ResourceState stores,
-- call `CarrierAssignmentService.assign()`,
-- calculate Reachability,
-- add pathfinding, routes, movement algorithms, traffic, reservations or deadlock logic,
-- perform pickup/delivery execution,
-- add priority/scoring/JobEngine queue behavior,
-- alter production/construction,
-- add SaveGame/rendering/gameplay UI/Inspector/balancing.
-
-Those completion/settlement concerns remain CR-27C or later.
+CR-27B does not release/mutate CR-27A reservation, mutate BuildingStock, settle delivery, release workforce after delivery/cancel, create/mutate legacy Claim/Demand/ResourceState stores, call `CarrierAssignmentService.assign()`, calculate Reachability, add pathfinding/routes/movement algorithms/traffic/deadlock logic, perform pickup/delivery execution, add priority/scoring/JobEngine queue behavior, alter production/construction or add SaveGame/rendering/gameplay UI/Inspector/balancing.
 
 ## 7. Implemented files
 
 - `src/domain/workforce-aware-transport-dispatch-integration.js`
 - `src/dev/cr-27b-self-test.js`
 - `src/dev/cr-27b-self-test.node.js`
+- `src/dev/cr-27b-freeze-gate.js`
 - `docs/CR27B_WORKFORCE_AWARE_TRANSPORT_DISPATCH_INTEGRATION.md`
-
-No CR-27B browser Verification / Freeze Gate was added in this implementation step.
+- `index.html` exposes the CR-27B browser gate.
 
 ## 8. Direct test matrix
 
-The direct self-test covers:
+The direct self-test covers ACTIVE/RELEASED gating, mandatory `CAN_SIMPLE_TRANSPORT`, ASSIGNED/UNAVAILABLE exclusion, deterministic selection, no-eligible-person behavior, selected Person/execution unit identity, immutable reservation/Profile/input state, exact TransportJob projection, compatibility-ID validation, explicit Reachability input and ownership-leakage guards.
 
-1. valid ACTIVE reservation dispatches through CR-26,
-2. RELEASED reservation is rejected,
-3. `CAN_SIMPLE_TRANSPORT` is mandatory,
-4. ASSIGNED and UNAVAILABLE candidates are excluded by CR-26,
-5. deterministic selected Person remains stable under candidate order changes,
-6. no eligible Person returns `null`,
-7. selected `personId === executionAssignment.unitId === execution.unitId`,
-8. reservation remains unchanged and ACTIVE,
-9. Profile/input workforce state remain unchanged,
-10. TransportJob projection copies source/target/resource/amount exactly,
-11. invalid compatibility IDs are rejected,
-12. explicit Reachability remains an input rather than a calculation,
-13. no CarrierAssignmentService/Carrier availability state is introduced,
-14. no legacy Claim/Demand/ResourceState mutation surface is introduced,
-15. no CR-27C settlement/release behavior leaks into the result.
+## 9. Browser Verification / Freeze Gate
 
-## 9. Freeze condition
+`src/dev/cr-27b-freeze-gate.js` additionally regresses frozen CR-27A and verifies the integrated dispatch entry end-to-end.
 
-CR-27B remains **NOT FROZEN**. A dedicated browser Verification / Freeze Gate must be built and pass with **PASS / 0 BLOCKER** before an immutable CR-27B marker may be created and before CR-27C begins.
+Required browser/device result:
+
+`CR-27B WORKFORCE-AWARE TRANSPORT DISPATCH INTEGRATION VERIFICATION / FREEZE GATE: PASS / 0 BLOCKER`
+
+## 10. Freeze condition
+
+CR-27B remains **NOT FROZEN** until the dedicated browser Verification / Freeze Gate passes with **PASS / 0 BLOCKER**, control documents are synchronized and the immutable CR-27B marker is created. Only then may CR-27C begin.
