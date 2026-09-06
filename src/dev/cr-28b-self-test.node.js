@@ -60,6 +60,8 @@ function fakeContext() {
   return {
     calls,
     canvas: { width: 320, height: 200 },
+    fillStyle: '#000000',
+    strokeStyle: '#000000',
     clearRect: (...args) => calls.push(['clearRect', ...args]),
     fillRect: (...args) => calls.push(['fillRect', ...args]),
     strokeRect: (...args) => calls.push(['strokeRect', ...args]),
@@ -82,6 +84,12 @@ assert.equal(Object.isFrozen(first[0]), true);
 
 assert.equal(first[0].type, 'clear');
 assert.equal(first[1].role, 'world-ground');
+assert.notEqual(first[1].fillStyle, '#000000', 'world ground must not rely on invisible default black fill');
+assert.equal(typeof first.find(command => command.role === 'grid-cell')?.strokeStyle, 'string');
+assert.equal(typeof first.find(command => command.role === 'building')?.fillStyle, 'string');
+assert.equal(typeof first.find(command => command.role === 'person')?.fillStyle, 'string');
+assert.notEqual(first.find(command => command.role === 'building')?.fillStyle, first[1].fillStyle, 'buildings must remain distinguishable from ground');
+assert.notEqual(first.find(command => command.role === 'person')?.fillStyle, first[1].fillStyle, 'persons must remain distinguishable from ground');
 assert.deepEqual(
   first.filter(command => command.role === 'grid-cell').map(command => command.sourceId),
   ['cell:00000001', 'cell:00000002']
@@ -106,11 +114,15 @@ assert.equal(executed, first.length);
 assert.equal(ctxA.calls[0][0], 'clearRect');
 assert.equal(ctxA.calls.some(call => call[0] === 'strokeRect'), true);
 assert.equal(ctxA.calls.filter(call => call[0] === 'arc').length, 2);
+assert.equal(ctxA.strokeStyle, first.find(command => command.role === 'grid-cell').strokeStyle);
+assert.equal(ctxA.fillStyle, first.find(command => command.role === 'person').fillStyle);
 
 const ctxB = fakeContext();
 const directCommands = renderProjectedWorldToCanvas(ctxB, projection, options);
 assert.deepEqual(directCommands, first);
 assert.deepEqual(ctxB.calls, ctxA.calls, 'same projection must produce same canvas call sequence');
+assert.equal(ctxB.fillStyle, ctxA.fillStyle, 'same projection must end with the same deterministic fill style');
+assert.equal(ctxB.strokeStyle, ctxA.strokeStyle, 'same projection must end with the same deterministic stroke style');
 assert.deepEqual(projection, before, 'canvas execution must not mutate projection/gameplay-visible data');
 
 assert.equal(first.some(command => 'gameplaySecret' in command), false);
