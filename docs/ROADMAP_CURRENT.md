@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-29 AUTHORIZED / CR-29A NEXT  
+**Status:** CURRENT – CR-29A COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-29-camera-world-view-foundation`  
 **Current frozen baseline:** **CR-28 – Visible World Runtime Integration Foundation**
@@ -37,37 +37,39 @@ Whole-CR branch:
 
 The branch was created directly from the frozen CR-28 marker at `1ca2997a3933b312737dda5a220f1026d149bdf1`.
 
-## 3. Planned CR-29 decomposition
+## 3. CR-29 decomposition and status
 
 ### CR-29A – World View / Camera State Contract
 
-Status: **AUTHORIZED / NOT_STARTED**.
+Status: **COMPLETE_NOT_FROZEN / PASS / 0 BLOCKER**.
 
-Define only the renderer-facing view/camera state contract required for deterministic presentation of the existing CR-28 world.
+Implementation:
 
-Minimum intended boundary:
+- `src/render/world-view-camera-state.js`
+- `src/dev/cr-29a-self-test.node.js`
 
-- viewport/view dimensions as needed by the render boundary,
-- world/view offset or equivalent origin state,
-- zoom/scale state,
+Contract:
+
+- viewport width/height,
+- world/view offset X/Y,
+- zoom/scale,
 - finite numeric validation,
-- deterministic immutable output/state representation,
-- no gameplay ownership or mutation.
+- positive viewport dimensions and zoom,
+- deterministic immutable state,
+- no gameplay/world ownership or mutation,
+- no world-to-screen transform or Canvas/input behavior.
 
-Still out of scope in CR-29A:
-
-- no world-to-screen transform integration,
-- no Canvas behavior changes,
-- no player pan input,
-- no pinch/wheel zoom input,
-- no touch controls,
-- no HUD, Build Menu or Inspector.
+GitHub Actions run `34051595342` on commit `5054684093499cc7f9b8f386c850b6d15e97e20e` passed frozen regression + CR-28 whole-system gate + CR-29A contract test: **PASS / 0 BLOCKER**.
 
 ### CR-29B – Deterministic World-to-Screen Projection
 
-After CR-29A passes, connect the CR-29A view state to the frozen CR-28 visible-world path. Same world + same camera/view state must produce the same screen-space result. Still no player interaction.
+Status: **AUTHORIZED / NEXT**.
+
+Connect the CR-29A view state to the frozen CR-28 visible-world path. Same world + same camera/view state must produce the same screen-space result. Still no player interaction.
 
 ### CR-29C – Controlled Pan & Zoom Integration
+
+Status: **NOT_AUTHORIZED** until CR-29B reaches **PASS / 0 BLOCKER**.
 
 After CR-29B passes, permit controlled user manipulation of the view state for pan and zoom. Presentation may change; gameplay/world owners must not.
 
@@ -97,10 +99,10 @@ CR-29 introduces no:
 
 ## 6. Current next step
 
-**CR-29A – World View / Camera State Contract** is the only authorized implementation step.
+**CR-29B – Deterministic World-to-Screen Projection** is now the only authorized implementation step.
 
-Implement and verify only the state contract. CR-29B and CR-29C remain unauthorized until the preceding substep reaches **PASS / 0 BLOCKER** under the established whole-CR workflow.
+CR-29B must remain deterministic and presentation-only. CR-29C remains unauthorized until CR-29B reaches **PASS / 0 BLOCKER**.
 
 ---
 
-**Updated:** 2026-09-06 after explicit authorization of **CR-29 – Camera & World View Foundation** and creation of its whole-CR branch directly from frozen CR-28.
+**Updated:** 2026-09-06 after **CR-29A – World View / Camera State Contract** verification: **PASS / 0 BLOCKER**.
