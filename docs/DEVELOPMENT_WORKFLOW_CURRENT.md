@@ -18,8 +18,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-29A – World View / Camera State Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-29B – Deterministic World-to-Screen Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-29C – Controlled Pan & Zoom Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- Current correction: stale CR-28C browser-test-page labels were replaced by CR-29/CR-29C labels only; no behavior changed.
-- Next allowed action: **exact-state CI verification of this corrected documentation-complete CR-29 HEAD, then advance the existing CR-29 frozen marker to that verified HEAD; no successor CR is implicitly authorized**
+- Post-freeze visible-label correction: **COMPLETE / PASS / 0 BLOCKER**.
+- Corrected CR-29 frozen marker: `frozen/cr-29-camera-world-view-foundation` -> `5ef4ba7f59070bfb392ed8c48abb6f8351788fc5`.
+- Next allowed action: **select the next system block explicitly from the current roadmap; no successor CR is implicitly authorized**.
 
 ## 2. Frozen predecessor baseline
 
@@ -114,7 +115,7 @@ Browser verification: **PASS / 0 BLOCKER**.
 
 A later visual check found that `index.html` still exposed the previous CR-28C test-page identity although CR-29C runtime status and behavior were already correct.
 
-The correction changes only visible test-page metadata/text:
+The correction changed only visible test-page metadata/text:
 
 - document title -> **Neue Siedler – CR-29 Camera & World View Foundation**,
 - stage accessibility label -> CR-29 camera-view wording,
@@ -125,7 +126,9 @@ The correction changes only visible test-page metadata/text:
 
 No camera state, projection, Canvas rendering, browser input, gameplay owner or ownership contract changed.
 
-Because this correction happened after the first marker creation, the existing frozen marker must be advanced only after the exact corrected, documentation-complete HEAD again passes the full CR-29 CI/freeze-gate chain.
+The corrected exact state passed the full CR-29 CI/freeze-gate chain, and the frozen marker was advanced to:
+
+`frozen/cr-29-camera-world-view-foundation` -> `5ef4ba7f59070bfb392ed8c48abb6f8351788fc5`.
 
 ## 6. Frozen CR-29 invariants
 
@@ -154,16 +157,39 @@ CR-29 adds no ownership for:
 - production/construction/new simulation semantics,
 - mandatory new visual assets.
 
-## 8. Final marker rule and next allowed action
+## 8. Frozen marker rule and next allowed action
 
 Current frozen marker:
 
 `frozen/cr-29-camera-world-view-foundation`
 
-It is maintained at the final exact-state-CI-verified CR-29 HEAD. For this visible-label correction, advance it only after the corrected documentation-complete HEAD has a successful full CI run.
+Current corrected frozen commit:
+
+`5ef4ba7f59070bfb392ed8c48abb6f8351788fc5`
 
 After the corrected marker is in place, **no CR-30 or other successor implementation is automatically authorized**. The next system block must be selected explicitly from the current roadmap and started from the corrected CR-29 frozen marker.
 
+## 9. Permanent visible CR / build identity synchronization rule
+
+This rule is mandatory for every future CR or substep that changes, deploys, tests or presents a visible browser/test page.
+
+Before a browser/device gate, before declaring a visible substep PASS, and again before a whole-CR Freeze Gate, verify that the deployed page visibly identifies the **current authorized CR/substep** and does not retain stale identity from a predecessor.
+
+The check must cover all applicable visible/build identity surfaces, including:
+
+- HTML document/page title,
+- visible page/card heading,
+- explanatory or diagnostic copy that names the active CR,
+- runtime/test-status and browser-gate text,
+- `aria-label` or equivalent accessibility labels that contain CR/build identity,
+- visible build/version badges or status pills,
+- cache-busting/version identifiers on JS/CSS/assets when they carry the CR/build identity,
+- any other user-visible or test-visible string that still names an earlier CR/substep.
+
+A stale predecessor label is a **visible verification defect**. It must be corrected before the relevant browser/device verification or Freeze Gate is considered complete. Do not treat correct runtime behavior alone as sufficient when the deployed test page still identifies the wrong CR.
+
+When a new CR/substep begins, visible identity synchronization belongs to that substep's normal completion work whenever the page exposes CR/build identity; it must not be left as an assumed cleanup step for later.
+
 ---
 
-**Updated:** 2026-09-06 after correction of stale CR-28C visible browser-test-page labels; final exact-state CI re-verification is required before advancing the CR-29 frozen marker.
+**Updated:** 2026-09-06 after successful CR-29 visible-label correction and user-confirmed iPad view. Permanent visible CR/build identity synchronization rule added to prevent stale predecessor labels in future browser/device gates.
