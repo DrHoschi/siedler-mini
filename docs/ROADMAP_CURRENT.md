@@ -1,8 +1,8 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-29 COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – CR-30 AUTHORIZED / CR-30A ACTIVE / NOT FROZEN  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `feature/cr-29-camera-world-view-foundation`  
+**Current control branch:** `feature/cr-30-housing-population-gold-integration-foundation`  
 **Latest freeze decision:** **CR-29 – Camera & World View Foundation**
 
 ## 1. Frozen line
@@ -17,95 +17,99 @@ CR-28 – Visible World Runtime Integration Foundation: **COMPLETE / FROZEN / PA
 
 CR-29 – Camera & World View Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Frozen CR-28 predecessor marker:
-
-`frozen/cr-28-visible-world-runtime-integration-foundation`
-
-Frozen CR-28 commit:
-
-`1ca2997a3933b312737dda5a220f1026d149bdf1`
-
-Current CR-29 frozen marker:
+Current frozen predecessor marker:
 
 `frozen/cr-29-camera-world-view-foundation`
 
-The CR-29 marker is maintained at the final documentation-complete, exact-state-CI-verified CR-29 HEAD.
+Current frozen predecessor commit:
 
-## 2. CR-29 completed system block
+`560334f6481aef0398b699d21100d0079ea429f1`
 
-**CR-29 – Camera & World View Foundation** — **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+## 2. Binding migration order around the current boundary
 
-Whole-CR development branch:
+The current capability order remains:
 
-`feature/cr-29-camera-world-view-foundation`
+- IM-09 – Logistics & Reservation Migration,
+- **IM-10 – Housing / Population / Gold Integration**,
+- later Navigation work,
+- later Path/Wear work,
+- IM-13 – SaveGame,
+- IM-14 – UI/Mobile,
+- IM-15 – Guidance/Inspector.
 
-The branch was created directly from frozen CR-28 at `1ca2997a3933b312737dda5a220f1026d149bdf1`.
+CR-25 through CR-27 reached the BuildingStock / Workforce / Logistics boundary. CR-28 and CR-29 were deliberately inserted to establish visible-world runtime integration and controlled camera/world viewing without changing gameplay truth.
 
-### CR-29A – World View / Camera State Contract
+With CR-29 frozen, the selected next implementation block is the still-open IM-10 boundary. SaveGame, UI/Mobile and Guidance/Inspector remain later and are not authorized by this transition.
 
-Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+## 3. IM-10 ↔ CR-30 reconciliation
 
-### CR-29B – Deterministic World-to-Screen Projection
+**IM-10 – Housing / Population / Gold Integration** is now assigned to:
 
-Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+**CR-30 – Housing / Population / Gold Integration Foundation** — **AUTHORIZED / ACTIVE / NOT FROZEN**.
 
-### CR-29C – Controlled Pan & Zoom Integration
+This is not duplicate Person work. The earlier stable Person/Resident identity boundary remains authoritative; housing/home/capacity/occupancy, derived population and non-physical Gold are the new integration concerns.
 
-Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+Whole-CR branch:
 
-## 3. Whole-system completion / regression / freeze evidence
+`feature/cr-30-housing-population-gold-integration-foundation`
 
-Whole-system gate:
+Branch base:
 
-`src/dev/cr-29-freeze-gate.node.js`
+`frozen/cr-29-camera-world-view-foundation` @ `560334f6481aef0398b699d21100d0079ea429f1`
 
-Completion report:
+Guiding question:
 
-`docs/CR-29_COMPLETION_REGRESSION_FREEZE_GATE.md`
+> How are already-real persons controlled into residents of real houses, population derived from those real residents, and the non-physical gold economy built on that truth?
 
-GitHub Actions run `34054452965` on commit `941cdce9e8a4aec4b97e85446d89f52fa4ddf01b` executed the frozen predecessor regression plus the whole CR-29 gate successfully: **PASS / 0 BLOCKER**.
+### CR-30A – Home & Housing Capacity Contract
 
-Accepted real iPhone Safari evidence on 2026-09-06 verifies real drag/pan + pinch zoom while the grid, 3 Buildings and 3 Persons remain coherent and visible: **PASS / 0 BLOCKER**.
+Status: **AUTHORIZED / ACTIVE / NOT FROZEN**.
 
-A post-freeze presentation audit then found stale CR-28C visible test-page labels in `index.html`. Those labels were corrected to CR-29/CR-29C only, with no behavior or ownership change. The corrected final state must again pass the same whole-system freeze-gate CI before the CR-29 frozen marker is advanced to it.
+First allowed capability increment:
 
-## 4. Frozen architectural boundary
+- Buildings may expose a housing function with defined capacity,
+- Persons may receive one unambiguous Home relationship,
+- identity and owner boundaries remain stable,
+- invalid housing/home relationships must be deterministically rejectable.
 
-Frozen presentation chain:
+Not yet allowed: automatic resident creation, Population integration, free-slot generation, Gold, SaveGame, UI/Inspector, Navigation/Path/Wear changes.
+
+### CR-30B – Deterministic Housing & Population Integration
+
+Status: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
+
+Target boundary: controlled deterministic assignment of existing real Persons to houses; Population derived only from valid real residents; only genuinely free housing places may create general residents; no random specialists and no second Population truth.
+
+### CR-30C – Gold Economy Integration
+
+Status: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
+
+Target boundary: a clear economy owner derives/generates Gold from real valid residents. Gold remains non-physical and is not BuildingStock or Logistics cargo. No restore surcharge/additional restore tax.
+
+### CR-30 Completion / Regression / Freeze Gate
+
+Status: **PLANNED**.
+
+A+B+C must be regressed together against frozen CR-29 and all relevant frozen predecessor contracts. CR-30 becomes FROZEN only at **PASS / 0 BLOCKER**.
+
+## 4. Frozen architectural boundaries preserved during CR-30
+
+CR-29 presentation chain remains unchanged:
 
 `gameplay/world owners -> CR-28A immutable projection -> CR-28B deterministic world render commands -> CR-29A immutable camera/view state -> CR-29B deterministic screen-space projection -> CR-29C controlled camera-only input -> Canvas`
 
-Frozen invariants include:
+CR-30 must preserve the frozen BuildingStock, Workforce, Logistics, world-render and camera/view owner boundaries. In particular, Gold is an economy truth, not a physical BuildingStock quantity and not a Logistics resource.
 
-- gameplay/world owners remain authoritative,
-- camera/view state is presentation-only and immutable,
-- screen-space transformation remains deterministic,
-- camera input mutates only camera/view presentation state,
-- zoom remains controlled in the CR-29C range `0.5 .. 3`,
-- no camera input write-back exists to Map, Buildings, Persons, Logistics, Workforce, BuildingStock or other gameplay owners,
-- frozen CR-28 identities and read-only render ownership remain intact,
-- `main` remains historical reference only.
+## 5. Current next step
 
-## 5. Frozen CR-29 non-scope
+Implement **CR-30A – Home & Housing Capacity Contract** only on `feature/cr-30-housing-population-gold-integration-foundation`.
 
-CR-29 owns no:
+Before code changes, inspect the existing Building and Person contracts/owners on this exact branch and design the smallest compatible Home/Housing-capacity contract. Add direct deterministic tests appropriate to CR-30A. Do not implement CR-30B or CR-30C behavior early.
 
-- Save/Load/Continue,
-- Gameplay HUD,
-- Build Menu,
-- Inspector,
-- gameplay selection or commands,
-- new pathfinding/movement/traffic behavior,
-- BuildingStock/Workforce/Logistics changes,
-- new production/construction/simulation semantics,
-- mandatory new assets.
+If a visible browser/test page is changed or used for CR-30A verification, synchronize all visible CR/build identity surfaces to CR-30A before accepting the browser/device gate.
 
-## 6. Current next step
-
-Do **not** begin or implicitly authorize a successor CR.
-
-After the visible-label correction receives successful exact-state CI, keep `frozen/cr-29-camera-world-view-foundation` on that verified final state. Only then select the next system block explicitly from the current implementation roadmap.
+No successor CR is implicitly authorized.
 
 ---
 
-**Updated:** 2026-09-06 after correcting stale CR-28C browser-test-page labels on the frozen CR-29 line; functionality remains unchanged and requires exact-state re-verification before advancing the marker.
+**Updated:** 2026-09-06 — IM-10 explicitly selected as CR-30 after frozen CR-29; whole-CR branch created from exact frozen commit `560334f6481aef0398b699d21100d0079ea429f1`; CR-30A is the sole currently authorized implementation substep.
