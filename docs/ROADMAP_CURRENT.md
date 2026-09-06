@@ -1,10 +1,10 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-30 COMPLETION GATE PASS / 0 BLOCKER / WHOLE-CR FREEZE READY  
+**Status:** CURRENT – CR-30 FROZEN / CR-31 AUTHORIZED / CR-31A ACTIVE  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `feature/cr-30-housing-population-gold-integration-foundation`  
-**Latest whole-CR freeze:** **CR-29 – Camera & World View Foundation**  
-**Latest substep freeze:** **CR-30C – Gold Economy Integration**
+**Current control branch:** `feature/cr-31-navigation-integration-foundation`  
+**Latest whole-CR freeze:** **CR-30 – Housing / Population / Gold Integration Foundation**  
+**Latest whole-CR freeze marker:** `frozen/cr-30-housing-population-gold-integration-foundation` @ `2e9208614a5cfd80abc47e39ccf236b80315ace8`
 
 ## 1. Frozen line
 
@@ -12,67 +12,69 @@ CR-25 – BuildingStock / Production Foundation: **COMPLETE / FROZEN / PASS / 0 
 CR-26 – Workforce Capability & Job Eligibility Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.  
 CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.  
 CR-28 – Visible World Runtime Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.  
-CR-29 – Camera & World View Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
-
-CR-30A marker: `frozen/cr-30a-home-housing-capacity-contract` @ `f74d6bc1399212650c11196f8f098a419eda6cbf`.  
-CR-30B marker: `frozen/cr-30b-deterministic-housing-population-integration` @ `e00fb5bbbde6f7f6e72b81ac77a44f0a263834a5`.  
-CR-30C marker: `frozen/cr-30c-gold-economy-integration` @ `7248b7ad0cc20b60f5919a422a261ab7cd2221d8`.
+CR-29 – Camera & World View Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.  
+CR-30 – Housing / Population / Gold Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `2e9208614a5cfd80abc47e39ccf236b80315ace8`.
 
 ## 2. Binding migration order
 
 - IM-09 – Logistics & Reservation Migration,
-- **IM-10 – Housing / Population / Gold Integration**,
-- later Navigation,
+- IM-10 – Housing / Population / Gold Integration,
+- **Navigation – now represented by CR-31**, 
 - later Path/Wear,
 - IM-13 – SaveGame,
 - IM-14 – UI/Mobile,
 - IM-15 – Guidance/Inspector.
 
-Later migration blocks remain locked until the whole CR-30 freeze marker is created.
+## 3. CR-31 – Navigation Integration Foundation
 
-## 3. CR-30 – Housing / Population / Gold Integration Foundation
+Status: **AUTHORIZED / ACTIVE / NOT FROZEN**.
 
-CR-30A, CR-30B and CR-30C are each **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+Repository reconciliation on frozen CR-30 confirms that Navigation is primarily an integration task, not a rebuild. Existing frozen components already include:
 
-The combined contract remains:
+- `MapStructure`,
+- `TraversabilityContract`,
+- `BlockedCellSource`,
+- route contract and deterministic grid/cost-aware pathfinding,
+- Road Preference / traversal-cost routing,
+- obstacle-aware routing,
+- occupancy/reservation/waiting/arbitration/deadlock/recovery/reroute traffic contracts.
 
-- Housing capacity and one-Home invariants are preserved,
-- Population is derived only from real valid housed Persons,
-- no independent mutable Population truth exists,
-- exactly one Gold economy owner consumes that derived Population,
-- Gold is explicitly non-physical and is not Resource/BuildingStock or Logistics cargo,
-- frozen CR-29 world/camera presentation remains intact.
+Therefore CR-31 must not create duplicate navigation, routing or traffic truths.
 
-### CR-30 Completion / Regression / Freeze Gate
+### CR-31A – World-backed Traversability Source Contract
 
-Status: **PASS / 0 BLOCKER — AUTOMATED + REAL BROWSER/DEVICE EVIDENCE ACCEPTED — WHOLE-CR FREEZE READY**.
+Status: **AUTHORIZED / ACTIVE / NOT IMPLEMENTED**.
 
-Automated whole-gate evidence:
+Boundary:
 
-- `src/dev/cr-30-freeze-gate.node.js` covers frozen CR-29 + CR-30A + CR-30B + CR-30C,
-- GitHub Actions run `34061733270` on `67bf665b9cf0acf94c0ec1f70ca01a39322fefb5` = **SUCCESS / PASS / 0 BLOCKER**,
-- CI chain includes baseline + CR-24C + CR-28 + CR-30 whole gate,
-- visible/build source identity is synchronized to `CR-30 Completion / Regression / Freeze Gate` and `CR-30-COMPLETION-FREEZE-GATE`.
+- real CR-28–30 world state may feed static traversability,
+- `MapStructure` remains the spatial boundary,
+- `TraversabilityContract` remains the semantic `TRAVERSABLE` / `BLOCKED` contract,
+- downstream compatibility with `BlockedCellSource` is preserved,
+- same real world state must yield the same static traversability result,
+- no reachability search,
+- no route calculation,
+- no path costs / Road Preference / Wear changes,
+- no occupancy/reservation/deadlock/recovery changes,
+- no Person/Carrier movement changes,
+- no SaveGame, UI/Mobile or Inspector work.
 
-Real iPad/Safari evidence accepted on 2026-09-06:
+### CR-31B – Deterministic World Reachability Integration
 
-- current heading: `CR-30 Completion / Regression / Freeze Gate`,
-- runtime: `READY`,
-- visible status: `CR-30 COMPLETION GATE ACTIVE — A+B+C`,
-- Population 3,
-- 3 Home Assignments,
-- Gold Income 3,
-- Gold Balance 3,
-- NON-PHYSICAL,
-- 3 Buildings / 3 Persons visible,
-- no stale CR-30A/B/C substep identity presented as current.
+Status: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
 
-Gate decision: **PASS / 0 BLOCKER**. Whole CR-30 is now freeze-ready.
+May consume frozen CR-31A plus existing deterministic routing primitives to answer whether two valid world positions are connected/reachable. No Path/Wear or movement integration yet.
+
+### CR-31C – Runtime Entity Navigation Validation Integration
+
+Status: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
+
+May validate existing real Person/Carrier positions and targets against the frozen navigation truth while keeping earlier route/movement/traffic owners intact.
 
 ## 4. Current next step
 
-Create the whole-CR freeze marker for **CR-30 – Housing / Population / Gold Integration Foundation** from the accepted completion-gate baseline. Do not introduce functionality during the freeze action. Navigation, Path/Wear, SaveGame, UI/Mobile and Inspector remain locked, and no successor CR is implicitly authorized by the freeze.
+Implement **CR-31A – World-backed Traversability Source Contract** only on `feature/cr-31-navigation-integration-foundation`. Visible/build CR identity must be synchronized in the same implementation step before browser verification. CR-31B/C and all later migration blocks remain locked.
 
 ---
 
-**Updated:** 2026-09-06 — automated CR-30 whole-block gate plus real iPad/Safari completion-gate evidence accepted at PASS / 0 BLOCKER; whole CR-30 is freeze-ready.
+**Updated:** 2026-09-06 — CR-31 authorized directly from frozen CR-30; existing navigation/route/traffic ownership reconciled; CR-31A fixed as the world-backed traversability integration boundary.
