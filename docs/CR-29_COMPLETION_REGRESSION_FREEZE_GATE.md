@@ -10,8 +10,6 @@
 
 **CR-29 – Camera & World View Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
-The frozen marker may be created only after the final documented CR-29 HEAD receives a successful exact-state CI verification.
-
 ## 2. Covered substeps
 
 - **CR-29A – World View / Camera State Contract:** PASS / 0 BLOCKER
@@ -46,7 +44,23 @@ Real iPhone Safari evidence supplied and accepted on 2026-09-06 shows:
 
 This closes the CR-29C real-browser drag/pan + pinch-zoom verification requirement: **PASS / 0 BLOCKER**.
 
-## 5. Frozen CR-29 contract
+## 5. Post-gate visible-label correction
+
+After the first frozen marker was created, the real browser page revealed one presentation-only defect: `index.html` still displayed the old **CR-28C – Live Runtime → Render Integration** page title/card text even though the runtime status already reported CR-29C correctly.
+
+This was confirmed directly in the frozen source and corrected on the same CR-29 whole-system branch by changing only the visible browser-test-page identification to:
+
+- page title: **CR-29 – Camera & World View Foundation**,
+- card heading: **CR-29 – Camera & World View Foundation**,
+- explanatory text describing CR-29A/B/C,
+- browser-gate placeholder: **CR-29C Browser-Gate wird aufgebaut …**,
+- cache-busting identifiers updated from CR-28C to CR-29.
+
+No camera, render, input, gameplay or ownership logic was changed by this correction.
+
+The corrected frozen marker must therefore point to the final documentation-complete CR-29 HEAD only after that exact state again passes the full CR-29 freeze-gate CI chain.
+
+## 6. Frozen CR-29 contract
 
 The CR-29 frozen presentation chain is:
 
@@ -71,7 +85,7 @@ Frozen invariants:
 - camera input has no write-back path to Map, Buildings, Persons, Logistics, Workforce, BuildingStock or other gameplay owners,
 - `main` remains historical reference only and is not an integration target.
 
-## 6. Frozen non-scope
+## 7. Frozen non-scope
 
 CR-29 introduces no ownership for:
 
@@ -85,10 +99,10 @@ CR-29 introduces no ownership for:
 - production, construction or new simulation semantics,
 - mandatory new visual assets.
 
-## 7. Freeze readiness
+## 8. Freeze readiness
 
-All required CR-29 implementation substeps are complete, automated regression is green, the frozen CR-28 baseline remains intact, and the required real-browser interaction evidence has been accepted.
+All required CR-29 implementation substeps are complete, automated regression is green, the frozen CR-28 baseline remains intact, required real-browser interaction evidence has been accepted, and the stale CR-28C visible page labels have been corrected without changing behavior.
 
 **Freeze decision: PASS / 0 BLOCKER.**
 
-The final frozen marker must point to the final documentation-complete HEAD only after that exact HEAD passes CI.
+`frozen/cr-29-camera-world-view-foundation` is maintained at the final documentation-complete CR-29 HEAD after that exact HEAD receives successful CI verification.
