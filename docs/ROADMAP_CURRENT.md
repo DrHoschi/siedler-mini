@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-27B implemented / browser gate pending  
+**Status:** CURRENT – CR-27B browser freeze gate exposed / device PASS pending  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-27-game-facing-logistics-integration-foundation`  
 **Frozen gameplay baseline:** **CR-26 – Workforce Capability & Job Eligibility Foundation**
@@ -33,9 +33,9 @@ The ACTIVE reservation remains the authoritative protection against double-dispo
 
 ### CR-27B – Workforce-Aware Transport Dispatch Integration
 
-**IMPLEMENTED / DIRECT TESTS ADDED / NOT FROZEN**
+**IMPLEMENTED / BROWSER FREEZE GATE EXPOSED / AWAITING DEVICE PASS / NOT FROZEN**
 
-Implemented dispatch chain:
+Dispatch chain:
 
 `ACTIVE reservation -> CAN_SIMPLE_TRANSPORT eligibility -> CR-26 assignment -> legacy-compatible pending TransportJob projection -> execution assignment using the same unit/person identity -> TransportExecutionContract.begin`
 
@@ -50,7 +50,7 @@ Key ownership rules:
 - CR-27A reservation remains ACTIVE and unchanged,
 - source/target BuildingStock is not mutated.
 
-Direct self-test and Node runner are present. Dedicated browser Verification / Freeze Gate is still pending.
+The dedicated browser gate is now exposed through `index.html` and `src/dev/cr-27b-freeze-gate.js`.
 
 ### CR-27C – Delivered Transport -> BuildingStock Settlement
 
@@ -62,11 +62,11 @@ After A/B/C, run a whole **CR-27 Completion / Regression / Freeze Gate**.
 
 ## 3. CR-27B current gate boundary
 
-The upcoming CR-27B browser gate must regress frozen CR-27A and CR-26 together with the new adapter and verify at least:
+The browser gate regresses frozen CR-27A and direct CR-27B tests together with additional end-to-end checks for:
 
 - ACTIVE required / RELEASED rejected,
 - mandatory `CAN_SIMPLE_TRANSPORT`,
-- CR-26 FREE/ASSIGNED/UNAVAILABLE semantics remain authoritative,
+- CR-26 FREE/ASSIGNED/UNAVAILABLE semantics remaining authoritative,
 - deterministic Person selection independent of candidate order,
 - no eligible Person means no dispatch,
 - selected Person identity equals execution unit identity,
@@ -76,7 +76,11 @@ The upcoming CR-27B browser gate must regress frozen CR-27A and CR-26 together w
 - no CarrierAssignmentService selection,
 - no physical BuildingStock mutation, delivery settlement, reservation release or workforce release.
 
-Only browser **PASS / 0 BLOCKER** permits the immutable CR-27B marker.
+Required browser/device result:
+
+`CR-27B WORKFORCE-AWARE TRANSPORT DISPATCH INTEGRATION VERIFICATION / FREEZE GATE: PASS / 0 BLOCKER`
+
+Only that browser **PASS / 0 BLOCKER** permits the immutable CR-27B marker.
 
 ## 4. CR-27 global non-scope
 
@@ -93,4 +97,4 @@ No new pathfinding, route algorithm, traffic algorithm, traffic reservation sema
 
 ---
 
-**Updated:** 2026-09-06 after CR-27B technical specification, dispatch adapter implementation and direct test addition. Next step: dedicated CR-27B browser Verification / Freeze Gate.
+**Updated:** 2026-09-06 after exposing the CR-27B browser Verification / Freeze Gate. Next step: device/browser verification; CR-27B remains NOT FROZEN until PASS / 0 BLOCKER.
