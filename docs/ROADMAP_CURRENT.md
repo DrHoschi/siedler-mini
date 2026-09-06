@@ -1,9 +1,9 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-28 COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – CR-29 AUTHORIZED / CR-29A NEXT  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current control branch:** `feature/cr-28-visible-world-runtime-integration-foundation`  
-**Frozen gameplay baseline before CR-28:** **CR-27 – Game-Facing Logistics Integration Foundation**
+**Current control branch:** `feature/cr-29-camera-world-view-foundation`  
+**Current frozen baseline:** **CR-28 – Visible World Runtime Integration Foundation**
 
 ## 1. Frozen line
 
@@ -15,101 +15,92 @@ CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PA
 
 CR-28 – Visible World Runtime Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-CR-27 predecessor marker:
+Current frozen marker:
 
-`frozen/cr-27-game-facing-logistics-integration-foundation`
+`frozen/cr-28-visible-world-runtime-integration-foundation`
 
-CR-27 baseline commit:
+Frozen CR-28 commit:
 
-`c821784264c846d00f15f018011eb13f817d13b5`
+`1ca2997a3933b312737dda5a220f1026d149bdf1`
 
-The CR-28 frozen marker is created only after final CI verification of the documented freeze HEAD.
+## 2. Active system block
 
-## 2. CR-28 completed system block
+**CR-29 – Camera & World View Foundation** — **AUTHORIZED / IN_PROGRESS**
 
-**CR-28 – Visible World Runtime Integration Foundation**
+Question:
 
-Question answered:
+> How does the player view the already-visible world through a controlled, deterministic camera/view boundary without changing gameplay truth?
 
-> How are already-frozen gameplay owners projected deterministically into a visible, read-only game world?
+Whole-CR branch:
 
-Completed decomposition:
+`feature/cr-29-camera-world-view-foundation`
 
-- **CR-28A – Game-State Render Projection Contract** — **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
-- **CR-28B – Deterministic World Canvas Rendering** — **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
-- **CR-28C – Live Runtime -> Render Integration** — **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+The branch was created directly from the frozen CR-28 marker at `1ca2997a3933b312737dda5a220f1026d149bdf1`.
 
-## 3. CR-28 implementation result
+## 3. Planned CR-29 decomposition
 
-CR-28A:
+### CR-29A – World View / Camera State Contract
 
-- `src/render/game-state-render-projection.js`
-- `src/dev/cr-28a-self-test.node.js`
-- renderer-neutral Map/Building/Person projection,
-- stable IDs and deterministic ordering,
-- deep immutability and no mutable aliases,
-- explicit visible fields only.
+Status: **AUTHORIZED / NOT_STARTED**.
 
-CR-28B:
+Define only the renderer-facing view/camera state contract required for deterministic presentation of the existing CR-28 world.
 
-- `src/render/world-canvas-rendering.js`
-- `src/dev/cr-28b-self-test.node.js`
-- deterministic immutable render commands,
-- world ground/grid plus simple Building/Person representation,
-- explicit deterministic visible Canvas styles,
-- same projection/options -> same ordered Canvas result.
+Minimum intended boundary:
 
-CR-28C:
+- viewport/view dimensions as needed by the render boundary,
+- world/view offset or equivalent origin state,
+- zoom/scale state,
+- finite numeric validation,
+- deterministic immutable output/state representation,
+- no gameplay ownership or mutation.
 
-- `src/render/live-runtime-render-integration.js`
-- `src/dev/cr-28c-self-test.node.js`
-- `src/main.js` composes current Map/Building/Person owners and renders through CR-28A/B,
-- current owner state is snapshotted read-only,
-- owner changes become visible only on a new projection/render pass,
-- obsolete CR-16A browser test-shell composition removed.
+Still out of scope in CR-29A:
 
-Whole-system gate:
-
-- `src/dev/cr-28-freeze-gate.node.js`
-- `docs/CR-28_COMPLETION_REGRESSION_FREEZE_GATE.md`
-
-GitHub Actions run `34046869483` on commit `990920805b92e1faf645d7c057abd83092eee4b4` completed frozen regression + the CR-28 whole-system A+B+C gate successfully: **PASS / 0 BLOCKER**.
-
-Real iPhone Safari evidence on 2026-09-06 confirmed the required visible miniworld: green ground, visible grid, three orange Buildings and three light Persons. The prior black-Canvas blocker is CLOSED.
-
-## 4. Frozen architectural boundary
-
-CR-28 is visibility integration, not a gameplay ownership layer. Frozen invariants:
-
-- gameplay/source owners remain authoritative,
-- renderer/UI consumes projected state only,
-- no renderer write-back path,
-- projection and render-command outputs remain immutable,
-- Map/Buildings/Persons are deterministic and identity-stable,
-- frozen CR-27 ownership remains unchanged,
-- no Save/Load/Continue ownership,
-- no Gameplay HUD,
-- no Build menu,
-- no Inspector,
+- no world-to-screen transform integration,
+- no Canvas behavior changes,
+- no player pan input,
+- no pinch/wheel zoom input,
 - no touch controls,
-- no new camera mechanics,
-- no mandatory new assets,
-- no new pathfinding/movement/traffic,
-- no BuildingStock/Workforce/Logistics ownership changes,
-- no new production/construction/simulation semantics.
+- no HUD, Build Menu or Inspector.
 
-## 5. Next development state
+### CR-29B – Deterministic World-to-Screen Projection
 
-CR-28 is complete and frozen. **No CR-29 implementation is automatically authorized by the freeze itself.** The next system block must be selected explicitly from the current implementation roadmap and started from the frozen CR-28 marker once that marker exists.
+After CR-29A passes, connect the CR-29A view state to the frozen CR-28 visible-world path. Same world + same camera/view state must produce the same screen-space result. Still no player interaction.
 
-## 6. Branch / gate policy
+### CR-29C – Controlled Pan & Zoom Integration
 
-- CR-28 was implemented on one whole-system branch: `feature/cr-28-visible-world-runtime-integration-foundation`.
-- It was created directly from frozen CR-27 at `c821784264c846d00f15f018011eb13f817d13b5`.
-- Frozen CR-27 markers remain immutable.
-- CR-28 A/B/C + browser repair + whole-system gate are complete.
-- Final freeze marker is attached to the final documented branch HEAD only after final CI success.
+After CR-29B passes, permit controlled user manipulation of the view state for pan and zoom. Presentation may change; gameplay/world owners must not.
+
+Then execute **CR-29 Completion / Regression / Freeze Gate** against frozen CR-28 before CR-29 can be FROZEN.
+
+## 4. Frozen CR-28 boundary carried forward
+
+The following remains authoritative and immutable while CR-29 is developed:
+
+`gameplay/world owners -> CR-28A immutable projection -> CR-28B deterministic rendering -> CR-28C browser-visible Canvas`
+
+CR-29 may alter only how this already-visible world is viewed. It must not become a gameplay authority.
+
+## 5. CR-29 hard global non-scope
+
+CR-29 introduces no:
+
+- Save/Load/Continue ownership,
+- Gameplay HUD,
+- Build menu,
+- Inspector,
+- gameplay selection or orders,
+- new pathfinding/movement/traffic,
+- BuildingStock/Workforce/Logistics ownership changes,
+- new production/construction/simulation semantics,
+- mandatory new assets.
+
+## 6. Current next step
+
+**CR-29A – World View / Camera State Contract** is the only authorized implementation step.
+
+Implement and verify only the state contract. CR-29B and CR-29C remain unauthorized until the preceding substep reaches **PASS / 0 BLOCKER** under the established whole-CR workflow.
 
 ---
 
-**Updated:** 2026-09-06 after successful **CR-28 Completion / Regression / Freeze Gate**: **PASS / 0 BLOCKER**.
+**Updated:** 2026-09-06 after explicit authorization of **CR-29 – Camera & World View Foundation** and creation of its whole-CR branch directly from frozen CR-28.
