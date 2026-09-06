@@ -6,7 +6,9 @@ import { CoreDomainStores } from './domain/core-domain-stores.js';
 import { BuildingIdentityOwnershipContract } from './domain/building-identity-ownership-contract.js';
 import { BuildingLifecycleStateContract } from './domain/building-lifecycle-state-contract.js';
 import { PersonResidentIdentityContract } from './domain/person-resident-identity-contract.js';
-import { renderLiveRuntimeToCanvas } from './render/live-runtime-render-integration.js';
+import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
+import { createWorldViewCameraState } from './render/world-view-camera-state.js';
+import { renderProjectedWorldWithCameraToCanvas } from './render/camera-world-rendering.js';
 
 const statusEl = document.querySelector('#runtime-status');
 const testEl = document.querySelector('#test-status');
@@ -19,11 +21,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-28 Visible Miniworld',
+  name: 'CR-29 Camera Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-28-VISIBLE-WORLD-RUNTIME-INTEGRATION' }
+  metadata: { foundation: 'CR-29-CAMERA-WORLD-VIEW-FOUNDATION' }
 });
 const domains = new CoreDomainStores();
 
@@ -67,14 +69,21 @@ function resizeCanvas() {
 function renderCurrentWorld() {
   const { width, height } = resizeCanvas();
   const cellPixels = Math.max(24, Math.min(56, Math.floor(Math.min(width / 10, height / 8))));
-  return renderLiveRuntimeToCanvas(ctx, { map, domains }, {
+  const projection = projectVisibleRuntimeState({ map, domains });
+  const cameraState = createWorldViewCameraState({
+    viewportWidth: width,
+    viewportHeight: height,
+    offsetX: 28,
+    offsetY: 28,
+    zoom: 1,
+  });
+  const commands = renderProjectedWorldWithCameraToCanvas(ctx, projection, cameraState, {
     cellPixels,
-    offset: { x: 28, y: 28 },
+    offset: { x: 0, y: 0 },
     buildingSize: Math.max(14, Math.round(cellPixels * 0.58)),
     personRadius: Math.max(4, Math.round(cellPixels * 0.16)),
-    width,
-    height
   });
+  return Object.freeze({ projection, cameraState, commands });
 }
 
 runtime.events.on('runtime.stateChanged', ({ current }) => {
@@ -86,7 +95,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-28C LIVE RUNTIME -> RENDER INTEGRATION: PASS / 0 BLOCKER — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `CR-29B WORLD -> SCREEN PROJECTION: PASS / 0 BLOCKER — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
   testEl.dataset.pass = 'true';
 }
 
@@ -99,9 +108,10 @@ window.CleanRuntime = Object.freeze({
   renderCurrentWorld
 });
 
-console.info('[CR-28C] Live Runtime -> Render Integration', {
+console.info('[CR-29B] Deterministic World-to-Screen Projection', {
   build: RuntimeConfig.build,
   mapId: initialRender.projection.map.id,
+  cameraState: initialRender.cameraState,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
   renderCommands: initialRender.commands.length,
