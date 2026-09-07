@@ -11,12 +11,12 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current whole-block branch: `feature/im-13-savegame-foundation`
 - Whole-block branch base: frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
 - Frozen predecessor: **CR-32 – Path / Wear Integration Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- Current migration block: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation**
+- Current migration block: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13A – SaveGame Snapshot Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13B – Deterministic SaveGame Validation Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13C – Deterministic SaveGame Restore Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-13 Whole-Block Completion / Regression / Freeze Gate: **AUTHORIZED / IN PROGRESS / VERIFICATION PENDING / NOT FROZEN**
+- IM-13 Whole-Block Completion / Regression / Freeze Gate: **COMPLETE / PASS / 0 BLOCKER**
 
 ## 2. Binding IM-13 Foundation contract
 
@@ -54,30 +54,24 @@ Together A+B+C+D implement the reconciled IM-13 Foundation chain:
 
 with canonical Capture A/Capture B identity and B-backed derived rebinding.
 
-## 4. Whole-Block gate now under verification
+## 4. Whole-Block completion evidence
 
-The Whole-Block gate adds no gameplay or persistence feature. It only regressions the four frozen contracts together and exposes a matching browser/device verification surface.
+The Whole-Block gate introduced no gameplay or persistence feature. It only regressed the four frozen contracts together and exposed a matching browser/device verification surface.
 
-Technical gate:
+Completion evidence:
 
 - `src/dev/im-13-freeze-gate.node.js` executes frozen IM-13A/B/C/D regressions as one Whole-Block gate,
-- CI continues to regress the frozen CR-31/CR-32 predecessor boundary before the Whole-IM-13 gate,
-- visible/build identity is `IM-13-WHOLE-BLOCK-COMPLETION-REGRESSION-FREEZE-GATE`,
-- browser evidence summarizes Snapshot A, Validation B, Restore C, Activation/Rebinding D, canonical A->B round-trip, active restored owners and derived/transient rebinding,
-- whole branch diff must remain within the original IM-13 persistence boundary.
-
-Required completion evidence before Whole-IM-13 may freeze:
-
-1. Whole-Block CI SUCCESS / 0 blocker,
-2. GitHub Pages deployment SUCCESS,
-3. whole branch diff against frozen CR-32 reviewed with no out-of-scope work,
-4. real iPhone/Safari evidence with READY, correct Whole-IM-13 visible identity and PASS / 0 BLOCKER.
+- CI SUCCESS / 0 blocker including frozen CR-31/CR-32 predecessor regression,
+- GitHub Pages deployment SUCCESS,
+- full whole-branch diff against frozen CR-32 reviewed and within the original IM-13 persistence boundary,
+- visible/build identity `IM-13-WHOLE-BLOCK-COMPLETION-REGRESSION-FREEZE-GATE`,
+- real iPhone/Safari evidence on 2026-09-07 20:10 local: READY, correct `IM-13 – Whole-Block Completion / Regression / Freeze Gate` identity, PASS / 0 BLOCKER, A Snapshot PASS, B Validation PASS, C Restore PASS, D Activation/Rebinding PASS, Capture A -> Restore/Activate B -> Capture B IDENTISCH, schemaVersion 1, stable runtime owners active PASS, derived/transient rebound PASS, and excluded Save-Slots/Storage/UI, Autosave, Cloud/Multiplayer and Schema-Migration not introduced.
 
 ## 5. Current gate
 
-**IM-13 WHOLE-BLOCK GATE = IN PROGRESS / VERIFICATION PENDING / NOT FROZEN.**
+**IM-13 WHOLE-BLOCK = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-Do not create the Whole-IM-13 freeze marker until all required evidence is PASS / 0 BLOCKER. IM-14 UI/Mobile, IM-15 Guidance/Inspector, Save-Slots/Storage, Autosave, Cloud/Multiplayer and Schema-Migration remain locked.
+The next migration block is not automatically implementation-authorized by this freeze. IM-14 UI/Mobile, IM-15 Guidance/Inspector and any Save-Slots/Storage, Autosave, Cloud/Multiplayer or Schema-Migration work remain locked until separately reconciled/authorized.
 
 ## 6. Permanent visible build identity synchronization rule
 
@@ -85,4 +79,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-07 — IM-13 Whole-Block Completion / Regression / Freeze Gate authorized and opened; CI/device verification pending; no Whole-IM-13 freeze yet.
+**Updated:** 2026-09-07 — IM-13 Whole-Block Completion / Regression / Freeze Gate PASS / 0 BLOCKER with real iPhone/Safari evidence; IM-13 frozen as a whole.
