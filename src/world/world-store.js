@@ -23,7 +23,7 @@ function normalizeEntity(entity) {
 
 function requireRestoreState(state) {
   if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('restore world state required');
-  if (!parseStableId(state.worldId)?.kind === 'world') throw new TypeError(`invalid world id: ${state.worldId}`);
+  if (parseStableId(state.worldId)?.kind !== 'world') throw new TypeError(`invalid world id: ${state.worldId}`);
   if (!Number.isSafeInteger(state.revision) || state.revision < 0) throw new TypeError('invalid world revision');
   if (!state.entities || typeof state.entities !== 'object' || Array.isArray(state.entities)) throw new TypeError('invalid world entities');
   const next = clone(state);
