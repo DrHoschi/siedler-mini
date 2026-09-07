@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A FROZEN / IM-13B IMPLEMENTED / VERIFICATION PENDING  
+**Status:** CURRENT – IM-13A FROZEN / IM-13B COMPLETE / FROZEN / PASS / 0 BLOCKER  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -9,7 +9,9 @@
 
 CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**. CR-32 – Path / Wear Integration Foundation is the direct frozen predecessor of IM-13.
 
-IM-13A – SaveGame Snapshot Contract is also **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `fadacda7f728f57b3b97cbb1771284e5d609d805`, marker `frozen/im-13a-savegame-snapshot-contract`.
+IM-13A – SaveGame Snapshot Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `fadacda7f728f57b3b97cbb1771284e5d609d805`, marker `frozen/im-13a-savegame-snapshot-contract`.
+
+IM-13B – Deterministic SaveGame Validation Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER**. Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract`, pointing exactly to the final documented IM-13B freeze head.
 
 ## 2. Binding migration order
 
@@ -50,9 +52,9 @@ Freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b9
 
 ## 5. IM-13B – Deterministic SaveGame Validation Contract
 
-Status: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Implemented scope:
+Frozen scope:
 
 - a separate validator for the frozen IM-13A `savegame-snapshot` schemaVersion 1 payload,
 - schema structure and completed-step capture metadata validation,
@@ -66,6 +68,15 @@ Implemented scope:
 - validation is side-effect-free and does not mutate the supplied payload or authoritative runtime owners,
 - Node regression coverage and browser evidence with visible/build identity `IM-13B-SAVEGAME-VALIDATION-CONTRACT`.
 
+Freeze gate evidence:
+
+- frozen CR-32 regression PASS,
+- frozen IM-13A regression PASS,
+- IM-13B regression PASS,
+- GitHub Actions CI run `34137143168`: SUCCESS,
+- real iPhone/Safari evidence on 2026-09-07: runtime READY and synchronized IM-13B PASS surface, including valid schemaVersion 1, deterministic INVALID cases for malformed schema/negative Gold/Wear inconsistency, side-effect-free PASS, unchanged IM-13A snapshot and Restore still absent,
+- 0 BLOCKER.
+
 Explicitly excluded from IM-13B:
 
 - Restore/Hydration,
@@ -76,16 +87,16 @@ Explicitly excluded from IM-13B:
 - historical schema migration,
 - new gameplay logic or ownership changes.
 
+Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` — exact final documented IM-13B freeze head.
+
 ## 6. Current gate
 
-The next permissible step is exclusively **IM-13B Verification / Regression / Freeze Gate**.
+IM-13B is frozen. **IM-13C / Restore remains NOT AUTHORIZED.**
 
-Required before freeze: frozen CR-32 regression PASS, frozen IM-13A regression PASS, IM-13B regression PASS, CI PASS, real browser/device evidence with synchronized IM-13B identity and 0 BLOCKER.
-
-IM-13C / Restore is not automatically authorized. It remains blocked until IM-13B is frozen with PASS / 0 BLOCKER.
+The next permissible step after this freeze is exclusively the fachliche definition and boundary reconciliation of IM-13C on top of frozen IM-13A + IM-13B. No Restore implementation is automatically authorized by the IM-13B freeze.
 
 IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later migration blocks.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13B validation implemented; verification/freeze pending; IM-13C Restore remains locked.
+**Updated:** 2026-09-07 — IM-13B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-13C Restore remains not authorized.
