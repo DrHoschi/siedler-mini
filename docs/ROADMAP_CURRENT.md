@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13 FROZEN / IM-14A FROZEN / IM-14 WHOLE BLOCK IN PROGRESS / NOT FROZEN  
+**Status:** CURRENT – IM-13 FROZEN / IM-14A FROZEN / IM-14B IMPLEMENTED / VERIFICATION PENDING / IM-14 WHOLE BLOCK NOT FROZEN  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-14-ui-mobile-foundation`  
 **Whole-block base:** frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
@@ -11,7 +11,7 @@ CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 IM-13A through IM-13D and whole IM-13 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-IM-14A – Player UI Shell & Responsive Surface Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+IM-14A – Player UI Shell & Responsive Surface Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `4ba4e152931058c9e6b62e2e26489f378779e80f`.
 
 ## 2. Binding migration order
 
@@ -27,60 +27,58 @@ IM-14A – Player UI Shell & Responsive Surface Contract is **COMPLETE / FROZEN 
 
 IM-14 introduces the player-facing UI/mobile layer over the existing modular runtime without making UI a gameplay, simulation, domain, camera or persistence owner.
 
-Current planned sequence:
+Current sequence:
 
 - **IM-14A – Player UI Shell & Responsive Surface Contract — COMPLETE / FROZEN**,
-- IM-14B – Unified Pointer / Touch Interaction Contract,
+- **IM-14B – Unified Pointer / Touch Interaction Contract — IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**,
 - IM-14C – Runtime HUD Projection,
 - IM-14D – World Selection & Context Projection,
 - IM-14E – Player Camera Controls Integration,
 - IM-14 Whole-Block Completion / Regression / Freeze Gate.
 
-Later substeps are not automatically authorized by the IM-14A freeze.
+Later substeps are not automatically authorized by IM-14B implementation.
 
-## 4. Frozen IM-14A – Player UI Shell & Responsive Surface Contract
+## 4. Frozen IM-14A boundary
 
-Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+IM-14A remains the authoritative responsive Player UI Shell boundary with distinct Topbar, World/Canvas and Action regions, mobile/desktop viewport support, `viewport-fit=cover`, safe-area handling, deterministic UI/World layering and Canvas↔World binding.
 
-Frozen boundary:
+Frozen marker: `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`.
 
-- responsive Player UI Shell with distinct Topbar, World/Canvas and structural Action regions,
-- mobile/desktop viewport support,
-- `viewport-fit=cover` plus safe-area insets,
-- deterministic UI/World layering,
-- canvas constrained to the World surface,
-- synchronized IM-14A visible/build identity,
-- dedicated browser runtime evidence,
-- cache-safe module/evidence loading for reliable real-device verification.
+## 5. IM-14B – Unified Pointer / Touch Interaction Contract
 
-Accepted completion evidence:
+Status: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**.
 
-- full diff against frozen IM-13 base `0a011af99ea8814b9e3555d7075ee091cfaf05c2` reviewed and inside IM-14A scope,
-- functional/evidence head `a3fd439278199dbc0efa69522984f8a061d95fec`,
-- CI Baseline run `34157309746`: SUCCESS,
-- Pages build/deployment run `34157308682`: SUCCESS,
-- iPhone/Safari 2026-09-07 21:56 local: READY / PASS / 0 BLOCKER with Player Shell, viewport-fit, Safe-Area/Viewport, Canvas↔World Surface and Build Identity all PASS,
-- iPad/Safari 2026-09-07 22:01 local: READY / PASS / 0 BLOCKER with the same complete PASS set and responsive wide-layout behavior,
-- earlier Build Identity FAIL corrected as a cache/module-loading issue without broadening IM-14A scope.
+Implemented boundary:
+
+- one neutral Pointer Event transport/lifecycle contract for mouse/pen/touch pointer sources,
+- deterministic UI vs WORLD classification from the frozen IM-14A surface structure,
+- owner-separated subscriber channels,
+- pointerId-based ACTIVE contact tracking,
+- deterministic ENDED/CANCELLED cleanup,
+- normalized owner/region/pointer/button/client/local-coordinate samples,
+- dedicated IM-14B browser evidence,
+- synchronized IM-14B visible/build identity and cache-safe evidence/config loading.
 
 Explicitly not introduced:
 
-- domain HUD data,
 - world/entity selection,
-- gameplay actions/build UI,
-- Save/Load UI or storage,
-- new Pointer/Touch semantics,
-- camera behavior changes,
-- minimap/dialog/notification behavior,
+- Tap = Select or other gameplay meaning,
+- new camera Pan/Zoom semantics,
+- pinch/gesture interpretation beyond neutral contact tracking,
+- build placement/context actions,
+- HUD/domain projection,
+- Save/Load UI,
 - Inspector,
 - new gameplay/domain/persistence ownership.
 
-## 5. Current gate
+The pre-existing camera behavior remains unchanged and is not made an IM-14B owner.
 
-IM-14A is frozen. The complete IM-14 block remains NOT FROZEN.
+## 6. Current gate
 
-There is no automatically authorized implementation successor. The next permissible action is reconciliation/definition of **IM-14B – Unified Pointer / Touch Interaction Contract** against frozen IM-14A.
+The only active step is **IM-14B verification**. IM-14B is not frozen yet.
+
+Before IM-14C may begin, direct technical/CI checks and real browser/device evidence must confirm the unified input boundary with PASS / 0 BLOCKER. The complete IM-14 block remains NOT FROZEN until its later Whole-Block gate.
 
 ---
 
-**Updated:** 2026-09-07 — IM-14A Completion / Regression / Freeze Gate PASS / 0 BLOCKER with CI, Pages, iPhone and iPad evidence; IM-14A frozen.
+**Updated:** 2026-09-07 — IM-14B implemented against frozen IM-14A; verification pending, not frozen.
