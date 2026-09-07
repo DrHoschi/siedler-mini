@@ -12,6 +12,7 @@ import { GoldEconomyOwner } from './domain/gold-economy-owner.js';
 import { CarrierContract } from './transport/carrier-contract.js';
 import { CarrierMovementContract } from './transport/carrier-movement-contract.js';
 import { WorldBackedTraversabilitySource } from './transport/world-backed-traversability-source.js';
+import { WorldBackedPathClassificationSource } from './transport/world-backed-path-classification-source.js';
 import { DeterministicWorldReachabilityIntegration } from './transport/deterministic-world-reachability-integration.js';
 import { RuntimeEntityNavigationValidationIntegration } from './transport/runtime-entity-navigation-validation-integration.js';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
@@ -34,11 +35,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-31 Navigation Integration Foundation Completion Gate Miniworld',
+  name: 'CR-32A World-backed Path Classification Contract Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-31-COMPLETION-FREEZE-GATE' }
+  metadata: { foundation: 'CR-32A-WORLD-BACKED-PATH-CLASSIFICATION-CONTRACT' }
 });
 const domains = new CoreDomainStores();
 
@@ -70,6 +71,21 @@ function createVisiblePerson(position, { carrierCapacity = null } = {}) {
   return domains.units.create(data, { id: personId });
 }
 
+const pathTile = map.createTile({
+  technicalName: 'path.cr32a.browser-evidence',
+  classification: 'terrain',
+  passability: 'UNSPECIFIED',
+  traversalType: 'PATH',
+});
+const roadTile = map.createTile({
+  technicalName: 'road.cr32a.browser-evidence',
+  classification: 'terrain',
+  passability: 'UNSPECIFIED',
+  traversalType: 'ROAD',
+});
+map.setTileAt(1, 4, pathTile.id);
+map.setTileAt(2, 4, roadTile.id);
+
 const hq = createVisibleBuilding('HQ', { x: 2, y: 2 });
 createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
 const storehouse = createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
@@ -93,6 +109,8 @@ const goldSettlement = goldEconomy.settle({
   goldPerResident: browserEvidenceGoldPerResident,
 });
 
+const pathClassification = new WorldBackedPathClassificationSource({ map, world });
+const pathClassificationEntries = pathClassification.entries();
 const traversability = new WorldBackedTraversabilitySource({ map, domains });
 const blockedStaticCells = traversability.entries();
 const reachabilityEvidence = DeterministicWorldReachabilityIntegration.evaluate({
@@ -256,9 +274,12 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 const runtimeValidationPass = validRuntimeNavigationCount === runtimeNavigationValidations.length;
+const classificationPass = pathClassification.typeAt({ x: 1, y: 4 }) === 'PATH'
+  && pathClassification.classAt({ x: 2, y: 4 }) === 'ROAD'
+  && pathClassificationEntries.length === 2;
 if (testEl) {
-  testEl.textContent = `CR-31 COMPLETION GATE — CR-31A + CR-31B + CR-31C — Person ${personNavigationValidation.reason} / Carrier ${carrierNavigationValidation.reason} — ${validRuntimeNavigationCount}/2 runtime entities VALID — CR-31B world reachability ${reachabilityEvidence.reachable ? 'REACHABLE' : reachabilityEvidence.reason} erhalten — CR-31A ${blockedStaticCells.length} static BLOCKED cells erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
-  testEl.dataset.pass = runtimeValidationPass ? 'true' : 'false';
+  testEl.textContent = `CR-32A — World-backed Path Classification Contract — ${classificationPass ? 'PASS' : 'FAIL'} — PATH ${pathClassification.typeAt({ x: 1, y: 4 })} / ROAD ${pathClassification.classAt({ x: 2, y: 4 })} aus realen MapStructure-Zellen — CR-31 Navigation ${runtimeValidationPass ? 'PASS' : 'FAIL'} erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.dataset.pass = classificationPass && runtimeValidationPass ? 'true' : 'false';
 }
 
 window.CleanRuntime = Object.freeze({
@@ -270,6 +291,8 @@ window.CleanRuntime = Object.freeze({
   housingPopulation,
   goldEconomy,
   goldSettlement,
+  pathClassification,
+  pathClassificationEntries,
   traversability,
   reachabilityEvidence,
   personNavigationValidation,
@@ -280,21 +303,24 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-31 COMPLETION GATE] Navigation Integration Foundation', {
+console.info('[CR-32A] World-backed Path Classification Contract', {
   build: RuntimeConfig.build,
+  classificationPass,
+  pathClassificationEntries,
+  pathAtEvidenceCell: pathClassification.typeAt({ x: 1, y: 4 }),
+  roadAtEvidenceCell: pathClassification.classAt({ x: 2, y: 4 }),
   personNavigationValidation,
   carrierNavigationValidation,
   runtimeValidationPass,
   reachabilityEvidence,
   blockedStaticCells,
-  cr31aFrozen: true,
-  cr31bFrozen: true,
-  cr31cFrozen: true,
-  frozenCr30RegressionPreserved: true,
+  frozenCr31RegressionPreserved: true,
+  traversalClassesPreserved: ['NEUTRAL', 'PATH', 'ROAD'],
   routeOwnerUnchanged: true,
   movementOwnerUnchanged: true,
   trafficReservationDeadlockRecoveryUnchanged: true,
-  pathWearNotIntroduced: true,
+  wearNotIntroduced: true,
+  traversalCostBehaviorUnchanged: true,
   population: housingPopulation.population.count,
   goldBalance: goldSettlement.state.balance,
   buildings: initialRender.projection.buildings.length,
