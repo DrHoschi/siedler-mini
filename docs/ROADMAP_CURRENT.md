@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A IMPLEMENTED / VERIFICATION PENDING  
+**Status:** CURRENT – IM-13A FROZEN / IM-13B IMPLEMENTATION-AUTHORIZED  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -8,6 +8,8 @@
 ## 1. Frozen line
 
 CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**. CR-32 – Path / Wear Integration Foundation is the direct frozen predecessor of IM-13.
+
+IM-13A – SaveGame Snapshot Contract is also **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `fadacda7f728f57b3b97cbb1771284e5d609d805`, marker `frozen/im-13a-savegame-snapshot-contract`.
 
 ## 2. Binding migration order
 
@@ -29,9 +31,9 @@ Binding boundary: persist existing authoritative truth, preserve Stable IDs/allo
 
 ## 4. IM-13A – SaveGame Snapshot Contract
 
-Status: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Implemented scope:
+Frozen scope:
 
 - canonical `savegame-snapshot` payload,
 - `schemaVersion: 1`,
@@ -53,12 +55,42 @@ Explicitly not implemented in IM-13A:
 - new gameplay behavior,
 - persistence of derived Population, route/pathfinder, Render or Camera state as competing truth.
 
-## 5. Current gate
+Freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`.
 
-The next permissible step is only **IM-13A Verification / Regression / Freeze Gate**. Required: frozen CR-32 regression PASS, IM-13A regression PASS, CI PASS, real browser/device evidence with synchronized IM-13A identity, and 0 BLOCKER.
+## 5. IM-13B – Deterministic SaveGame Validation Contract
 
-No later IM-13 substep is authorized before IM-13A freeze. IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later migration blocks.
+Status: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
+
+Binding scope:
+
+- validate only the frozen IM-13A `savegame-snapshot` schemaVersion 1 payload,
+- validate schema structure and completed-step capture metadata,
+- validate Stable-ID uniqueness and saved allocator consistency/continuity,
+- validate persisted reference integrity and reject dangling references,
+- validate authoritative Gold state,
+- validate CR-32 PATH/ROAD wear state and counters,
+- produce deterministic validation success/failure for identical input,
+- reject malformed or inconsistent saves rather than silently repairing them,
+- remain strictly side-effect-free and mutate no authoritative runtime owner.
+
+Explicitly excluded from IM-13B:
+
+- Restore/Hydration,
+- runtime-state mutation,
+- save slots, storage/file adapters or UI,
+- autosave,
+- cloud or multiplayer synchronization,
+- historical schema migration,
+- new gameplay logic or ownership changes.
+
+## 6. Current gate
+
+The next permissible implementation step is exclusively **IM-13B – Deterministic SaveGame Validation Contract**.
+
+IM-13C / Restore is not automatically authorized. It remains blocked until IM-13B has been implemented, regressed, verified and frozen with PASS / 0 BLOCKER.
+
+IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later migration blocks.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13A SaveGame Snapshot Contract implemented; verification/freeze pending.
+**Updated:** 2026-09-07 — IM-13A frozen; IM-13B contract confirmed and explicitly implementation-authorized; implementation not yet started.
