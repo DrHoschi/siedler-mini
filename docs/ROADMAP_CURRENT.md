@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A FROZEN / IM-13B IMPLEMENTATION-AUTHORIZED  
+**Status:** CURRENT – IM-13A FROZEN / IM-13B IMPLEMENTED / VERIFICATION PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -46,32 +46,25 @@ Frozen scope:
 - canonical deterministic JSON serialization,
 - Node self-test and browser evidence surface.
 
-Explicitly not implemented in IM-13A:
-
-- Restore execution,
-- save-slot/storage UI,
-- cloud or multiplayer synchronization,
-- historical schema migration,
-- new gameplay behavior,
-- persistence of derived Population, route/pathfinder, Render or Camera state as competing truth.
-
 Freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`.
 
 ## 5. IM-13B – Deterministic SaveGame Validation Contract
 
-Status: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
+Status: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**.
 
-Binding scope:
+Implemented scope:
 
-- validate only the frozen IM-13A `savegame-snapshot` schemaVersion 1 payload,
-- validate schema structure and completed-step capture metadata,
-- validate Stable-ID uniqueness and saved allocator consistency/continuity,
-- validate persisted reference integrity and reject dangling references,
-- validate authoritative Gold state,
-- validate CR-32 PATH/ROAD wear state and counters,
-- produce deterministic validation success/failure for identical input,
-- reject malformed or inconsistent saves rather than silently repairing them,
-- remain strictly side-effect-free and mutate no authoritative runtime owner.
+- a separate validator for the frozen IM-13A `savegame-snapshot` schemaVersion 1 payload,
+- schema structure and completed-step capture metadata validation,
+- global persisted Stable-ID uniqueness and allocator continuity validation,
+- World/Map identity, dimensions, cell membership and map/tile reference validation,
+- exact CoreDomainStores structure, item identity/kind consistency and persisted Stable-ID reference integrity,
+- authoritative Gold validation,
+- CR-32 PATH/ROAD wear reference, counter and traversal-type consistency validation,
+- deterministic sorted validation error code/path results,
+- malformed/inconsistent saves return `INVALID` without silent repair or coercion,
+- validation is side-effect-free and does not mutate the supplied payload or authoritative runtime owners,
+- Node regression coverage and browser evidence with visible/build identity `IM-13B-SAVEGAME-VALIDATION-CONTRACT`.
 
 Explicitly excluded from IM-13B:
 
@@ -85,12 +78,14 @@ Explicitly excluded from IM-13B:
 
 ## 6. Current gate
 
-The next permissible implementation step is exclusively **IM-13B – Deterministic SaveGame Validation Contract**.
+The next permissible step is exclusively **IM-13B Verification / Regression / Freeze Gate**.
 
-IM-13C / Restore is not automatically authorized. It remains blocked until IM-13B has been implemented, regressed, verified and frozen with PASS / 0 BLOCKER.
+Required before freeze: frozen CR-32 regression PASS, frozen IM-13A regression PASS, IM-13B regression PASS, CI PASS, real browser/device evidence with synchronized IM-13B identity and 0 BLOCKER.
+
+IM-13C / Restore is not automatically authorized. It remains blocked until IM-13B is frozen with PASS / 0 BLOCKER.
 
 IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later migration blocks.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13A frozen; IM-13B contract confirmed and explicitly implementation-authorized; implementation not yet started.
+**Updated:** 2026-09-07 — IM-13B validation implemented; verification/freeze pending; IM-13C Restore remains locked.
