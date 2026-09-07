@@ -11,69 +11,104 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current whole-CR branch: `feature/cr-31-navigation-integration-foundation`
 - Frozen whole-CR predecessor: **CR-30 – Housing / Population / Gold Integration Foundation** @ `2e9208614a5cfd80abc47e39ccf236b80315ace8`
 - CR-31 – Navigation Integration Foundation: **ACTIVE / NOT FROZEN**
-- CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- CR-31A freeze marker: `frozen/cr-31a-world-backed-traversability-source-contract`
-- CR-31A frozen commit: `39b43015721a5de2b4d63b221558431205767037`
-- CR-31B – Deterministic World Reachability Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- CR-31B freeze marker: `frozen/cr-31b-deterministic-world-reachability-integration`
-- CR-31B frozen commit: `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`
-- CR-31C – Runtime Entity Navigation Validation Integration: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
-- Current allowed action: explicit confirmation/authorization of CR-31C only. No CR-31C implementation before that authorization.
+- CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `39b43015721a5de2b4d63b221558431205767037`
+- CR-31B – Deterministic World Reachability Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`
+- CR-31C – Runtime Entity Navigation Validation Integration: **IMPLEMENTED / AUTOMATED VERIFIED / PASS / 0 BLOCKER / BROWSER GATE PENDING / NOT FROZEN**
+- Current allowed action: real browser/device verification of CR-31C only. Whole-CR-31 completion/freeze remains locked until CR-31C is accepted and frozen.
 
-## 2. CR-31A frozen boundary
+## 2. Frozen navigation boundary before CR-31C
 
-CR-31A connects real Building world state to the existing `TRAVERSABLE` / `BLOCKED` truth through `WorldBackedTraversabilitySource`. `MapStructure`, existing routing, Road Preference, traffic/reservation/deadlock/recovery and movement ownership remain unchanged.
+CR-31A connects real Building world state to the existing `TRAVERSABLE` / `BLOCKED` truth through `WorldBackedTraversabilitySource`.
 
-Freeze evidence: Actions run `34087731207` on `39b43015721a5de2b4d63b221558431205767037` = **SUCCESS / PASS / 0 BLOCKER**, plus accepted real browser/device evidence.
+CR-31B consumes that frozen truth plus the existing deterministic cost-aware pathfinder to answer deterministic world reachability without creating another pathfinder or route owner.
 
-## 3. CR-31B frozen boundary
+CR-31B freeze marker: `frozen/cr-31b-deterministic-world-reachability-integration` @ `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`.
 
-CR-31B consumes frozen CR-31A and the existing deterministic cost-aware pathfinder to answer whether two valid real world positions are connected through traversable cells. It does not create a second pathfinder or route owner.
+## 3. CR-31C – Runtime Entity Navigation Validation Integration
 
-Frozen implementation:
+**IMPLEMENTED / AUTOMATED VERIFIED / PASS / 0 BLOCKER / BROWSER GATE PENDING / NOT FROZEN**.
 
-- `src/transport/deterministic-world-reachability-integration.js`
-- `src/dev/cr-31b-self-test.node.js`
+Implementation:
 
-Frozen contract:
+- `src/transport/runtime-entity-navigation-validation-integration.js`
+- `src/dev/cr-31c-self-test.node.js`
 
-- finite real world positions map deterministically to containing `MapStructure` cells,
-- positions outside the map are rejected,
-- frozen CR-31A traversability remains authoritative,
-- blocked endpoints return explicit `START_BLOCKED` / `TARGET_BLOCKED`,
-- same traversable cell is reachable,
-- distinct traversable cells reuse the existing `DeterministicCostAwarePathfinder`,
-- reachable/disconnected results are deterministic,
-- no new route ownership, Path/Wear, movement, Road Preference, Traffic, Reservation, Deadlock or Recovery behavior is introduced,
-- world/domain state and TransportJobs are not mutated or created.
+Implemented contract:
 
-Automated freeze evidence: Actions run `34094572739` on `6ec205a93102614eb29f3c98150a7da61958b47b` completed **SUCCESS / PASS / 0 BLOCKER**.
+- validates only already-existing real runtime units from `domains.units`,
+- Person validation requires the existing `PersonResidentIdentityContract` identity and reads the unit's real stored position,
+- Carrier validation consumes the existing `CarrierMovementContract` plus the carrier identity already attached to the real unit,
+- carrier movement currentPosition must match the real runtime entity position; mismatch yields `ENTITY_POSITION_MISMATCH`,
+- current positions and optional targets are checked by consuming frozen CR-31B `DeterministicWorldReachabilityIntegration`,
+- a valid current position without a target returns `POSITION_VALID`,
+- a reachable target returns `TARGET_REACHABLE`,
+- frozen CR-31B failure reasons such as `START_BLOCKED`, `TARGET_BLOCKED` and `NO_TRAVERSABLE_CONNECTION` remain authoritative,
+- identical runtime/domain/navigation state yields identical validation output,
+- validation is read-only: no Person/Carrier position mutation and no TransportJob creation.
 
-Accepted real iPhone/Safari evidence on 2026-09-07 showed:
+Explicit non-scope preserved:
 
-- correct `CR-31B – Deterministic World Reachability Integration` identity,
+- no new route owner,
+- no new pathfinder,
+- no Person/Carrier movement execution,
+- no Traffic, Reservation, Deadlock or Recovery changes,
+- no Road Preference changes,
+- no Path/Wear,
+- no SaveGame, UI/Mobile or Guidance/Inspector work.
+
+## 4. Browser evidence setup
+
+Visible/build identity is synchronized to `CR-31C – Runtime Entity Navigation Validation Integration`.
+
+The existing visible miniworld remains 3 Buildings / 3 Persons. One of the existing Persons also carries the already-existing Carrier contract so CR-31C can validate both a real Person and a real Carrier without adding another visible runtime entity.
+
+Expected browser evidence:
+
 - runtime `READY`,
-- world `(0.25,0.25)` → `(7.25,5.25)` = `REACHABLE`,
+- heading `CR-31C – Runtime Entity Navigation Validation Integration`,
+- evidence line starts with `CR-31C ACTIVE`,
+- Person result `TARGET_REACHABLE`,
+- Carrier result `TARGET_REACHABLE`,
+- `2/2 runtime entities VALID`,
+- CR-31B world reachability remains `REACHABLE`,
 - CR-31A 3 static BLOCKED cells preserved,
 - CR-30 Population 3 / Gold 3 preserved,
-- 3 Buildings / 3 Persons visible.
+- 3 Buildings / 3 Persons remain visible,
+- no stale CR-31B identity presented as current build.
 
-Freeze marker `frozen/cr-31b-deterministic-world-reachability-integration` now points to `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`. Therefore CR-31B is **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+## 5. Automated verification
 
-## 4. CR-31C – Runtime Entity Navigation Validation Integration
+CI regression chain now runs:
 
-**PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
+`npm run ci` → CR-24C → CR-28 → reusable CR-31A self-test → CR-31B self-test → CR-31C self-test.
 
-CR-31C may later validate existing real Person/Carrier positions and targets against the frozen CR-31A/CR-31B navigation truth while preserving existing route, movement and traffic owners. Its implementation requires explicit authorization first.
+GitHub Actions run `34097331344` on commit `d4d61af7bac5b69f2017fb45136ab187da485dd1` completed **SUCCESS / PASS / 0 BLOCKER**. The `Run CR-31C Regression` step completed successfully and failure diagnostics were skipped.
 
-## 5. Locked later work
+CR-31C direct automated evidence includes:
+
+- real Person current-position validation,
+- real Person target reachability,
+- deterministic repeated validation,
+- blocked real Person position rejection,
+- blocked target rejection,
+- real Carrier movement target validation,
+- real runtime entity position vs movement-position mismatch rejection,
+- unknown runtime unit rejection,
+- no TransportJob creation,
+- no Person/Carrier position mutation.
+
+## 6. Current gate
+
+The next and only allowed action is **real browser/device verification of CR-31C**. Do not freeze CR-31C and do not begin the whole-CR-31 completion/freeze gate until that evidence is accepted PASS / 0 BLOCKER.
+
+## 7. Locked later work
 
 Path/Wear remains after CR-31. SaveGame remains IM-13, UI/Mobile IM-14, Guidance/Inspector IM-15.
 
-## 6. Permanent visible CR / build identity synchronization rule
+## 8. Permanent visible CR / build identity synchronization rule
 
 Every browser/device-verifiable CR/substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-07 — CR-31B frozen at `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`; CR-31C remains planned and requires explicit authorization before implementation.
+**Updated:** 2026-09-07 — CR-31C implemented on the existing Whole-CR-31 branch; automated Actions regression PASS / 0 BLOCKER; browser/device gate pending.
