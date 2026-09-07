@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-30 FROZEN / CR-31 ACTIVE / CR-31A FROZEN / CR-31B IMPLEMENTED – VERIFICATION ACTIVE  
+**Status:** CURRENT – CR-30 FROZEN / CR-31 ACTIVE / CR-31A FROZEN / CR-31B VERIFIED – FREEZE READY  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-31-navigation-integration-foundation`  
 **Latest whole-CR freeze:** **CR-30 – Housing / Population / Gold Integration Foundation**  
@@ -39,7 +39,7 @@ Real existing Buildings own static blocked-cell evidence through the frozen worl
 
 ### CR-31B – Deterministic World Reachability Integration
 
-Status: **IMPLEMENTED / VERIFICATION ACTIVE / NOT FROZEN**.
+Status: **IMPLEMENTED / AUTOMATED PASS / REAL IPHONE BROWSER PASS / 0 BLOCKER / FREEZE READY / NOT YET FROZEN**.
 
 CR-31B consumes frozen CR-31A and the existing deterministic cost-aware pathfinder to answer whether two valid real world positions are connected through traversable cells. World positions are deterministically mapped to cells. Blocked endpoints and disconnected regions produce explicit non-reachable results. No route ownership, Path/Wear, movement, Road Preference, Traffic, Reservation, Deadlock or Recovery behavior is added.
 
@@ -48,7 +48,16 @@ Implementation:
 - `src/transport/deterministic-world-reachability-integration.js`
 - `src/dev/cr-31b-self-test.node.js`
 
-Visible/build identity is synchronized to CR-31B. Automated regression must pass before browser/device acceptance; CR-31B is not frozen yet.
+Automated evidence: Actions run `34094572739` on `6ec205a93102614eb29f3c98150a7da61958b47b` = **SUCCESS / PASS / 0 BLOCKER**.
+
+Accepted real iPhone/Safari evidence on 2026-09-07 shows:
+
+- correct `CR-31B – Deterministic World Reachability Integration` identity,
+- runtime `READY`,
+- world `(0.25,0.25)` → `(7.25,5.25)` = `REACHABLE`,
+- CR-31A 3 static BLOCKED cells preserved,
+- CR-30 Population 3 / Gold 3 preserved,
+- 3 Buildings / 3 Persons visible.
 
 ### CR-31C – Runtime Entity Navigation Validation Integration
 
@@ -58,8 +67,8 @@ May later validate existing real Person/Carrier positions and targets against fr
 
 ## 4. Current next step
 
-Complete automated regression for **CR-31B – Deterministic World Reachability Integration**. On PASS / 0 BLOCKER, perform real browser/device verification showing correct CR-31B identity, runtime READY, deterministic world reachability `REACHABLE`, preserved CR-31A blocked-cell evidence, preserved CR-30 Population 3 / Gold 3, and 3 Buildings / 3 Persons. Do not freeze CR-31B or authorize CR-31C before those gates pass.
+The only allowed action is to freeze **CR-31B – Deterministic World Reachability Integration** at its verified branch state and create its substep freeze marker. Do not implement or authorize CR-31C until CR-31B is explicitly frozen. Whole CR-31 remains active/not frozen.
 
 ---
 
-**Updated:** 2026-09-07 — CR-31B implementation complete; verification active; CR-31C locked.
+**Updated:** 2026-09-07 — CR-31B automated regression and real iPhone/Safari verification PASS / 0 BLOCKER; freeze-ready; CR-31C locked.
