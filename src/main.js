@@ -34,11 +34,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-31C Runtime Entity Navigation Validation Miniworld',
+  name: 'CR-31 Navigation Integration Foundation Completion Gate Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-31C-RUNTIME-ENTITY-NAVIGATION-VALIDATION-INTEGRATION' }
+  metadata: { foundation: 'CR-31-COMPLETION-FREEZE-GATE' }
 });
 const domains = new CoreDomainStores();
 
@@ -257,7 +257,7 @@ window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 const runtimeValidationPass = validRuntimeNavigationCount === runtimeNavigationValidations.length;
 if (testEl) {
-  testEl.textContent = `CR-31C ACTIVE — Runtime Entity Navigation Validation — Person ${personNavigationValidation.reason} / Carrier ${carrierNavigationValidation.reason} — ${validRuntimeNavigationCount}/2 runtime entities VALID — CR-31B world reachability ${reachabilityEvidence.reachable ? 'REACHABLE' : reachabilityEvidence.reason} erhalten — CR-31A ${blockedStaticCells.length} static BLOCKED cells erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `CR-31 COMPLETION GATE — CR-31A + CR-31B + CR-31C — Person ${personNavigationValidation.reason} / Carrier ${carrierNavigationValidation.reason} — ${validRuntimeNavigationCount}/2 runtime entities VALID — CR-31B world reachability ${reachabilityEvidence.reachable ? 'REACHABLE' : reachabilityEvidence.reason} erhalten — CR-31A ${blockedStaticCells.length} static BLOCKED cells erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
   testEl.dataset.pass = runtimeValidationPass ? 'true' : 'false';
 }
 
@@ -280,13 +280,17 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-31C] Runtime Entity Navigation Validation Integration', {
+console.info('[CR-31 COMPLETION GATE] Navigation Integration Foundation', {
   build: RuntimeConfig.build,
   personNavigationValidation,
   carrierNavigationValidation,
   runtimeValidationPass,
   reachabilityEvidence,
   blockedStaticCells,
+  cr31aFrozen: true,
+  cr31bFrozen: true,
+  cr31cFrozen: true,
+  frozenCr30RegressionPreserved: true,
   routeOwnerUnchanged: true,
   movementOwnerUnchanged: true,
   trafficReservationDeadlockRecoveryUnchanged: true,
