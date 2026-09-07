@@ -1,8 +1,9 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-32 COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-13 AUTHORIZED / NOT YET IMPLEMENTED  
 **Repository:** `DrHoschi/siedler-mini`  
-**Completed control branch:** `feature/cr-32-path-wear-integration-foundation`  
+**Current whole-block branch:** `feature/im-13-savegame-foundation`  
+**Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`  
 **Latest whole-CR freeze:** **CR-32 – Path / Wear Integration Foundation**  
 **CR-32 freeze marker:** `frozen/cr-32-path-wear-integration-foundation`
 
@@ -70,12 +71,36 @@ Binding rule:
 - visible identity consistent,
 - **0 BLOCKER**.
 
-## 5. Current next step
+## 5. IM-13 – Deterministic SaveGame Snapshot / Restore Foundation
 
-The next migration block is **IM-13 – SaveGame**. It is not automatically implementation-authorized. Its exact contract and boundary must be reconciled first, then explicitly authorized before any implementation or new branch is created.
+Status: **CONTRACT RECONCILED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
 
-UI/Mobile and Guidance/Inspector remain later migration blocks.
+Whole-block branch: `feature/im-13-savegame-foundation`.
+
+Exact branch base: frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`.
+
+Binding boundary:
+
+- persist existing authoritative runtime truth only,
+- preserve Stable IDs and allocator continuity,
+- persist World/Map identity, persistence-relevant domain state, Gold balance and CR-32 PATH/ROAD wear,
+- recompute derived/transient views after restore instead of persisting competing truth,
+- capture only at a completed deterministic simulation-step boundary,
+- use a versioned canonical SaveGame payload from the first implementation,
+- reject invalid schema/reference/state deterministically,
+- do not alter frozen gameplay ownership or CR-32 navigation/path/wear semantics,
+- keep SaveGame UI/storage presentation, cloud sync and later Guidance/Inspector outside the Foundation boundary.
+
+## 6. Next permissible step
+
+The next permissible implementation step is **IM-13A – SaveGame Snapshot Contract**.
+
+IM-13A is limited to the canonical versioned snapshot contract and deterministic capture of existing authoritative state. It must not implement restore execution, save-slot UI, cloud sync, historical migration or new gameplay behavior.
+
+No later IM-13 substep is automatically authorized by IM-13A authorization/completion; each remains gated by its predecessor regression/freeze.
+
+IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later migration blocks.
 
 ---
 
-**Updated:** 2026-09-07 — CR-32 Path / Wear Integration Foundation COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-13 SaveGame is next for contract reconciliation only.
+**Updated:** 2026-09-07 — IM-13 SaveGame contract reconciled and explicitly implementation-authorized; whole-block branch created exactly from frozen CR-32; IM-13A is the next permissible implementation step.
