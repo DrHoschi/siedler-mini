@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A FROZEN / IM-13B FROZEN / IM-13C IMPLEMENTED / VERIFICATION PENDING  
+**Status:** CURRENT – IM-13A FROZEN / IM-13B FROZEN / IM-13C COMPLETE / FROZEN / PASS / 0 BLOCKER  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -49,22 +49,32 @@ Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4
 
 ## 6. IM-13C – Deterministic SaveGame Restore Contract
 
-Status: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Implemented scope:
+Frozen scope:
 
 - restore input is first passed through frozen IM-13B validation; invalid input is `REJECTED` before replacement state construction,
 - complete replacement authoritative World/Map, CoreDomainStores, Gold and CR-32 PATH/ROAD wear owners are prepared before commit,
-- additive restore initialization paths avoid replay side effects and preserve saved store revisions,
-- World/Map restore preserves exact World/Map/Tile/Cell Stable IDs and reconstructs map coordinate lookup without generating competing identities,
+- restore is atomic/all-or-nothing and never exposes partial replacement state,
+- additive restore initialization paths preserve saved Store revisions and avoid replay side effects,
+- World/Map restore preserves exact World/Map/Tile/Cell Stable IDs and reconstructs coordinate lookup without generating competing identities,
 - Domain restore preserves exact items, relationships, revisions and per-domain Stable-ID allocator next-sequences,
 - Gold restores directly from saved balance without settlement,
 - world-backed path classification is rebuilt from restored World/Map truth,
 - CR-32 wear restores saved entries without recalculation or traversal-class mutation,
 - allocator continuity is restored from saved allocator snapshots so later allocations continue without collision or reuse,
-- deterministic Node round-trip regression proves Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B canonical identity,
-- invalid restore regression verifies that existing World/Domain/Gold owners remain unchanged,
-- browser evidence surface and build identity are synchronized to `IM-13C-SAVEGAME-RESTORE-CONTRACT`.
+- deterministic round-trip regression proves Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B canonical identity,
+- invalid restore regression proves existing World/Domain/Gold owners remain unchanged.
+
+Freeze gate evidence:
+
+- frozen CR-32 regression PASS,
+- frozen IM-13A regression PASS,
+- frozen IM-13B regression PASS,
+- IM-13C round-trip regression PASS,
+- GitHub Actions CI run `34143896461`, job `101811630247`: SUCCESS,
+- real iPhone/Safari evidence on 2026-09-07 at 18:50 local: runtime READY, synchronized IM-13C identity and PASS surface; IM-13B VALID before restore; Capture A -> Restore B -> Capture B IDENTICAL; Stable IDs/Allocator PASS; Gold 3; Wear PASS; invalid restore REJECTED; previous Runtime-State unchanged PASS,
+- 0 BLOCKER.
 
 Explicitly excluded from IM-13C:
 
@@ -78,12 +88,10 @@ Explicitly excluded from IM-13C:
 
 ## 7. Current gate
 
-The next permissible step is exclusively **IM-13C Verification / Regression / Freeze Gate**.
+IM-13C is frozen. No later persistence/UI/schema-migration step is automatically authorized.
 
-Required before freeze: frozen CR-32 regression PASS, frozen IM-13A regression PASS, frozen IM-13B regression PASS, IM-13C round-trip regression PASS, CI PASS, real browser/device evidence with synchronized IM-13C identity and 0 BLOCKER.
-
-No later persistence/UI/schema-migration step is automatically authorized.
+The next permissible step is exclusively the reconciliation of whether IM-13 is complete at A+B+C and may enter its whole-block Completion / Regression / Freeze Gate, or whether a further narrowly scoped SaveGame foundation substep is still required. IM-14 UI/Mobile and IM-15 Guidance/Inspector remain locked.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13C restore implemented; verification/freeze pending; later persistence/UI/migration work remains locked.
+**Updated:** 2026-09-07 — IM-13C COMPLETE / FROZEN / PASS / 0 BLOCKER; whole IM-13 completion not yet automatically authorized.
