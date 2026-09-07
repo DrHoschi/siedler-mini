@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A FROZEN / IM-13B COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-13A FROZEN / IM-13B FROZEN / IM-13C IMPLEMENTATION-AUTHORIZED  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -11,7 +11,7 @@ CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**. CR-32 – P
 
 IM-13A – SaveGame Snapshot Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `fadacda7f728f57b3b97cbb1771284e5d609d805`, marker `frozen/im-13a-savegame-snapshot-contract`.
 
-IM-13B – Deterministic SaveGame Validation Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER**. Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract`, pointing exactly to the final documented IM-13B freeze head.
+IM-13B – Deterministic SaveGame Validation Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `0a4b225d86e239cc2b2d80c20166faafe483aa20`, marker `frozen/im-13b-deterministic-savegame-validation-contract`.
 
 ## 2. Binding migration order
 
@@ -56,47 +56,53 @@ Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 Frozen scope:
 
-- a separate validator for the frozen IM-13A `savegame-snapshot` schemaVersion 1 payload,
-- schema structure and completed-step capture metadata validation,
-- global persisted Stable-ID uniqueness and allocator continuity validation,
-- World/Map identity, dimensions, cell membership and map/tile reference validation,
-- exact CoreDomainStores structure, item identity/kind consistency and persisted Stable-ID reference integrity,
-- authoritative Gold validation,
-- CR-32 PATH/ROAD wear reference, counter and traversal-type consistency validation,
-- deterministic sorted validation error code/path results,
-- malformed/inconsistent saves return `INVALID` without silent repair or coercion,
-- validation is side-effect-free and does not mutate the supplied payload or authoritative runtime owners,
-- Node regression coverage and browser evidence with visible/build identity `IM-13B-SAVEGAME-VALIDATION-CONTRACT`.
+- separate validation of the frozen IM-13A schemaVersion-1 payload,
+- schema/capture validation,
+- Stable-ID uniqueness and allocator continuity,
+- World/Map/Domain reference integrity,
+- Gold and CR-32 wear validation,
+- deterministic INVALID results without silent repair,
+- strict side-effect-free behavior.
 
-Freeze gate evidence:
+Freeze gate evidence includes frozen predecessor regressions, IM-13B regression, GitHub Actions CI success and real iPhone/Safari PASS evidence with synchronized build identity.
 
-- frozen CR-32 regression PASS,
-- frozen IM-13A regression PASS,
-- IM-13B regression PASS,
-- GitHub Actions CI run `34137143168`: SUCCESS,
-- real iPhone/Safari evidence on 2026-09-07: runtime READY and synchronized IM-13B PASS surface, including valid schemaVersion 1, deterministic INVALID cases for malformed schema/negative Gold/Wear inconsistency, side-effect-free PASS, unchanged IM-13A snapshot and Restore still absent,
-- 0 BLOCKER.
+Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4b225d86e239cc2b2d80c20166faafe483aa20`.
 
-Explicitly excluded from IM-13B:
+## 6. IM-13C – Deterministic SaveGame Restore Contract
 
-- Restore/Hydration,
-- runtime-state mutation,
-- save slots, storage/file adapters or UI,
+Status: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
+
+Binding scope:
+
+- accept restore input only after frozen IM-13B returns `VALID`,
+- restore is atomic/all-or-nothing and must not expose partial active state,
+- reconstruct a complete replacement set of authoritative World/Map, CoreDomainStores, Gold and CR-32 PATH/ROAD wear owners from the frozen IM-13A snapshot truth,
+- preserve all saved Stable IDs exactly,
+- restore allocator continuity without ID reuse/collision,
+- avoid constructor side effects that create competing map/tile/cell or domain identities,
+- preserve persisted relationships and references,
+- restore Gold without economy settlement side effects,
+- restore Wear without recalculation or traversal-class mutation,
+- recompute derived/transient Population, navigation/pathfinding/cost views, render/camera/evidence only from restored authoritative owners,
+- deterministic round-trip proof: Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B must reproduce canonically identical authoritative snapshot truth under the defined restore evidence boundary,
+- restore failure leaves the previously active runtime state unchanged.
+
+Explicitly excluded from IM-13C:
+
+- Save Slots, LocalStorage/file-system adapters or save/load UI,
 - autosave,
 - cloud or multiplayer synchronization,
-- historical schema migration,
-- new gameplay logic or ownership changes.
+- historical schema migration beyond schemaVersion 1,
+- compression/encryption,
+- new gameplay rules or ownership changes,
+- IM-14 UI/Mobile and IM-15 Guidance/Inspector work.
 
-Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` — exact final documented IM-13B freeze head.
+## 7. Current gate
 
-## 6. Current gate
+The next permissible implementation step is exclusively **IM-13C – Deterministic SaveGame Restore Contract** within the confirmed and authorized boundary above.
 
-IM-13B is frozen. **IM-13C / Restore remains NOT AUTHORIZED.**
-
-The next permissible step after this freeze is exclusively the fachliche definition and boundary reconciliation of IM-13C on top of frozen IM-13A + IM-13B. No Restore implementation is automatically authorized by the IM-13B freeze.
-
-IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later migration blocks.
+No later persistence/UI/migration step is automatically authorized by this IM-13C authorization.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-13C Restore remains not authorized.
+**Updated:** 2026-09-07 — IM-13A and IM-13B frozen; IM-13C contract confirmed and explicitly implementation-authorized; implementation not yet started.
