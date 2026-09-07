@@ -13,71 +13,72 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Frozen predecessor: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current migration block: **IM-14 – UI / Mobile Foundation: IN PROGRESS / NOT FROZEN**
 - IM-14A – Player UI Shell & Responsive Surface Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- IM-14B – Unified Pointer / Touch Interaction Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
 
-## 2. Binding IM-14A contract
+## 2. Frozen IM-14A boundary
 
-IM-14A introduces only the structural player UI shell over the frozen modular runtime.
+IM-14A remains frozen and authoritative for the responsive player shell, Topbar/World/Action regions, safe-area handling, deterministic UI/World layering and Canvas↔World surface binding.
+
+Frozen IM-14A marker: `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`.
+
+## 3. Binding IM-14B contract
+
+IM-14B introduces only a unified Pointer/Touch transport and lifecycle boundary over frozen IM-14A.
 
 Binding requirements:
 
-- a dedicated Player UI Shell exists over the existing World/Canvas surface,
-- World/Canvas, Topbar and Action regions are structurally distinct,
-- responsive layout supports desktop and mobile viewport sizes,
-- `viewport-fit=cover` and CSS safe-area insets are respected,
-- UI shell layout may own only presentation/layout state,
-- resize/orientation changes must preserve a valid viewport-bound shell,
-- existing runtime, camera and gameplay ownership remain unchanged,
-- visible/build identity is `IM-14A-PLAYER-UI-SHELL-RESPONSIVE-SURFACE-CONTRACT`.
+- Pointer input is normalized through one contract for mouse/pen/touch pointer sources,
+- UI surfaces and the World surface are deterministically classified,
+- UI-owned input is not emitted through the World channel,
+- active contacts are tracked by pointerId,
+- contact lifecycle is controlled as ACTIVE -> ENDED / CANCELLED,
+- pointerup/pointercancel cannot leave a hanging active contact,
+- duplicate terminal events are not re-emitted as new active interaction,
+- normalized samples carry owner, region, pointer identity/type, button/contact state and local/client coordinates,
+- the contract owns only input transport/lifecycle state,
+- existing camera/gameplay/domain/persistence ownership remains unchanged,
+- visible/build identity is `IM-14B-UNIFIED-POINTER-TOUCH-INTERACTION-CONTRACT`.
 
-Explicitly excluded from IM-14A:
+Explicitly excluded from IM-14B:
 
-- Gold/Population or other domain HUD projection,
-- world/entity selection and context actions,
-- build UI,
-- Save/Load UI, Save Slots, storage adapters or autosave,
-- new Pointer/Touch gameplay semantics,
-- camera behavior changes,
-- minimap, dialogs/notifications and Inspector,
-- any new gameplay, simulation, domain or persistence ownership.
+- world/entity selection semantics,
+- Tap = Select or other gameplay meaning,
+- new camera Pan/Zoom semantics,
+- pinch/gesture interpretation beyond neutral contact tracking,
+- build placement/context actions,
+- HUD/domain projection,
+- Save/Load UI,
+- Inspector,
+- any gameplay/domain/persistence mutation or ownership change.
 
-## 3. Frozen IM-14A surface
+## 4. Implemented IM-14B surface
 
-The frozen implementation provides:
+The current implementation provides:
 
-- responsive `app-shell` with topbar, world stage and structural action region,
-- safe-area aware desktop/mobile layout,
-- deterministic UI/World layer separation,
-- world canvas bound to the dedicated world region,
-- browser runtime evidence in `src/im14a-runtime-evidence.js`,
+- `src/ui/unified-pointer-touch-interaction.js` as the neutral input contract,
+- root-level Pointer Event normalization across UI and World surfaces,
+- deterministic UI/WORLD classification using existing `data-ui-region` ownership,
+- pointerId-based active contact tracking and terminal cleanup,
+- owner-specific subscriber channels without assigning gameplay meaning,
+- dedicated browser evidence in `src/im14b-runtime-evidence.js`,
 - synchronized page title, visible gate identity and RuntimeConfig build identity,
-- cache-safe evidence/config loading for reliable real-device build-identity verification.
+- cache-versioned evidence/config imports for reliable mobile verification.
 
-No IM-14B/C/D/E behavior has been introduced.
+The existing frozen camera behavior in `src/main.js` has not been broadened or semantically changed by IM-14B. No IM-14C/D/E behavior has been introduced.
 
-## 4. IM-14A Completion / Regression / Freeze Gate
+## 5. Current gate
 
-**IM-14A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+**IM-14B = IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN.**
 
-Accepted evidence:
+Before any IM-14C work, IM-14B requires direct technical/CI verification plus real browser/device evidence. The complete IM-14 block remains NOT FROZEN.
 
-- full branch diff reviewed against frozen IM-13 base `0a011af99ea8814b9e3555d7075ee091cfaf05c2`,
-- diff remains inside the IM-14A presentation/layout boundary,
-- latest functional IM-14A implementation/evidence head before freeze recording: `a3fd439278199dbc0efa69522984f8a061d95fec`,
-- CI Baseline run `34157309746` on that head: SUCCESS,
-- GitHub Pages build/deployment run `34157308682` on that head: SUCCESS,
-- real iPhone/Safari evidence 2026-09-07 21:56 local: READY and IM-14A PASS with Player Shell PASS, viewport-fit=cover PASS, Safe-Area/Viewport PASS, Canvas↔World Surface PASS and Build Identity PASS,
-- real iPad/Safari evidence 2026-09-07 22:01 local: READY and IM-14A PASS with the same complete PASS set, including responsive wide-layout behavior,
-- the earlier iPhone Build Identity FAIL was isolated to stale module/cache loading and corrected without introducing new UI/gameplay behavior.
+Expected browser gate:
 
-## 5. Frozen predecessor preservation
+`IM-14B — Unified Pointer / Touch Interaction Contract — PASS — UI↔World Classification PASS — Pointer Lifecycle PASS — Unified Boundary PASS — Build Identity PASS`
 
-IM-13 and the frozen CR-31/CR-32 Navigation/Path/Wear boundaries remain authoritative and unchanged. IM-14A is presentation structure only and does not make UI a gameplay or persistence owner.
+## 6. Frozen predecessor preservation
 
-## 6. Current gate
-
-IM-14A is frozen. This freeze does **not** automatically authorize IM-14B implementation.
-
-The next permissible action is reconciliation/definition of IM-14B – Unified Pointer / Touch Interaction Contract against frozen IM-14A. The complete IM-14 block remains NOT FROZEN until its later Whole-Block gate.
+IM-14A, IM-13 and the frozen CR-31/CR-32 boundaries remain authoritative and unchanged. IM-14B is input transport/lifecycle only and does not become a competing camera, gameplay, domain or persistence owner.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -85,4 +86,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-07 — IM-14A Completion / Regression / Freeze Gate PASS / 0 BLOCKER with CI, Pages, iPhone and iPad evidence; IM-14A frozen.
+**Updated:** 2026-09-07 — IM-14B Unified Pointer / Touch Interaction Contract implemented against frozen IM-14A; verification pending, not frozen.
