@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-30 FROZEN / CR-31 ACTIVE / CR-31A FROZEN / CR-31B FROZEN / CR-31C IMPLEMENTED – BROWSER GATE PENDING  
+**Status:** CURRENT – CR-30 FROZEN / CR-31 ACTIVE / CR-31A FROZEN / CR-31B FROZEN / CR-31C FREEZE READY  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-31-navigation-integration-foundation`  
 **Latest whole-CR freeze:** **CR-30 – Housing / Population / Gold Integration Foundation**  
@@ -52,7 +52,7 @@ Freeze evidence:
 
 ### CR-31C – Runtime Entity Navigation Validation Integration
 
-Status: **IMPLEMENTED / AUTOMATED VERIFIED / PASS / 0 BLOCKER / BROWSER GATE PENDING / NOT FROZEN**.
+Status: **IMPLEMENTED / AUTOMATED VERIFIED / REAL BROWSER VERIFIED / PASS / 0 BLOCKER / FREEZE READY / NOT YET FROZEN**.
 
 CR-31C validates existing real runtime Person/Carrier positions and targets against frozen CR-31A/CR-31B navigation truth while preserving route, movement and traffic ownership.
 
@@ -71,20 +71,25 @@ Behavior:
 - CR-31B blocked/disconnected reasons remain authoritative,
 - validation creates no TransportJobs and mutates no entity positions.
 
-Automated evidence: Actions run `34097331344` on `d4d61af7bac5b69f2017fb45136ab187da485dd1` = **SUCCESS / PASS / 0 BLOCKER**.
+Automated evidence:
+
+- Actions run `34097331344` = **SUCCESS / PASS / 0 BLOCKER**,
+- follow-up Actions run `34097459849` = **SUCCESS / PASS / 0 BLOCKER**.
+
+Accepted real iPhone/Safari evidence on 2026-09-07 = **PASS / 0 BLOCKER** and visibly confirms `READY`, correct CR-31C identity, Person `TARGET_REACHABLE`, Carrier `TARGET_REACHABLE`, `2/2 runtime entities VALID`, preserved CR-31B `REACHABLE`, CR-31A 3 static BLOCKED cells, CR-30 Population 3 / Gold 3, and 3 Buildings / 3 Persons visible.
 
 Visible/build identity is synchronized to CR-31C. The browser miniworld keeps 3 Buildings / 3 Persons, with one existing Person also carrying the Carrier contract for validation evidence.
 
 ### Whole CR-31 Completion / Regression / Freeze Gate
 
-Status: **LOCKED** until CR-31C browser acceptance and substep freeze are complete.
+Status: **LOCKED** until the CR-31C substep freeze marker is created.
 
 ## 4. Current next step
 
-The next and only allowed action is the real browser/device verification of **CR-31C – Runtime Entity Navigation Validation Integration**. Required visible evidence: `READY`, correct CR-31C identity, Person `TARGET_REACHABLE`, Carrier `TARGET_REACHABLE`, `2/2 runtime entities VALID`, preserved CR-31B `REACHABLE`, preserved CR-31A 3 static BLOCKED cells, CR-30 Population 3 / Gold 3, and 3 Buildings / 3 Persons visible.
+CR-31C has automated and real-device **PASS / 0 BLOCKER** and is **FREEZE READY**. The next permissible action is to create the CR-31C substep freeze on the verified Whole-CR-31 branch state. Only after that freeze may the **CR-31 Completion / Regression / Freeze Gate** begin.
 
-Do not freeze CR-31C or start the whole-CR-31 completion/regression/freeze gate before browser PASS / 0 BLOCKER.
+Do not begin Path/Wear, SaveGame, UI/Mobile or Guidance/Inspector work.
 
 ---
 
-**Updated:** 2026-09-07 — CR-31C implementation complete; automated regression PASS / 0 BLOCKER; browser/device gate pending.
+**Updated:** 2026-09-07 — CR-31C real iPhone/Safari browser evidence accepted PASS / 0 BLOCKER; substep is freeze-ready.
