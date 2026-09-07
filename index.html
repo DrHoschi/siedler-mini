@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-14A Player UI Shell & Responsive Surface Contract</title>
+  <title>Neue Siedler – IM-14B Unified Pointer / Touch Interaction Contract</title>
   <link rel="stylesheet" href="src/ui/app.css?v=im14a-1">
 </head>
 <body>
@@ -19,19 +19,19 @@
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-14A – Player UI Shell & Responsive Surface Contract</h1>
-        <p>Responsive Player-Shell über der eingefrorenen modularen Runtime. Nur Layout-, Safe-Area- und Layer-Verantwortung; keine neue Gameplay-, Domain-, Camera-, SaveGame- oder Inspector-Ownership.</p>
-        <output id="test-status">IM-14A-PLAYER-UI-SHELL-RESPONSIVE-SURFACE-CONTRACT wird aufgebaut …</output>
+        <h1>IM-14B – Unified Pointer / Touch Interaction Contract</h1>
+        <p>Einheitliche Pointer-/Touch-Transportgrenze über der eingefrorenen IM-14A-Shell. UI- und World-Surfaces werden reproduzierbar klassifiziert; Kontakte besitzen einen kontrollierten Lifecycle. Noch keine neue Auswahl-, Gameplay- oder Kamera-Semantik.</p>
+        <output id="test-status">IM-14B-UNIFIED-POINTER-TOUCH-INTERACTION-CONTRACT wird aufgebaut …</output>
       </aside>
     </section>
 
     <footer class="player-action-region" data-ui-region="actions" aria-label="Spieleraktionsbereich">
       <span>PLAYER UI SURFACE</span>
-      <span class="surface-note">strukturell · noch ohne Gameplay-Aktionen</span>
+      <span class="surface-note">Input-Grenze aktiv · noch ohne neue Gameplay-Aktionen</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im14a-1"></script>
-  <script type="module" src="src/im14a-runtime-evidence.js?v=im14a-2"></script>
+  <script type="module" src="src/main.js?v=im14b-1"></script>
+  <script type="module" src="src/im14b-runtime-evidence.js?v=im14b-1"></script>
 </body>
 </html>
