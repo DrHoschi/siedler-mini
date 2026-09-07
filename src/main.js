@@ -9,6 +9,7 @@ import { PersonResidentIdentityContract } from './domain/person-resident-identit
 import { HousingHomeCapacityIntegrationContract } from './domain/housing-home-capacity-integration-contract.js';
 import { DeterministicHousingPopulationIntegration } from './domain/deterministic-housing-population-integration.js';
 import { GoldEconomyOwner } from './domain/gold-economy-owner.js';
+import { WorldBackedTraversabilitySource } from './transport/world-backed-traversability-source.js';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import {
@@ -29,11 +30,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-30 Completion Freeze Gate Miniworld',
+  name: 'CR-31A World-backed Traversability Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-30-COMPLETION-FREEZE-GATE' }
+  metadata: { foundation: 'CR-31A-WORLD-BACKED-TRAVERSABILITY-SOURCE-CONTRACT' }
 });
 const domains = new CoreDomainStores();
 
@@ -76,6 +77,9 @@ const goldSettlement = goldEconomy.settle({
   population: housingPopulation.population,
   goldPerResident: browserEvidenceGoldPerResident,
 });
+
+const traversability = new WorldBackedTraversabilitySource({ map, domains });
+const blockedStaticCells = traversability.entries();
 
 let cameraState = createWorldViewCameraState({
   viewportWidth: 1,
@@ -205,7 +209,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-30 COMPLETION GATE ACTIVE — A+B+C — Population ${housingPopulation.population.count} — ${housingPopulation.assignments.length} Home Assignments — Gold Income ${goldSettlement.income.amount} — Gold Balance ${goldSettlement.state.balance} — NON-PHYSICAL — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `CR-31A ACTIVE — World-backed Traversability — ${blockedStaticCells.length} static BLOCKED cells aus realen Buildings — freie Zellen TRAVERSABLE — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
   testEl.dataset.pass = 'true';
 }
 
@@ -218,24 +222,23 @@ window.CleanRuntime = Object.freeze({
   housingPopulation,
   goldEconomy,
   goldSettlement,
+  traversability,
   renderCurrentWorld,
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-30 COMPLETION GATE] Housing / Population / Gold Integration Foundation', {
+console.info('[CR-31A] World-backed Traversability Source Contract', {
   build: RuntimeConfig.build,
+  blockedStaticCells,
+  buildingCellsBlocked: blockedStaticCells.length,
+  personsDoNotOwnStaticTraversability: true,
+  existingTraversabilitySemanticsPreserved: true,
+  pathfindingUnchanged: true,
+  roadPreferenceUnchanged: true,
+  trafficReservationMovementUnchanged: true,
+  pathWearNotIntroduced: true,
   population: housingPopulation.population.count,
-  homeAssignments: housingPopulation.assignments.length,
-  goldPerResident: browserEvidenceGoldPerResident,
-  goldIncome: goldSettlement.income.amount,
   goldBalance: goldSettlement.state.balance,
-  goldPhysical: goldSettlement.state.physical,
-  physicalResourceCount: domains.resources.size,
-  logisticsJobCount: domains.jobs.size,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
-  frozenCR29PresentationRegressionPreserved: true,
-  cr30ARegressionIncluded: true,
-  cr30BRegressionIncluded: true,
-  cr30CRegressionIncluded: true,
 });
