@@ -10,6 +10,7 @@ import { HousingHomeCapacityIntegrationContract } from './domain/housing-home-ca
 import { DeterministicHousingPopulationIntegration } from './domain/deterministic-housing-population-integration.js';
 import { GoldEconomyOwner } from './domain/gold-economy-owner.js';
 import { WorldBackedTraversabilitySource } from './transport/world-backed-traversability-source.js';
+import { DeterministicWorldReachabilityIntegration } from './transport/deterministic-world-reachability-integration.js';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import {
@@ -30,11 +31,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-31A World-backed Traversability Miniworld',
+  name: 'CR-31B Deterministic World Reachability Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-31A-WORLD-BACKED-TRAVERSABILITY-SOURCE-CONTRACT' }
+  metadata: { foundation: 'CR-31B-DETERMINISTIC-WORLD-REACHABILITY-INTEGRATION' }
 });
 const domains = new CoreDomainStores();
 
@@ -80,6 +81,12 @@ const goldSettlement = goldEconomy.settle({
 
 const traversability = new WorldBackedTraversabilitySource({ map, domains });
 const blockedStaticCells = traversability.entries();
+const reachabilityEvidence = DeterministicWorldReachabilityIntegration.evaluate({
+  map,
+  traversability,
+  startPosition: { x: 0.25, y: 0.25 },
+  targetPosition: { x: 7.25, y: 5.25 },
+});
 
 let cameraState = createWorldViewCameraState({
   viewportWidth: 1,
@@ -209,8 +216,8 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-31A ACTIVE — World-backed Traversability — ${blockedStaticCells.length} static BLOCKED cells aus realen Buildings — freie Zellen TRAVERSABLE — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
-  testEl.dataset.pass = 'true';
+  testEl.textContent = `CR-31B ACTIVE — Deterministic World Reachability — World (0.25,0.25) → (7.25,5.25): ${reachabilityEvidence.reachable ? 'REACHABLE' : reachabilityEvidence.reason} — CR-31A ${blockedStaticCells.length} static BLOCKED cells erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.dataset.pass = reachabilityEvidence.reachable ? 'true' : 'false';
 }
 
 window.CleanRuntime = Object.freeze({
@@ -223,17 +230,17 @@ window.CleanRuntime = Object.freeze({
   goldEconomy,
   goldSettlement,
   traversability,
+  reachabilityEvidence,
   renderCurrentWorld,
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-31A] World-backed Traversability Source Contract', {
+console.info('[CR-31B] Deterministic World Reachability Integration', {
   build: RuntimeConfig.build,
+  reachabilityEvidence,
   blockedStaticCells,
-  buildingCellsBlocked: blockedStaticCells.length,
-  personsDoNotOwnStaticTraversability: true,
-  existingTraversabilitySemanticsPreserved: true,
-  pathfindingUnchanged: true,
+  existingPathfinderReused: true,
+  noNewPathfinder: true,
   roadPreferenceUnchanged: true,
   trafficReservationMovementUnchanged: true,
   pathWearNotIntroduced: true,
