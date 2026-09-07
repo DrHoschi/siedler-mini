@@ -7,6 +7,10 @@ function normalizeCell(position) {
   return Object.freeze({ x, y });
 }
 
+function sameCell(a, b) {
+  return a?.x === b?.x && a?.y === b?.y;
+}
+
 function assertCompletedStep(stepMovement) {
   if (!stepMovement || stepMovement.kind !== 'reservation-controlled-step-movement') {
     throw new TypeError('CR-32B requires CR-21C reservation-controlled-step-movement input');
@@ -17,10 +21,17 @@ function assertCompletedStep(stepMovement) {
   if (typeof stepMovement.carrierId !== 'string' || stepMovement.carrierId.length === 0) {
     throw new TypeError('completed step movement requires carrierId');
   }
-  return Object.freeze({
-    carrierId: stepMovement.carrierId,
-    enteredCell: normalizeCell(stepMovement.enteredCell),
-  });
+  const enteredCell = normalizeCell(stepMovement.enteredCell);
+  if (stepMovement.lifecycleState?.status !== 'CONSUMED') {
+    throw new Error('completed CR-21C step must consume its reservation');
+  }
+  if (stepMovement.movement?.state !== 'IDLE' || !sameCell(stepMovement.movement?.currentPosition, enteredCell)) {
+    throw new Error('completed CR-21C step movement must end exactly at enteredCell');
+  }
+  if (stepMovement.blocking?.blocks !== false || stepMovement.readyForNextIntent !== true) {
+    throw new Error('completed CR-21C step must release blocking and be ready for next intent');
+  }
+  return Object.freeze({ carrierId: stepMovement.carrierId, enteredCell });
 }
 
 function assertMap(map) {
