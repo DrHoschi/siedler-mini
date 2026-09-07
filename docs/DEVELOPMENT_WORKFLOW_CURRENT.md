@@ -16,7 +16,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - IM-13A – SaveGame Snapshot Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13A freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`
 - IM-13B – Deterministic SaveGame Validation Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-13B freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` — must point exactly to the final documented IM-13B freeze head.
+- IM-13B freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4b225d86e239cc2b2d80c20166faafe483aa20`
+- IM-13C – Deterministic SaveGame Restore Contract: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**
 
 ## 2. Frozen CR-32 boundary
 
@@ -24,7 +25,7 @@ CR-32 remains fully frozen. Navigation, Path/Wear, Movement, Traffic, Reservatio
 
 ## 3. IM-13 binding boundary
 
-IM-13 is persistence only. It may capture, serialize, validate and later restore existing authoritative runtime state but must not become a gameplay owner.
+IM-13 is persistence only. It may capture, serialize, validate and restore existing authoritative runtime state but must not become a gameplay owner.
 
 Binding principles:
 
@@ -82,25 +83,48 @@ Verification evidence:
 - visible/build identity synchronized to `IM-13B-SAVEGAME-VALIDATION-CONTRACT`,
 - blockers: 0.
 
-Explicitly not introduced:
+## 6. IM-13C binding contract and authorization
 
-- Restore/Hydration or runtime-state mutation,
-- Save Slots, file/storage adapters or UI,
+IM-13C – Deterministic SaveGame Restore Contract is fachlich confirmed and explicitly implementation-authorized.
+
+Its scope is limited to controlled deterministic restoration of a frozen IM-13A schemaVersion-1 snapshot that has first passed the frozen IM-13B validator:
+
+- restore accepts only IM-13B `VALID`; invalid payloads are rejected before runtime mutation,
+- restore is all-or-nothing: no partially restored active runtime state,
+- prepare a complete replacement authoritative runtime state before commit,
+- reconstruct WorldStore/World entities, Map identity/default tile/dimensions/cells, exact CoreDomainStores, Gold and CR-32 PATH/ROAD wear from saved truth,
+- preserve every persisted Stable ID exactly,
+- restore saved allocator continuity so later allocations continue beyond saved occupied IDs without collision or reuse,
+- do not let normal constructors create competing replacement IDs/entities as hidden restore truth,
+- preserve persisted domain relationships and references exactly,
+- restore Gold without running economy settlement or creating additional Gold,
+- restore CR-32 wear without recalculating wear or changing PATH/ROAD classification,
+- recompute derived/transient Population, reachability/routes, wear-aware costs, render projection, camera/evidence only from restored authoritative owners rather than persisting them as competing truth,
+- provide a deterministic round-trip proof: Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B yields canonically identical authoritative snapshot truth under the defined restore evidence boundary,
+- a restore failure must leave the previously active runtime state unchanged.
+
+Explicitly excluded from IM-13C:
+
+- Save Slots, LocalStorage/file-system adapters or save/load UI,
 - autosave,
 - cloud or multiplayer synchronization,
-- historical schema migration,
-- new gameplay behavior or ownership changes.
+- historical schema migration beyond schemaVersion 1,
+- compression or encryption,
+- new gameplay rules or ownership changes,
+- IM-14 UI/Mobile or IM-15 Guidance/Inspector work.
 
-## 6. Current gate
+Authorization status: **IM-13C IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
 
-**IM-13B is COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+## 7. Current gate
 
-IM-13C / Restore is **NOT AUTHORIZED** by this freeze and remains locked. The next permissible step after completion of this freeze bookkeeping is exclusively the fachliche definition and boundary reconciliation of IM-13C; no Restore implementation may begin automatically.
+The next permissible implementation step is exclusively **IM-13C – Deterministic SaveGame Restore Contract** within the confirmed boundary above.
 
-## 7. Permanent visible build identity synchronization rule
+No Save Slots/UI, schema migration, cloud/multiplayer persistence or later migration block is automatically authorized by this IM-13C authorization.
+
+## 8. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-13C Restore remains not authorized.
+**Updated:** 2026-09-07 — IM-13A/IM-13B frozen; IM-13C contract confirmed and explicitly implementation-authorized; implementation not yet started.
