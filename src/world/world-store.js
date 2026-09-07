@@ -21,11 +21,30 @@ function normalizeEntity(entity) {
   return next;
 }
 
+function requireRestoreState(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('restore world state required');
+  if (!parseStableId(state.worldId)?.kind === 'world') throw new TypeError(`invalid world id: ${state.worldId}`);
+  if (!Number.isSafeInteger(state.revision) || state.revision < 0) throw new TypeError('invalid world revision');
+  if (!state.entities || typeof state.entities !== 'object' || Array.isArray(state.entities)) throw new TypeError('invalid world entities');
+  const next = clone(state);
+  for (const [id, entity] of Object.entries(next.entities)) {
+    const normalized = normalizeEntity(entity);
+    if (normalized.id !== id) throw new Error(`world entity id/key mismatch: ${id}`);
+  }
+  return next;
+}
+
 export class WorldStore {
   #store;
   #ids;
 
-  constructor({ worldId = 'world:00000001', allocator = null } = {}) {
+  constructor({ worldId = 'world:00000001', allocator = null, restoreState = null } = {}) {
+    if (restoreState != null) {
+      const state = requireRestoreState(restoreState);
+      this.#ids = allocator instanceof StableIdAllocator ? allocator : new StableIdAllocator();
+      this.#store = new Store('world', state);
+      return;
+    }
     if (!parseStableId(worldId)) throw new TypeError(`invalid world id: ${worldId}`);
     this.#ids = allocator instanceof StableIdAllocator ? allocator : new StableIdAllocator();
     this.#ids.reserve(worldId);
