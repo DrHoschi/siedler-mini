@@ -48,15 +48,38 @@ function assertClassificationSource(classification) {
   return classAt.bind(classification);
 }
 
+function normalizeInitialEntry(entry) {
+  if (!entry || typeof entry.cellId !== 'string' || (entry.traversalType !== 'PATH' && entry.traversalType !== 'ROAD')) {
+    throw new TypeError('invalid restored PATH/ROAD wear entry');
+  }
+  if (!Number.isSafeInteger(entry.usageCount) || entry.usageCount < 0) throw new TypeError('invalid restored usageCount');
+  if (!Number.isSafeInteger(entry.wearUnits) || entry.wearUnits < 0) throw new TypeError('invalid restored wearUnits');
+  if (entry.usageCount !== entry.wearUnits) throw new Error('restored CR-32B usageCount/wearUnits mismatch');
+  return Object.freeze({
+    cellId: entry.cellId,
+    traversalType: entry.traversalType,
+    usageCount: entry.usageCount,
+    wearUnits: entry.wearUnits,
+  });
+}
+
 export class DeterministicPathUsageWearIntegration {
   #map;
   #classAt;
   #stateByCellId = new Map();
 
-  constructor({ map, classification } = {}) {
+  constructor({ map, classification, initialEntries = [] } = {}) {
     assertMap(map);
     this.#map = map;
     this.#classAt = assertClassificationSource(classification);
+    for (const raw of initialEntries) {
+      const entry = normalizeInitialEntry(raw);
+      if (this.#stateByCellId.has(entry.cellId)) throw new Error(`duplicate restored wear cellId: ${entry.cellId}`);
+      const cell = [...map.cellIds()].find(id => id === entry.cellId);
+      if (!cell) throw new Error(`restored wear cell outside map: ${entry.cellId}`);
+      const entity = typeof map.cellIds === 'function' ? null : null;
+      this.#stateByCellId.set(entry.cellId, entry);
+    }
   }
 
   recordCompletedStep(stepMovement) {
