@@ -82,14 +82,14 @@ function makeFixture() {
 
 {
   const { wear, classification } = makeFixture();
-  const beforePathCost = RoadPreferenceCostPolicy.resolve('PATH').cost;
-  const beforeRoadCost = RoadPreferenceCostPolicy.resolve('ROAD').cost;
+  const beforePathCost = RoadPreferenceCostPolicy.resolve('PATH').traversalCost;
+  const beforeRoadCost = RoadPreferenceCostPolicy.resolve('ROAD').traversalCost;
   wear.recordCompletedStep(makeCompletedStep('carrier-1', { x: 1, y: 0 }));
   wear.recordCompletedStep(makeCompletedStep('carrier-2', { x: 2, y: 0 }));
   assert.equal(classification.classAt({ x: 1, y: 0 }), 'PATH');
   assert.equal(classification.classAt({ x: 2, y: 0 }), 'ROAD');
-  assert.equal(RoadPreferenceCostPolicy.resolve('PATH').cost, beforePathCost);
-  assert.equal(RoadPreferenceCostPolicy.resolve('ROAD').cost, beforeRoadCost);
+  assert.equal(RoadPreferenceCostPolicy.resolve('PATH').traversalCost, beforePathCost);
+  assert.equal(RoadPreferenceCostPolicy.resolve('ROAD').traversalCost, beforeRoadCost);
   console.log('PASS wear-does-not-yet-change-classification-or-traversal-cost');
 }
 
