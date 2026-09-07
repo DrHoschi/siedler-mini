@@ -8,8 +8,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Completed whole-CR branch: `feature/cr-32-path-wear-integration-foundation`
-- Frozen whole-CR predecessor: **CR-31 – Navigation Integration Foundation** @ `f4fba712cd88dc83e616c0c4f360a2a016e5dff2`
+- Current whole-block branch: `feature/im-13-savegame-foundation`
+- Whole-block branch base: frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
+- Frozen predecessor: **CR-32 – Path / Wear Integration Foundation**
 - CR-32 – Path / Wear Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-32 whole freeze marker: `frozen/cr-32-path-wear-integration-foundation`
 - CR-32A – World-backed Path Classification Contract: **FROZEN / PASS / 0 BLOCKER** @ `7576c3db15ffa8b17d0477eda9981a5d853a3c22`
@@ -18,7 +19,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-32B freeze marker: `frozen/cr-32b-deterministic-path-usage-wear-accumulation-integration`
 - CR-32C – Wear-aware Traversal Cost Integration: **FROZEN / PASS / 0 BLOCKER**
 - CR-32C freeze marker: `frozen/cr-32c-wear-aware-traversal-cost-integration`
-- Current next migration boundary: **IM-13 – SaveGame**, not yet implementation-authorized.
+- Current migration block: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation**
+- IM-13 status: **CONTRACT RECONCILED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**
 
 ## 2. Frozen CR-32 system boundary
 
@@ -44,30 +46,51 @@ Binding invariants:
 - Movement, Traffic, Reservation, Deadlock and Recovery ownership remain unchanged,
 - no repair, maintenance, PATH-to-ROAD upgrade, worker road construction, material consumption or automatic desire path is introduced.
 
-## 3. Completion / regression / freeze evidence
+## 3. IM-13 reconciled contract / boundary
 
-CR-32 completion gate is PASS / 0 BLOCKER based on:
+IM-13 is a persistence foundation only. It may capture, serialize, validate and restore existing authoritative runtime state but must not become a new gameplay owner.
 
-- complete frozen CR-31 regression PASS,
-- CR-32A self-test PASS,
-- CR-32B self-test PASS,
-- CR-32C self-test PASS,
-- CI `Clean Runtime + CR Regression` PASS including `Run CR-32C Regression`,
-- branch is linearly ahead of frozen CR-31 with merge-base exactly `f4fba712cd88dc83e616c0c4f360a2a016e5dff2`,
-- real iPhone evidence shows CR-32C PASS with `wearCostPerUnit 0.01`, `PATH Wear 1: 0.75 → 0.76`, `ROAD Wear 1: 0.50 → 0.51`, NEUTRAL unchanged and existing Pathfinder/Route owner unchanged,
-- visible CR/build identity is consistent with CR-32C,
-- 0 known blockers.
+Binding IM-13 principles:
 
-## 4. Next migration boundary
+- authoritative state is persisted; derived views are recomputed after restore,
+- Stable IDs and allocator continuity must survive Save → Restore,
+- World/Map identity, domain-owned persistent state, Gold balance and CR-32 PATH/ROAD wear are persistence-relevant authoritative state,
+- transient route/pathfinder results, render projection, UI state and other derived views are not persisted as competing truth,
+- capture occurs only at a completed deterministic simulation-step boundary,
+- payloads are versioned from the first implementation (`kind` + schema version),
+- invalid schemas, duplicate IDs, dangling references and invalid authoritative values must be rejected deterministically,
+- restore must reconstruct the same normalized authoritative truth without changing frozen CR-32 routing/wear semantics,
+- storage backend and user-facing save-slot UI remain outside the core persistence contract,
+- IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later blocks.
 
-CR-32 is frozen. The next migration block in the binding order is **IM-13 – SaveGame**.
+Explicitly out of scope for IM-13 Foundation:
 
-IM-13 is not automatically implementation-authorized by this freeze. Its exact contract/boundary must be reconciled and explicitly authorized before implementation. UI/Mobile and Guidance/Inspector remain later migration blocks.
+- new gameplay rules,
+- save-slot/menu UX,
+- cloud sync,
+- multiplayer synchronization,
+- compression/encryption features,
+- historical schema migration beyond the first supported schema,
+- any change to Movement, Traffic, Reservation, Deadlock, Recovery, Navigation or Path/Wear ownership.
 
-## 5. Permanent visible CR / build identity synchronization rule
+## 4. Authorization state
 
-Every browser/device-verifiable CR/substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
+The IM-13 contract/boundary reconciliation is accepted and **IM-13 is explicitly implementation-authorized**.
+
+The whole-block branch `feature/im-13-savegame-foundation` was created exactly from frozen CR-32 commit `845fa5d5f513ac3a974bbae0a81bc78652e9e674`.
+
+This authorization does not mark any IM-13 implementation substep complete or frozen. Each implementation substep still requires its own narrow contract, regression evidence and freeze gate before the next substep is allowed.
+
+## 5. Next permissible step
+
+The next permissible implementation step is **IM-13A – SaveGame Snapshot Contract**.
+
+IM-13A may define only the canonical versioned SaveGame payload and deterministic capture of existing authoritative state at a completed simulation-step boundary. Restore execution, storage adapter/UI and historical migration remain forbidden in IM-13A.
+
+## 6. Permanent visible CR / build identity synchronization rule
+
+Every browser/device-verifiable CR/IM substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-07 — CR-32A/B/C jointly regressed against frozen CR-31; CR-32 complete and FROZEN at PASS / 0 BLOCKER.
+**Updated:** 2026-09-07 — IM-13 contract reconciled and explicitly implementation-authorized; whole-block branch created exactly from frozen CR-32; no SaveGame implementation started yet.
