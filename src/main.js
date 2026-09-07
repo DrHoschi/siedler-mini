@@ -153,6 +153,19 @@ let cameraState = createWorldViewCameraState({
   offsetY: 28,
   zoom: 1,
 });
+let activeRuntimeComposition = null;
+
+function installActiveRuntimeComposition(composition) {
+  if (composition?.kind !== 'active-runtime-composition' || !composition?.authoritative?.map || !composition?.authoritative?.domains) {
+    throw new TypeError('complete active runtime composition required');
+  }
+  activeRuntimeComposition = composition;
+  return activeRuntimeComposition;
+}
+
+function currentRenderOwners() {
+  return activeRuntimeComposition?.authoritative ?? { map, domains };
+}
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
@@ -176,7 +189,8 @@ function resizeCanvas() {
 function renderCurrentWorld() {
   const { width, height } = resizeCanvas();
   const cellPixels = Math.max(24, Math.min(56, Math.floor(Math.min(width / 10, height / 8))));
-  const projection = projectVisibleRuntimeState({ map, domains });
+  const renderOwners = currentRenderOwners();
+  const projection = projectVisibleRuntimeState({ map: renderOwners.map, domains: renderOwners.domains });
   const commands = renderProjectedWorldWithCameraToCanvas(ctx, projection, cameraState, {
     cellPixels,
     offset: { x: 0, y: 0 },
@@ -300,6 +314,8 @@ window.CleanRuntime = Object.freeze({
   carrierNavigationValidation,
   runtimeNavigationValidations,
   renderCurrentWorld,
+  installActiveRuntimeComposition,
+  getActiveRuntimeComposition: () => activeRuntimeComposition,
   getCameraState: () => cameraState,
 });
 
