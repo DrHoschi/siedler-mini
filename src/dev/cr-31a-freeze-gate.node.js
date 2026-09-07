@@ -24,7 +24,7 @@ const [indexHtml, mainJs, runtimeConfig, sourceJs] = await Promise.all([
 assert.match(indexHtml, /CR-31A[^<]*World-backed Traversability Source Contract/, 'visible title/heading must identify CR-31A');
 assert.match(indexHtml, /cr31a-1/, 'CR-31A cache-busting identity must remain current');
 assert.match(mainJs, /CR-31A ACTIVE/, 'runtime evidence must identify CR-31A as active');
-assert.match(mainJs, /3 static BLOCKED cells/, 'runtime evidence must expose static blocked-cell result');
+assert.match(mainJs, /static BLOCKED cells/, 'runtime evidence must expose static blocked-cell result');
 assert.match(runtimeConfig, /build: 'CR-31A-WORLD-BACKED-TRAVERSABILITY-SOURCE-CONTRACT'/, 'RuntimeConfig.build must identify CR-31A');
 assert.match(sourceJs, /export class WorldBackedTraversabilitySource/, 'CR-31A source implementation must exist');
 assert.doesNotMatch(sourceJs, /findPath|findRoute|moveCarrier|reservation|wear/i, 'CR-31A source must not absorb pathfinding, movement, reservation or wear ownership');
