@@ -19,7 +19,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - IM-13B freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4b225d86e239cc2b2d80c20166faafe483aa20`
 - IM-13C – Deterministic SaveGame Restore Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13C freeze marker: `frozen/im-13c-deterministic-savegame-restore-contract` @ `21aa0a3e42f84cb713bc681467cd3a0b075f2bff`
-- IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
+- IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- IM-13D freeze marker: `frozen/im-13d-deterministic-restored-runtime-activation-derived-rebinding-contract`
 
 ## 2. Frozen CR-32 boundary
 
@@ -57,39 +58,47 @@ IM-13C reconstructs a complete authoritative replacement state only after IM-13B
 
 IM-13C is frozen at `21aa0a3e42f84cb713bc681467cd3a0b075f2bff` with CI and real iPhone/Safari PASS evidence and 0 blockers.
 
-## 7. IM-13D implemented contract
+## 7. IM-13D frozen contract
 
-IM-13D is the final reconciled IM-13 Foundation substep. IM-13C reconstructs authoritative state B; IM-13D makes only an already successful IM-13C `RESTORED` state B the new active runtime truth and rebinds dependent transient/derived integrations. IM-13D does not duplicate or alter IM-13C restore logic.
+IM-13D is the final reconciled IM-13 Foundation substep. It makes only an already successful IM-13C `RESTORED` state B the new active runtime truth and rebinds dependent transient/derived integrations without duplicating or altering IM-13C restore logic.
 
-Implemented behavior:
+Frozen behavior:
 
 - `RestoredRuntimeActivationContract` accepts only IM-13C `RESTORED` results,
 - active World/Map/CoreDomainStores/Gold/Path-Classification/Path-Wear owners are published as one active composition,
 - B-derived World-backed Traversability is constructed before publish,
 - Reachability and Runtime Entity Navigation validation closures are rebound to B,
-- Render Projection is rebound to B Map/Domain truth,
-- the browser runtime render owner is switched by one composition publish hook so subsequent render/pan/zoom reads B,
-- Population is explicitly non-persisted/derived and activation performs no population mutation,
-- Gold and Wear are adopted from IM-13C without settlement or recalculation,
+- Render Projection is rebound to B Map/Domain truth and the browser render path follows the active composition,
+- Population remains explicitly derived/non-persisted and activation performs no population mutation,
+- Gold and Wear are adopted without settlement or recalculation,
 - Camera remains independent non-persisted view state,
 - failed publish leaves the prior active composition unchanged,
 - raw snapshots and non-RESTORED inputs are rejected for activation.
 
-Required implementation regression is encoded as:
+Verified end-to-end regression:
 
 `active Runtime A -> Capture A -> Serialize/Parse -> IM-13B VALID -> IM-13C Restore B -> IM-13D Activate B -> active Runtime B -> Capture B`
 
-with canonical Capture A/Capture B identity plus explicit B-owner, Traversability, Navigation, Reachability, Render Projection and failed-activation checks.
+with canonical Capture A/Capture B identity and explicit B-owner, Traversability, Navigation, Reachability, Render Projection and failed-activation checks.
 
-Explicitly excluded remain Save Slots, storage adapters, save/load UI, autosave, cloud/multiplayer sync, historical schema migration, compression/encryption, new gameplay rules, IM-14 UI/Mobile and IM-15 Guidance/Inspector.
+Verification evidence:
+
+- implementation head before freeze: `caae631f8985a7100d13adc31f5d0c489cb0307d`,
+- CI Baseline run `34148749832`: **SUCCESS**,
+- GitHub Pages deployment for the same head: **SUCCESS**,
+- real iPhone/Safari evidence on 2026-09-07: READY; visible IM-13D identity; PASS; IM-13C RESTORED B ACTIVATED; Active World/Map/Domains = B PASS; Traversability B PASS; Navigation B PASS; Render Projection B PASS; Capture A -> Activate B -> Capture B IDENTISCH; Population derived/non-persisted PASS; Gold/Wear unchanged PASS; failed activation keeps A PASS; Save-Slots/Storage/UI not introduced,
+- full diff against frozen IM-13C contains only IM-13D activation/rebinding, evidence, regression, visible/build identity and control-document changes,
+- result: **PASS / 0 BLOCKER**.
+
+Explicitly excluded and still absent: Save Slots, storage adapters, LocalStorage/file system, save/load UI, autosave, cloud/multiplayer synchronization, historical schema migration beyond schemaVersion 1, compression/encryption, new gameplay rules, IM-14 UI/Mobile and IM-15 Guidance/Inspector.
 
 ## 8. Current gate
 
-**IM-13D is IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN.**
+**IM-13D is COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible step is exclusively IM-13D Verification / Regression / Freeze Gate. IM-13 Whole-Block Completion / Regression / Freeze Gate remains locked until IM-13D is verified and frozen. No further IM-13 Foundation substep is currently planned after D.
+No further IM-13 Foundation substep is planned after D. The next exclusively permissible step is now the **IM-13 Whole-Block Completion / Regression / Freeze Gate** across frozen IM-13A + B + C + D and the original binding IM-13 Foundation contract.
 
-No later SaveGame/storage/UI/schema-migration block is automatically authorized. IM-14 UI/Mobile and IM-15 Guidance/Inspector remain locked.
+IM-13 as a whole is **not yet frozen**. IM-14 UI/Mobile, IM-15 Guidance/Inspector, Save-Slots/Storage, autosave, cloud/multiplayer sync and schema migration remain locked until the Whole-IM-13 gate is separately authorized and successfully completed.
 
 ## 9. Permanent visible build identity synchronization rule
 
@@ -97,4 +106,4 @@ Every browser/device-verifiable CR/IM substep must update all applicable visible
 
 ---
 
-**Updated:** 2026-09-07 — IM-13D implemented; verification pending; Whole-IM-13 freeze and later persistence/UI/migration work remain locked.
+**Updated:** 2026-09-07 — IM-13D verified and frozen at PASS / 0 BLOCKER; next gate is Whole-IM-13 Completion / Regression / Freeze only; later persistence/UI/migration work remains locked.
