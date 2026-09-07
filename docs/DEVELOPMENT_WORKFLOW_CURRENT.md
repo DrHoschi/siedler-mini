@@ -12,58 +12,59 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Frozen whole-CR predecessor: **CR-30 – Housing / Population / Gold Integration Foundation**
 - CR-30 freeze marker: `frozen/cr-30-housing-population-gold-integration-foundation`
 - CR-30 frozen commit: `2e9208614a5cfd80abc47e39ccf236b80315ace8`
-- CR-31 – Navigation Integration Foundation: **AUTHORIZED / ACTIVE / NOT FROZEN**
-- CR-31A – World-backed Traversability Source Contract: **AUTHORIZED / ACTIVE / NOT IMPLEMENTED**
+- CR-31 – Navigation Integration Foundation: **ACTIVE / NOT FROZEN**
+- CR-31A – World-backed Traversability Source Contract: **IMPLEMENTED / AUTOMATED VERIFIED / PASS / 0 BLOCKER / BROWSER GATE PENDING / NOT FROZEN**
 - CR-31B / CR-31C: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
-- Current allowed action: implement and verify CR-31A only.
+- Current allowed action: real browser/device verification of CR-31A only.
 
 ## 2. CR-31 repository reconciliation result
 
 The frozen CR-30 repository already contains the navigation/route/traffic foundations that CR-31 must reuse rather than rebuild.
 
-Existing authoritative building blocks include:
+Existing authoritative building blocks include `MapStructure`, `TraversabilityContract`, `BlockedCellSource`, deterministic grid/cost pathfinding, road preference, obstacle-aware routing and the frozen occupancy/reservation/waiting/deadlock/recovery chain.
 
-- `src/world/map-structure.js` — stable grid/map boundary,
-- `src/transport/traversability-contract.js` — existing `TRAVERSABLE` / `BLOCKED` contract,
-- `src/transport/blocked-cell-source.js` — current mutable traversability source keyed by real map cells,
-- `src/transport/route-contract.js`,
-- `src/transport/deterministic-grid-pathfinder.js`,
-- `src/transport/deterministic-cost-aware-pathfinder.js`,
-- `src/transport/road-preference-cost-policy.js`,
-- `src/transport/road-preferred-routing-integration.js`,
-- `src/transport/obstacle-aware-routing-integration.js`,
-- occupancy, reservation, waiting, arbitration, deadlock, recovery and reroute contracts/integrations already frozen from the earlier traffic CR line.
+The integration gap is between the real CR-28–30 world/domain state and the existing traversability consumer boundary. CR-31 introduces no replacement pathfinder or traffic owner.
 
-The key finding is that CR-31 must not introduce another navigation truth, another pathfinder or another traffic owner. The missing integration boundary is between the real CR-28–30 world state and the already-existing `BlockedCellSource` / `TraversabilityContract` navigation truth.
+## 3. CR-31A – World-backed Traversability Source Contract
 
-## 3. CR-31 – Navigation Integration Foundation
+**IMPLEMENTED / AUTOMATED VERIFIED / PASS / 0 BLOCKER / BROWSER GATE PENDING / NOT FROZEN**.
 
-Leitfrage:
+Implementation:
 
-> Wie wird die reale, bereits sichtbare Welt kontrolliert an die vorhandene eingefrorene Navigations-/Traversability-Kette angebunden, ohne Pathfinding, Road Preference, Traffic oder Movement neu zu erfinden?
+- `src/transport/world-backed-traversability-source.js`
+- `src/dev/cr-31a-self-test.node.js`
 
-### CR-31A – World-backed Traversability Source Contract
+Implemented boundary:
 
-**AUTHORIZED / ACTIVE / NOT IMPLEMENTED**.
+- `MapStructure` remains the spatial boundary,
+- `TraversabilityContract` remains the `TRAVERSABLE` / `BLOCKED` semantic contract,
+- the source exposes the existing downstream-compatible `stateAt`, `isTraversable` and `entries` surface,
+- real existing Buildings in lifecycle state `EXISTS` are treated as static world occupancy,
+- each real Building world position is deterministically projected into its containing map cell using the map origin and cell size,
+- multiple Buildings in one cell still create only one blocked-cell truth,
+- retired Buildings no longer contribute static blocking,
+- Persons do not become static traversability owners,
+- cells outside `MapStructure` remain invalid,
+- identical real world/domain state produces identical sorted blocked-cell evidence,
+- the existing `ObstacleAwareRoutingIntegration` can consume the new source unchanged,
+- no new reachability search, route algorithm, path cost, Road Preference, Wear, traffic/reservation/deadlock/recovery ownership or movement was added.
 
-CR-31A must establish one world-backed adapter/source contract that exposes static world navigability through the already-existing traversability semantics.
+Browser evidence setup:
 
-Required boundary:
+- visible/build identity is synchronized to `CR-31A – World-backed Traversability Source Contract`,
+- `RuntimeConfig.build = CR-31A-WORLD-BACKED-TRAVERSABILITY-SOURCE-CONTRACT`,
+- the existing CR-30 browser miniworld remains visible,
+- its 3 real existing Buildings produce 3 static `BLOCKED` cells,
+- CR-30 Population 3 and Gold Balance 3 remain preserved and visible as predecessor evidence.
 
-- `MapStructure` remains the spatial map boundary,
-- `TraversabilityContract` remains the semantic `TRAVERSABLE` / `BLOCKED` contract,
-- existing `BlockedCellSource` compatibility remains the downstream consumption boundary,
-- real frozen world entities/static world occupancy may be translated into traversability,
-- identical real world state must produce identical traversability results,
-- cells outside the map remain invalid/outside navigation space,
-- CR-31A must not add reachability search,
-- CR-31A must not compute routes,
-- CR-31A must not add path costs, road preference or wear,
-- CR-31A must not alter occupancy/reservation/deadlock/recovery traffic ownership,
-- CR-31A must not move Persons or Carriers,
-- no SaveGame, UI/Mobile or Inspector work.
+Automated verification:
 
-CR-31A is therefore an integration/ownership step, not a new navigation algorithm.
+- first CI run `34086953706` correctly exposed an obsolete predecessor-gate coupling: the frozen CR-30 completion gate asserted that the *current* page must still carry CR-30 identity. CR-30A/B/C themselves passed; this was not a CR-31A domain failure.
+- the CR-30 frozen contract/test files were not modified. CI was corrected to regress frozen CR-29 + CR-30A + CR-30B + CR-30C directly, while the historical CR-30 completion-page identity check remains frozen for its original gate.
+- GitHub Actions run `34087031469` on commit `a5b0a6dd2e65fdd7359ed2071321b02677b99215`: **SUCCESS / PASS / 0 BLOCKER**.
+- regression chain includes baseline CI, CR-24C, CR-28, CR-29, CR-30A/B/C and CR-31A direct verification.
+
+## 4. CR-31B / CR-31C
 
 ### CR-31B – Deterministic World Reachability Integration
 
@@ -77,14 +78,31 @@ May later consume frozen CR-31A traversability and existing deterministic routin
 
 May later allow real runtime Persons/Carriers to validate existing positions/targets against the frozen navigation truth. Existing route/movement/traffic owners remain authoritative.
 
-## 4. Locked later work
+## 5. Current CR-31A gate
 
-Path/Wear remains after CR-31. SaveGame remains IM-13, UI/Mobile IM-14, Guidance/Inspector IM-15. None are authorized by starting CR-31.
+Automated verification is PASS / 0 BLOCKER. Before CR-31A can be accepted/frozen, real browser/device evidence must confirm the deployed CR-31A identity and evidence values.
 
-## 5. Permanent visible CR / build identity synchronization rule
+Expected visible evidence:
+
+- heading/title identify CR-31A,
+- runtime `READY`,
+- `CR-31A ACTIVE`,
+- `3 static BLOCKED cells aus realen Buildings`,
+- free cells `TRAVERSABLE`,
+- CR-30 Population 3 / Gold 3 preserved,
+- 3 Buildings / 3 Persons remain visible,
+- no stale CR-30 completion-gate identity is presented as the current build.
+
+CR-31B remains locked until CR-31A is explicitly accepted and frozen.
+
+## 6. Locked later work
+
+Path/Wear remains after CR-31. SaveGame remains IM-13, UI/Mobile IM-14, Guidance/Inspector IM-15.
+
+## 7. Permanent visible CR / build identity synchronization rule
 
 Every browser/device-verifiable CR/substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-06 — CR-31 authorized from frozen CR-30 @ `2e9208614a5cfd80abc47e39ccf236b80315ace8`; repository reconciliation confirms existing navigation/pathfinding/traffic foundations and fixes CR-31A as World-backed Traversability Source Contract.
+**Updated:** 2026-09-07 — CR-31A implemented and automated regression PASS / 0 BLOCKER on Actions run `34087031469`; real browser/device gate is the sole next action.
