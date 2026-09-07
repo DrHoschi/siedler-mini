@@ -17,7 +17,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - IM-13A freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`
 - IM-13B – Deterministic SaveGame Validation Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13B freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4b225d86e239cc2b2d80c20166faafe483aa20`
-- IM-13C – Deterministic SaveGame Restore Contract: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**
+- IM-13C – Deterministic SaveGame Restore Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
 
 ## 2. Frozen CR-32 boundary
 
@@ -52,58 +52,39 @@ IM-13A defines the canonical snapshot/capture boundary:
 - deterministic canonical JSON serialization,
 - derived Population, Camera/Render state, route/pathfinder results and Restore are not part of the snapshot truth.
 
-IM-13A passed frozen CR-32 regression, IM-13A self-test, CI, real iPhone browser evidence with synchronized visible/build identity and 0 blockers, and is frozen at `fadacda7f728f57b3b97cbb1771284e5d609d805`.
+IM-13A is frozen at `fadacda7f728f57b3b97cbb1771284e5d609d805`.
 
 ## 5. IM-13B frozen contract
 
-IM-13B adds a separate side-effect-free validator for the frozen IM-13A schemaVersion-1 payload without changing the frozen IM-13A capture/serialization owner.
+IM-13B provides deterministic side-effect-free validation of the frozen IM-13A schemaVersion-1 payload before any restore mutation.
 
-Frozen validation scope:
+Frozen validation includes schema/capture metadata, globally unique Stable IDs, allocator continuity, World/Map/Domain references, Gold and CR-32 PATH/ROAD wear consistency, deterministic sorted INVALID errors, and no silent repair/defaulting/coercion.
 
-- required SaveGame kind, schema version and completed-step capture metadata,
-- required World/Map/Domain/Gold/Wear sections,
-- valid and globally unique persisted Stable IDs,
-- allocator continuity: each allocator next-sequence remains beyond every occupied ID sequence it owns,
-- Map identity, dimensions, stable cell membership, cell -> map and cell -> tile reference integrity,
-- exact four CoreDomainStores and their item-kind/ID consistency,
-- persisted domain Stable-ID references are checked for dangling targets while external `definitionId` values remain outside SaveGame ownership,
-- Gold remains `gold-economy-state`, non-negative and explicitly non-physical,
-- CR-32 wear remains PATH/ROAD only, references saved map cells, has non-negative integer counters and `usageCount === wearUnits`, and agrees with the saved cell tile traversal type,
-- deterministic validation results contain stable sorted error code/path pairs,
-- invalid payloads are rejected as `INVALID`; no repair/defaulting/coercion is performed,
-- validator does not mutate the supplied payload or any runtime owner.
+IM-13B is frozen at `0a4b225d86e239cc2b2d80c20166faafe483aa20` with frozen predecessor regression PASS, IM-13B regression PASS, GitHub Actions CI success, real iPhone/Safari PASS evidence and 0 blockers.
 
-Verification evidence:
+## 6. IM-13C implemented contract
 
-- frozen CR-32 regression: PASS,
-- frozen IM-13A regression: PASS,
-- IM-13B self-test/regression: PASS,
-- GitHub Actions CI run `34137143168`, job `Clean Runtime + CR/IM Regression`: SUCCESS,
-- real iPhone/Safari evidence on 2026-09-07: runtime `READY`, visible identity `IM-13B – Deterministic SaveGame Validation Contract`, overall PASS, schemaVersion 1 VALID, invalid schema INVALID, negative Gold INVALID, Wear consistency invalid-case PASS, side-effect-free PASS, IM-13A snapshot unchanged, Restore not introduced,
-- visible/build identity synchronized to `IM-13B-SAVEGAME-VALIDATION-CONTRACT`,
-- blockers: 0.
+IM-13C implements controlled deterministic restoration only after the frozen IM-13B validator returns `VALID`.
 
-## 6. IM-13C binding contract and authorization
+Implemented restore behavior:
 
-IM-13C – Deterministic SaveGame Restore Contract is fachlich confirmed and explicitly implementation-authorized.
+- `SaveGameRestoreContract.prepare(...)` validates first and rejects invalid payloads before constructing replacement owners,
+- restore prepares a complete replacement authoritative owner set before commit,
+- `SaveGameRestoreContract.commit(...)` exposes only a fully prepared authoritative replacement state,
+- `SaveGameRestoreContract.restore(...)` performs the validated prepare -> commit path without mutating a previously active runtime object,
+- WorldStore supports additive restore initialization from the saved World state plus saved Stable-ID allocator seed without replaying entity mutations or changing saved revision truth,
+- MapStructure supports additive restore initialization from saved Map identity/default tile/dimensions/cell IDs and reconstructs cell-coordinate lookup without creating new competing Tile/Map/Cell identities,
+- DomainStore/CoreDomainStores support additive restore initialization from exact saved state and saved per-domain allocator seeds without replaying domain mutations or changing saved revisions,
+- GoldEconomyOwner is reconstructed directly from saved balance without economy settlement,
+- WorldBackedPathClassificationSource is rebuilt from restored World/Map truth,
+- DeterministicPathUsageWearIntegration supports additive initial PATH/ROAD wear entries and restores saved `cellId`, `traversalType`, `usageCount` and `wearUnits` without recalculation,
+- all persisted Stable IDs remain exact and allocator next-sequences continue from saved allocator state,
+- invalid restore input returns `REJECTED` before a replacement runtime state exists,
+- Node regression proves Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B canonical identity,
+- Node regression separately verifies allocator continuation and that rejected restore does not mutate the pre-existing World/Domain/Gold owners,
+- browser evidence is synchronized to visible/build identity `IM-13C-SAVEGAME-RESTORE-CONTRACT` and performs the real runtime round-trip against the frozen IM-13A snapshot evidence.
 
-Its scope is limited to controlled deterministic restoration of a frozen IM-13A schemaVersion-1 snapshot that has first passed the frozen IM-13B validator:
-
-- restore accepts only IM-13B `VALID`; invalid payloads are rejected before runtime mutation,
-- restore is all-or-nothing: no partially restored active runtime state,
-- prepare a complete replacement authoritative runtime state before commit,
-- reconstruct WorldStore/World entities, Map identity/default tile/dimensions/cells, exact CoreDomainStores, Gold and CR-32 PATH/ROAD wear from saved truth,
-- preserve every persisted Stable ID exactly,
-- restore saved allocator continuity so later allocations continue beyond saved occupied IDs without collision or reuse,
-- do not let normal constructors create competing replacement IDs/entities as hidden restore truth,
-- preserve persisted domain relationships and references exactly,
-- restore Gold without running economy settlement or creating additional Gold,
-- restore CR-32 wear without recalculating wear or changing PATH/ROAD classification,
-- recompute derived/transient Population, reachability/routes, wear-aware costs, render projection, camera/evidence only from restored authoritative owners rather than persisting them as competing truth,
-- provide a deterministic round-trip proof: Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B yields canonically identical authoritative snapshot truth under the defined restore evidence boundary,
-- a restore failure must leave the previously active runtime state unchanged.
-
-Explicitly excluded from IM-13C:
+Explicitly not introduced:
 
 - Save Slots, LocalStorage/file-system adapters or save/load UI,
 - autosave,
@@ -113,13 +94,21 @@ Explicitly excluded from IM-13C:
 - new gameplay rules or ownership changes,
 - IM-14 UI/Mobile or IM-15 Guidance/Inspector work.
 
-Authorization status: **IM-13C IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
-
 ## 7. Current gate
 
-The next permissible implementation step is exclusively **IM-13C – Deterministic SaveGame Restore Contract** within the confirmed boundary above.
+IM-13C is implemented but **NOT FROZEN**.
 
-No Save Slots/UI, schema migration, cloud/multiplayer persistence or later migration block is automatically authorized by this IM-13C authorization.
+Required before freeze:
+
+- frozen CR-32 regression PASS,
+- frozen IM-13A regression PASS,
+- frozen IM-13B regression PASS,
+- IM-13C self-test/round-trip regression PASS,
+- CI PASS,
+- real browser/device evidence with synchronized IM-13C visible/build identity,
+- 0 BLOCKER.
+
+The next permissible step is exclusively **IM-13C Verification / Regression / Freeze Gate**. No later SaveGame/UI/schema-migration block is automatically authorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -127,4 +116,4 @@ Every browser/device-verifiable CR/IM substep must update all applicable visible
 
 ---
 
-**Updated:** 2026-09-07 — IM-13A/IM-13B frozen; IM-13C contract confirmed and explicitly implementation-authorized; implementation not yet started.
+**Updated:** 2026-09-07 — IM-13C restore implemented; verification/freeze pending; later persistence/UI/migration work remains locked.
