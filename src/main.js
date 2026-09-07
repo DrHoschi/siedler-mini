@@ -9,8 +9,11 @@ import { PersonResidentIdentityContract } from './domain/person-resident-identit
 import { HousingHomeCapacityIntegrationContract } from './domain/housing-home-capacity-integration-contract.js';
 import { DeterministicHousingPopulationIntegration } from './domain/deterministic-housing-population-integration.js';
 import { GoldEconomyOwner } from './domain/gold-economy-owner.js';
+import { CarrierContract } from './transport/carrier-contract.js';
+import { CarrierMovementContract } from './transport/carrier-movement-contract.js';
 import { WorldBackedTraversabilitySource } from './transport/world-backed-traversability-source.js';
 import { DeterministicWorldReachabilityIntegration } from './transport/deterministic-world-reachability-integration.js';
+import { RuntimeEntityNavigationValidationIntegration } from './transport/runtime-entity-navigation-validation-integration.js';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import {
@@ -31,11 +34,11 @@ if (!ctx) throw new TypeError('2d canvas context required');
 const runtime = new Runtime(RuntimeConfig);
 const world = new WorldStore();
 const map = new MapStructure(world, {
-  name: 'CR-31B Deterministic World Reachability Miniworld',
+  name: 'CR-31C Runtime Entity Navigation Validation Miniworld',
   width: 8,
   height: 6,
   cellSize: 1,
-  metadata: { foundation: 'CR-31B-DETERMINISTIC-WORLD-REACHABILITY-INTEGRATION' }
+  metadata: { foundation: 'CR-31C-RUNTIME-ENTITY-NAVIGATION-VALIDATION-INTEGRATION' }
 });
 const domains = new CoreDomainStores();
 
@@ -48,19 +51,30 @@ function createVisibleBuilding(definitionId, position) {
   }, { id: buildingId });
 }
 
-function createVisiblePerson(position) {
+function createVisiblePerson(position, { carrierCapacity = null } = {}) {
   const personId = domains.units.allocateId();
-  return domains.units.create({
+  const data = {
     identity: PersonResidentIdentityContract.define({ personId }),
     position
-  }, { id: personId });
+  };
+  if (carrierCapacity != null) {
+    data.carrier = CarrierContract.define({
+      unitId: personId,
+      capacity: carrierCapacity,
+      location: {
+        kind: 'cell',
+        refId: map.cellIdAt(Math.floor(position.x), Math.floor(position.y)),
+      },
+    });
+  }
+  return domains.units.create(data, { id: personId });
 }
 
 const hq = createVisibleBuilding('HQ', { x: 2, y: 2 });
 createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
 const storehouse = createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
-createVisiblePerson({ x: 1.25, y: 1.5 });
-createVisiblePerson({ x: 4.25, y: 2.25 });
+const carrierPerson = createVisiblePerson({ x: 1.25, y: 1.5 }, { carrierCapacity: 2 });
+const secondPerson = createVisiblePerson({ x: 4.25, y: 2.25 });
 createVisiblePerson({ x: 6.25, y: 4.25 });
 
 const housingPopulation = DeterministicHousingPopulationIntegration.integrate({
@@ -87,6 +101,32 @@ const reachabilityEvidence = DeterministicWorldReachabilityIntegration.evaluate(
   startPosition: { x: 0.25, y: 0.25 },
   targetPosition: { x: 7.25, y: 5.25 },
 });
+
+const personNavigationValidation = RuntimeEntityNavigationValidationIntegration.validatePerson({
+  domains,
+  map,
+  traversability,
+  personId: secondPerson.id,
+  targetPosition: { x: 7.25, y: 5.25 },
+});
+
+const carrierMovementEvidence = CarrierMovementContract.define({
+  unitId: carrierPerson.id,
+  currentPosition: carrierPerson.position,
+  state: 'MOVING',
+  targetPosition: { x: 7.25, y: 0.25 },
+});
+const carrierNavigationValidation = RuntimeEntityNavigationValidationIntegration.validateCarrierMovement({
+  domains,
+  map,
+  traversability,
+  movement: carrierMovementEvidence,
+});
+const runtimeNavigationValidations = Object.freeze([
+  personNavigationValidation,
+  carrierNavigationValidation,
+]);
+const validRuntimeNavigationCount = runtimeNavigationValidations.filter(entry => entry.valid).length;
 
 let cameraState = createWorldViewCameraState({
   viewportWidth: 1,
@@ -215,9 +255,10 @@ runtime.boot();
 const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
+const runtimeValidationPass = validRuntimeNavigationCount === runtimeNavigationValidations.length;
 if (testEl) {
-  testEl.textContent = `CR-31B ACTIVE — Deterministic World Reachability — World (0.25,0.25) → (7.25,5.25): ${reachabilityEvidence.reachable ? 'REACHABLE' : reachabilityEvidence.reason} — CR-31A ${blockedStaticCells.length} static BLOCKED cells erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
-  testEl.dataset.pass = reachabilityEvidence.reachable ? 'true' : 'false';
+  testEl.textContent = `CR-31C ACTIVE — Runtime Entity Navigation Validation — Person ${personNavigationValidation.reason} / Carrier ${carrierNavigationValidation.reason} — ${validRuntimeNavigationCount}/2 runtime entities VALID — CR-31B world reachability ${reachabilityEvidence.reachable ? 'REACHABLE' : reachabilityEvidence.reason} erhalten — CR-31A ${blockedStaticCells.length} static BLOCKED cells erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.dataset.pass = runtimeValidationPass ? 'true' : 'false';
 }
 
 window.CleanRuntime = Object.freeze({
@@ -231,18 +272,24 @@ window.CleanRuntime = Object.freeze({
   goldSettlement,
   traversability,
   reachabilityEvidence,
+  personNavigationValidation,
+  carrierMovementEvidence,
+  carrierNavigationValidation,
+  runtimeNavigationValidations,
   renderCurrentWorld,
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-31B] Deterministic World Reachability Integration', {
+console.info('[CR-31C] Runtime Entity Navigation Validation Integration', {
   build: RuntimeConfig.build,
+  personNavigationValidation,
+  carrierNavigationValidation,
+  runtimeValidationPass,
   reachabilityEvidence,
   blockedStaticCells,
-  existingPathfinderReused: true,
-  noNewPathfinder: true,
-  roadPreferenceUnchanged: true,
-  trafficReservationMovementUnchanged: true,
+  routeOwnerUnchanged: true,
+  movementOwnerUnchanged: true,
+  trafficReservationDeadlockRecoveryUnchanged: true,
   pathWearNotIntroduced: true,
   population: housingPopulation.population.count,
   goldBalance: goldSettlement.state.balance,
