@@ -15,7 +15,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - IM-13: **IMPLEMENTATION-AUTHORIZED / IN PROGRESS**
 - IM-13A – SaveGame Snapshot Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13A freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`
-- IM-13B – Deterministic SaveGame Validation Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
+- IM-13B – Deterministic SaveGame Validation Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- IM-13B freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` — must point exactly to the final documented IM-13B freeze head.
 
 ## 2. Frozen CR-32 boundary
 
@@ -52,16 +53,16 @@ IM-13A defines the canonical snapshot/capture boundary:
 
 IM-13A passed frozen CR-32 regression, IM-13A self-test, CI, real iPhone browser evidence with synchronized visible/build identity and 0 blockers, and is frozen at `fadacda7f728f57b3b97cbb1771284e5d609d805`.
 
-## 5. IM-13B implemented contract
+## 5. IM-13B frozen contract
 
 IM-13B adds a separate side-effect-free validator for the frozen IM-13A schemaVersion-1 payload without changing the frozen IM-13A capture/serialization owner.
 
-Implemented validation:
+Frozen validation scope:
 
 - required SaveGame kind, schema version and completed-step capture metadata,
 - required World/Map/Domain/Gold/Wear sections,
 - valid and globally unique persisted Stable IDs,
-- allocator continuity: each allocator next-sequence must remain beyond every occupied ID sequence it owns,
+- allocator continuity: each allocator next-sequence remains beyond every occupied ID sequence it owns,
 - Map identity, dimensions, stable cell membership, cell -> map and cell -> tile reference integrity,
 - exact four CoreDomainStores and their item-kind/ID consistency,
 - persisted domain Stable-ID references are checked for dangling targets while external `definitionId` values remain outside SaveGame ownership,
@@ -71,7 +72,15 @@ Implemented validation:
 - invalid payloads are rejected as `INVALID`; no repair/defaulting/coercion is performed,
 - validator does not mutate the supplied payload or any runtime owner.
 
-IM-13B includes Node regression coverage for valid Capture -> Serialize -> Parse -> Validate and targeted invalid cases for schema, duplicate Stable ID, dangling tile/domain/wear references, allocator reuse risk, negative Gold and inconsistent wear. Browser evidence is synchronized to build identity `IM-13B-SAVEGAME-VALIDATION-CONTRACT`.
+Verification evidence:
+
+- frozen CR-32 regression: PASS,
+- frozen IM-13A regression: PASS,
+- IM-13B self-test/regression: PASS,
+- GitHub Actions CI run `34137143168`, job `Clean Runtime + CR/IM Regression`: SUCCESS,
+- real iPhone/Safari evidence on 2026-09-07: runtime `READY`, visible identity `IM-13B – Deterministic SaveGame Validation Contract`, overall PASS, schemaVersion 1 VALID, invalid schema INVALID, negative Gold INVALID, Wear consistency invalid-case PASS, side-effect-free PASS, IM-13A snapshot unchanged, Restore not introduced,
+- visible/build identity synchronized to `IM-13B-SAVEGAME-VALIDATION-CONTRACT`,
+- blockers: 0.
 
 Explicitly not introduced:
 
@@ -84,16 +93,9 @@ Explicitly not introduced:
 
 ## 6. Current gate
 
-IM-13B is implemented but not frozen. Required before freeze:
+**IM-13B is COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-- frozen CR-32 regression PASS,
-- frozen IM-13A regression PASS,
-- IM-13B self-test PASS,
-- CI PASS,
-- real browser/device evidence with correct IM-13B visible/build identity,
-- 0 BLOCKER.
-
-The next permissible step is exclusively **IM-13B Verification / Regression / Freeze Gate**. IM-13C / Restore remains locked and is not automatically authorized.
+IM-13C / Restore is **NOT AUTHORIZED** by this freeze and remains locked. The next permissible step after completion of this freeze bookkeeping is exclusively the fachliche definition and boundary reconciliation of IM-13C; no Restore implementation may begin automatically.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -101,4 +103,4 @@ Every browser/device-verifiable CR/IM substep must update all applicable visible
 
 ---
 
-**Updated:** 2026-09-07 — IM-13B validation implemented; verification/freeze pending; IM-13C Restore remains locked.
+**Updated:** 2026-09-07 — IM-13B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-13C Restore remains not authorized.
