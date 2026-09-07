@@ -8,17 +8,17 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Current whole-CR branch: `feature/cr-31-navigation-integration-foundation`
+- Completed whole-CR branch: `feature/cr-31-navigation-integration-foundation`
 - Frozen whole-CR predecessor: **CR-30 – Housing / Population / Gold Integration Foundation** @ `2e9208614a5cfd80abc47e39ccf236b80315ace8`
-- CR-31 – Navigation Integration Foundation: **ACTIVE / NOT FROZEN**
+- CR-31 – Navigation Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- CR-31 whole freeze marker: `frozen/cr-31-navigation-integration-foundation`
+- CR-31 whole frozen commit: `f4fba712cd88dc83e616c0c4f360a2a016e5dff2`
 - CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `39b43015721a5de2b4d63b221558431205767037`
 - CR-31B – Deterministic World Reachability Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`
-- CR-31C – Runtime Entity Navigation Validation Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- CR-31C freeze marker: `frozen/cr-31c-runtime-entity-navigation-validation-integration`
-- CR-31C frozen commit: `2886839edddcf636fc347a0e25d1e9b40ff16d85`
-- Current allowed action: **CR-31 Completion / Regression / Freeze Gate** only. No Path/Wear or later migration block may begin before whole CR-31 is frozen.
+- CR-31C – Runtime Entity Navigation Validation Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `2886839edddcf636fc347a0e25d1e9b40ff16d85`
+- Current allowed action: determine and explicitly authorize the next post-navigation system block. No implementation has begun after CR-31.
 
-## 2. Frozen navigation boundary
+## 2. Frozen CR-31 navigation boundary
 
 CR-31A connects real Building world state to the existing `TRAVERSABLE` / `BLOCKED` truth through `WorldBackedTraversabilitySource`.
 
@@ -26,54 +26,45 @@ CR-31B consumes that frozen truth plus the existing deterministic cost-aware pat
 
 CR-31C validates existing real runtime Person/Carrier positions and targets against the frozen CR-31A/CR-31B navigation truth while preserving route, movement and traffic ownership.
 
-## 3. CR-31C frozen evidence
+The whole frozen CR-31 boundary therefore provides real world-backed static traversability, deterministic reachability and runtime entity navigation validation while preserving all earlier routing/traffic ownership.
 
-Frozen implementation:
+## 3. Whole CR-31 Completion / Regression / Freeze Gate
 
-- `src/transport/runtime-entity-navigation-validation-integration.js`
-- `src/dev/cr-31c-self-test.node.js`
-
-Frozen contract:
-
-- validates only already-existing real runtime units from `domains.units`,
-- Person validation reads the unit's real stored position,
-- Carrier validation consumes the existing `CarrierMovementContract`,
-- carrier movement currentPosition must match the real runtime entity position; mismatch yields `ENTITY_POSITION_MISMATCH`,
-- current positions and optional targets consume frozen CR-31B `DeterministicWorldReachabilityIntegration`,
-- valid current-only positions return `POSITION_VALID`, reachable targets return `TARGET_REACHABLE`,
-- frozen CR-31B failure reasons remain authoritative,
-- validation is deterministic and read-only,
-- no Person/Carrier position mutation and no TransportJob creation,
-- no route/pathfinder/Traffic/Reservation/Deadlock/Recovery/Road Preference/Path-Wear ownership changes.
+The whole gate regressed the complete CR-31A + CR-31B + CR-31C navigation integration against the frozen CR-30 functional predecessor line and verified current visible/build identity consistency.
 
 Automated evidence:
 
-- Actions run `34097331344` = **SUCCESS / PASS / 0 BLOCKER**,
-- follow-up Actions run `34097459849` = **SUCCESS / PASS / 0 BLOCKER**.
+- dedicated gate: `src/dev/cr-31-freeze-gate.node.js`,
+- CI chain: `npm run ci` → reusable frozen predecessor regressions → CR-31A → CR-31B → CR-31C → CR-31 whole identity/evidence gate,
+- GitHub Actions run `34100391182` on commit `f4fba712cd88dc83e616c0c4f360a2a016e5dff2` = **SUCCESS / PASS / 0 BLOCKER**,
+- step `Run CR-31 Completion Regression Freeze Gate` = **SUCCESS**,
+- failure diagnostics skipped.
 
 Accepted real iPhone/Safari evidence on 2026-09-07 = **PASS / 0 BLOCKER** and visibly confirmed:
 
 - runtime `READY`,
-- correct CR-31C identity,
+- heading `CR-31 – Navigation Integration Foundation – Completion / Regression / Freeze Gate`,
+- evidence line `CR-31 COMPLETION GATE — CR-31A + CR-31B + CR-31C`,
 - Person `TARGET_REACHABLE`,
 - Carrier `TARGET_REACHABLE`,
 - `2/2 runtime entities VALID`,
 - CR-31B world reachability `REACHABLE`,
 - CR-31A `3 static BLOCKED cells`,
-- CR-30 `Population 3 / Gold 3`,
-- `3 Buildings / 3 Persons` visible.
+- frozen CR-30 `Population 3 / Gold 3`,
+- `3 Buildings / 3 Persons` visible,
+- no stale CR-31C active identity presented as current build.
 
-Freeze marker `frozen/cr-31c-runtime-entity-navigation-validation-integration` points exactly to `2886839edddcf636fc347a0e25d1e9b40ff16d85`. Therefore CR-31C is **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+Freeze marker `frozen/cr-31-navigation-integration-foundation` points exactly to `f4fba712cd88dc83e616c0c4f360a2a016e5dff2`. Therefore CR-31 as a whole is **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-## 4. Whole CR-31 Completion / Regression / Freeze Gate
+## 4. Locked/non-scope preserved by CR-31
 
-Now **UNLOCKED / NOT YET EXECUTED**.
+CR-31 introduced no new route owner, no second pathfinder, no new movement execution, no Traffic/Reservation/Deadlock/Recovery ownership changes, no Road Preference changes and no Path/Wear behavior.
 
-The gate may only regress the complete CR-31A + CR-31B + CR-31C navigation integration against the frozen CR-30 predecessor, verify current visible/build identity consistency, and freeze the whole CR-31 only on **PASS / 0 BLOCKER**. It must not add new navigation behavior.
+SaveGame remains IM-13, UI/Mobile IM-14 and Guidance/Inspector IM-15.
 
-## 5. Locked later work
+## 5. Next-system boundary
 
-Path/Wear remains after CR-31. SaveGame remains IM-13, UI/Mobile IM-14, Guidance/Inspector IM-15. None is authorized before the whole CR-31 freeze.
+The binding migration order places **Path/Wear** after Navigation. It is no longer blocked by CR-31, but no concrete next CR is implementation-authorized merely by this freeze. The next action must first define the exact post-navigation Path/Wear system boundary and CR structure against this frozen CR-31 baseline.
 
 ## 6. Permanent visible CR / build identity synchronization rule
 
@@ -81,4 +72,4 @@ Every browser/device-verifiable CR/substep must update all applicable visible/bu
 
 ---
 
-**Updated:** 2026-09-07 — CR-31C substep frozen at `2886839edddcf636fc347a0e25d1e9b40ff16d85`; CR-31 Completion / Regression / Freeze Gate is now the sole next action.
+**Updated:** 2026-09-07 — whole CR-31 Completion / Regression / Freeze Gate automated and real iPhone/Safari evidence PASS / 0 BLOCKER; CR-31 frozen at `f4fba712cd88dc83e616c0c4f360a2a016e5dff2`.
