@@ -16,25 +16,11 @@ function executeRealStep({ map, carrierId, currentCell, nextCell, finalTarget, s
     ]),
     state: 'ACTIVE',
   });
-  const intent = NextCellReservationIntentContract.define({
-    carrierId,
-    route,
-    currentPosition: currentCell,
-    nextCell,
-  });
-  const cycle = DeterministicReservationExecutionCycle.run({
-    intents: [intent],
-    validFromStep: stepNumber,
-    validUntilStep: stepNumber + 1,
-  });
+  const intent = NextCellReservationIntentContract.define({ carrierId, route, currentPosition: currentCell, nextCell });
+  const cycle = DeterministicReservationExecutionCycle.run({ intents: [intent], validFromStep: stepNumber, validUntilStep: stepNumber + 1 });
   const blocked = new BlockedCellSource({ map });
   const trafficIntegration = new ReservationLifecycleTrafficIntegration({ blockedCellSource: blocked });
-  const movement = CarrierMovementContract.define({
-    unitId: carrierId,
-    currentPosition: currentCell,
-    state: 'IDLE',
-    targetPosition: null,
-  });
+  const movement = CarrierMovementContract.define({ unitId: carrierId, currentPosition: currentCell, state: 'IDLE', targetPosition: null });
   return ReservationControlledStepMovementIntegration.execute({ cycle, route, movement, trafficIntegration });
 }
 
@@ -42,26 +28,15 @@ queueMicrotask(() => {
   const runtimeState = window.CleanRuntime;
   if (!runtimeState) throw new Error('CR-32B requires existing CleanRuntime');
   const { map, pathClassification } = runtimeState;
+  const carrierId = runtimeState.carrierMovementEvidence?.unitId;
+  if (typeof carrierId !== 'string' || !/^unit:\d{8}$/.test(carrierId)) {
+    throw new Error('CR-32B requires existing stable runtime carrier id');
+  }
   const wear = new DeterministicPathUsageWearIntegration({ map, classification: pathClassification });
 
-  const pathStep = executeRealStep({
-    map,
-    carrierId: 'unit:cr32b-evidence',
-    currentCell: { x: 0, y: 4 },
-    nextCell: { x: 1, y: 4 },
-    finalTarget: { x: 2, y: 4 },
-    stepNumber: 3201,
-  });
+  const pathStep = executeRealStep({ map, carrierId, currentCell: { x: 0, y: 4 }, nextCell: { x: 1, y: 4 }, finalTarget: { x: 2, y: 4 }, stepNumber: 3201 });
   const pathWear = wear.recordCompletedStep(pathStep);
-
-  const roadStep = executeRealStep({
-    map,
-    carrierId: 'unit:cr32b-evidence',
-    currentCell: { x: 1, y: 4 },
-    nextCell: { x: 2, y: 4 },
-    finalTarget: { x: 3, y: 4 },
-    stepNumber: 3202,
-  });
+  const roadStep = executeRealStep({ map, carrierId, currentCell: { x: 1, y: 4 }, nextCell: { x: 2, y: 4 }, finalTarget: { x: 3, y: 4 }, stepNumber: 3202 });
   const roadWear = wear.recordCompletedStep(roadStep);
 
   const pass = pathStep.status === 'COMPLETED'
@@ -79,17 +54,11 @@ queueMicrotask(() => {
     testEl.dataset.pass = pass ? 'true' : 'false';
   }
 
-  window.CleanRuntime = Object.freeze({
-    ...runtimeState,
-    pathUsageWear: wear,
-    pathStepEvidence: pathStep,
-    roadStepEvidence: roadStep,
-    pathWearEvidence: pathWear,
-    roadWearEvidence: roadWear,
-  });
+  window.CleanRuntime = Object.freeze({ ...runtimeState, pathUsageWear: wear, pathStepEvidence: pathStep, roadStepEvidence: roadStep, pathWearEvidence: pathWear, roadWearEvidence: roadWear });
 
   console.info('[CR-32B] Deterministic Path Usage / Wear Accumulation Integration', {
     build: runtimeState.config.build,
+    carrierId,
     pass,
     pathStep,
     roadStep,
