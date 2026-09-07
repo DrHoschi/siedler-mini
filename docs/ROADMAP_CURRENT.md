@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A FROZEN / IM-13B FROZEN / IM-13C IMPLEMENTATION-AUTHORIZED  
+**Status:** CURRENT – IM-13A FROZEN / IM-13B FROZEN / IM-13C IMPLEMENTED / VERIFICATION PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -35,18 +35,7 @@ Binding boundary: persist existing authoritative truth, preserve Stable IDs/allo
 
 Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Frozen scope:
-
-- canonical `savegame-snapshot` payload,
-- `schemaVersion: 1`,
-- explicit completed simulation-step capture boundary,
-- deterministic World + Stable-ID allocator snapshot,
-- deterministic Map identity/cell snapshot,
-- CoreDomainStores + allocator snapshots,
-- Gold economy state,
-- CR-32B PATH/ROAD wear state,
-- canonical deterministic JSON serialization,
-- Node self-test and browser evidence surface.
+Frozen scope: canonical schemaVersion-1 snapshot/capture, World/Map, CoreDomainStores plus allocators, Gold, CR-32 wear and deterministic canonical serialization.
 
 Freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`.
 
@@ -54,38 +43,28 @@ Freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b9
 
 Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Frozen scope:
-
-- separate validation of the frozen IM-13A schemaVersion-1 payload,
-- schema/capture validation,
-- Stable-ID uniqueness and allocator continuity,
-- World/Map/Domain reference integrity,
-- Gold and CR-32 wear validation,
-- deterministic INVALID results without silent repair,
-- strict side-effect-free behavior.
-
-Freeze gate evidence includes frozen predecessor regressions, IM-13B regression, GitHub Actions CI success and real iPhone/Safari PASS evidence with synchronized build identity.
+Frozen scope: deterministic side-effect-free validation of the frozen IM-13A payload, including schema/capture, Stable-ID uniqueness, allocator continuity, World/Map/Domain references, Gold and CR-32 wear consistency, with deterministic INVALID results and no silent repair.
 
 Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4b225d86e239cc2b2d80c20166faafe483aa20`.
 
 ## 6. IM-13C – Deterministic SaveGame Restore Contract
 
-Status: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
+Status: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**.
 
-Binding scope:
+Implemented scope:
 
-- accept restore input only after frozen IM-13B returns `VALID`,
-- restore is atomic/all-or-nothing and must not expose partial active state,
-- reconstruct a complete replacement set of authoritative World/Map, CoreDomainStores, Gold and CR-32 PATH/ROAD wear owners from the frozen IM-13A snapshot truth,
-- preserve all saved Stable IDs exactly,
-- restore allocator continuity without ID reuse/collision,
-- avoid constructor side effects that create competing map/tile/cell or domain identities,
-- preserve persisted relationships and references,
-- restore Gold without economy settlement side effects,
-- restore Wear without recalculation or traversal-class mutation,
-- recompute derived/transient Population, navigation/pathfinding/cost views, render/camera/evidence only from restored authoritative owners,
-- deterministic round-trip proof: Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B must reproduce canonically identical authoritative snapshot truth under the defined restore evidence boundary,
-- restore failure leaves the previously active runtime state unchanged.
+- restore input is first passed through frozen IM-13B validation; invalid input is `REJECTED` before replacement state construction,
+- complete replacement authoritative World/Map, CoreDomainStores, Gold and CR-32 PATH/ROAD wear owners are prepared before commit,
+- additive restore initialization paths avoid replay side effects and preserve saved store revisions,
+- World/Map restore preserves exact World/Map/Tile/Cell Stable IDs and reconstructs map coordinate lookup without generating competing identities,
+- Domain restore preserves exact items, relationships, revisions and per-domain Stable-ID allocator next-sequences,
+- Gold restores directly from saved balance without settlement,
+- world-backed path classification is rebuilt from restored World/Map truth,
+- CR-32 wear restores saved entries without recalculation or traversal-class mutation,
+- allocator continuity is restored from saved allocator snapshots so later allocations continue without collision or reuse,
+- deterministic Node round-trip regression proves Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B canonical identity,
+- invalid restore regression verifies that existing World/Domain/Gold owners remain unchanged,
+- browser evidence surface and build identity are synchronized to `IM-13C-SAVEGAME-RESTORE-CONTRACT`.
 
 Explicitly excluded from IM-13C:
 
@@ -99,10 +78,12 @@ Explicitly excluded from IM-13C:
 
 ## 7. Current gate
 
-The next permissible implementation step is exclusively **IM-13C – Deterministic SaveGame Restore Contract** within the confirmed and authorized boundary above.
+The next permissible step is exclusively **IM-13C Verification / Regression / Freeze Gate**.
 
-No later persistence/UI/migration step is automatically authorized by this IM-13C authorization.
+Required before freeze: frozen CR-32 regression PASS, frozen IM-13A regression PASS, frozen IM-13B regression PASS, IM-13C round-trip regression PASS, CI PASS, real browser/device evidence with synchronized IM-13C identity and 0 BLOCKER.
+
+No later persistence/UI/schema-migration step is automatically authorized.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13A and IM-13B frozen; IM-13C contract confirmed and explicitly implementation-authorized; implementation not yet started.
+**Updated:** 2026-09-07 — IM-13C restore implemented; verification/freeze pending; later persistence/UI/migration work remains locked.
