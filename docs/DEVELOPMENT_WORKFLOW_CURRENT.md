@@ -13,9 +13,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-30 freeze marker: `frozen/cr-30-housing-population-gold-integration-foundation`
 - CR-30 frozen commit: `2e9208614a5cfd80abc47e39ccf236b80315ace8`
 - CR-31 – Navigation Integration Foundation: **ACTIVE / NOT FROZEN**
-- CR-31A – World-backed Traversability Source Contract: **IMPLEMENTED / AUTOMATED VERIFIED / PASS / 0 BLOCKER / BROWSER GATE PENDING / NOT FROZEN**
+- CR-31A – World-backed Traversability Source Contract: **IMPLEMENTED / AUTOMATED VERIFIED / BROWSER VERIFIED / ACCEPTED / PASS / 0 BLOCKER / FREEZE GATE NEXT / NOT YET FROZEN**
 - CR-31B / CR-31C: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
-- Current allowed action: real browser/device verification of CR-31A only.
+- Current allowed action: CR-31A verification/freeze gate only; CR-31B remains locked until CR-31A is frozen.
 
 ## 2. CR-31 repository reconciliation result
 
@@ -27,7 +27,7 @@ The integration gap is between the real CR-28–30 world/domain state and the ex
 
 ## 3. CR-31A – World-backed Traversability Source Contract
 
-**IMPLEMENTED / AUTOMATED VERIFIED / PASS / 0 BLOCKER / BROWSER GATE PENDING / NOT FROZEN**.
+**IMPLEMENTED / AUTOMATED VERIFIED / BROWSER VERIFIED / ACCEPTED / PASS / 0 BLOCKER / FREEZE GATE NEXT / NOT YET FROZEN**.
 
 Implementation:
 
@@ -64,6 +64,20 @@ Automated verification:
 - GitHub Actions run `34087031469` on commit `a5b0a6dd2e65fdd7359ed2071321b02677b99215`: **SUCCESS / PASS / 0 BLOCKER**.
 - regression chain includes baseline CI, CR-24C, CR-28, CR-29, CR-30A/B/C and CR-31A direct verification.
 
+Real browser/device acceptance evidence (2026-09-07, iPhone Safari / GitHub Pages):
+
+- top runtime status visibly shows `READY`,
+- visible heading is `CR-31A – World-backed Traversability Source Contract`,
+- evidence panel visibly shows `CR-31A ACTIVE`,
+- panel confirms `3 static BLOCKED cells aus realen Buildings`,
+- panel confirms free cells `TRAVERSABLE`,
+- predecessor evidence remains `CR-30 Population 3 / Gold 3 erhalten`,
+- panel confirms `3 Buildings / 3 Persons sichtbar`,
+- rendered world visibly contains three building squares and three person markers,
+- no stale CR-30 completion-gate identity is presented as current build.
+
+Result: **BROWSER ACCEPTANCE PASS / 0 BLOCKER**. This evidence authorizes the CR-31A freeze gate; it does not yet authorize CR-31B implementation.
+
 ## 4. CR-31B / CR-31C
 
 ### CR-31B – Deterministic World Reachability Integration
@@ -80,20 +94,9 @@ May later allow real runtime Persons/Carriers to validate existing positions/tar
 
 ## 5. Current CR-31A gate
 
-Automated verification is PASS / 0 BLOCKER. Before CR-31A can be accepted/frozen, real browser/device evidence must confirm the deployed CR-31A identity and evidence values.
+Automated verification and real browser/device verification are both PASS / 0 BLOCKER. The next and only allowed step is the **CR-31A Verification / Freeze Gate**: regress the accepted CR-31A implementation against the frozen predecessor line, confirm visible/build identity consistency, and freeze CR-31A only on PASS / 0 BLOCKER.
 
-Expected visible evidence:
-
-- heading/title identify CR-31A,
-- runtime `READY`,
-- `CR-31A ACTIVE`,
-- `3 static BLOCKED cells aus realen Buildings`,
-- free cells `TRAVERSABLE`,
-- CR-30 Population 3 / Gold 3 preserved,
-- 3 Buildings / 3 Persons remain visible,
-- no stale CR-30 completion-gate identity is presented as the current build.
-
-CR-31B remains locked until CR-31A is explicitly accepted and frozen.
+CR-31B remains locked until that freeze is complete.
 
 ## 6. Locked later work
 
@@ -105,4 +108,4 @@ Every browser/device-verifiable CR/substep must update all applicable visible/bu
 
 ---
 
-**Updated:** 2026-09-07 — CR-31A implemented and automated regression PASS / 0 BLOCKER on Actions run `34087031469`; real browser/device gate is the sole next action.
+**Updated:** 2026-09-07 — CR-31A automated regression PASS / 0 BLOCKER and real iPhone Safari/GitHub Pages evidence accepted PASS / 0 BLOCKER; CR-31A Verification / Freeze Gate is now the sole next action.
