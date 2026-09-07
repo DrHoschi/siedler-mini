@@ -1,6 +1,6 @@
 export const RuntimeConfig = Object.freeze({
   product: 'Neue Siedler',
-  build: 'CR-31B-DETERMINISTIC-WORLD-REACHABILITY-INTEGRATION',
+  build: 'CR-31C-RUNTIME-ENTITY-NAVIGATION-VALIDATION-INTEGRATION',
   simulation: Object.freeze({
     fixedStepMs: 100,
     maxCatchUpSteps: 4,
