@@ -14,77 +14,79 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-31A freeze marker: `frozen/cr-31a-world-backed-traversability-source-contract`
 - CR-31A frozen commit: `39b43015721a5de2b4d63b221558431205767037`
-- CR-31B / CR-31C: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
-- Current allowed action: define/authorize CR-31B only. No CR-31B implementation is authorized yet.
+- CR-31B – Deterministic World Reachability Integration: **IMPLEMENTED / AUTOMATED VERIFICATION PENDING FINAL CI / BROWSER GATE PENDING / NOT FROZEN**
+- CR-31C: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
+- Current allowed action: CR-31B verification only. CR-31C remains locked.
 
-## 2. CR-31 repository reconciliation result
+## 2. CR-31A frozen boundary
 
-The frozen CR-30 repository already contains the navigation/route/traffic foundations that CR-31 must reuse rather than rebuild.
+CR-31A connects real Building world state to the existing `TRAVERSABLE` / `BLOCKED` truth through `WorldBackedTraversabilitySource`. `MapStructure`, existing routing, Road Preference, traffic/reservation/deadlock/recovery and movement ownership remain unchanged.
 
-Existing authoritative building blocks include `MapStructure`, `TraversabilityContract`, `BlockedCellSource`, deterministic grid/cost pathfinding, road preference, obstacle-aware routing and the frozen occupancy/reservation/waiting/deadlock/recovery chain.
+Freeze evidence: Actions run `34087731207` on `39b43015721a5de2b4d63b221558431205767037` = **SUCCESS / PASS / 0 BLOCKER**, plus accepted real browser/device evidence.
 
-The integration gap is between the real CR-28–30 world/domain state and the existing traversability consumer boundary. CR-31 introduces no replacement pathfinder or traffic owner.
+## 3. CR-31B – Deterministic World Reachability Integration
 
-## 3. CR-31A – World-backed Traversability Source Contract
-
-**COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+**IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN**.
 
 Implementation:
 
-- `src/transport/world-backed-traversability-source.js`
-- `src/dev/cr-31a-self-test.node.js`
-- `src/dev/cr-31a-freeze-gate.node.js`
+- `src/transport/deterministic-world-reachability-integration.js`
+- `src/dev/cr-31b-self-test.node.js`
 
-Frozen boundary:
+Implemented contract:
 
-- `MapStructure` remains the spatial boundary,
-- `TraversabilityContract` remains the `TRAVERSABLE` / `BLOCKED` semantic contract,
-- the source exposes the downstream-compatible `stateAt`, `isTraversable` and `entries` surface,
-- real existing Buildings in lifecycle state `EXISTS` are static world occupancy,
-- each real Building world position maps deterministically into its containing map cell,
-- multiple Buildings in one cell still create one blocked-cell truth,
-- retired Buildings do not block,
-- Persons do not become static traversability owners,
-- outside-map cells remain invalid,
-- identical real world/domain state yields identical sorted blocked-cell evidence,
-- existing obstacle-aware routing consumes the source unchanged,
-- no new reachability search, route algorithm, path cost, Road Preference, Wear, traffic/reservation/deadlock/recovery ownership or movement is part of CR-31A.
+- accepts two finite real world positions,
+- deterministically projects both positions into their containing `MapStructure` cells using the map origin and cell size,
+- rejects world positions outside the map,
+- consumes the frozen CR-31A traversability source as the authoritative blocked/free truth,
+- returns `START_BLOCKED` or `TARGET_BLOCKED` without inventing another occupancy owner,
+- positions in the same traversable cell are reachable,
+- for distinct traversable cells, reuses the existing `DeterministicCostAwarePathfinder` only as the already-frozen deterministic search primitive,
+- exposes only a reachability result (`REACHABLE` / `NO_TRAVERSABLE_CONNECTION` plus blocked endpoint reasons), not a new route owner,
+- identical world/map/traversability state yields identical reachability output,
+- does not create jobs or mutate world/domain state.
 
-Verification evidence:
+Explicit non-scope:
 
-- automated implementation regression: Actions run `34087031469` = **SUCCESS / PASS / 0 BLOCKER**,
-- real browser/device evidence on 2026-09-07: **PASS / 0 BLOCKER**, showing `READY`, correct CR-31A identity, 3 static BLOCKED cells, free cells TRAVERSABLE, preserved CR-30 Population 3 / Gold 3, and 3 Buildings / 3 Persons,
-- dedicated Verification / Freeze Gate added as `src/dev/cr-31a-freeze-gate.node.js`,
-- first freeze-gate run `34087656611` found only a too-literal source-text assertion for the dynamically rendered blocked-cell count; no domain/predecessor regression failed,
-- corrected freeze-gate run `34087731207` on `39b43015721a5de2b4d63b221558431205767037` = **SUCCESS / PASS / 0 BLOCKER**,
-- CR-31A frozen at exactly that accepted commit.
+- no new pathfinder,
+- no Road Preference changes,
+- no Path/Wear,
+- no Person/Carrier movement,
+- no Traffic, Reservation, Deadlock or Recovery changes,
+- no CR-31C runtime entity validation.
 
-## 4. CR-31B / CR-31C
+Browser evidence setup:
 
-### CR-31B – Deterministic World Reachability Integration
+- visible/build identity synchronized to `CR-31B – Deterministic World Reachability Integration`,
+- `RuntimeConfig.build = CR-31B-DETERMINISTIC-WORLD-REACHABILITY-INTEGRATION`,
+- browser miniworld preserves the CR-31A 3 static blocked Building cells and CR-30 Population 3 / Gold 3,
+- deterministic evidence query: world `(0.25,0.25)` → `(7.25,5.25)` must display `REACHABLE`,
+- existing 3 Buildings / 3 Persons remain visible.
 
-**PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
+## 4. Verification gate
 
-Candidate boundary from prior reconciliation: consume frozen CR-31A traversability plus existing deterministic routing primitives to answer whether two valid world positions are connected/reachable. No Path/Wear and no movement integration. This boundary must be explicitly confirmed/authorized before implementation.
+CI now runs the frozen CR-31A Verification / Freeze Gate before `src/dev/cr-31b-self-test.node.js`.
 
-### CR-31C – Runtime Entity Navigation Validation Integration
+Required CR-31B automated evidence:
 
-**PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
+- reachable world positions across obstacles,
+- deterministic repeated result,
+- same-cell reachability,
+- blocked start and blocked target rejection,
+- fully disconnected traversability returns `NO_TRAVERSABLE_CONNECTION`,
+- outside-map world position rejection,
+- no TransportJob creation.
 
-May later validate existing real Person/Carrier positions and targets against the frozen navigation truth while keeping earlier route/movement/traffic owners intact.
+After automated PASS / 0 BLOCKER, real browser/device verification is required before any CR-31B freeze. CR-31C remains locked throughout.
 
-## 5. Current next step
+## 5. Locked later work
 
-CR-31A is frozen. The next allowed step is **CR-31B contract confirmation / explicit authorization only**. Do not implement CR-31B automatically.
+CR-31C remains planned only. Path/Wear remains after CR-31. SaveGame remains IM-13, UI/Mobile IM-14, Guidance/Inspector IM-15.
 
-## 6. Locked later work
-
-Path/Wear remains after CR-31. SaveGame remains IM-13, UI/Mobile IM-14, Guidance/Inspector IM-15.
-
-## 7. Permanent visible CR / build identity synchronization rule
+## 6. Permanent visible CR / build identity synchronization rule
 
 Every browser/device-verifiable CR/substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-07 — CR-31A Verification / Freeze Gate PASS / 0 BLOCKER; frozen at `39b43015721a5de2b4d63b221558431205767037`. CR-31B remains not implementation-authorized pending explicit confirmation.
+**Updated:** 2026-09-07 — CR-31B implementation completed on the existing Whole-CR-31 branch; automated verification is the current gate and CR-31C remains locked.
