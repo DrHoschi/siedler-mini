@@ -13,7 +13,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Frozen predecessor: **CR-32 – Path / Wear Integration Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current migration block: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation**
 - IM-13: **IMPLEMENTATION-AUTHORIZED / IN PROGRESS**
-- IM-13A – SaveGame Snapshot Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
+- IM-13A – SaveGame Snapshot Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- IM-13A freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`
+- IM-13B – Deterministic SaveGame Validation Contract: **IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**
 
 ## 2. Frozen CR-32 boundary
 
@@ -33,9 +35,9 @@ Binding principles:
 - reject invalid schemas/references/state deterministically,
 - no SaveGame UI, cloud sync, multiplayer sync, new gameplay rules or ownership changes in this foundation.
 
-## 4. IM-13A implemented contract
+## 4. IM-13A frozen contract
 
-IM-13A introduces only the canonical snapshot/capture boundary:
+IM-13A defines the canonical snapshot/capture boundary:
 
 - `kind: savegame-snapshot`,
 - `schemaVersion: 1`,
@@ -48,24 +50,45 @@ IM-13A introduces only the canonical snapshot/capture boundary:
 - deterministic canonical JSON serialization,
 - derived Population, Camera/Render state, route/pathfinder results and Restore are not part of the snapshot truth.
 
-IM-13A also has Node self-test coverage and a browser evidence overlay with synchronized visible/build identity `IM-13A-SAVEGAME-SNAPSHOT-CONTRACT`.
+IM-13A passed frozen CR-32 regression, IM-13A self-test, CI, real iPhone browser evidence with synchronized visible/build identity and 0 blockers, and is frozen at `fadacda7f728f57b3b97cbb1771284e5d609d805`.
 
-## 5. Current gate
+## 5. IM-13B binding contract and authorization
 
-IM-13A is not frozen yet. Required before freeze:
+IM-13B – Deterministic SaveGame Validation Contract is fachlich confirmed and explicitly implementation-authorized.
 
-- complete frozen CR-32 regression PASS,
-- IM-13A self-test PASS,
-- CI PASS,
-- real browser/device evidence with correct IM-13A visible identity,
-- 0 BLOCKER.
+Its scope is limited to deterministic, side-effect-free validation of the frozen IM-13A schemaVersion-1 snapshot:
 
-No Restore implementation or later IM-13 substep may begin before IM-13A freeze.
+- validate `kind`, `schemaVersion`, capture boundary and required top-level sections,
+- validate Stable-ID uniqueness and allocator continuity/consistency,
+- validate reference integrity across persisted World/Map/Domain/Wear state,
+- reject dangling references deterministically,
+- validate authoritative Gold state as non-negative and non-physical,
+- validate CR-32 PATH/ROAD wear entries, non-negative integer counters and `usageCount === wearUnits`,
+- deterministic identical input -> identical validation result/failure,
+- no silent repair, coercion, fallback/defaulting or best-effort acceptance,
+- validation must not mutate WorldStore, MapStructure, DomainStores, Gold, Wear or any other runtime owner.
 
-## 6. Permanent visible build identity synchronization rule
+Explicitly excluded from IM-13B:
+
+- Restore/Hydration or any runtime-state mutation,
+- Save Slots, file/storage adapters or UI,
+- autosave,
+- cloud or multiplayer synchronization,
+- historical schema migration,
+- new gameplay behavior or ownership changes.
+
+Authorization status: **IM-13B IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
+
+## 6. Current gate
+
+The next permissible implementation step is exclusively **IM-13B – Deterministic SaveGame Validation Contract** within the confirmed boundary above.
+
+IM-13C or any Restore implementation is not automatically authorized by this IM-13B authorization and may not begin before IM-13B implementation, regression, verification and freeze.
+
+## 7. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13A snapshot contract implemented; verification/freeze pending.
+**Updated:** 2026-09-07 — IM-13A frozen; IM-13B contract confirmed and implementation-authorized; implementation not yet started.
