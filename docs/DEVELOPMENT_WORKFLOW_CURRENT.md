@@ -10,13 +10,17 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Default branch: `main` — historical old-game reference only
 - Completed whole-CR branch: `feature/cr-32-path-wear-integration-foundation`
 - Frozen whole-CR predecessor: **CR-31 – Navigation Integration Foundation** @ `f4fba712cd88dc83e616c0c4f360a2a016e5dff2`
-- CR-32 – Path / Wear Integration Foundation: **COMPLETE / PASS / 0 BLOCKER / FREEZE GATE APPROVED**
+- CR-32 – Path / Wear Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- CR-32 whole freeze marker: `frozen/cr-32-path-wear-integration-foundation`
 - CR-32A – World-backed Path Classification Contract: **FROZEN / PASS / 0 BLOCKER** @ `7576c3db15ffa8b17d0477eda9981a5d853a3c22`
+- CR-32A freeze marker: `frozen/cr-32a-world-backed-path-classification-contract`
 - CR-32B – Deterministic Path Usage / Wear Accumulation Integration: **FROZEN / PASS / 0 BLOCKER** @ `684198a852366f59bfb3469ae9d24c1a7901abb7`
-- CR-32C – Wear-aware Traversal Cost Integration: **PASS / 0 BLOCKER / FREEZE GATE APPROVED**
-- Current allowed action: **final CR-32C + whole-CR CR-32 freeze markers only**. IM-13 must not begin until those markers exist on the final passing commit.
+- CR-32B freeze marker: `frozen/cr-32b-deterministic-path-usage-wear-accumulation-integration`
+- CR-32C – Wear-aware Traversal Cost Integration: **FROZEN / PASS / 0 BLOCKER**
+- CR-32C freeze marker: `frozen/cr-32c-wear-aware-traversal-cost-integration`
+- Current next migration boundary: **IM-13 – SaveGame**, not yet implementation-authorized.
 
-## 2. CR-32 frozen system boundary
+## 2. Frozen CR-32 system boundary
 
 CR-32 owns the complete Path / Wear integration chain:
 
@@ -56,9 +60,9 @@ CR-32 completion gate is PASS / 0 BLOCKER based on:
 
 ## 4. Next migration boundary
 
-Only after final CR-32C and whole-CR CR-32 freeze markers exist may **IM-13 – SaveGame** be planned/authorized.
+CR-32 is frozen. The next migration block in the binding order is **IM-13 – SaveGame**.
 
-IM-13 is not implemented or automatically authorized by the CR-32 freeze. UI/Mobile and Guidance/Inspector remain later migration blocks.
+IM-13 is not automatically implementation-authorized by this freeze. Its exact contract/boundary must be reconciled and explicitly authorized before implementation. UI/Mobile and Guidance/Inspector remain later migration blocks.
 
 ## 5. Permanent visible CR / build identity synchronization rule
 
@@ -66,4 +70,4 @@ Every browser/device-verifiable CR/substep must update all applicable visible/bu
 
 ---
 
-**Updated:** 2026-09-07 — CR-32A/B/C jointly regressed against frozen CR-31; CR-32 completion gate PASS / 0 BLOCKER; final freeze markers pending on this gate commit.
+**Updated:** 2026-09-07 — CR-32A/B/C jointly regressed against frozen CR-31; CR-32 complete and FROZEN at PASS / 0 BLOCKER.
