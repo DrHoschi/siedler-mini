@@ -15,7 +15,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - IM-13: **IMPLEMENTATION-AUTHORIZED / IN PROGRESS**
 - IM-13A – SaveGame Snapshot Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-13A freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`
-- IM-13B – Deterministic SaveGame Validation Contract: **IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**
+- IM-13B – Deterministic SaveGame Validation Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
 
 ## 2. Frozen CR-32 boundary
 
@@ -52,38 +52,48 @@ IM-13A defines the canonical snapshot/capture boundary:
 
 IM-13A passed frozen CR-32 regression, IM-13A self-test, CI, real iPhone browser evidence with synchronized visible/build identity and 0 blockers, and is frozen at `fadacda7f728f57b3b97cbb1771284e5d609d805`.
 
-## 5. IM-13B binding contract and authorization
+## 5. IM-13B implemented contract
 
-IM-13B – Deterministic SaveGame Validation Contract is fachlich confirmed and explicitly implementation-authorized.
+IM-13B adds a separate side-effect-free validator for the frozen IM-13A schemaVersion-1 payload without changing the frozen IM-13A capture/serialization owner.
 
-Its scope is limited to deterministic, side-effect-free validation of the frozen IM-13A schemaVersion-1 snapshot:
+Implemented validation:
 
-- validate `kind`, `schemaVersion`, capture boundary and required top-level sections,
-- validate Stable-ID uniqueness and allocator continuity/consistency,
-- validate reference integrity across persisted World/Map/Domain/Wear state,
-- reject dangling references deterministically,
-- validate authoritative Gold state as non-negative and non-physical,
-- validate CR-32 PATH/ROAD wear entries, non-negative integer counters and `usageCount === wearUnits`,
-- deterministic identical input -> identical validation result/failure,
-- no silent repair, coercion, fallback/defaulting or best-effort acceptance,
-- validation must not mutate WorldStore, MapStructure, DomainStores, Gold, Wear or any other runtime owner.
+- required SaveGame kind, schema version and completed-step capture metadata,
+- required World/Map/Domain/Gold/Wear sections,
+- valid and globally unique persisted Stable IDs,
+- allocator continuity: each allocator next-sequence must remain beyond every occupied ID sequence it owns,
+- Map identity, dimensions, stable cell membership, cell -> map and cell -> tile reference integrity,
+- exact four CoreDomainStores and their item-kind/ID consistency,
+- persisted domain Stable-ID references are checked for dangling targets while external `definitionId` values remain outside SaveGame ownership,
+- Gold remains `gold-economy-state`, non-negative and explicitly non-physical,
+- CR-32 wear remains PATH/ROAD only, references saved map cells, has non-negative integer counters and `usageCount === wearUnits`, and agrees with the saved cell tile traversal type,
+- deterministic validation results contain stable sorted error code/path pairs,
+- invalid payloads are rejected as `INVALID`; no repair/defaulting/coercion is performed,
+- validator does not mutate the supplied payload or any runtime owner.
 
-Explicitly excluded from IM-13B:
+IM-13B includes Node regression coverage for valid Capture -> Serialize -> Parse -> Validate and targeted invalid cases for schema, duplicate Stable ID, dangling tile/domain/wear references, allocator reuse risk, negative Gold and inconsistent wear. Browser evidence is synchronized to build identity `IM-13B-SAVEGAME-VALIDATION-CONTRACT`.
 
-- Restore/Hydration or any runtime-state mutation,
+Explicitly not introduced:
+
+- Restore/Hydration or runtime-state mutation,
 - Save Slots, file/storage adapters or UI,
 - autosave,
 - cloud or multiplayer synchronization,
 - historical schema migration,
 - new gameplay behavior or ownership changes.
 
-Authorization status: **IM-13B IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
-
 ## 6. Current gate
 
-The next permissible implementation step is exclusively **IM-13B – Deterministic SaveGame Validation Contract** within the confirmed boundary above.
+IM-13B is implemented but not frozen. Required before freeze:
 
-IM-13C or any Restore implementation is not automatically authorized by this IM-13B authorization and may not begin before IM-13B implementation, regression, verification and freeze.
+- frozen CR-32 regression PASS,
+- frozen IM-13A regression PASS,
+- IM-13B self-test PASS,
+- CI PASS,
+- real browser/device evidence with correct IM-13B visible/build identity,
+- 0 BLOCKER.
+
+The next permissible step is exclusively **IM-13B Verification / Regression / Freeze Gate**. IM-13C / Restore remains locked and is not automatically authorized.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -91,4 +101,4 @@ Every browser/device-verifiable CR/IM substep must update all applicable visible
 
 ---
 
-**Updated:** 2026-09-07 — IM-13A frozen; IM-13B contract confirmed and implementation-authorized; implementation not yet started.
+**Updated:** 2026-09-07 — IM-13B validation implemented; verification/freeze pending; IM-13C Restore remains locked.
