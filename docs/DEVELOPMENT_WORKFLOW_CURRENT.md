@@ -9,13 +9,13 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
 - Current whole-CR branch: `feature/cr-31-navigation-integration-foundation`
-- Frozen whole-CR predecessor: **CR-30 – Housing / Population / Gold Integration Foundation**
-- CR-30 freeze marker: `frozen/cr-30-housing-population-gold-integration-foundation`
-- CR-30 frozen commit: `2e9208614a5cfd80abc47e39ccf236b80315ace8`
+- Frozen whole-CR predecessor: **CR-30 – Housing / Population / Gold Integration Foundation** @ `2e9208614a5cfd80abc47e39ccf236b80315ace8`
 - CR-31 – Navigation Integration Foundation: **ACTIVE / NOT FROZEN**
-- CR-31A – World-backed Traversability Source Contract: **IMPLEMENTED / AUTOMATED VERIFIED / BROWSER VERIFIED / ACCEPTED / PASS / 0 BLOCKER / FREEZE GATE NEXT / NOT YET FROZEN**
+- CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- CR-31A freeze marker: `frozen/cr-31a-world-backed-traversability-source-contract`
+- CR-31A frozen commit: `39b43015721a5de2b4d63b221558431205767037`
 - CR-31B / CR-31C: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
-- Current allowed action: CR-31A verification/freeze gate only; CR-31B remains locked until CR-31A is frozen.
+- Current allowed action: define/authorize CR-31B only. No CR-31B implementation is authorized yet.
 
 ## 2. CR-31 repository reconciliation result
 
@@ -27,56 +27,37 @@ The integration gap is between the real CR-28–30 world/domain state and the ex
 
 ## 3. CR-31A – World-backed Traversability Source Contract
 
-**IMPLEMENTED / AUTOMATED VERIFIED / BROWSER VERIFIED / ACCEPTED / PASS / 0 BLOCKER / FREEZE GATE NEXT / NOT YET FROZEN**.
+**COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 Implementation:
 
 - `src/transport/world-backed-traversability-source.js`
 - `src/dev/cr-31a-self-test.node.js`
+- `src/dev/cr-31a-freeze-gate.node.js`
 
-Implemented boundary:
+Frozen boundary:
 
 - `MapStructure` remains the spatial boundary,
 - `TraversabilityContract` remains the `TRAVERSABLE` / `BLOCKED` semantic contract,
-- the source exposes the existing downstream-compatible `stateAt`, `isTraversable` and `entries` surface,
-- real existing Buildings in lifecycle state `EXISTS` are treated as static world occupancy,
-- each real Building world position is deterministically projected into its containing map cell using the map origin and cell size,
-- multiple Buildings in one cell still create only one blocked-cell truth,
-- retired Buildings no longer contribute static blocking,
+- the source exposes the downstream-compatible `stateAt`, `isTraversable` and `entries` surface,
+- real existing Buildings in lifecycle state `EXISTS` are static world occupancy,
+- each real Building world position maps deterministically into its containing map cell,
+- multiple Buildings in one cell still create one blocked-cell truth,
+- retired Buildings do not block,
 - Persons do not become static traversability owners,
-- cells outside `MapStructure` remain invalid,
-- identical real world/domain state produces identical sorted blocked-cell evidence,
-- the existing `ObstacleAwareRoutingIntegration` can consume the new source unchanged,
-- no new reachability search, route algorithm, path cost, Road Preference, Wear, traffic/reservation/deadlock/recovery ownership or movement was added.
+- outside-map cells remain invalid,
+- identical real world/domain state yields identical sorted blocked-cell evidence,
+- existing obstacle-aware routing consumes the source unchanged,
+- no new reachability search, route algorithm, path cost, Road Preference, Wear, traffic/reservation/deadlock/recovery ownership or movement is part of CR-31A.
 
-Browser evidence setup:
+Verification evidence:
 
-- visible/build identity is synchronized to `CR-31A – World-backed Traversability Source Contract`,
-- `RuntimeConfig.build = CR-31A-WORLD-BACKED-TRAVERSABILITY-SOURCE-CONTRACT`,
-- the existing CR-30 browser miniworld remains visible,
-- its 3 real existing Buildings produce 3 static `BLOCKED` cells,
-- CR-30 Population 3 and Gold Balance 3 remain preserved and visible as predecessor evidence.
-
-Automated verification:
-
-- first CI run `34086953706` correctly exposed an obsolete predecessor-gate coupling: the frozen CR-30 completion gate asserted that the *current* page must still carry CR-30 identity. CR-30A/B/C themselves passed; this was not a CR-31A domain failure.
-- the CR-30 frozen contract/test files were not modified. CI was corrected to regress frozen CR-29 + CR-30A + CR-30B + CR-30C directly, while the historical CR-30 completion-page identity check remains frozen for its original gate.
-- GitHub Actions run `34087031469` on commit `a5b0a6dd2e65fdd7359ed2071321b02677b99215`: **SUCCESS / PASS / 0 BLOCKER**.
-- regression chain includes baseline CI, CR-24C, CR-28, CR-29, CR-30A/B/C and CR-31A direct verification.
-
-Real browser/device acceptance evidence (2026-09-07, iPhone Safari / GitHub Pages):
-
-- top runtime status visibly shows `READY`,
-- visible heading is `CR-31A – World-backed Traversability Source Contract`,
-- evidence panel visibly shows `CR-31A ACTIVE`,
-- panel confirms `3 static BLOCKED cells aus realen Buildings`,
-- panel confirms free cells `TRAVERSABLE`,
-- predecessor evidence remains `CR-30 Population 3 / Gold 3 erhalten`,
-- panel confirms `3 Buildings / 3 Persons sichtbar`,
-- rendered world visibly contains three building squares and three person markers,
-- no stale CR-30 completion-gate identity is presented as current build.
-
-Result: **BROWSER ACCEPTANCE PASS / 0 BLOCKER**. This evidence authorizes the CR-31A freeze gate; it does not yet authorize CR-31B implementation.
+- automated implementation regression: Actions run `34087031469` = **SUCCESS / PASS / 0 BLOCKER**,
+- real browser/device evidence on 2026-09-07: **PASS / 0 BLOCKER**, showing `READY`, correct CR-31A identity, 3 static BLOCKED cells, free cells TRAVERSABLE, preserved CR-30 Population 3 / Gold 3, and 3 Buildings / 3 Persons,
+- dedicated Verification / Freeze Gate added as `src/dev/cr-31a-freeze-gate.node.js`,
+- first freeze-gate run `34087656611` found only a too-literal source-text assertion for the dynamically rendered blocked-cell count; no domain/predecessor regression failed,
+- corrected freeze-gate run `34087731207` on `39b43015721a5de2b4d63b221558431205767037` = **SUCCESS / PASS / 0 BLOCKER**,
+- CR-31A frozen at exactly that accepted commit.
 
 ## 4. CR-31B / CR-31C
 
@@ -84,19 +65,17 @@ Result: **BROWSER ACCEPTANCE PASS / 0 BLOCKER**. This evidence authorizes the CR
 
 **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
 
-May later consume frozen CR-31A traversability and existing deterministic routing primitives to answer whether two valid world positions are connected/reachable. It must not yet alter movement or introduce Path/Wear.
+Candidate boundary from prior reconciliation: consume frozen CR-31A traversability plus existing deterministic routing primitives to answer whether two valid world positions are connected/reachable. No Path/Wear and no movement integration. This boundary must be explicitly confirmed/authorized before implementation.
 
 ### CR-31C – Runtime Entity Navigation Validation Integration
 
 **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
 
-May later allow real runtime Persons/Carriers to validate existing positions/targets against the frozen navigation truth. Existing route/movement/traffic owners remain authoritative.
+May later validate existing real Person/Carrier positions and targets against the frozen navigation truth while keeping earlier route/movement/traffic owners intact.
 
-## 5. Current CR-31A gate
+## 5. Current next step
 
-Automated verification and real browser/device verification are both PASS / 0 BLOCKER. The next and only allowed step is the **CR-31A Verification / Freeze Gate**: regress the accepted CR-31A implementation against the frozen predecessor line, confirm visible/build identity consistency, and freeze CR-31A only on PASS / 0 BLOCKER.
-
-CR-31B remains locked until that freeze is complete.
+CR-31A is frozen. The next allowed step is **CR-31B contract confirmation / explicit authorization only**. Do not implement CR-31B automatically.
 
 ## 6. Locked later work
 
@@ -108,4 +87,4 @@ Every browser/device-verifiable CR/substep must update all applicable visible/bu
 
 ---
 
-**Updated:** 2026-09-07 — CR-31A automated regression PASS / 0 BLOCKER and real iPhone Safari/GitHub Pages evidence accepted PASS / 0 BLOCKER; CR-31A Verification / Freeze Gate is now the sole next action.
+**Updated:** 2026-09-07 — CR-31A Verification / Freeze Gate PASS / 0 BLOCKER; frozen at `39b43015721a5de2b4d63b221558431205767037`. CR-31B remains not implementation-authorized pending explicit confirmation.
