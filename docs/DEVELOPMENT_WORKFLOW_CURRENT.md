@@ -10,87 +10,62 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Default branch: `main` — historical old-game reference only
 - Current whole-block branch: `feature/im-13-savegame-foundation`
 - Whole-block branch base: frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
-- Frozen predecessor: **CR-32 – Path / Wear Integration Foundation**
-- CR-32 – Path / Wear Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- CR-32 whole freeze marker: `frozen/cr-32-path-wear-integration-foundation`
-- CR-32A – World-backed Path Classification Contract: **FROZEN / PASS / 0 BLOCKER** @ `7576c3db15ffa8b17d0477eda9981a5d853a3c22`
-- CR-32A freeze marker: `frozen/cr-32a-world-backed-path-classification-contract`
-- CR-32B – Deterministic Path Usage / Wear Accumulation Integration: **FROZEN / PASS / 0 BLOCKER** @ `684198a852366f59bfb3469ae9d24c1a7901abb7`
-- CR-32B freeze marker: `frozen/cr-32b-deterministic-path-usage-wear-accumulation-integration`
-- CR-32C – Wear-aware Traversal Cost Integration: **FROZEN / PASS / 0 BLOCKER**
-- CR-32C freeze marker: `frozen/cr-32c-wear-aware-traversal-cost-integration`
+- Frozen predecessor: **CR-32 – Path / Wear Integration Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current migration block: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation**
-- IM-13 status: **CONTRACT RECONCILED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**
+- IM-13: **IMPLEMENTATION-AUTHORIZED / IN PROGRESS**
+- IM-13A – SaveGame Snapshot Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
 
-## 2. Frozen CR-32 system boundary
+## 2. Frozen CR-32 boundary
 
-CR-32 owns the complete Path / Wear integration chain:
+CR-32 remains fully frozen. Navigation, Path/Wear, Movement, Traffic, Reservation, Deadlock and Recovery ownership are unchanged. `wearCostPerUnit = 0.01` and the existing deterministic pathfinder/route ownership remain authoritative.
 
-`MapStructure world-backed classification → real completed step usage/wear → wear-aware traversal cost → existing road-preference routing → existing deterministic cost-aware pathfinder`.
+## 3. IM-13 binding boundary
 
-Binding invariants:
+IM-13 is persistence only. It may capture, serialize, validate and later restore existing authoritative runtime state but must not become a gameplay owner.
 
-- traversal classes remain `NEUTRAL`, `PATH`, `ROAD`,
-- real MapStructure cell identity remains authoritative,
-- only successful real CR-21C `reservation-controlled-step-movement` with `status: COMPLETED` and `enteredCell` may create wear,
-- PATH and ROAD accumulate deterministic wear; NEUTRAL does not,
-- route planning, reservation winning or movement planning alone never creates wear,
-- `wearCostPerUnit = 0.01`,
-- `effectiveTraversalCost = baseTraversalCost + (wearUnits × 0.01)`,
-- frozen base costs remain `NEUTRAL = 1.0`, `PATH = 0.75`, `ROAD = 0.5`,
-- wear 0 reproduces previous routing costs and routing behavior,
-- PATH/ROAD cost increases monotonically with wear,
-- NEUTRAL remains unchanged,
-- PATH remains PATH and ROAD remains ROAD regardless of wear,
-- existing `DeterministicCostAwarePathfinder` and route ownership remain unchanged,
-- Movement, Traffic, Reservation, Deadlock and Recovery ownership remain unchanged,
-- no repair, maintenance, PATH-to-ROAD upgrade, worker road construction, material consumption or automatic desire path is introduced.
+Binding principles:
 
-## 3. IM-13 reconciled contract / boundary
+- persist authoritative state; recompute derived/transient views,
+- preserve Stable IDs and allocator continuity,
+- persistence-relevant state includes World/Map identity, domain stores, Gold balance and CR-32 PATH/ROAD wear,
+- capture only at a completed deterministic simulation-step boundary,
+- version payloads from the first schema,
+- reject invalid schemas/references/state deterministically,
+- no SaveGame UI, cloud sync, multiplayer sync, new gameplay rules or ownership changes in this foundation.
 
-IM-13 is a persistence foundation only. It may capture, serialize, validate and restore existing authoritative runtime state but must not become a new gameplay owner.
+## 4. IM-13A implemented contract
 
-Binding IM-13 principles:
+IM-13A introduces only the canonical snapshot/capture boundary:
 
-- authoritative state is persisted; derived views are recomputed after restore,
-- Stable IDs and allocator continuity must survive Save → Restore,
-- World/Map identity, domain-owned persistent state, Gold balance and CR-32 PATH/ROAD wear are persistence-relevant authoritative state,
-- transient route/pathfinder results, render projection, UI state and other derived views are not persisted as competing truth,
-- capture occurs only at a completed deterministic simulation-step boundary,
-- payloads are versioned from the first implementation (`kind` + schema version),
-- invalid schemas, duplicate IDs, dangling references and invalid authoritative values must be rejected deterministically,
-- restore must reconstruct the same normalized authoritative truth without changing frozen CR-32 routing/wear semantics,
-- storage backend and user-facing save-slot UI remain outside the core persistence contract,
-- IM-14 UI/Mobile and IM-15 Guidance/Inspector remain later blocks.
+- `kind: savegame-snapshot`,
+- `schemaVersion: 1`,
+- completed simulation-step capture boundary with non-negative `stepIndex`,
+- World state plus World Stable-ID allocator snapshot,
+- Map identity, default tile, dimensions and stable cell IDs,
+- all CoreDomainStores state plus per-domain Stable-ID allocator snapshots,
+- non-physical Gold state,
+- CR-32B PATH/ROAD wear entries sorted by stable `cellId`,
+- deterministic canonical JSON serialization,
+- derived Population, Camera/Render state, route/pathfinder results and Restore are not part of the snapshot truth.
 
-Explicitly out of scope for IM-13 Foundation:
+IM-13A also has Node self-test coverage and a browser evidence overlay with synchronized visible/build identity `IM-13A-SAVEGAME-SNAPSHOT-CONTRACT`.
 
-- new gameplay rules,
-- save-slot/menu UX,
-- cloud sync,
-- multiplayer synchronization,
-- compression/encryption features,
-- historical schema migration beyond the first supported schema,
-- any change to Movement, Traffic, Reservation, Deadlock, Recovery, Navigation or Path/Wear ownership.
+## 5. Current gate
 
-## 4. Authorization state
+IM-13A is not frozen yet. Required before freeze:
 
-The IM-13 contract/boundary reconciliation is accepted and **IM-13 is explicitly implementation-authorized**.
+- complete frozen CR-32 regression PASS,
+- IM-13A self-test PASS,
+- CI PASS,
+- real browser/device evidence with correct IM-13A visible identity,
+- 0 BLOCKER.
 
-The whole-block branch `feature/im-13-savegame-foundation` was created exactly from frozen CR-32 commit `845fa5d5f513ac3a974bbae0a81bc78652e9e674`.
+No Restore implementation or later IM-13 substep may begin before IM-13A freeze.
 
-This authorization does not mark any IM-13 implementation substep complete or frozen. Each implementation substep still requires its own narrow contract, regression evidence and freeze gate before the next substep is allowed.
-
-## 5. Next permissible step
-
-The next permissible implementation step is **IM-13A – SaveGame Snapshot Contract**.
-
-IM-13A may define only the canonical versioned SaveGame payload and deterministic capture of existing authoritative state at a completed simulation-step boundary. Restore execution, storage adapter/UI and historical migration remain forbidden in IM-13A.
-
-## 6. Permanent visible CR / build identity synchronization rule
+## 6. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep must update all applicable visible/build identity surfaces in the same implementation step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13 contract reconciled and explicitly implementation-authorized; whole-block branch created exactly from frozen CR-32; no SaveGame implementation started yet.
+**Updated:** 2026-09-07 — IM-13A snapshot contract implemented; verification/freeze pending.
