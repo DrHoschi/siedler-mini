@@ -72,12 +72,11 @@ export class DeterministicPathUsageWearIntegration {
     assertMap(map);
     this.#map = map;
     this.#classAt = assertClassificationSource(classification);
+    const mapCellIds = new Set(map.cellIds());
     for (const raw of initialEntries) {
       const entry = normalizeInitialEntry(raw);
       if (this.#stateByCellId.has(entry.cellId)) throw new Error(`duplicate restored wear cellId: ${entry.cellId}`);
-      const cell = [...map.cellIds()].find(id => id === entry.cellId);
-      if (!cell) throw new Error(`restored wear cell outside map: ${entry.cellId}`);
-      const entity = typeof map.cellIds === 'function' ? null : null;
+      if (!mapCellIds.has(entry.cellId)) throw new Error(`restored wear cell outside map: ${entry.cellId}`);
       this.#stateByCellId.set(entry.cellId, entry);
     }
   }
