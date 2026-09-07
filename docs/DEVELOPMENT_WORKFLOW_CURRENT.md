@@ -8,70 +8,60 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Current whole-block branch: `feature/im-13-savegame-foundation`
-- Whole-block branch base: frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
-- Frozen predecessor: **CR-32 – Path / Wear Integration Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- Current migration block: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-13A – SaveGame Snapshot Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-13B – Deterministic SaveGame Validation Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-13C – Deterministic SaveGame Restore Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-13 Whole-Block Completion / Regression / Freeze Gate: **COMPLETE / PASS / 0 BLOCKER**
+- Current whole-block branch: `feature/im-14-ui-mobile-foundation`
+- Whole-block branch base: frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
+- Frozen predecessor: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- Current migration block: **IM-14 – UI / Mobile Foundation: IN PROGRESS / NOT FROZEN**
+- IM-14A – Player UI Shell & Responsive Surface Contract: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
 
-## 2. Binding IM-13 Foundation contract
+## 2. Binding IM-14A contract
 
-IM-13 is persistence only. It captures, serializes, validates, restores and activates existing authoritative runtime truth without becoming a gameplay owner.
+IM-14A introduces only the structural player UI shell over the frozen modular runtime.
 
 Binding requirements:
 
-- authoritative World/Map identity and state persist,
-- authoritative domain state persists,
-- Gold balance persists as non-physical economy truth,
-- CR-32 PATH/ROAD wear persists,
-- Stable IDs and allocator continuity survive Save -> Restore,
-- capture occurs only at a completed deterministic simulation-step boundary,
-- payload is canonical and versioned from schemaVersion 1,
-- invalid schema/reference/allocator/Gold/Wear state is rejected deterministically without silent repair,
-- restore is all-or-nothing and reconstructs authoritative owners without gameplay mutation,
-- restored state is atomically activated and dependent transient/derived integrations are rebound,
-- Population remains derived/non-persisted,
-- pathfinder/routes/traversal costs/render projections/reachability/navigation results are derived/transient rather than persisted,
-- Camera remains non-persisted view state,
-- frozen Navigation/Path/Wear/Movement/Traffic/Reservation/Deadlock/Recovery ownership remains unchanged.
+- a dedicated Player UI Shell exists over the existing World/Canvas surface,
+- World/Canvas, Topbar and Action regions are structurally distinct,
+- responsive layout supports desktop and mobile viewport sizes,
+- `viewport-fit=cover` and CSS safe-area insets are respected,
+- UI shell layout may own only presentation/layout state,
+- resize/orientation changes must preserve a valid viewport-bound shell,
+- existing runtime, camera and gameplay ownership remain unchanged,
+- visible/build identity is `IM-14A-PLAYER-UI-SHELL-RESPONSIVE-SURFACE-CONTRACT`.
 
-Explicitly excluded remain Save Slots, LocalStorage/file adapters, save/load UI, autosave, cloud/multiplayer synchronization, compression/encryption, historical schema migration beyond schemaVersion 1, new gameplay rules, IM-14 UI/Mobile and IM-15 Guidance/Inspector.
+Explicitly excluded from IM-14A:
 
-## 3. Frozen IM-13 substeps
+- Gold/Population or other domain HUD projection,
+- world/entity selection and context actions,
+- build UI,
+- Save/Load UI, Save Slots, storage adapters or autosave,
+- new Pointer/Touch gameplay semantics,
+- camera behavior changes,
+- minimap, dialogs/notifications and Inspector,
+- any new gameplay, simulation, domain or persistence ownership.
 
-- IM-13A frozen marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`.
-- IM-13B frozen marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4b225d86e239cc2b2d80c20166faafe483aa20`.
-- IM-13C frozen marker: `frozen/im-13c-deterministic-savegame-restore-contract` @ `21aa0a3e42f84cb713bc681467cd3a0b075f2bff`.
-- IM-13D frozen marker: `frozen/im-13d-deterministic-restored-runtime-activation-derived-rebinding-contract` @ `f34d8012f1562bba7879858b860920a3c67471b8`.
+## 3. Implemented IM-14A surface
 
-Together A+B+C+D implement the reconciled IM-13 Foundation chain:
+The current implementation provides:
 
-`active Runtime A -> Capture -> Serialize/Parse -> Validate -> Restore B -> Activate B -> active Runtime B -> Capture B`
+- responsive `app-shell` with topbar, world stage and structural action region,
+- safe-area aware desktop/mobile layout,
+- deterministic UI/World layer separation,
+- world canvas bound to the dedicated world region,
+- browser runtime evidence in `src/im14a-runtime-evidence.js`,
+- synchronized page title, visible gate identity and RuntimeConfig build identity.
 
-with canonical Capture A/Capture B identity and B-backed derived rebinding.
+No IM-14B/C/D/E behavior has been introduced.
 
-## 4. Whole-Block completion evidence
+## 4. Current gate
 
-The Whole-Block gate introduced no gameplay or persistence feature. It only regressed the four frozen contracts together and exposed a matching browser/device verification surface.
+**IM-14A = IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN.**
 
-Completion evidence:
+Before any IM-14B implementation, IM-14A requires its direct technical checks plus browser/device evidence. The IM-14 whole block remains NOT FROZEN.
 
-- `src/dev/im-13-freeze-gate.node.js` executes frozen IM-13A/B/C/D regressions as one Whole-Block gate,
-- CI SUCCESS / 0 blocker including frozen CR-31/CR-32 predecessor regression,
-- GitHub Pages deployment SUCCESS,
-- full whole-branch diff against frozen CR-32 reviewed and within the original IM-13 persistence boundary,
-- visible/build identity `IM-13-WHOLE-BLOCK-COMPLETION-REGRESSION-FREEZE-GATE`,
-- real iPhone/Safari evidence on 2026-09-07 20:10 local: READY, correct `IM-13 – Whole-Block Completion / Regression / Freeze Gate` identity, PASS / 0 BLOCKER, A Snapshot PASS, B Validation PASS, C Restore PASS, D Activation/Rebinding PASS, Capture A -> Restore/Activate B -> Capture B IDENTISCH, schemaVersion 1, stable runtime owners active PASS, derived/transient rebound PASS, and excluded Save-Slots/Storage/UI, Autosave, Cloud/Multiplayer and Schema-Migration not introduced.
+## 5. Frozen predecessor preservation
 
-## 5. Current gate
-
-**IM-13 WHOLE-BLOCK = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
-
-The next migration block is not automatically implementation-authorized by this freeze. IM-14 UI/Mobile, IM-15 Guidance/Inspector and any Save-Slots/Storage, Autosave, Cloud/Multiplayer or Schema-Migration work remain locked until separately reconciled/authorized.
+IM-13 and the frozen CR-31/CR-32 Navigation/Path/Wear boundaries remain authoritative and unchanged. IM-14A is presentation structure only and does not make UI a gameplay or persistence owner.
 
 ## 6. Permanent visible build identity synchronization rule
 
@@ -79,4 +69,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-07 — IM-13 Whole-Block Completion / Regression / Freeze Gate PASS / 0 BLOCKER with real iPhone/Safari evidence; IM-13 frozen as a whole.
+**Updated:** 2026-09-07 — IM-14A Player UI Shell & Responsive Surface Contract implemented on the IM-14 whole-block branch; verification pending, not frozen.
