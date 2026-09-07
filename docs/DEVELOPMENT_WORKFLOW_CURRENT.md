@@ -14,9 +14,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - CR-31A freeze marker: `frozen/cr-31a-world-backed-traversability-source-contract`
 - CR-31A frozen commit: `39b43015721a5de2b4d63b221558431205767037`
-- CR-31B – Deterministic World Reachability Integration: **IMPLEMENTED / AUTOMATED VERIFICATION PENDING FINAL CI / BROWSER GATE PENDING / NOT FROZEN**
+- CR-31B – Deterministic World Reachability Integration: **IMPLEMENTED / AUTOMATED PASS / REAL IPHONE BROWSER PASS / 0 BLOCKER / FREEZE READY / NOT YET FROZEN**
 - CR-31C: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**
-- Current allowed action: CR-31B verification only. CR-31C remains locked.
+- Current allowed action: CR-31B freeze only. CR-31C remains locked until CR-31B is explicitly frozen.
 
 ## 2. CR-31A frozen boundary
 
@@ -26,7 +26,7 @@ Freeze evidence: Actions run `34087731207` on `39b43015721a5de2b4d63b22155843120
 
 ## 3. CR-31B – Deterministic World Reachability Integration
 
-**IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN**.
+**IMPLEMENTED / AUTOMATED PASS / REAL IPHONE BROWSER PASS / 0 BLOCKER / FREEZE READY / NOT YET FROZEN**.
 
 Implementation:
 
@@ -55,19 +55,23 @@ Explicit non-scope:
 - no Traffic, Reservation, Deadlock or Recovery changes,
 - no CR-31C runtime entity validation.
 
-Browser evidence setup:
+Browser evidence setup and accepted result:
 
 - visible/build identity synchronized to `CR-31B – Deterministic World Reachability Integration`,
-- `RuntimeConfig.build = CR-31B-DETERMINISTIC-WORLD-REACHABILITY-INTEGRATION`,
-- browser miniworld preserves the CR-31A 3 static blocked Building cells and CR-30 Population 3 / Gold 3,
-- deterministic evidence query: world `(0.25,0.25)` → `(7.25,5.25)` must display `REACHABLE`,
-- existing 3 Buildings / 3 Persons remain visible.
+- runtime displayed `READY`,
+- deterministic evidence query world `(0.25,0.25)` → `(7.25,5.25)` displayed `REACHABLE`,
+- `CR-31A 3 static BLOCKED cells` preserved,
+- CR-30 Population 3 / Gold 3 preserved,
+- 3 Buildings / 3 Persons visible,
+- accepted real iPhone/Safari evidence supplied 2026-09-07.
 
 ## 4. Verification gate
 
-CI now runs the frozen CR-31A Verification / Freeze Gate before `src/dev/cr-31b-self-test.node.js`.
+Automated CR-31B regression Actions run `34094572739` on commit `6ec205a93102614eb29f3c98150a7da61958b47b` completed **SUCCESS / PASS / 0 BLOCKER**. The `Clean Runtime + CR Regression` job and `Run CR-31B Regression` step both completed successfully; failure diagnostics were skipped.
 
-Required CR-31B automated evidence:
+The predecessor regression boundary was corrected without modifying the frozen CR-31A contract: successor CI uses the reusable CR-31A self-test rather than the historical CR-31A browser/build-identity freeze gate.
+
+Required CR-31B automated evidence passed:
 
 - reachable world positions across obstacles,
 - deterministic repeated result,
@@ -77,7 +81,7 @@ Required CR-31B automated evidence:
 - outside-map world position rejection,
 - no TransportJob creation.
 
-After automated PASS / 0 BLOCKER, real browser/device verification is required before any CR-31B freeze. CR-31C remains locked throughout.
+Real browser/device evidence also passed with **0 BLOCKER**. CR-31B is therefore freeze-ready, but remains NOT FROZEN until the explicit freeze marker is created. CR-31C remains locked until that freeze is complete.
 
 ## 5. Locked later work
 
@@ -89,4 +93,4 @@ Every browser/device-verifiable CR/substep must update all applicable visible/bu
 
 ---
 
-**Updated:** 2026-09-07 — CR-31B implementation completed on the existing Whole-CR-31 branch; automated verification is the current gate and CR-31C remains locked.
+**Updated:** 2026-09-07 — CR-31B automated regression and real iPhone/Safari verification accepted PASS / 0 BLOCKER; CR-31B freeze is now the only allowed action and CR-31C remains locked.
