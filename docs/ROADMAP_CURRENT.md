@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A/B/C FROZEN / IM-13D CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED  
+**Status:** CURRENT – IM-13A/B/C FROZEN / IM-13D IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -53,57 +53,44 @@ Frozen scope: IM-13B-validated all-or-nothing reconstruction of a complete autho
 
 ## 7. IM-13 Whole-Block Reconciliation result
 
-A+B+C close the persistence core but do not yet activate the restored replacement owner set inside the running runtime composition. The current runtime still binds World, Map, Domains and dependent transient integrations at boot. Therefore one final narrowly scoped Foundation substep is required before Whole-IM-13 completion: **IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract**.
-
-No further IM-13 Foundation substep is currently planned after D.
+A+B+C close the persistence core but do not activate the restored replacement owner set inside the running runtime composition. Therefore the final reconciled Foundation substep is **IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract**. No further IM-13 Foundation substep is currently planned after D.
 
 ## 8. IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract
 
-Status: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
+Status: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**.
 
-Binding scope:
+Implemented scope:
 
-- only an already successful IM-13C `RESTORED` result may be activated,
-- atomically replace the active authoritative World/Map/CoreDomainStores/Gold/Path-Classification/Path-Wear owner set; no mixed A/B composition may be visible,
-- prepare transient/derived rebinding before publishing B as active,
-- rebuild World-backed Traversability from restored B Map/Domain truth,
-- ensure Reachability and Runtime Entity Navigation validation read B after activation,
-- ensure Render Projection reads B Map/Domain truth after activation,
-- Population remains derived from restored Domain/Housing truth and is not persisted as competing truth,
-- Gold is adopted from IM-13C without settlement/recalculation,
-- wear-aware traversal costs and routing results remain derived rather than persisted,
-- Camera remains an independent non-persisted view state outside authoritative activation,
-- after successful activation dependent active integrations must no longer use A owner references,
-- failed activation leaves the complete prior active runtime A unchanged,
-- activation/rebinding must not mutate restored authoritative World/Domain/Gold/Wear state,
-- IM-13D must not duplicate or modify IM-13C restore logic.
+- only an already successful IM-13C `RESTORED` result is activatable,
+- active World/Map/CoreDomainStores/Gold/Path-Classification/Path-Wear are published as one atomic runtime composition,
+- dependent World-backed Traversability is rebuilt from B before publish,
+- Reachability and Runtime Entity Navigation validation are rebound to B,
+- Render Projection reads B Map/Domain truth after activation and the browser render path follows the active composition,
+- Population remains explicitly derived/non-persisted and activation performs no population mutation,
+- Gold and CR-32 wear are adopted without settlement/recalculation,
+- Camera remains independent non-persisted view state,
+- failed publish keeps prior active composition A,
+- raw snapshots and non-RESTORED inputs are rejected,
+- IM-13C restore logic is not duplicated or changed.
 
-Required end-to-end proof:
+Implemented regression target:
 
 `active Runtime A -> Capture A -> Serialize/Parse -> IM-13B VALID -> IM-13C Restore B -> IM-13D Activate B -> active Runtime B -> Capture B`
 
-with `canonicalSerialize(Capture A) === canonicalSerialize(Capture B)` plus explicit evidence that active World/Map/Domains are B, Traversability/Navigation/Render Projection read B, and failed activation keeps A active.
+with canonical Capture A/Capture B identity and explicit B-owner, Traversability, Navigation, Reachability, Render Projection and failed-activation checks.
 
-Explicitly excluded:
+Visible/build identity is now `IM-13D-RESTORED-RUNTIME-ACTIVATION-CONTRACT` with matching IM-13D browser surface.
 
-- Save Slots or storage adapters,
-- LocalStorage/file-system persistence,
-- save/load UI or buttons,
-- autosave,
-- cloud or multiplayer synchronization,
-- historical schema migration beyond schemaVersion 1,
-- compression/encryption,
-- new gameplay rules or ownership changes,
-- IM-14 UI/Mobile and IM-15 Guidance/Inspector work.
+Explicitly excluded remain Save Slots/storage adapters, LocalStorage/file system, save/load UI, autosave, cloud/multiplayer synchronization, historical schema migration beyond schemaVersion 1, compression/encryption, new gameplay rules, IM-14 UI/Mobile and IM-15 Guidance/Inspector.
 
 ## 9. Current gate
 
-The next permissible step is exclusively **IM-13D implementation inside the confirmed contract**.
+The next permissible step is exclusively **IM-13D Verification / Regression / Freeze Gate**.
 
-IM-13 Whole-Block Completion / Regression / Freeze Gate remains locked until IM-13D is implemented, verified and frozen. After a successful IM-13D freeze, the next permissible step is directly the IM-13 Whole-Block Completion / Regression / Freeze Gate; no additional IM-13 Foundation substep is currently planned.
+IM-13 Whole-Block Completion / Regression / Freeze Gate remains locked until IM-13D is verified and frozen. After a successful IM-13D freeze, the next permissible step is directly the IM-13 Whole-Block Completion / Regression / Freeze Gate; no additional IM-13 Foundation substep is currently planned.
 
 No later SaveGame/storage/UI/schema-migration step is automatically authorized.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13D contract confirmed and implementation-authorized; implementation not yet started; Whole-IM-13 freeze remains locked.
+**Updated:** 2026-09-07 — IM-13D implemented; verification pending; Whole-IM-13 freeze remains locked.
