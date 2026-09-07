@@ -11,19 +11,37 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
+function requireRestoreState(state, kind) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('restore domain state required');
+  if (!Number.isSafeInteger(state.revision) || state.revision < 0) throw new TypeError('invalid domain revision');
+  if (!state.items || typeof state.items !== 'object' || Array.isArray(state.items)) throw new TypeError('invalid domain items');
+  const next = clone(state);
+  for (const [id, item] of Object.entries(next.items)) {
+    const parsed = parseStableId(id);
+    if (!parsed || parsed.kind !== kind) throw new TypeError(`invalid ${kind} id: ${id}`);
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError(`invalid ${kind} item: ${id}`);
+    if (item.id !== id) throw new Error(`${kind} item id/key mismatch: ${id}`);
+    if (item.kind !== kind) throw new Error(`${kind} item kind mismatch: ${id}`);
+  }
+  return next;
+}
+
 export class DomainStore {
   #domain;
   #kind;
   #store;
   #ids;
 
-  constructor(domain, kind, { allocator = null } = {}) {
+  constructor(domain, kind, { allocator = null, restoreState = null } = {}) {
     if (!domain) throw new TypeError('domain required');
     if (!kind) throw new TypeError('kind required');
     this.#domain = String(domain);
     this.#kind = String(kind);
     this.#ids = allocator instanceof StableIdAllocator ? allocator : new StableIdAllocator();
-    this.#store = new Store(`domain.${this.#domain}`, { revision: 0, items: {} });
+    this.#store = new Store(
+      `domain.${this.#domain}`,
+      restoreState == null ? { revision: 0, items: {} } : requireRestoreState(restoreState, this.#kind),
+    );
   }
 
   get domain() { return this.#domain; }
