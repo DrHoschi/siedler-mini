@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13A FROZEN / IM-13B FROZEN / IM-13C COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-13A/B/C FROZEN / IM-13D CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-13-savegame-foundation`  
 **Whole-block base:** frozen CR-32 @ `845fa5d5f513ac3a974bbae0a81bc78652e9e674`
@@ -12,6 +12,8 @@ CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**. CR-32 – P
 IM-13A – SaveGame Snapshot Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `fadacda7f728f57b3b97cbb1771284e5d609d805`, marker `frozen/im-13a-savegame-snapshot-contract`.
 
 IM-13B – Deterministic SaveGame Validation Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `0a4b225d86e239cc2b2d80c20166faafe483aa20`, marker `frozen/im-13b-deterministic-savegame-validation-contract`.
+
+IM-13C – Deterministic SaveGame Restore Contract is **COMPLETE / FROZEN / PASS / 0 BLOCKER** at `21aa0a3e42f84cb713bc681467cd3a0b075f2bff`, marker `frozen/im-13c-deterministic-savegame-restore-contract`.
 
 ## 2. Binding migration order
 
@@ -37,48 +39,56 @@ Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 Frozen scope: canonical schemaVersion-1 snapshot/capture, World/Map, CoreDomainStores plus allocators, Gold, CR-32 wear and deterministic canonical serialization.
 
-Freeze marker: `frozen/im-13a-savegame-snapshot-contract` @ `fadacda7f728f57b3b97cbb1771284e5d609d805`.
-
 ## 5. IM-13B – Deterministic SaveGame Validation Contract
 
 Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Frozen scope: deterministic side-effect-free validation of the frozen IM-13A payload, including schema/capture, Stable-ID uniqueness, allocator continuity, World/Map/Domain references, Gold and CR-32 wear consistency, with deterministic INVALID results and no silent repair.
-
-Freeze marker: `frozen/im-13b-deterministic-savegame-validation-contract` @ `0a4b225d86e239cc2b2d80c20166faafe483aa20`.
+Frozen scope: deterministic side-effect-free validation of the frozen IM-13A payload, including schema/capture, Stable-ID uniqueness, allocator continuity, World/Map/Domain references, Gold and CR-32 wear consistency, deterministic INVALID results and no silent repair.
 
 ## 6. IM-13C – Deterministic SaveGame Restore Contract
 
 Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Frozen scope:
+Frozen scope: IM-13B-validated all-or-nothing reconstruction of a complete authoritative replacement World/Map/Domain/Gold/Path-Wear state with exact Stable IDs, revisions and allocator continuity, plus deterministic Capture A -> Restore B -> Capture B canonical identity and rejected-restore non-mutation.
 
-- restore input is first passed through frozen IM-13B validation; invalid input is `REJECTED` before replacement state construction,
-- complete replacement authoritative World/Map, CoreDomainStores, Gold and CR-32 PATH/ROAD wear owners are prepared before commit,
-- restore is atomic/all-or-nothing and never exposes partial replacement state,
-- additive restore initialization paths preserve saved Store revisions and avoid replay side effects,
-- World/Map restore preserves exact World/Map/Tile/Cell Stable IDs and reconstructs coordinate lookup without generating competing identities,
-- Domain restore preserves exact items, relationships, revisions and per-domain Stable-ID allocator next-sequences,
-- Gold restores directly from saved balance without settlement,
-- world-backed path classification is rebuilt from restored World/Map truth,
-- CR-32 wear restores saved entries without recalculation or traversal-class mutation,
-- allocator continuity is restored from saved allocator snapshots so later allocations continue without collision or reuse,
-- deterministic round-trip regression proves Capture A -> Serialize/Parse -> IM-13B VALID -> Restore B -> Capture B canonical identity,
-- invalid restore regression proves existing World/Domain/Gold owners remain unchanged.
+## 7. IM-13 Whole-Block Reconciliation result
 
-Freeze gate evidence:
+A+B+C close the persistence core but do not yet activate the restored replacement owner set inside the running runtime composition. The current runtime still binds World, Map, Domains and dependent transient integrations at boot. Therefore one final narrowly scoped Foundation substep is required before Whole-IM-13 completion: **IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract**.
 
-- frozen CR-32 regression PASS,
-- frozen IM-13A regression PASS,
-- frozen IM-13B regression PASS,
-- IM-13C round-trip regression PASS,
-- GitHub Actions CI run `34143896461`, job `101811630247`: SUCCESS,
-- real iPhone/Safari evidence on 2026-09-07 at 18:50 local: runtime READY, synchronized IM-13C identity and PASS surface; IM-13B VALID before restore; Capture A -> Restore B -> Capture B IDENTICAL; Stable IDs/Allocator PASS; Gold 3; Wear PASS; invalid restore REJECTED; previous Runtime-State unchanged PASS,
-- 0 BLOCKER.
+No further IM-13 Foundation substep is currently planned after D.
 
-Explicitly excluded from IM-13C:
+## 8. IM-13D – Deterministic Restored Runtime Activation & Derived Rebinding Contract
 
-- Save Slots, LocalStorage/file-system adapters or save/load UI,
+Status: **CONTRACT CONFIRMED / IMPLEMENTATION-AUTHORIZED / NOT YET IMPLEMENTED**.
+
+Binding scope:
+
+- only an already successful IM-13C `RESTORED` result may be activated,
+- atomically replace the active authoritative World/Map/CoreDomainStores/Gold/Path-Classification/Path-Wear owner set; no mixed A/B composition may be visible,
+- prepare transient/derived rebinding before publishing B as active,
+- rebuild World-backed Traversability from restored B Map/Domain truth,
+- ensure Reachability and Runtime Entity Navigation validation read B after activation,
+- ensure Render Projection reads B Map/Domain truth after activation,
+- Population remains derived from restored Domain/Housing truth and is not persisted as competing truth,
+- Gold is adopted from IM-13C without settlement/recalculation,
+- wear-aware traversal costs and routing results remain derived rather than persisted,
+- Camera remains an independent non-persisted view state outside authoritative activation,
+- after successful activation dependent active integrations must no longer use A owner references,
+- failed activation leaves the complete prior active runtime A unchanged,
+- activation/rebinding must not mutate restored authoritative World/Domain/Gold/Wear state,
+- IM-13D must not duplicate or modify IM-13C restore logic.
+
+Required end-to-end proof:
+
+`active Runtime A -> Capture A -> Serialize/Parse -> IM-13B VALID -> IM-13C Restore B -> IM-13D Activate B -> active Runtime B -> Capture B`
+
+with `canonicalSerialize(Capture A) === canonicalSerialize(Capture B)` plus explicit evidence that active World/Map/Domains are B, Traversability/Navigation/Render Projection read B, and failed activation keeps A active.
+
+Explicitly excluded:
+
+- Save Slots or storage adapters,
+- LocalStorage/file-system persistence,
+- save/load UI or buttons,
 - autosave,
 - cloud or multiplayer synchronization,
 - historical schema migration beyond schemaVersion 1,
@@ -86,12 +96,14 @@ Explicitly excluded from IM-13C:
 - new gameplay rules or ownership changes,
 - IM-14 UI/Mobile and IM-15 Guidance/Inspector work.
 
-## 7. Current gate
+## 9. Current gate
 
-IM-13C is frozen. No later persistence/UI/schema-migration step is automatically authorized.
+The next permissible step is exclusively **IM-13D implementation inside the confirmed contract**.
 
-The next permissible step is exclusively the reconciliation of whether IM-13 is complete at A+B+C and may enter its whole-block Completion / Regression / Freeze Gate, or whether a further narrowly scoped SaveGame foundation substep is still required. IM-14 UI/Mobile and IM-15 Guidance/Inspector remain locked.
+IM-13 Whole-Block Completion / Regression / Freeze Gate remains locked until IM-13D is implemented, verified and frozen. After a successful IM-13D freeze, the next permissible step is directly the IM-13 Whole-Block Completion / Regression / Freeze Gate; no additional IM-13 Foundation substep is currently planned.
+
+No later SaveGame/storage/UI/schema-migration step is automatically authorized.
 
 ---
 
-**Updated:** 2026-09-07 — IM-13C COMPLETE / FROZEN / PASS / 0 BLOCKER; whole IM-13 completion not yet automatically authorized.
+**Updated:** 2026-09-07 — IM-13D contract confirmed and implementation-authorized; implementation not yet started; Whole-IM-13 freeze remains locked.
