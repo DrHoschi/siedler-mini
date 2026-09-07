@@ -30,13 +30,45 @@ export class MapStructure {
     height = 8,
     cellSize = 1,
     origin = { x: 0, y: 0 },
-    metadata = {}
+    metadata = {},
+    restoreSnapshot = null,
   } = {}) {
     if (!worldStore || typeof worldStore.create !== 'function' || typeof worldStore.get !== 'function') {
       throw new TypeError('WorldStore-compatible instance required');
     }
 
     this.#world = worldStore;
+
+    if (restoreSnapshot != null) {
+      const mapId = String(restoreSnapshot.mapId || '');
+      const defaultTileId = String(restoreSnapshot.defaultTileId || '');
+      const map = this.#world.get(mapId);
+      const defaultTile = this.#world.get(defaultTileId);
+      if (!map || map.kind !== 'map') throw new TypeError('restore map entity required');
+      if (!defaultTile || defaultTile.kind !== 'tile') throw new TypeError('restore default tile entity required');
+      const dimensions = restoreSnapshot.dimensions;
+      const w = asPositiveInt(dimensions?.width, 'restore dimensions.width');
+      const h = asPositiveInt(dimensions?.height, 'restore dimensions.height');
+      if (map.width !== w || map.height !== h) throw new Error('restore map dimensions mismatch');
+      if (!Array.isArray(restoreSnapshot.cellIds) || restoreSnapshot.cellIds.length !== w * h) {
+        throw new Error('restore cellIds/dimensions mismatch');
+      }
+      this.#mapId = mapId;
+      this.#defaultTileId = defaultTileId;
+      for (const cellId of restoreSnapshot.cellIds) {
+        const cell = this.#world.get(cellId);
+        const x = cell?.grid?.x;
+        const y = cell?.grid?.y;
+        if (!cell || cell.kind !== 'cell' || cell.mapId !== mapId || !Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
+          throw new TypeError(`invalid restore cell: ${cellId}`);
+        }
+        const key = coordKey(x, y);
+        if (this.#cellsByCoord.has(key)) throw new Error(`duplicate restore cell coordinate: ${key}`);
+        this.#cellsByCoord.set(key, cellId);
+      }
+      return;
+    }
+
     const w = asPositiveInt(width, 'width');
     const h = asPositiveInt(height, 'height');
     const size = asFiniteNumber(cellSize, 'cellSize');
