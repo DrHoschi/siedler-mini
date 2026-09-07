@@ -63,6 +63,7 @@ const snapshotA = SaveGameSnapshotContract.capture({
 const serializedA = SaveGameSnapshotContract.serialize(snapshotA);
 const parsed = JSON.parse(serializedA);
 assert.equal(SaveGameValidationContract.validate(parsed).status, 'VALID');
+const capturedBuildingCount = Object.keys(snapshotA.domains.buildings.state.items).length;
 
 const activeA = {
   world: worldA,
@@ -78,7 +79,7 @@ const compositionA = owner.active();
 // Change only the old live A after capture. B must come from the captured snapshot, not from this later A state.
 createBuilding(domainsA, 'A_ONLY_AFTER_CAPTURE', { x: 3, y: 1 });
 const aBuildingCountAfterCapture = domainsA.buildings.ids().length;
-assert.equal(aBuildingCountAfterCapture, snapshotA.domains.buildings.state.ids.length + 1);
+assert.equal(aBuildingCountAfterCapture, capturedBuildingCount + 1);
 
 const restored = SaveGameRestoreContract.restore(parsed);
 assert.equal(restored.status, 'RESTORED');
@@ -96,7 +97,7 @@ assert.equal(compositionB.authoritative.pathClassification, stateB.pathClassific
 assert.equal(compositionB.authoritative.pathUsageWear, stateB.pathUsageWear);
 
 const bProjection = compositionB.derived.render.projectVisibleState();
-assert.equal(bProjection.buildings.length, snapshotA.domains.buildings.state.ids.length, 'render projection must read restored B domains, not mutated A');
+assert.equal(bProjection.buildings.length, capturedBuildingCount, 'render projection must read restored B domains, not mutated A');
 assert.equal(compositionB.derived.traversability.entries().length, 1, 'traversability must be rebuilt from restored B building truth');
 const navigationB = compositionB.derived.navigation.validatePerson({
   personId: personA.id,
