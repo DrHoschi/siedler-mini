@@ -1,11 +1,11 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – CR-30 FROZEN / CR-31 ACTIVE / CR-31A FROZEN / CR-31B VERIFIED – FREEZE READY  
+**Status:** CURRENT – CR-30 FROZEN / CR-31 ACTIVE / CR-31A FROZEN / CR-31B FROZEN  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current control branch:** `feature/cr-31-navigation-integration-foundation`  
 **Latest whole-CR freeze:** **CR-30 – Housing / Population / Gold Integration Foundation**  
-**Latest substep freeze:** **CR-31A – World-backed Traversability Source Contract**  
-**CR-31A freeze marker:** `frozen/cr-31a-world-backed-traversability-source-contract` @ `39b43015721a5de2b4d63b221558431205767037`
+**Latest substep freeze:** **CR-31B – Deterministic World Reachability Integration**  
+**CR-31B freeze marker:** `frozen/cr-31b-deterministic-world-reachability-integration` @ `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`
 
 ## 1. Frozen line
 
@@ -15,7 +15,8 @@ CR-27 – Game-Facing Logistics Integration Foundation: **COMPLETE / FROZEN / PA
 CR-28 – Visible World Runtime Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.  
 CR-29 – Camera & World View Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.  
 CR-30 – Housing / Population / Gold Integration Foundation: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `2e9208614a5cfd80abc47e39ccf236b80315ace8`.  
-CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `39b43015721a5de2b4d63b221558431205767037`.
+CR-31A – World-backed Traversability Source Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `39b43015721a5de2b4d63b221558431205767037`.  
+CR-31B – Deterministic World Reachability Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`.
 
 ## 2. Binding migration order
 
@@ -39,36 +40,26 @@ Real existing Buildings own static blocked-cell evidence through the frozen worl
 
 ### CR-31B – Deterministic World Reachability Integration
 
-Status: **IMPLEMENTED / AUTOMATED PASS / REAL IPHONE BROWSER PASS / 0 BLOCKER / FREEZE READY / NOT YET FROZEN**.
+Status: **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 CR-31B consumes frozen CR-31A and the existing deterministic cost-aware pathfinder to answer whether two valid real world positions are connected through traversable cells. World positions are deterministically mapped to cells. Blocked endpoints and disconnected regions produce explicit non-reachable results. No route ownership, Path/Wear, movement, Road Preference, Traffic, Reservation, Deadlock or Recovery behavior is added.
 
-Implementation:
+Freeze evidence:
 
-- `src/transport/deterministic-world-reachability-integration.js`
-- `src/dev/cr-31b-self-test.node.js`
-
-Automated evidence: Actions run `34094572739` on `6ec205a93102614eb29f3c98150a7da61958b47b` = **SUCCESS / PASS / 0 BLOCKER**.
-
-Accepted real iPhone/Safari evidence on 2026-09-07 shows:
-
-- correct `CR-31B – Deterministic World Reachability Integration` identity,
-- runtime `READY`,
-- world `(0.25,0.25)` → `(7.25,5.25)` = `REACHABLE`,
-- CR-31A 3 static BLOCKED cells preserved,
-- CR-30 Population 3 / Gold 3 preserved,
-- 3 Buildings / 3 Persons visible.
+- automated Actions run `34094572739` = **SUCCESS / PASS / 0 BLOCKER**,
+- accepted real iPhone/Safari evidence = **PASS / 0 BLOCKER**,
+- freeze marker `frozen/cr-31b-deterministic-world-reachability-integration` @ `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`.
 
 ### CR-31C – Runtime Entity Navigation Validation Integration
 
 Status: **PLANNED / NOT YET IMPLEMENTATION-AUTHORIZED**.
 
-May later validate existing real Person/Carrier positions and targets against frozen navigation truth while keeping route/movement/traffic owners intact.
+May later validate existing real Person/Carrier positions and targets against frozen CR-31A/CR-31B navigation truth while keeping route/movement/traffic owners intact.
 
 ## 4. Current next step
 
-The only allowed action is to freeze **CR-31B – Deterministic World Reachability Integration** at its verified branch state and create its substep freeze marker. Do not implement or authorize CR-31C until CR-31B is explicitly frozen. Whole CR-31 remains active/not frozen.
+CR-31B is frozen. The next permissible action is only the explicit confirmation/authorization of **CR-31C – Runtime Entity Navigation Validation Integration**. Do not implement CR-31C until that authorization is given. Whole CR-31 remains active/not frozen until A+B+C and the whole-CR completion/regression/freeze gate pass.
 
 ---
 
-**Updated:** 2026-09-07 — CR-31B automated regression and real iPhone/Safari verification PASS / 0 BLOCKER; freeze-ready; CR-31C locked.
+**Updated:** 2026-09-07 — CR-31B frozen at `68ecf9a031d6d63da5dbb7cd24d558f1a1e89391`; CR-31C remains planned and not implementation-authorized.
