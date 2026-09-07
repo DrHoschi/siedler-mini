@@ -109,7 +109,7 @@ const reachabilityB = compositionB.derived.reachability.evaluate({
   startPosition: { x: 0.25, y: 0.25 },
   targetPosition: { x: 3.25, y: 2.25 },
 });
-assert.equal(reachabilityB.kind, 'world-reachability-result');
+assert.equal(reachabilityB.kind, 'world-reachability');
 assert.equal(compositionB.derived.populationPolicy.persisted, false);
 assert.equal(compositionB.derived.populationPolicy.mutationDuringActivation, false);
 
