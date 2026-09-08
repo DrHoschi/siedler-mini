@@ -14,7 +14,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current migration block: **IM-15 – Guidance / Inspector: IN PROGRESS / NOT FROZEN**
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15B – Structured Runtime Diagnostics Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-15C – World Diagnostic Overlay Foundation: IMPLEMENTED / NOT FROZEN**
+- **IM-15C – World Diagnostic Overlay Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
 ## 2. Frozen predecessor line
 
@@ -34,7 +34,7 @@ Authoritative frozen IM-15B baseline for IM-15C: `513636c0fbb4a892134734dc49d8b9
 
 1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-15B – Structured Runtime Diagnostics Projection — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-3. **IM-15C – World Diagnostic Overlay Foundation — IMPLEMENTED / NOT FROZEN**
+3. **IM-15C – World Diagnostic Overlay Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER**
    - separate transparent read-only diagnostic canvas over the existing world canvas,
    - same existing world/camera projection truth as the frozen renderer,
    - PATH/ROAD cell overlay from existing `pathClassification.entries()`,
@@ -54,7 +54,7 @@ Authoritative frozen IM-15B baseline for IM-15C: `513636c0fbb4a892134734dc49d8b9
 - Automated tests remain test code.
 - Legacy Inspector/debug architecture from `main` must not be imported; `main` remains historical reference only.
 
-## 5. Frozen IM-15A / IM-15B predecessor boundary
+## 5. Frozen predecessor regression boundary
 
 Frozen IM-15A and IM-15B remain behaviorally preserved. IM-15C does not modify:
 
@@ -64,34 +64,72 @@ Frozen IM-15A and IM-15B remain behaviorally preserved. IM-15C does not modify:
 - IM-14E pointer/touch/camera ownership,
 - Domain or Transport owner contracts.
 
-## 6. IM-15C implemented read-only overlay scope
+## 6. Frozen IM-15C read-only overlay scope
 
-Implementation uses only already authoritative/read-only facts:
+IM-15C uses only already authoritative/read-only facts:
 
-- **Path / ROAD:** `pathClassification.entries()` is joined to existing `grid-cell` render commands through the same cell ID,
+- **Path / ROAD:** `pathClassification.entries()` joined to existing `grid-cell` render commands through the same cell ID,
 - **Building identities:** existing camera-projected Building commands and their `sourceId`,
 - **Person identities:** existing camera-projected Person commands and their `sourceId`,
 - **Carrier movement:** existing `carrierMovementEvidence.currentPosition`, `targetPosition`, `unitId`, `state`; no route/intermediate points are calculated,
 - **Selection highlight:** `window.IM14DWorldSelectionContext.getSelection()` read-only.
 
-The existing world renderer remains the normal gameplay/world owner. IM-15C adds only a small render-integration hook in `src/main.js`: normal rendering completes first, returns its immutable render result plus current view scale, then the optional diagnostic overlay renderer receives that result. Pan/zoom still call the existing frozen camera functions and therefore automatically redraw the overlay through the same render path.
+The existing world renderer remains normal gameplay/world owner. IM-15C adds only a small read-only render-integration hook in `src/main.js`: normal rendering completes first, returns its immutable render result plus current view scale, then the optional diagnostic overlay renderer receives that result. Pan/zoom still call the frozen camera functions and therefore redraw the overlay through the same render path.
 
-The selection highlight is synchronized independently by observing the existing read-only selection value; it does not subscribe to or mutate input/selection ownership.
+The selection highlight is synchronized by observing the existing read-only selection value; IM-15C does not subscribe to or mutate input/selection ownership.
 
 ## 7. IM-15C implementation surfaces
 
-Relative to frozen IM-15B, IM-15C implementation is limited to:
+Relative to frozen IM-15B, IM-15C is limited to:
 
-- new `src/ui/world-diagnostic-overlay-foundation.js` — read-only overlay projector/controller/renderer,
-- `index.html` — separate overlay canvas, IM-15C visible identity and cache identity,
-- `src/ui/app.css` — overlay canvas stacking and `pointer-events: none`,
-- `src/runtime/config.js` — synchronized build identity `IM-15C-WORLD-DIAGNOSTIC-OVERLAY-FOUNDATION`,
-- `src/main.js` — only read-only overlay render-hook integration, immutable `view` metadata in the existing render result, and RuntimeConfig cache identity update to `im15c-1`,
-- this workflow file and `docs/ROADMAP_CURRENT.md` — control state.
+- new `src/ui/world-diagnostic-overlay-foundation.js`,
+- `index.html`,
+- `src/ui/app.css`,
+- `src/runtime/config.js`,
+- `src/main.js` only for the read-only overlay render hook, immutable render-view metadata and RuntimeConfig cache identity,
+- this workflow file and `docs/ROADMAP_CURRENT.md`.
 
-## 8. Explicit exclusions remain unimplemented
+Visible/build identity remains `IM-15C-WORLD-DIAGNOSTIC-OVERLAY-FOUNDATION`.
 
-IM-15C does not implement:
+## 8. IM-15C Completion / Regression / Freeze Gate
+
+Regression against frozen IM-15B @ `513636c0fbb4a892134734dc49d8b9a438b7a513` confirmed before freeze-status synchronization:
+
+- branch: **10 commits ahead / 0 behind**,
+- exactly seven permitted changed files: `docs/DEVELOPMENT_WORKFLOW_CURRENT.md`, `docs/ROADMAP_CURRENT.md`, `index.html`, `src/main.js`, `src/runtime/config.js`, `src/ui/app.css`, `src/ui/world-diagnostic-overlay-foundation.js`,
+- frozen IM-15A/IM-15B projector files unchanged,
+- no Domain or Transport source files changed,
+- no IM-15D/IM-15E functionality introduced.
+
+Read-only / ownership verification:
+
+- overlay canvas is separate and `pointer-events: none`,
+- overlay reads existing render commands, `pathClassification.entries()`, `carrierMovementEvidence` and IM-14D `getSelection()` only,
+- overlay projection is recursively frozen,
+- world/camera mutation remains only in frozen IM-14E camera owner,
+- no Domain/Transport mutation API is called by IM-15C.
+
+Technical evidence:
+
+- implementation CI Baseline `34236720224` on `fec9c39fd6ef500f81075024d2fd1e3277069bfa`: **SUCCESS**,
+- implementation Pages `34236765007` on `39a04cab18d8d9f7b3e2242d8e038e40afdcc6f1`: **SUCCESS**,
+- final visible-freeze-status CI Baseline `34237371166` on `5d333caa83f21f9fb8b80ef40fbb218e3fcee1c2`: **SUCCESS**,
+- final visible-freeze-status Pages `34237370186` on `5d333caa83f21f9fb8b80ef40fbb218e3fcee1c2`: **SUCCESS**.
+
+Real-device evidence:
+
+- iPhone / Safari, 2026-09-08 16:14 local,
+- Runtime `READY`, Population `3`, Gold `3`, World Basics preserved,
+- visible build identity `IM-15C-WORLD-DIAGNOSTIC-OVERLAY-FOUNDATION`,
+- PATH and ROAD overlays visible on their world cells,
+- Building/Person IDs visible,
+- Carrier current→target diagnostic relationship visible,
+- two distinct camera positions show overlays moving synchronously with the world,
+- Inspector remains `READ ONLY`, Structured Diagnostics remains present, selection/context remains `Keine Auswahl / Weltobjekt antippen` in the supplied evidence.
+
+**Gate result: IM-15C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+
+## 9. Explicit exclusions remain unimplemented
 
 - occupancy/reservation/queue/deadlock overlays without a live authoritative read owner,
 - Wear overlay without a live Wear owner,
@@ -103,20 +141,16 @@ IM-15C does not implement:
 - long-running metrics, heatmaps, throughput history or balancing — IM-15E,
 - any gameplay/domain/persistence mutation.
 
-## 9. Current gate
+## 10. Current gate
 
-IM-15C is **IMPLEMENTED / NOT FROZEN** against frozen IM-15B @ `513636c0fbb4a892134734dc49d8b9a438b7a513`.
+IM-15C is frozen. IM-15 as a whole remains **IN PROGRESS / NOT FROZEN**.
 
-CI Baseline and Pages were triggered by the implementation commits and are not used here as a freeze decision; the Completion / Regression / Freeze Gate remains separate.
+The next permissible action is exclusively the separate **reconciliation/definition of IM-15D – Controlled Guidance / Diagnostic Scenario Actions** against the frozen IM-15C stand. No IM-15D implementation is authorized in the same step.
 
-The next permissible action is exclusively **IM-15C – Completion / Regression / Freeze Gate**: verify full diff against frozen IM-15B, CI/Pages, read-only ownership, IM-15A/IM-15B and IM-14 selection/camera regression, synchronized visible build identity, camera-synchronous overlay rendering and real browser/device evidence. Freeze only at **PASS / 0 BLOCKER**.
-
-No IM-15D implementation is authorized before IM-15C is separately frozen.
-
-## 10. Permanent visible build identity synchronization rule
+## 11. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15C World Diagnostic Overlay Foundation IMPLEMENTED / NOT FROZEN within the defined read-only, camera-synchronous overlay scope. Next permissible action is IM-15C Completion / Regression / Freeze Gate only.
+**Updated:** 2026-09-08 — IM-15C COMPLETE / FROZEN / PASS / 0 BLOCKER after full diff, CI/Pages, read-only ownership, predecessor regression and real iPhone camera-synchronous overlay evidence. IM-15 remains IN PROGRESS / NOT FROZEN.
