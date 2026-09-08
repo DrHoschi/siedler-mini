@@ -8,97 +8,79 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Current whole-block branch: `feature/im-14-ui-mobile-foundation`
-- Whole-block branch base: frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
-- Current migration block: **IM-14 – UI / Mobile Foundation: IN PROGRESS / NOT FROZEN**
-- IM-14A – Player UI Shell & Responsive Surface Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14B – Unified Pointer / Touch Interaction Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14C – Runtime HUD Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14D – World Selection & Context Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14E – Player Camera Controls Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- Current whole-block branch: `feature/im-15-guidance-inspector`
+- Whole-block branch base: frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
+- **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- Current migration block: **IM-15 – Guidance / Inspector: DEFINED / NOT IMPLEMENTED**
+- First planned subblock: **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**
 
 ## 2. Frozen predecessor line
 
-Frozen markers:
+CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-- `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`
-- `frozen/im-14b-unified-pointer-touch-interaction-contract` @ `8aa7594f4debcc838382ca6f49fcdcbadf9be324`
-- `frozen/im-14c-runtime-hud-projection` @ `788358677092ef91d7edf1c0d8a6a82efacc5f21`
-- `frozen/im-14d-world-selection-context-projection` @ `72b234e0ada95afa324d62d83274ee1f320abe37`
+IM-13 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-IM-14A remains layout owner, IM-14B neutral Pointer/Touch transport owner, IM-14C read-only HUD owner, and IM-14D ephemeral Selection/Context owner.
+IM-14 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER** as a whole block.
 
-## 3. Frozen IM-14E contract
+Frozen IM-14 substeps:
 
-IM-14E integrates the already existing/frozen camera behavior into the IM-14 input architecture. It does not invent a new camera policy.
+- IM-14A – Player UI Shell & Responsive Surface Contract,
+- IM-14B – Unified Pointer / Touch Interaction Contract,
+- IM-14C – Runtime HUD Projection,
+- IM-14D – World Selection & Context Projection,
+- IM-14E – Player Camera Controls Integration.
 
-Frozen requirements:
+Authoritative frozen IM-14 baseline for IM-15: `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
 
-- `cameraState` remains the single authoritative camera state,
-- camera mutations continue exclusively through `panWorldViewCamera`, `zoomWorldViewCameraAt`, and viewport resize through `resizeWorldViewCameraViewport`,
-- frozen zoom limits remain `0.5 .. 3.0`,
-- one WORLD pointer moving means Pan,
-- two WORLD pointers mean midpoint Pan + anchor-based Pinch Zoom,
-- Wheel means anchor-based desktop zoom,
-- Pointer Up/Cancel ends gesture state cleanly,
-- Pointer camera input reuses the same frozen IM-14D/IM-14B WORLD input boundary,
-- direct parallel Canvas pointer handling is removed so camera mutations are not double processed,
-- IM-14D Tap/Click selection remains functional and Drag/Pinch still does not select,
-- camera mutation only triggers world rerender and does not create gameplay/domain/persistence ownership,
-- browser gesture suppression remains limited to the Canvas/world interaction surface,
-- visible/build identity is `IM-14E-PLAYER-CAMERA-CONTROLS-INTEGRATION`.
+## 3. IM-15 – Guidance / Inspector reconciliation
 
-Explicitly excluded:
+IM-15 establishes a modular diagnostic, observation, guidance and later simulation/balancing surface over already authoritative runtime systems. It does not become an owner of gameplay/domain/persistence state.
 
-- new zoom limits or camera math,
-- world-bound camera clamps,
-- inertia/momentum,
-- edge scrolling,
-- keyboard/WASD camera controls,
-- auto-center/follow camera,
-- zoom buttons or minimap camera control,
-- new Selection/Context semantics,
-- gameplay/domain/persistence mutation,
-- Inspector.
+Binding sequence:
 
-## 4. IM-14E Completion / Regression / Freeze Gate
+1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**
+   - establish the Inspector shell/boundary in the modular architecture, separate from the Player UI Shell,
+   - observe existing authoritative runtime state only,
+   - first narrow observation set: Runtime/World basics, Population, Gold and selected Building/Person identity,
+   - no runtime/domain mutation,
+   - no simulation controls, scenario triggering, world overlays or balancing functions yet.
 
-Authoritative final pre-freeze branch HEAD: `e3df3aca45a1fa156447ba302188227fd3718125`.
+2. **IM-15B – Structured Runtime Diagnostics Projection**
+   - extend read-only structured diagnostics across existing authoritative owners such as Buildings/Stocks, Persons/Workforce, Jobs/Carrier, Movement/Routes, Cell Occupancy, Reservations/Queues/Deadlocks, Construction/Production and Path/Wear,
+   - no second truth and no direct mutation.
 
-Regression against frozen IM-14D @ `72b234e0ada95afa324d62d83274ee1f320abe37`:
+3. **IM-15C – World Diagnostic Overlay Foundation**
+   - add diagnostic-only world visualization for existing runtime facts such as occupancy, path/road classification, reservations, carrier/route relationships and stable object identities,
+   - no gameplay/world mutation.
 
-- branch is 11 commits ahead / 0 behind,
-- changed surface is limited to this workflow file, roadmap, `index.html`, `src/im14e-runtime-evidence.js`, `src/main.js`, `src/runtime/config.js`, and `src/ui/player-camera-controls-integration.js`,
-- the former direct Canvas pointer/wheel camera pipeline is removed from `src/main.js`,
-- the single authoritative camera state and frozen camera-control functions remain in use,
-- no new camera policy, gameplay/domain/persistence ownership or Inspector was introduced.
+4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions**
+   - allow controlled triggering of reproducible existing diagnostic/test scenarios through explicit runtime/test boundaries,
+   - Inspector must not directly repair or mutate domain state outside those boundaries.
 
-Technical evidence on `e3df3aca45a1fa156447ba302188227fd3718125`:
+5. **IM-15E – Simulation & Balancing Observation Foundation**
+   - establish long-running observation/collection for scheduler/tick behavior, throughput, stocks, transport/wait behavior, production/population development and other balancing metrics,
+   - observation/collection only; no balancing AI or rule changes.
 
-- CI Baseline run `34203676233`: **SUCCESS**,
-- Pages build/deployment run `34203675151`: **SUCCESS**.
+A separate **IM-15 Whole-Block Completion / Regression / Freeze Gate** follows only after all authorized IM-15 substeps are individually complete and frozen.
 
-Evidence correction history:
+## 4. Binding IM-15 architectural boundary
 
-- first real-device pass exposed only `Frozen Camera Policy FAIL` while all functional camera/selection checks passed,
-- diagnosis confirmed the failure came exclusively from JavaScript object-identity comparison across cache-versioned module instances,
-- the evidence path was corrected to compare the frozen semantic values (`minZoom = 0.5`, `maxZoom = 3.0`) and actual clamp results rather than object identity,
-- no camera behavior or policy was changed by that correction.
-
-Real-device evidence:
-
-- iPhone / Safari, 2026-09-08 10:13–10:14 local: one-finger Pan, two-finger zoom in/out, Pan after zoom, Building selection and Person selection all manually confirmed; Drag/Pinch causes no accidental selection,
-- corrected iPhone / Safari evidence, 2026-09-08 10:18 local: **READY / PASS / 0 BLOCKER**,
-- visible browser gate shows Unified Camera Input PASS, Single-Pointer Pan PASS, Pinch Zoom PASS, Wheel Zoom PASS, Selection Regression PASS, No Double Processing PASS, Frozen Camera Policy PASS and Build Identity PASS,
-- HUD, Context and responsive shell remain intact.
-
-**Gate result: IM-14E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- IM-15 owns no new gameplay/domain/persistence truth.
+- Inspector reads existing authoritative owners and visualizes their state.
+- Later Inspector actions are allowed only through explicit diagnostic/test/runtime boundaries.
+- Automated tests remain test code; Inspector may later display results or trigger reproducible scenarios but does not replace test ownership.
+- Legacy Inspector/debug architecture from `main` must not be imported; `main` remains historical reference only.
+- No IM-15 implementation is implied by this reconciliation or by branch creation.
 
 ## 5. Current gate
 
-The complete IM-14 block remains **IN PROGRESS / NOT FROZEN**.
+The IM-15 Whole-Block branch exists and is based exactly on frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
 
-IM-14E freeze does not itself freeze the whole block. The next permissible action is exclusively **IM-14 Whole-Block Completion / Regression / Freeze Gate** across frozen IM-14A/B/C/D/E and their real-device/CI evidence. No additional IM-14 feature implementation is authorized before that gate.
+IM-15 is **DEFINED / NOT IMPLEMENTED**.
+
+The next permissible action is exclusively the separate **IM-15A Definition/Implementation Gate** for **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**. This gate is not automatically executed by this control-state synchronization.
+
+No IM-15A runtime/UI/Inspector implementation is authorized in the same step as this synchronization.
 
 ## 6. Permanent visible build identity synchronization rule
 
@@ -106,4 +88,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-08 — IM-14E COMPLETE / FROZEN / PASS / 0 BLOCKER after full regression, successful CI/Pages, corrected camera-policy evidence and real iPhone/Safari interaction verification. IM-14 whole block remains NOT FROZEN; next permissible action is the separate IM-14 Whole-Block Completion / Regression / Freeze Gate only.
+**Updated:** 2026-09-08 — IM-15 whole-block branch control state synchronized against frozen IM-14. IM-15 is DEFINED / NOT IMPLEMENTED; IM-15A is the first planned subblock and requires a separate Definition/Implementation Gate before implementation.
