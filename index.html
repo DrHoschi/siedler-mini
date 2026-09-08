@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-14B Unified Pointer / Touch Interaction Contract</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im14a-1">
+  <title>Neue Siedler – IM-14C Runtime HUD Projection</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im14c-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
     <header class="player-topbar" data-ui-region="topbar">
       <strong>Neue Siedler</strong>
+      <div class="runtime-hud" data-ui-region="hud" aria-label="Runtime HUD">
+        <span id="hud-population" data-hud-field="population">Bevölkerung: —</span>
+        <span id="hud-gold" data-hud-field="gold">Gold: —</span>
+      </div>
       <span id="runtime-status">BOOTING</span>
     </header>
 
@@ -19,19 +23,20 @@
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-14B – Unified Pointer / Touch Interaction Contract</h1>
-        <p>Einheitliche Pointer-/Touch-Transportgrenze über der eingefrorenen IM-14A-Shell. UI- und World-Surfaces werden reproduzierbar klassifiziert; Kontakte besitzen einen kontrollierten Lifecycle. Noch keine neue Auswahl-, Gameplay- oder Kamera-Semantik.</p>
-        <output id="test-status">IM-14B-UNIFIED-POINTER-TOUCH-INTERACTION-CONTRACT wird aufgebaut …</output>
+        <h1>IM-14C – Runtime HUD Projection</h1>
+        <p>Read-only Projektion bereits autoritativer Runtime-Daten in die eingefrorene Player-UI-Shell. Bevölkerung und Gold werden ausschließlich gelesen und angezeigt. Noch keine Selection-, Context-, Gameplay- oder Kamera-Semantik.</p>
+        <output id="test-status">IM-14C-RUNTIME-HUD-PROJECTION wird aufgebaut …</output>
       </aside>
     </section>
 
     <footer class="player-action-region" data-ui-region="actions" aria-label="Spieleraktionsbereich">
       <span>PLAYER UI SURFACE</span>
-      <span class="surface-note">Input-Grenze aktiv · noch ohne neue Gameplay-Aktionen</span>
+      <span class="surface-note">HUD-Projektion aktiv · read-only Runtime-Werte</span>
     </footer>
   </main>
 
   <script type="module" src="src/main.js?v=im14b-1"></script>
-  <script type="module" src="src/im14b-runtime-evidence.js?v=im14b-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im14c-1"></script>
+  <script type="module" src="src/im14c-runtime-evidence.js?v=im14c-1"></script>
 </body>
 </html>
