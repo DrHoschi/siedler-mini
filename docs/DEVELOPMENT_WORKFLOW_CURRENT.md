@@ -14,15 +14,11 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - IM-14A – Player UI Shell & Responsive Surface Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14B – Unified Pointer / Touch Interaction Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14C – Runtime HUD Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14D – World Selection & Context Projection: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
+- IM-14D – World Selection & Context Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
 ## 2. Frozen predecessor line
 
-IM-14A remains authoritative for the responsive Player UI Shell, safe-area handling, Topbar/World/Action regions and Canvas↔World binding.
-
-IM-14B remains authoritative for neutral Pointer/Touch transport/lifecycle and UI-vs-WORLD classification.
-
-IM-14C remains authoritative for the read-only player-facing Runtime HUD projection.
+IM-14A remains authoritative for Player UI Shell/layout, IM-14B for neutral Pointer/Touch transport/lifecycle, and IM-14C for the read-only Runtime HUD projection.
 
 Frozen markers:
 
@@ -30,20 +26,20 @@ Frozen markers:
 - `frozen/im-14b-unified-pointer-touch-interaction-contract` @ `8aa7594f4debcc838382ca6f49fcdcbadf9be324`
 - `frozen/im-14c-runtime-hud-projection` @ `788358677092ef91d7edf1c0d8a6a82efacc5f21`
 
-## 3. Binding IM-14D contract
+## 3. Frozen IM-14D contract
 
 IM-14D introduces only ephemeral selection and read-only context projection for already visible Runtime objects.
 
-Binding requirements:
+Frozen requirements:
 
-- selectable scope is limited to visible projected `building` and `person` objects,
-- world Tap/Click may acquire selection; Tap/Click on empty world clears selection,
-- Drag/Pan and Multi-Touch gestures must not create selection,
-- hit testing is based on the same camera-projected render-command geometry used for visible rendering,
-- deterministic overlap priority is `person` before `building`, then stable source ID ordering,
+- selectable scope limited to visible projected `building` and `person` objects,
+- world Tap/Click may acquire selection; empty-world Tap/Click clears selection,
+- Drag/Pan and Multi-Touch must not create selection,
+- hit testing uses the same camera-projected render-command geometry as visible rendering,
+- deterministic overlap priority is `person` before `building`, then stable source ID,
 - selection state is ephemeral UI state only: `null` or `{ kind, id }`,
-- selection does not mutate the selected domain/runtime object,
-- context projection is read-only and limited to Building ID/definitionId/visibleState or Person ID/visibleState,
+- selected domain/runtime objects are never mutated by selection,
+- read-only context projection is limited to Building ID/definitionId/visibleState or Person ID/visibleState,
 - no context actions are introduced,
 - IM-14A shell ownership, IM-14B neutral input ownership and IM-14C HUD ownership remain unchanged,
 - visible/build identity is `IM-14D-WORLD-SELECTION-CONTEXT-PROJECTION`.
@@ -51,46 +47,46 @@ Binding requirements:
 Explicitly excluded from IM-14D:
 
 - terrain/cell selection,
-- build placement or construction actions,
-- stock, workforce, transport, housing or economy controls,
+- build placement or construction/context actions,
+- stock/workforce/transport/housing/economy controls,
 - persistent selection or SaveGame ownership,
 - new camera Pan/Zoom semantics,
 - IM-14E player camera-control integration,
 - Inspector,
-- any gameplay/domain/persistence mutation.
+- gameplay/domain/persistence mutation.
 
-## 4. Implemented IM-14D surface
+## 4. IM-14D Completion / Regression / Freeze Gate
 
-Implementation started exactly from frozen IM-14C @ `788358677092ef91d7edf1c0d8a6a82efacc5f21` on the existing whole-block branch.
+Authoritative final pre-freeze branch HEAD: `b6ef61188e26dbbc0462bfedbb897f11b210cc53`.
 
-Current implementation provides:
+Regression against frozen IM-14C @ `788358677092ef91d7edf1c0d8a6a82efacc5f21`:
 
-- `src/ui/world-selection-context-projection.js` as the selection/context boundary,
-- reuse of the frozen IM-14B unified WORLD pointer stream,
-- Tap-vs-Drag/Multi-Touch guarding with no new camera-control semantics,
-- deterministic hit testing against current camera-projected render commands,
-- Person-before-Building overlap priority and stable ID fallback,
-- ephemeral `{ kind, id }` selection state,
-- read-only Building/Person context view models,
-- a compact context surface in the frozen IM-14A Action region,
-- dedicated browser evidence in `src/im14d-runtime-evidence.js`,
-- synchronized page/verification/build identity and cache-versioned IM-14D bootstrap.
+- branch is 7 commits ahead / 0 behind,
+- changed surface is limited to this workflow file, roadmap, `index.html`, `src/im14d-runtime-evidence.js`, `src/runtime/config.js`, `src/ui/app.css`, and `src/ui/world-selection-context-projection.js`,
+- `src/main.js` is unchanged,
+- no IM-14E camera-control semantics and no gameplay/domain/persistence mutation were introduced.
 
-`src/main.js` remains unchanged by IM-14D. Existing camera behavior is neither replaced nor broadened.
+Technical evidence:
+
+- CI Baseline run `34199822307`: **SUCCESS** on `72a3e8ac092fa58d9c0f580823471c3d3048ca54`,
+- the only change from `72a3e8ac092fa58d9c0f580823471c3d3048ca54` to final pre-freeze HEAD `b6ef61188e26dbbc0462bfedbb897f11b210cc53` is `docs/ROADMAP_CURRENT.md`; no runtime/config/UI/selection behavior changed after successful CI,
+- Pages build/deployment run `34199874533`: **SUCCESS** on final pre-freeze HEAD `b6ef61188e26dbbc0462bfedbb897f11b210cc53`.
+
+Real-device evidence:
+
+- iPhone / Safari, 2026-09-08 09:37–09:41 local: **PASS / 0 BLOCKER**,
+- visible browser gate shows World Selection PASS, Empty World Clear PASS, Drag/Multi-touch Guard PASS, Context Projection PASS, Read-only Ownership PASS and Build Identity PASS,
+- real tap on a Building changes context from `Keine Auswahl` to a read-only Building context (`building:00000003 · STOREHOUSE · …`),
+- user manually confirmed empty-world clear, repeated drag/pan with and without selection, and pinch/zoom all work without accidental selection,
+- frozen HUD and mobile shell remain intact.
+
+**Gate result: IM-14D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 ## 5. Current gate
 
-**IM-14D = IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN.**
+The complete IM-14 block remains **IN PROGRESS / NOT FROZEN**.
 
-Expected browser gate:
-
-`IM-14D — World Selection & Context Projection — PASS — World Selection PASS — Empty World Clear PASS — Drag/Multi-touch Guard PASS — Context Projection PASS — Read-only Ownership PASS — Build Identity PASS`
-
-Real browser/device verification should additionally demonstrate that tapping a visible Building/Person updates only the context surface, empty-world tap clears it, and drag/pinch camera interaction does not accidentally select.
-
-Before IM-14E may begin, IM-14D requires technical/CI verification, real browser/device evidence and its Completion / Regression / Freeze Gate with PASS / 0 BLOCKER.
-
-The complete IM-14 block remains NOT FROZEN.
+IM-14D freeze does not automatically authorize IM-14E implementation. The next permissible action is exclusively **reconciliation/definition of IM-14E – Player Camera Controls Integration against frozen IM-14D**. Implementation requires separate explicit authorization after that contract is reconciled and accepted.
 
 ## 6. Permanent visible build identity synchronization rule
 
@@ -98,4 +94,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-08 — IM-14D implemented against frozen IM-14C; verification pending, not frozen. No IM-14E implementation authorized.
+**Updated:** 2026-09-08 — IM-14D COMPLETE / FROZEN / PASS / 0 BLOCKER after full regression, CI/Pages success and real iPhone/Safari interaction evidence. IM-14 whole block remains NOT FROZEN; next permissible action is IM-14E reconciliation/definition only.
