@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-14C Runtime HUD Projection</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im14c-1">
+  <title>Neue Siedler – IM-14D World Selection & Context Projection</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im14d-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -23,20 +23,24 @@
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-14C – Runtime HUD Projection</h1>
-        <p>Read-only Projektion bereits autoritativer Runtime-Daten in die eingefrorene Player-UI-Shell. Bevölkerung und Gold werden ausschließlich gelesen und angezeigt. Noch keine Selection-, Context-, Gameplay- oder Kamera-Semantik.</p>
-        <output id="test-status">IM-14C-RUNTIME-HUD-PROJECTION wird aufgebaut …</output>
+        <h1>IM-14D – World Selection & Context Projection</h1>
+        <p>Tap/Click auf bereits sichtbare Buildings oder Persons erzeugt ausschließlich eine ephemere Auswahl und read-only Context-Projektion. Drag/Pan und Multi-Touch lösen keine Auswahl aus. Noch keine Context-Aktionen und keine neue Kamera-Semantik.</p>
+        <output id="test-status">IM-14D-WORLD-SELECTION-CONTEXT-PROJECTION wird aufgebaut …</output>
       </aside>
     </section>
 
     <footer class="player-action-region" data-ui-region="actions" aria-label="Spieleraktionsbereich">
-      <span>PLAYER UI SURFACE</span>
-      <span class="surface-note">HUD-Projektion aktiv · read-only Runtime-Werte</span>
+      <div class="selection-context" data-ui-region="context" aria-label="Auswahlkontext" aria-live="polite">
+        <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
+        <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
+      </div>
+      <span class="surface-note">Selection/Context read-only · keine Gameplay-Aktion</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im14c-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im14c-1"></script>
-  <script type="module" src="src/im14c-runtime-evidence.js?v=im14c-1"></script>
+  <script type="module" src="src/main.js?v=im14d-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im14d-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im14d-1"></script>
+  <script type="module" src="src/im14d-runtime-evidence.js?v=im14d-1"></script>
 </body>
 </html>
