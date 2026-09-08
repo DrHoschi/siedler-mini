@@ -1,6 +1,6 @@
 export const RuntimeConfig = Object.freeze({
   product: 'Neue Siedler',
-  build: 'IM-14E-PLAYER-CAMERA-CONTROLS-INTEGRATION',
+  build: 'IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION',
   simulation: Object.freeze({
     fixedStepMs: 100,
     maxCatchUpSteps: 4,
