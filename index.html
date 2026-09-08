@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-14D World Selection & Context Projection</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im14d-1">
+  <title>Neue Siedler – IM-14E Player Camera Controls Integration</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im14e-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -23,9 +23,9 @@
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-14D – World Selection & Context Projection</h1>
-        <p>Tap/Click auf bereits sichtbare Buildings oder Persons erzeugt ausschließlich eine ephemere Auswahl und read-only Context-Projektion. Drag/Pan und Multi-Touch lösen keine Auswahl aus. Noch keine Context-Aktionen und keine neue Kamera-Semantik.</p>
-        <output id="test-status">IM-14D-WORLD-SELECTION-CONTEXT-PROJECTION wird aufgebaut …</output>
+        <h1>IM-14E – Player Camera Controls Integration</h1>
+        <p>Die bereits eingefrorene Kamera-Policy wird jetzt ausschließlich über den gemeinsamen WORLD-Input integriert: ein Pointer verschiebt, zwei Pointer zoomen/verschieben und Wheel zoomt am Anker. IM-14D Selection bleibt getrennt und Drag/Pinch selektiert nicht.</p>
+        <output id="test-status">IM-14E-PLAYER-CAMERA-CONTROLS-INTEGRATION wird aufgebaut …</output>
       </aside>
     </section>
 
@@ -34,13 +34,14 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">Selection/Context read-only · keine Gameplay-Aktion</span>
+      <span class="surface-note">Kamera: Drag · Pinch · Wheel · Selection getrennt</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im14d-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im14d-1"></script>
-  <script type="module" src="src/ui/world-selection-context-projection.js?v=im14d-1"></script>
-  <script type="module" src="src/im14d-runtime-evidence.js?v=im14d-1"></script>
+  <script type="module" src="src/main.js?v=im14e-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im14e-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im14e-1"></script>
+  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im14e-1"></script>
+  <script type="module" src="src/im14e-runtime-evidence.js?v=im14e-1"></script>
 </body>
 </html>
