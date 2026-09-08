@@ -89,7 +89,7 @@ Explicit unavailable/currently omitted groups are surfaced as unavailable rather
 
 Construction/Production/Stock/Workforce detail is displayed only when it already exists inside the authoritative current Building/Person record. Missing facts render as absent/empty rather than being reconstructed.
 
-IM-15B creates no new Domain API and does not modify `src/main.js`, Domain owners or Transport owners.
+IM-15B creates no new Domain API and does not modify Domain owners or Transport owners.
 
 ## 7. IM-15B implementation surfaces
 
@@ -99,22 +99,39 @@ Relative to frozen IM-15A, IM-15B implementation is limited to:
 - `index.html` — structured diagnostics sections and synchronized IM-15B visible identity/cache identity,
 - `src/ui/app.css` — presentation of structured diagnostics inside the existing Inspector shell,
 - `src/runtime/config.js` — synchronized IM-15B build identity,
+- `src/main.js` — build-identity cache correction only: the existing RuntimeConfig import is versioned as `./runtime/config.js?v=im15b-1` so the live browser runtime cannot retain the stale IM-15A config module,
 - this workflow file and `docs/ROADMAP_CURRENT.md` — control state.
+
+No gameplay/runtime semantics in `src/main.js` were changed; only the RuntimeConfig import URL identity changed.
 
 No IM-15C world overlay, IM-15D action boundary or IM-15E metrics/balancing logic is present.
 
-## 8. Current gate
+## 8. IM-15B Build Identity Verification / Correction
+
+Real iPhone/Safari evidence at 2026-09-08 11:33 local showed IM-15B page/title/status correctly loaded while the Inspector `Build` field still displayed `IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION`.
+
+Repository verification confirmed:
+
+- `src/runtime/config.js` already contained the correct IM-15B build value,
+- `index.html` already versioned top-level module URLs with `?v=im15b-1`,
+- but `src/main.js` imported `./runtime/config.js` without a version query, allowing Safari to reuse the stale IM-15A config module.
+
+Correction: `src/main.js` now imports `./runtime/config.js?v=im15b-1`. No runtime/domain/transport behavior was otherwise changed.
+
+IM-15B remains **IMPLEMENTED / NOT FROZEN** until the corrected identity is confirmed in real-device evidence and the Completion / Regression / Freeze Gate passes at **PASS / 0 BLOCKER**.
+
+## 9. Current gate
 
 IM-15B is **IMPLEMENTED / NOT FROZEN** against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
 
-The next permissible action is exclusively **IM-15B – Completion / Regression / Freeze Gate**: verify the full diff against frozen IM-15A, CI/Pages, read-only ownership, IM-15A/IM-14 regression, visible build identity and real browser/device diagnostics rendering. Freeze only at **PASS / 0 BLOCKER**.
+The next permissible action is exclusively continuation of **IM-15B – Completion / Regression / Freeze Gate** with corrected build-identity verification: full diff against frozen IM-15A, CI/Pages, read-only ownership, IM-15A/IM-14 regression, visible build identity and real browser/device diagnostics rendering. Freeze only at **PASS / 0 BLOCKER**.
 
 No IM-15C implementation is authorized before IM-15B is separately frozen.
 
-## 9. Permanent visible build identity synchronization rule
+## 10. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15B Structured Runtime Diagnostics Projection IMPLEMENTED / NOT FROZEN within the reduced authoritative read-only scope. Next permissible action is IM-15B Completion / Regression / Freeze Gate only.
+**Updated:** 2026-09-08 — IM-15B remains IMPLEMENTED / NOT FROZEN. Build-identity cache-chain blocker corrected by versioning the RuntimeConfig import in `src/main.js`; real-device confirmation and freeze gate still pending.
