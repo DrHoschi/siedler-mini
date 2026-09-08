@@ -153,6 +153,8 @@ Real-device evidence on 2026-09-09:
 - no Confirm/Commit,
 - existing IM-15 Inspector remained visible/read-only.
 
+`docs/ROADMAP_CURRENT.md` is synchronized with this closing gate before the final CI/Pages verification HEAD is frozen.
+
 **Gate result: PASS / 0 BLOCKER.**
 
 ## 9. Current gate
