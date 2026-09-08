@@ -9,6 +9,7 @@ import { computePinchGesture } from './ui/player-camera-controls-integration.js?
 
 const EXPECTED_BUILD = 'IM-14E-PLAYER-CAMERA-CONTROLS-INTEGRATION';
 const output = document.querySelector('#test-status');
+const canvas = document.querySelector('#game-canvas');
 const runtime = window.CleanRuntime;
 const selection = window.IM14DWorldSelectionContext;
 const camera = window.IM14EPlayerCameraControls;
@@ -44,8 +45,10 @@ try {
     && zoomedIn.zoom === 3
     && zoomedOut.zoom === 0.5;
 
+  const worldSurfacePass = canvas instanceof HTMLCanvasElement && canvas.style.touchAction === 'none';
   const unifiedInputPass = camera.input === selection.input
-    && camera.capabilities?.unifiedWorldPointerInput === true;
+    && camera.capabilities?.unifiedWorldPointerInput === true
+    && worldSurfacePass;
   const wheelZoomPass = camera.capabilities?.wheelZoom === true;
   const noDoubleProcessingPass = runtime.cameraInputOwner === 'IM-14E-UNIFIED-WORLD-INPUT'
     && camera.capabilities?.directCanvasPointerPipeline === false;
@@ -73,6 +76,7 @@ try {
   window.IM14ECameraControlsEvidence = Object.freeze({
     pass,
     unifiedInputPass,
+    worldSurfacePass,
     singlePointerPanPass,
     pinchPass,
     wheelZoomPass,
