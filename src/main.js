@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im15-final-1';
+import { RuntimeConfig } from './runtime/config.js?v=im16a-1';
 import { Runtime } from './runtime/runtime.js';
 import {
   BASELINE_MINIWORLD_SCENARIO_ID,
@@ -130,8 +130,8 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `IM-15 — Whole-Block Completion / Regression / Freeze Gate — ${initialOwners.classificationPass && initialOwners.runtimeValidationPass ? 'PASS' : 'FAIL'} — A/B/C/D/E foundations loaded · Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;
-  testEl.dataset.pass = initialOwners.classificationPass && initialOwners.runtimeValidationPass ? 'true' : 'false';
+  testEl.textContent = `IM-16A — Authoritative Construction Placement Contract — Runtime foundation loaded — Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;
+  testEl.dataset.pass = 'pending';
 }
 
 window.CleanRuntime = Object.freeze({
@@ -163,7 +163,7 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[IM-15] Guidance / Inspector whole-block foundation', {
+console.info('[IM-16A] Authoritative Construction Placement Contract runtime foundation', {
   build: RuntimeConfig.build,
   scenarioId: BASELINE_MINIWORLD_SCENARIO_ID,
   classificationPass: initialOwners.classificationPass,
@@ -175,7 +175,7 @@ console.info('[IM-15] Guidance / Inspector whole-block foundation', {
   goldBalance: initialOwners.goldSettlement.state.balance,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
-  controlledActionsOnly: true,
-  stopExcluded: true,
-  arbitraryStateEditingExcluded: true,
+  constructionPlacementMutationExcluded: true,
+  playerPlacementUiExcluded: true,
+  inspectorMutationExcluded: true,
 });
