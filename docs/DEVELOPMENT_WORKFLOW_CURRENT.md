@@ -10,94 +10,87 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Default branch: `main` — historical old-game reference only
 - Current whole-block branch: `feature/im-14-ui-mobile-foundation`
 - Whole-block branch base: frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
-- Frozen predecessor: **IM-13 – Deterministic SaveGame Snapshot / Restore Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current migration block: **IM-14 – UI / Mobile Foundation: IN PROGRESS / NOT FROZEN**
 - IM-14A – Player UI Shell & Responsive Surface Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14B – Unified Pointer / Touch Interaction Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- IM-14C – Runtime HUD Projection: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
 
-## 2. Frozen IM-14A boundary
+## 2. Frozen predecessor line
 
-IM-14A remains frozen and authoritative for the responsive player shell, Topbar/World/Action regions, safe-area handling, deterministic UI/World layering and Canvas↔World surface binding.
+IM-14A remains authoritative for the responsive Player UI Shell, safe-area handling, Topbar/World/Action regions and Canvas↔World binding.
 
-Frozen IM-14A marker: `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`.
+IM-14B remains authoritative for neutral Pointer/Touch transport/lifecycle and UI-vs-WORLD classification. It owns no Selection, Gameplay or Camera meaning.
 
-## 3. Frozen IM-14B contract
+Frozen markers:
 
-IM-14B introduces only a unified Pointer/Touch transport and lifecycle boundary over frozen IM-14A.
+- `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`
+- `frozen/im-14b-unified-pointer-touch-interaction-contract` @ `8aa7594f4debcc838382ca6f49fcdcbadf9be324`
 
-Frozen requirements:
+## 3. Binding IM-14C contract
 
-- Pointer input is normalized through one contract for mouse/pen/touch pointer sources,
-- UI surfaces and the World surface are deterministically classified,
-- UI-owned input is not emitted through the World channel,
-- active contacts are tracked by pointerId,
-- contact lifecycle is controlled as ACTIVE -> ENDED / CANCELLED,
-- pointerup/pointercancel cannot leave a hanging active contact,
-- duplicate terminal events are not re-emitted as new active interaction,
-- normalized samples carry owner, region, pointer identity/type, button/contact state and local/client coordinates,
-- the contract owns only input transport/lifecycle state,
-- existing camera/gameplay/domain/persistence ownership remains unchanged,
-- visible/build identity is `IM-14B-UNIFIED-POINTER-TOUCH-INTERACTION-CONTRACT`.
+IM-14C introduces only a read-only player-facing HUD projection over already authoritative Runtime data.
 
-Explicitly excluded from IM-14B:
+Binding requirements:
 
-- world/entity selection semantics,
-- Tap = Select or other gameplay meaning,
+- the HUD source for population is exclusively `housingPopulation.population.count`,
+- the HUD source for gold is exclusively `goldEconomy.snapshot().balance`,
+- projection produces an immutable HUD view model,
+- equal authoritative state produces equal projected HUD state,
+- rendering may format and display values but may not create a second authoritative truth,
+- HUD refresh must not execute simulation/domain/economy mutation,
+- the HUD owns only `authoritative runtime state -> immutable HUD view model -> DOM projection`,
+- IM-14A layout ownership and IM-14B input ownership remain unchanged,
+- visible/build identity is `IM-14C-RUNTIME-HUD-PROJECTION`.
+
+Explicitly excluded from IM-14C:
+
+- world/entity selection,
+- context panels or selection-derived information,
+- Tap = Select or other interaction meaning,
 - new camera Pan/Zoom semantics,
-- pinch/gesture interpretation beyond neutral contact tracking,
-- build placement/context actions,
-- HUD/domain projection,
-- Save/Load UI,
-- Inspector,
-- any gameplay/domain/persistence mutation or ownership change.
+- population creation or housing assignment,
+- gold settlement, income application or spending,
+- production/stock/workforce/transport controls,
+- Save/Load UI or persistence mutation,
+- minimap, notifications or Inspector,
+- any new gameplay/domain/persistence owner.
 
-## 4. Frozen IM-14B implementation surface
+## 4. Implemented IM-14C surface
 
-The frozen implementation provides:
+The current implementation provides:
 
-- `src/ui/unified-pointer-touch-interaction.js` as the neutral input contract,
-- root-level Pointer Event normalization across UI and World surfaces,
-- deterministic UI/WORLD classification using existing `data-ui-region` ownership,
-- pointerId-based active contact tracking and terminal cleanup,
-- owner-specific subscriber channels without assigning gameplay meaning,
-- dedicated browser evidence in `src/im14b-runtime-evidence.js`,
-- synchronized page title, visible gate identity and RuntimeConfig build identity,
-- cache-versioned evidence/config imports for reliable mobile verification.
+- `src/ui/runtime-hud-projection.js` as the read-only projection boundary,
+- a compact player-facing Topbar HUD for `Bevölkerung` and `Gold`,
+- population read directly from the existing derived-population truth,
+- gold read directly from `GoldEconomyOwner.snapshot()`,
+- immutable deterministic view-model projection,
+- DOM-only rendering/refresh without domain mutation,
+- responsive HUD styling inside the frozen IM-14A shell,
+- dedicated browser evidence in `src/im14c-runtime-evidence.js`,
+- synchronized page/verification/build identity.
 
-The existing frozen camera behavior in `src/main.js` was not broadened or semantically changed by IM-14B. No IM-14C/D/E behavior was introduced.
+`src/main.js` was not changed by IM-14C. Existing camera behavior and all frozen gameplay/domain/persistence owners remain unchanged.
 
-## 5. IM-14B Completion / Regression / Freeze Gate
+## 5. Current gate
 
-**IM-14B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+**IM-14C = IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN.**
 
-Accepted evidence:
+Expected browser gate:
 
-- frozen IM-14A base: `4ba4e152931058c9e6b62e2e26489f378779e80f`,
-- CI-verified final functional/implementation state: `3017377774b13aeefd8fa06e9f047fe9a6f29ecc`,
-- CI Baseline run `34160223336`: completed / SUCCESS,
-- final pre-freeze documentation HEAD: `19186808df37eb97382d1ee8787be566e76fed12`,
-- the only change from `301737...` to `191868...` is `docs/ROADMAP_CURRENT.md`; no runtime/config/UI/input behavior changed after successful CI,
-- Pages run `34160239693` for `191868...`: completed / SUCCESS,
-- iPhone / Safari real-device evidence at 2026-09-07 22:41 local: READY and complete IM-14B PASS,
-- iPad / Safari real-device evidence at 2026-09-07 23:05 local: READY and complete IM-14B PASS,
-- complete regression review confirms no new Selection, Gameplay or Camera semantics and no change to `src/main.js`.
+`IM-14C — Runtime HUD Projection — PASS — Population Source PASS — Gold Source PASS — Read-only Ownership PASS — Build Identity PASS`
+
+Before any IM-14D work, IM-14C requires technical/CI verification plus real browser/device evidence and a Completion / Regression / Freeze Gate with PASS / 0 BLOCKER.
 
 The complete IM-14 block remains NOT FROZEN.
 
-## 6. Next permissible action
+## 6. Frozen predecessor preservation
 
-The next permissible action is exclusively **reconciliation/definition of IM-14C – Runtime HUD Projection against frozen IM-14B**.
+IM-14B, IM-14A, IM-13 and the frozen CR-31/CR-32 boundaries remain authoritative and unchanged. IM-14C is projection-only and does not become a competing Simulation, Gameplay, Selection, Camera or Persistence owner.
 
-IM-14B freeze does not automatically authorize IM-14C implementation. No IM-14C implementation may begin before its reconciled contract and ownership boundary are explicitly accepted.
-
-## 7. Frozen predecessor preservation
-
-IM-14B, IM-14A, IM-13 and the frozen CR-31/CR-32 boundaries remain authoritative and unchanged. IM-14B is input transport/lifecycle only and does not become a competing camera, gameplay, domain or persistence owner.
-
-## 8. Permanent visible build identity synchronization rule
+## 7. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-07 — IM-14B Completion / Regression / Freeze Gate PASS / 0 BLOCKER; IM-14B COMPLETE / FROZEN. Next permissible action is IM-14C reconciliation/definition only.
+**Updated:** 2026-09-08 — IM-14C Runtime HUD Projection implemented against frozen IM-14B; verification pending, not frozen.
