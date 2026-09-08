@@ -38,7 +38,9 @@ export function projectInspectorRuntimeObservation({
   const source = requireRuntime(runtime);
   const population = source.housingPopulation.population;
   const gold = source.goldEconomy.snapshot();
-  const map = source.map;
+  const mapStructure = source.map;
+  const worldMap = mapStructure.map();
+  const dimensions = mapStructure.dimensions();
 
   return deepFreeze({
     kind: 'im15a-read-only-runtime-observation',
@@ -48,10 +50,10 @@ export function projectInspectorRuntimeObservation({
       state: source.runtime.state,
     },
     world: {
-      name: map.name ?? null,
-      width: map.width ?? null,
-      height: map.height ?? null,
-      cellSize: map.cellSize ?? null,
+      name: worldMap.name ?? null,
+      width: dimensions.width,
+      height: dimensions.height,
+      cellSize: worldMap.cellSize ?? null,
     },
     population: population.count,
     gold: gold.balance,
