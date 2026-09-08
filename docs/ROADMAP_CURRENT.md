@@ -1,9 +1,9 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-13 FROZEN / IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 RECONCILED / DEFINED / NOT IMPLEMENTED  
 **Repository:** `DrHoschi/siedler-mini`  
-**Whole-block branch:** `feature/im-14-ui-mobile-foundation`  
-**Whole-block base:** frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
+**Frozen predecessor:** IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`  
+**IM-15 branch:** NOT YET AUTHORIZED / NOT YET CREATED
 
 ## 1. Frozen line
 
@@ -11,7 +11,7 @@ CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 IM-13 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-**IM-14 – UI / Mobile Foundation is now COMPLETE / FROZEN / PASS / 0 BLOCKER as a whole block.**
+**IM-14 – UI / Mobile Foundation remains COMPLETE / FROZEN / PASS / 0 BLOCKER as a whole block.**
 
 Its frozen substeps are:
 
@@ -29,60 +29,58 @@ Its frozen substeps are:
 - Path / Wear – CR-32,
 - **IM-13 – SaveGame — COMPLETE / FROZEN**,
 - **IM-14 – UI/Mobile — COMPLETE / FROZEN**,
-- IM-15 – Guidance/Inspector.
+- **IM-15 – Guidance / Inspector — RECONCILED / DEFINED / NOT IMPLEMENTED**.
 
-## 3. Frozen IM-14 composition
+## 3. IM-15 reconciled capability boundary
 
-IM-14 establishes the player-facing UI/mobile foundation without transferring gameplay/domain/persistence ownership into UI:
+IM-15 establishes the new modular Guidance/Inspector capability on top of frozen IM-14. It is a diagnosis, observation, visual verification, controlled simulation/testing-support and later balancing tool, but **not a gameplay owner**.
 
-- responsive safe-area-aware Player UI Shell,
-- neutral unified Pointer/Touch transport and UI-vs-WORLD classification,
-- read-only Population/Gold HUD projection,
-- ephemeral Building/Person selection and read-only Context projection,
-- shared-input player camera Pan/Pinch/Wheel integration using the frozen camera policy.
+Binding rules:
 
-The following remain outside IM-14:
+- existing runtime/domain owners remain authoritative,
+- Inspector projections are read-only unless a later explicitly defined controlled action boundary says otherwise,
+- no second runtime truth may be created in Inspector state,
+- the old `main` Inspector/debug implementation is historical functional/visual reference only and is not migrated as architecture or code,
+- automatic tests remain test code; later Inspector surfaces may display their results or trigger explicitly defined reproducible scenarios,
+- diagnostic overlays must remain observational and non-mutating.
 
-- new gameplay/context actions,
-- Save/Load UI or persistence ownership,
-- minimap,
-- Inspector/Guidance,
-- camera inertia/edge scrolling/WASD/world clamps,
-- new domain/simulation ownership.
+## 4. Planned IM-15 decomposition
 
-## 4. IM-14 Whole-Block Completion / Regression / Freeze Gate
+1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**  
+   Establish only the modular Inspector surface and first explicit read-only observation contract against existing authoritative runtime owners. Minimal initial observation may include runtime/world identity, Population, Gold and Building/Person identity. No simulation controls, test/scenario triggering, world overlays or balancing.
 
-Final pre-whole-block-freeze branch HEAD: `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
+2. **IM-15B – Structured Runtime Diagnostics Projection**  
+   Extend read-only diagnostics across existing modular systems without duplicating ownership.
 
-Full branch regression against frozen IM-13 `0a011af99ea8814b9e3555d7075ee091cfaf05c2`:
+3. **IM-15C – World Diagnostic Overlay Foundation**  
+   Make selected diagnostic state visually inspectable in the world without mutating gameplay/world state.
 
-- **51 commits ahead / 0 behind**,
-- changed surface limited to IM-14 control, evidence, responsive UI, HUD, unified input, selection/context and camera-integration surfaces,
-- all planned IM-14 substeps A–E individually frozen before the whole-block gate,
-- no unrelated domain/gameplay/persistence/Inspector implementation introduced.
+4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions**  
+   Permit only explicitly defined reproducible diagnostic/test actions through controlled runtime/test boundaries; no arbitrary state editing.
 
-Technical evidence:
+5. **IM-15E – Simulation & Balancing Observation Foundation**  
+   Establish suitable long-running simulation/runtime metric observation and collection; no automatic balancing and no domain-rule changes.
 
-- final functional/evidence state `e3df3aca45a1fa156447ba302188227fd3718125`: CI Baseline `34203676233` **SUCCESS**, Pages `34203675151` **SUCCESS**,
-- only `docs/DEVELOPMENT_WORKFLOW_CURRENT.md` and `docs/ROADMAP_CURRENT.md` changed between that state and final pre-whole-block-freeze HEAD,
-- Pages run `34204224161` on `053d4cc7f8befdb747ebce9afb755f286e2b0682`: **SUCCESS**.
+After A–E, one combined **IM-15 Completion / Regression / Freeze Gate** must regress the whole block against frozen IM-14. Only PASS / 0 BLOCKER may freeze IM-15.
 
-Combined real-device evidence:
+## 5. IM-15A first planned substep
 
-- IM-14A shell: iPhone + iPad **PASS / 0 BLOCKER**,
-- IM-14B unified input: iPhone + iPad **PASS / 0 BLOCKER**,
-- IM-14C HUD: iPhone **PASS / 0 BLOCKER**,
-- IM-14D selection/context/gesture guard: iPhone **PASS / 0 BLOCKER**,
-- IM-14E Pan/Pinch/selection regression/frozen camera policy: iPhone **PASS / 0 BLOCKER**.
+The first planned substep is now bindingly named:
 
-**Whole-block result: IM-14 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+**IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**
 
-## 5. Current gate
+Its intended implementation boundary is limited to the Inspector shell plus minimal read-only runtime observation. It explicitly excludes later IM-15B/C/D/E behavior, new gameplay/domain/persistence ownership, arbitrary runtime mutation and legacy-Inspector migration.
 
-No further IM-14 feature work is authorized.
+This definition does **not** authorize implementation.
 
-According to the binding migration order, the next migration block is **IM-15 – Guidance / Inspector**. The IM-14 freeze does not automatically authorize IM-15 implementation. The next permissible action is reconciliation/definition of the next block against frozen IM-14 before any implementation begins.
+## 6. Current gate
+
+The reconciliation/definition of **IM-15 – Guidance / Inspector** against frozen IM-14 is complete at the control-document level.
+
+No IM-15 whole-block branch has been created or authorized by this step, and no IM-15A implementation is authorized.
+
+The next permissible action is exclusively a separate branch-creation decision for the IM-15 whole-block branch from frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`. Only after successful branch creation may IM-15A implementation be separately authorized.
 
 ---
 
-**Updated:** 2026-09-08 — IM-14 UI / Mobile Foundation COMPLETE / FROZEN / PASS / 0 BLOCKER after whole-block regression and combined CI/Pages/device evidence.
+**Updated:** 2026-09-08 — IM-15 Guidance / Inspector reconciled and defined against frozen IM-14; IM-15A fixed as first planned substep; branch creation remains a separate next decision.
