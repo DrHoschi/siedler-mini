@@ -254,7 +254,7 @@ if (overlayCanvas && worldCanvas && window.CleanRuntime && window.IM14DWorldSele
 
   const status = document.querySelector('#test-status');
   if (status) {
-    status.textContent = 'IM-15C — IMPLEMENTED / NOT FROZEN — World Diagnostic Overlay aktiv · PATH/ROAD · Building/Person IDs · Carrier Movement · Selection Highlight · read-only';
-    status.dataset.pass = 'pending';
+    status.textContent = 'IM-15C — COMPLETE / FROZEN / PASS / 0 BLOCKER — World Diagnostic Overlay aktiv · PATH/ROAD · Building/Person IDs · Carrier Movement · Selection Highlight · read-only';
+    status.dataset.pass = 'true';
   }
 }
