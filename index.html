@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-15D Controlled Guidance / Diagnostic Scenario Actions</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im15d-1">
+  <title>Neue Siedler – IM-15E Simulation & Balancing Observation Foundation</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im15e-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -24,9 +24,9 @@
       <canvas id="diagnostic-overlay-canvas" aria-label="Read-only World Diagnostic Overlay"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-15D – Controlled Guidance / Diagnostic Scenario Actions</h1>
-        <p>Allowlist-basierte Diagnoseaktionen über bestehende Runtime-/Scheduler-/Scenario-Grenzen. START, PAUSE, SINGLE STEP und RESET BASELINE_MINIWORLD; keine freie Zustandsbearbeitung.</p>
-        <output id="test-status">IM-15D-CONTROLLED-DIAGNOSTIC-SCENARIO-ACTIONS wird aufgebaut …</output>
+        <h1>IM-15E – Simulation & Balancing Observation Foundation</h1>
+        <p>Scheduler-synchrone, begrenzte und ausschließlich read-only Simulation Observation. Source Facts und diagnostische Deltas ohne Rückwirkung auf Runtime oder Balancing.</p>
+        <output id="test-status">IM-15E-SIMULATION-BALANCING-OBSERVATION-FOUNDATION wird aufgebaut …</output>
       </aside>
 
       <aside class="inspector-shell" data-ui-shell="inspector" aria-label="Inspector" aria-live="polite">
@@ -54,6 +54,30 @@
           <output id="inspector-action-result" data-status="idle">Noch keine Diagnoseaktion ausgeführt.</output>
         </section>
 
+        <section class="inspector-simulation-observation" aria-label="Simulation Observation">
+          <div class="inspector-simulation-heading"><strong>Simulation Observation</strong><span>READ ONLY · BOUNDED 120</span></div>
+          <dl class="simulation-observation-summary">
+            <div><dt>Session</dt><dd id="im15e-session">—</dd></div>
+            <div><dt>Scenario</dt><dd id="im15e-scenario">—</dd></div>
+            <div><dt>Runtime</dt><dd id="im15e-runtime">—</dd></div>
+            <div><dt>Step</dt><dd id="im15e-step">0</dd></div>
+            <div><dt>Sim Time</dt><dd id="im15e-time">0 ms</dd></div>
+            <div><dt>Samples</dt><dd id="im15e-samples">0</dd></div>
+          </dl>
+          <div class="simulation-metrics" role="table" aria-label="Simulation Observation Metrics">
+            <div class="simulation-metric simulation-metric-head" role="row"><span>Metric</span><span>Current</span><span>Δ</span></div>
+            <div class="simulation-metric" role="row"><span>Population</span><span data-im15e-value="population">—</span><span data-im15e-delta="population">—</span></div>
+            <div class="simulation-metric" role="row"><span>Gold</span><span data-im15e-value="gold">—</span><span data-im15e-delta="gold">—</span></div>
+            <div class="simulation-metric" role="row"><span>Buildings</span><span data-im15e-value="buildings">—</span><span data-im15e-delta="buildings">—</span></div>
+            <div class="simulation-metric" role="row"><span>Persons</span><span data-im15e-value="persons">—</span><span data-im15e-delta="persons">—</span></div>
+            <div class="simulation-metric" role="row"><span>Jobs</span><span data-im15e-value="jobs">—</span><span data-im15e-delta="jobs">—</span></div>
+            <div class="simulation-metric" role="row"><span>Resources</span><span data-im15e-value="resources">—</span><span data-im15e-delta="resources">—</span></div>
+            <div class="simulation-metric" role="row"><span>Stock</span><span data-im15e-value="stock">—</span><span data-im15e-delta="stock">—</span></div>
+            <div class="simulation-metric" role="row"><span>Production</span><span data-im15e-value="production">—</span><span data-im15e-delta="production">—</span></div>
+            <div class="simulation-metric" role="row"><span>Transport</span><span data-im15e-value="transport">—</span><span data-im15e-delta="transport">—</span></div>
+          </div>
+        </section>
+
         <section class="inspector-diagnostics" aria-label="Structured Runtime Diagnostics">
           <div class="inspector-diagnostics-heading"><strong>Structured Diagnostics</strong><span id="inspector-diag-summary">—</span></div>
           <details open><summary>Buildings / Stocks / Construction / Production</summary><pre id="inspector-diag-buildings">—</pre></details>
@@ -72,17 +96,18 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">Observation read-only · Diagnostic Actions kontrolliert/allowlisted</span>
+      <span class="surface-note">Observation read-only · Diagnostic Actions kontrolliert/allowlisted · Metrics ohne Runtime-Rückwirkung</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im15d-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15d-1"></script>
-  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15d-1"></script>
-  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15d-1"></script>
-  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15d-1"></script>
-  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im15d-1"></script>
-  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im15d-1"></script>
-  <script type="module" src="src/ui/controlled-diagnostic-scenario-actions.js?v=im15d-1"></script>
+  <script type="module" src="src/main.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/controlled-diagnostic-scenario-actions.js?v=im15e-1"></script>
+  <script type="module" src="src/ui/simulation-balancing-observation.js?v=im15e-1"></script>
 </body>
 </html>
