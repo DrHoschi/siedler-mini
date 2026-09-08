@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im15b-1';
+import { RuntimeConfig } from './runtime/config.js?v=im15c-1';
 import { Runtime } from './runtime/runtime.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
@@ -155,6 +155,7 @@ let cameraState = createWorldViewCameraState({
   zoom: 1,
 });
 let activeRuntimeComposition = null;
+let diagnosticOverlayRenderer = null;
 
 function installActiveRuntimeComposition(composition) {
   if (composition?.kind !== 'active-runtime-composition' || !composition?.authoritative?.map || !composition?.authoritative?.domains) {
@@ -162,6 +163,12 @@ function installActiveRuntimeComposition(composition) {
   }
   activeRuntimeComposition = composition;
   return activeRuntimeComposition;
+}
+
+function installDiagnosticOverlayRenderer(renderer) {
+  if (typeof renderer !== 'function') throw new TypeError('IM-15C diagnostic overlay renderer required');
+  diagnosticOverlayRenderer = renderer;
+  return diagnosticOverlayRenderer;
 }
 
 function currentRenderOwners() {
@@ -198,7 +205,14 @@ function renderCurrentWorld() {
     buildingSize: Math.max(14, Math.round(cellPixels * 0.58)),
     personRadius: Math.max(4, Math.round(cellPixels * 0.16)),
   });
-  return Object.freeze({ projection, cameraState, commands });
+  const result = Object.freeze({
+    projection,
+    cameraState,
+    commands,
+    view: Object.freeze({ cellPixels, offset: Object.freeze({ x: 0, y: 0 }), width, height }),
+  });
+  diagnosticOverlayRenderer?.(result);
+  return result;
 }
 
 function panCameraBy({ deltaX = 0, deltaY = 0 } = {}) {
@@ -252,6 +266,7 @@ window.CleanRuntime = Object.freeze({
   cameraInputOwner: 'IM-14E-UNIFIED-WORLD-INPUT',
   installActiveRuntimeComposition,
   getActiveRuntimeComposition: () => activeRuntimeComposition,
+  installDiagnosticOverlayRenderer,
   getCameraState: () => cameraState,
 });
 
