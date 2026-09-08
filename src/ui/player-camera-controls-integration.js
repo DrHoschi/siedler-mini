@@ -121,6 +121,13 @@ export function createPlayerCameraControlsIntegration({
     kind: 'player-camera-controls-integration',
     input,
     cameraPolicy: runtime.cameraControlLimits,
+    capabilities: Object.freeze({
+      unifiedWorldPointerInput: true,
+      singlePointerPan: true,
+      pinchPanZoom: true,
+      wheelZoom: true,
+      directCanvasPointerPipeline: false,
+    }),
     getActivePointers: () => Object.freeze([...active.entries()].map(([pointerId, point]) => Object.freeze({ pointerId, point }))),
     getMetrics: () => Object.freeze({ ...metrics }),
     destroy() {
