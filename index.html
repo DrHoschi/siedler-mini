@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-15C World Diagnostic Overlay Foundation</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im15c-1">
+  <title>Neue Siedler – IM-15D Controlled Guidance / Diagnostic Scenario Actions</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im15d-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -24,15 +24,15 @@
       <canvas id="diagnostic-overlay-canvas" aria-label="Read-only World Diagnostic Overlay"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-15C – World Diagnostic Overlay Foundation</h1>
-        <p>Separate kamera-synchrone Read-only-Diagnoseebene über der bestehenden Welt. PATH/ROAD, Building-/Person-IDs, Carrier-Movement-Beziehung und bestehende Selection werden ausschließlich visualisiert; keine neue Runtime-, Input- oder Gameplay-Semantik.</p>
-        <output id="test-status">IM-15C-WORLD-DIAGNOSTIC-OVERLAY-FOUNDATION wird aufgebaut …</output>
+        <h1>IM-15D – Controlled Guidance / Diagnostic Scenario Actions</h1>
+        <p>Allowlist-basierte Diagnoseaktionen über bestehende Runtime-/Scheduler-/Scenario-Grenzen. START, PAUSE, SINGLE STEP und RESET BASELINE_MINIWORLD; keine freie Zustandsbearbeitung.</p>
+        <output id="test-status">IM-15D-CONTROLLED-DIAGNOSTIC-SCENARIO-ACTIONS wird aufgebaut …</output>
       </aside>
 
       <aside class="inspector-shell" data-ui-shell="inspector" aria-label="Inspector" aria-live="polite">
         <div class="inspector-heading">
           <strong>Inspector</strong>
-          <span>READ ONLY</span>
+          <span>OBSERVATION READ ONLY</span>
         </div>
         <dl class="inspector-fields">
           <div><dt>Runtime</dt><dd id="inspector-runtime">—</dd></div>
@@ -43,39 +43,26 @@
           <div><dt>Selection</dt><dd id="inspector-selection" data-selection-kind="none" data-selection-id="">Keine Auswahl</dd></div>
         </dl>
 
-        <section class="inspector-diagnostics" aria-label="Structured Runtime Diagnostics">
-          <div class="inspector-diagnostics-heading">
-            <strong>Structured Diagnostics</strong>
-            <span id="inspector-diag-summary">—</span>
+        <section class="inspector-actions" aria-label="Controlled Diagnostic Actions">
+          <div class="inspector-actions-heading"><strong>Controlled Diagnostic Actions</strong><span>ALLOWLIST</span></div>
+          <div class="inspector-action-buttons">
+            <button type="button" data-im15d-action="START">Start</button>
+            <button type="button" data-im15d-action="PAUSE">Pause</button>
+            <button type="button" data-im15d-action="SINGLE_STEP">Single Step</button>
+            <button type="button" data-im15d-action="RESET_BASELINE_MINIWORLD">Reset Baseline</button>
           </div>
-          <details open>
-            <summary>Buildings / Stocks / Construction / Production</summary>
-            <pre id="inspector-diag-buildings">—</pre>
-          </details>
-          <details open>
-            <summary>Persons / Workforce / Carriers</summary>
-            <pre id="inspector-diag-persons">—</pre>
-          </details>
-          <details>
-            <summary>Jobs</summary>
-            <pre id="inspector-diag-jobs">—</pre>
-          </details>
-          <details>
-            <summary>Resources</summary>
-            <pre id="inspector-diag-resources">—</pre>
-          </details>
-          <details open>
-            <summary>Movement / Navigation</summary>
-            <pre id="inspector-diag-navigation">—</pre>
-          </details>
-          <details open>
-            <summary>Path Classification</summary>
-            <pre id="inspector-diag-paths">—</pre>
-          </details>
-          <details>
-            <summary>Unavailable in current read boundary</summary>
-            <pre id="inspector-diag-unavailable">—</pre>
-          </details>
+          <output id="inspector-action-result" data-status="idle">Noch keine Diagnoseaktion ausgeführt.</output>
+        </section>
+
+        <section class="inspector-diagnostics" aria-label="Structured Runtime Diagnostics">
+          <div class="inspector-diagnostics-heading"><strong>Structured Diagnostics</strong><span id="inspector-diag-summary">—</span></div>
+          <details open><summary>Buildings / Stocks / Construction / Production</summary><pre id="inspector-diag-buildings">—</pre></details>
+          <details open><summary>Persons / Workforce / Carriers</summary><pre id="inspector-diag-persons">—</pre></details>
+          <details><summary>Jobs</summary><pre id="inspector-diag-jobs">—</pre></details>
+          <details><summary>Resources</summary><pre id="inspector-diag-resources">—</pre></details>
+          <details open><summary>Movement / Navigation</summary><pre id="inspector-diag-navigation">—</pre></details>
+          <details open><summary>Path Classification</summary><pre id="inspector-diag-paths">—</pre></details>
+          <details><summary>Unavailable in current read boundary</summary><pre id="inspector-diag-unavailable">—</pre></details>
         </section>
       </aside>
     </section>
@@ -85,16 +72,17 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">Inspector + World Overlay: read-only · keine Runtime-Mutation</span>
+      <span class="surface-note">Observation read-only · Diagnostic Actions kontrolliert/allowlisted</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im15c-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15c-1"></script>
-  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15c-1"></script>
-  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15c-1"></script>
-  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15c-1"></script>
-  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im15c-1"></script>
-  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im15c-1"></script>
+  <script type="module" src="src/main.js?v=im15d-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15d-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15d-1"></script>
+  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15d-1"></script>
+  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15d-1"></script>
+  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im15d-1"></script>
+  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im15d-1"></script>
+  <script type="module" src="src/ui/controlled-diagnostic-scenario-actions.js?v=im15d-1"></script>
 </body>
 </html>
