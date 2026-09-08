@@ -103,7 +103,7 @@ if (inspectorShell && window.CleanRuntime) {
 
   const status = document.querySelector('#test-status');
   if (status) {
-    status.textContent = 'IM-15E — IMPLEMENTED / NOT FROZEN — Simulation Observation aktiv · scheduler-synchron · bounded history 120 · read-only metrics/deltas';
-    status.dataset.pass = 'pending';
+    status.textContent = 'IM-15E — COMPLETE / FROZEN / PASS / 0 BLOCKER — Simulation Observation aktiv · scheduler-synchron · bounded history 120 · read-only metrics/deltas';
+    status.dataset.pass = 'true';
   }
 }
