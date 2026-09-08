@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-15B Structured Runtime Diagnostics Projection</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im15b-1">
+  <title>Neue Siedler – IM-15C World Diagnostic Overlay Foundation</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im15c-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -21,11 +21,12 @@
 
     <section class="player-stage" data-ui-region="world" aria-label="Spielwelt">
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
+      <canvas id="diagnostic-overlay-canvas" aria-label="Read-only World Diagnostic Overlay"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-15B – Structured Runtime Diagnostics Projection</h1>
-        <p>Der Inspector erweitert den eingefrorenen IM-15A-Read-only-Shell ausschließlich um strukturierte Diagnoseprojektionen bereits autoritativer Runtime-Owner. Keine Domain-Mutation, keine Overlays und keine Scenario-Aktionen.</p>
-        <output id="test-status">IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION wird aufgebaut …</output>
+        <h1>IM-15C – World Diagnostic Overlay Foundation</h1>
+        <p>Separate kamera-synchrone Read-only-Diagnoseebene über der bestehenden Welt. PATH/ROAD, Building-/Person-IDs, Carrier-Movement-Beziehung und bestehende Selection werden ausschließlich visualisiert; keine neue Runtime-, Input- oder Gameplay-Semantik.</p>
+        <output id="test-status">IM-15C-WORLD-DIAGNOSTIC-OVERLAY-FOUNDATION wird aufgebaut …</output>
       </aside>
 
       <aside class="inspector-shell" data-ui-shell="inspector" aria-label="Inspector" aria-live="polite">
@@ -84,15 +85,16 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">Inspector: strukturierte Read-only-Diagnostik · keine Runtime-Mutation</span>
+      <span class="surface-note">Inspector + World Overlay: read-only · keine Runtime-Mutation</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im15b-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15b-1"></script>
-  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15b-1"></script>
-  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15b-1"></script>
-  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15b-1"></script>
-  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im15b-1"></script>
+  <script type="module" src="src/main.js?v=im15c-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15c-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15c-1"></script>
+  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15c-1"></script>
+  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15c-1"></script>
+  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im15c-1"></script>
+  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im15c-1"></script>
 </body>
 </html>
