@@ -9,9 +9,9 @@
 
 CR-25 through CR-32, IM-13, IM-14 and IM-15A/B/C/D/E remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-IM-15 Whole Block is now **COMPLETE / FROZEN / PASS / 0 BLOCKER** after its combined completion/regression/freeze gate.
+**IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-Whole-block frozen marker name: `frozen/im-15-guidance-inspector`.
+Whole-block frozen marker: `frozen/im-15-guidance-inspector`.
 
 ## 2. Frozen IM-15 substep chain
 
@@ -45,10 +45,11 @@ The frozen block preserves:
 
 ## 5. IM-15 Whole-Block regression
 
-Against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`, the pre-final-identity Whole-Block diff was:
+Against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`:
 
-- **66 commits ahead / 0 behind**,
-- exactly **14 changed files**,
+- pre-identity synchronization: **66 commits ahead / 0 behind**,
+- after Whole-Block identity and initial freeze documentation: **72 commits ahead / 0 behind**,
+- exactly **14 changed files** throughout,
 - no Domain owner source changes,
 - no Transport owner source changes,
 - no `src/runtime/runtime.js` changes,
@@ -58,14 +59,17 @@ All five frozen IM-15 substep markers were re-verified at their authoritative he
 
 ## 6. Cumulative evidence
 
-The Whole-Block decision incorporates the already frozen substep evidence:
+The Whole-Block decision incorporates the complete frozen substep evidence:
 
 - IM-15A/B real iPhone Inspector/Diagnostics evidence,
 - IM-15C real iPhone overlay/camera synchronization evidence,
 - IM-15D real iPad controlled action sequence evidence,
 - IM-15E seven real iPad screenshots verifying scheduler synchronization, pause stillness, +1 single-step behavior, bounded history 120 and session reset separation.
 
-CI/Pages for frozen IM-15E were successful. Final Whole-Block identity/documentation commits must also complete successfully before the final frozen marker is accepted.
+Final Whole-Block technical evidence:
+
+- CI Baseline `34274868699`: **SUCCESS**,
+- Pages `34274915778` on `f0012a577e804684e0ece34f015492c06f375f56`: **SUCCESS**.
 
 ## 7. Final Whole-Block identity
 
@@ -96,7 +100,9 @@ This final identity synchronization adds no new capability.
 
 ## 9. Current gate
 
-**IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER**, pending only successful final CI/Pages on the Whole-Block identity/documentation head and creation/acceptance of `frozen/im-15-guidance-inspector` at that exact head.
+**IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+
+The final frozen marker `frozen/im-15-guidance-inspector` is to be created at the final documentation HEAD produced by this closing gate sequence. That marker creation is a mechanical freeze operation only.
 
 No next migration block is authorized in this same step.
 
@@ -104,4 +110,4 @@ After the final marker exists, the next permissible action is exclusively reconc
 
 ---
 
-**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole Block finalized at PASS / 0 BLOCKER; final CI/Pages and exact frozen marker head are the remaining mechanical completion checks. No next migration block in this step.
+**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole Block COMPLETE / FROZEN / PASS / 0 BLOCKER after combined diff, frozen-chain, CI/Pages, ownership and cumulative real-device regression. No next migration block in this step.
