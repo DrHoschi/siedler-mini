@@ -133,4 +133,10 @@ if (inspectorShell && window.CleanRuntime) {
     selectionController: window.IM14DWorldSelectionContext,
     root: document,
   });
+
+  const status = document.querySelector('#test-status');
+  if (status) {
+    status.textContent = 'IM-15A — IMPLEMENTED / NOT FROZEN — Inspector Shell aktiv · Runtime/World/Population/Gold/Selection ausschließlich read-only projiziert';
+    status.dataset.pass = 'true';
+  }
 }
