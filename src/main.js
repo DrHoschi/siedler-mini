@@ -1,20 +1,9 @@
-import { RuntimeConfig } from './runtime/config.js?v=im15c-1';
+import { RuntimeConfig } from './runtime/config.js?v=im15d-1';
 import { Runtime } from './runtime/runtime.js';
-import { WorldStore } from './world/world-store.js';
-import { MapStructure } from './world/map-structure.js';
-import { CoreDomainStores } from './domain/core-domain-stores.js';
-import { BuildingIdentityOwnershipContract } from './domain/building-identity-ownership-contract.js';
-import { BuildingLifecycleStateContract } from './domain/building-lifecycle-state-contract.js';
-import { PersonResidentIdentityContract } from './domain/person-resident-identity-contract.js';
-import { HousingHomeCapacityIntegrationContract } from './domain/housing-home-capacity-integration-contract.js';
-import { DeterministicHousingPopulationIntegration } from './domain/deterministic-housing-population-integration.js';
-import { GoldEconomyOwner } from './domain/gold-economy-owner.js';
-import { CarrierContract } from './transport/carrier-contract.js';
-import { CarrierMovementContract } from './transport/carrier-movement-contract.js';
-import { WorldBackedTraversabilitySource } from './transport/world-backed-traversability-source.js';
-import { WorldBackedPathClassificationSource } from './transport/world-backed-path-classification-source.js';
-import { DeterministicWorldReachabilityIntegration } from './transport/deterministic-world-reachability-integration.js';
-import { RuntimeEntityNavigationValidationIntegration } from './transport/runtime-entity-navigation-validation-integration.js';
+import {
+  BASELINE_MINIWORLD_SCENARIO_ID,
+  createBaselineMiniworldScenario,
+} from './diagnostics/baseline-miniworld-scenario.js?v=im15d-1';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import {
@@ -34,119 +23,8 @@ const ctx = canvas.getContext('2d');
 if (!ctx) throw new TypeError('2d canvas context required');
 
 const runtime = new Runtime(RuntimeConfig);
-const world = new WorldStore();
-const map = new MapStructure(world, {
-  name: 'CR-32A World-backed Path Classification Contract Miniworld',
-  width: 8,
-  height: 6,
-  cellSize: 1,
-  metadata: { foundation: 'CR-32A-WORLD-BACKED-PATH-CLASSIFICATION-CONTRACT' }
-});
-const domains = new CoreDomainStores();
-
-function createVisibleBuilding(definitionId, position) {
-  const buildingId = domains.buildings.allocateId();
-  return domains.buildings.create({
-    identity: BuildingIdentityOwnershipContract.define({ buildingId, definitionId }),
-    lifecycle: BuildingLifecycleStateContract.define({ buildingId }),
-    position
-  }, { id: buildingId });
-}
-
-function createVisiblePerson(position, { carrierCapacity = null } = {}) {
-  const personId = domains.units.allocateId();
-  const data = {
-    identity: PersonResidentIdentityContract.define({ personId }),
-    position
-  };
-  if (carrierCapacity != null) {
-    data.carrier = CarrierContract.define({
-      unitId: personId,
-      capacity: carrierCapacity,
-      location: {
-        kind: 'cell',
-        refId: map.cellIdAt(Math.floor(position.x), Math.floor(position.y)),
-      },
-    });
-  }
-  return domains.units.create(data, { id: personId });
-}
-
-const pathTile = map.createTile({
-  technicalName: 'path.cr32a.browser-evidence',
-  classification: 'terrain',
-  passability: 'UNSPECIFIED',
-  traversalType: 'PATH',
-});
-const roadTile = map.createTile({
-  technicalName: 'road.cr32a.browser-evidence',
-  classification: 'terrain',
-  passability: 'UNSPECIFIED',
-  traversalType: 'ROAD',
-});
-map.setTileAt(1, 4, pathTile.id);
-map.setTileAt(2, 4, roadTile.id);
-
-const hq = createVisibleBuilding('HQ', { x: 2, y: 2 });
-createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
-const storehouse = createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
-const carrierPerson = createVisiblePerson({ x: 1.25, y: 1.5 }, { carrierCapacity: 2 });
-const secondPerson = createVisiblePerson({ x: 4.25, y: 2.25 });
-createVisiblePerson({ x: 6.25, y: 4.25 });
-
-const housingPopulation = DeterministicHousingPopulationIntegration.integrate({
-  domains,
-  housings: [
-    HousingHomeCapacityIntegrationContract.defineHousing({ buildingIdentity: hq.identity, capacity: 2 }),
-    HousingHomeCapacityIntegrationContract.defineHousing({ buildingIdentity: storehouse.identity, capacity: 1 }),
-  ],
-  assignments: [],
-});
-
-const goldEconomy = new GoldEconomyOwner({ initialGold: 0 });
-const browserEvidenceGoldPerResident = 1;
-const goldSettlement = goldEconomy.settle({
-  population: housingPopulation.population,
-  goldPerResident: browserEvidenceGoldPerResident,
-});
-
-const pathClassification = new WorldBackedPathClassificationSource({ map, world });
-const pathClassificationEntries = pathClassification.entries();
-const traversability = new WorldBackedTraversabilitySource({ map, domains });
-const blockedStaticCells = traversability.entries();
-const reachabilityEvidence = DeterministicWorldReachabilityIntegration.evaluate({
-  map,
-  traversability,
-  startPosition: { x: 0.25, y: 0.25 },
-  targetPosition: { x: 7.25, y: 5.25 },
-});
-
-const personNavigationValidation = RuntimeEntityNavigationValidationIntegration.validatePerson({
-  domains,
-  map,
-  traversability,
-  personId: secondPerson.id,
-  targetPosition: { x: 7.25, y: 5.25 },
-});
-
-const carrierMovementEvidence = CarrierMovementContract.define({
-  unitId: carrierPerson.id,
-  currentPosition: carrierPerson.position,
-  state: 'MOVING',
-  targetPosition: { x: 7.25, y: 0.25 },
-});
-const carrierNavigationValidation = RuntimeEntityNavigationValidationIntegration.validateCarrierMovement({
-  domains,
-  map,
-  traversability,
-  movement: carrierMovementEvidence,
-});
-const runtimeNavigationValidations = Object.freeze([
-  personNavigationValidation,
-  carrierNavigationValidation,
-]);
-const validRuntimeNavigationCount = runtimeNavigationValidations.filter(entry => entry.valid).length;
-
+let activeRuntimeComposition = createBaselineMiniworldScenario();
+let diagnosticOverlayRenderer = null;
 let cameraState = createWorldViewCameraState({
   viewportWidth: 1,
   viewportHeight: 1,
@@ -154,14 +32,24 @@ let cameraState = createWorldViewCameraState({
   offsetY: 28,
   zoom: 1,
 });
-let activeRuntimeComposition = null;
-let diagnosticOverlayRenderer = null;
 
-function installActiveRuntimeComposition(composition) {
+function requireComposition(composition) {
   if (composition?.kind !== 'active-runtime-composition' || !composition?.authoritative?.map || !composition?.authoritative?.domains) {
     throw new TypeError('complete active runtime composition required');
   }
-  activeRuntimeComposition = composition;
+  return composition;
+}
+
+function currentComposition() {
+  return requireComposition(activeRuntimeComposition);
+}
+
+function currentAuthoritative() {
+  return currentComposition().authoritative;
+}
+
+function installActiveRuntimeComposition(composition) {
+  activeRuntimeComposition = requireComposition(composition);
   return activeRuntimeComposition;
 }
 
@@ -169,10 +57,6 @@ function installDiagnosticOverlayRenderer(renderer) {
   if (typeof renderer !== 'function') throw new TypeError('IM-15C diagnostic overlay renderer required');
   diagnosticOverlayRenderer = renderer;
   return diagnosticOverlayRenderer;
-}
-
-function currentRenderOwners() {
-  return activeRuntimeComposition?.authoritative ?? { map, domains };
 }
 
 function resizeCanvas() {
@@ -197,8 +81,8 @@ function resizeCanvas() {
 function renderCurrentWorld() {
   const { width, height } = resizeCanvas();
   const cellPixels = Math.max(24, Math.min(56, Math.floor(Math.min(width / 10, height / 8))));
-  const renderOwners = currentRenderOwners();
-  const projection = projectVisibleRuntimeState({ map: renderOwners.map, domains: renderOwners.domains });
+  const owners = currentAuthoritative();
+  const projection = projectVisibleRuntimeState({ map: owners.map, domains: owners.domains });
   const commands = renderProjectedWorldWithCameraToCanvas(ctx, projection, cameraState, {
     cellPixels,
     offset: { x: 0, y: 0 },
@@ -225,71 +109,73 @@ function zoomCameraAt({ factor, anchorX, anchorY } = {}) {
   return renderCurrentWorld();
 }
 
+function resetBaselineMiniworld() {
+  if (runtime.state === 'RUNNING') throw new Error('baseline reset not allowed while RUNNING');
+  const composition = createBaselineMiniworldScenario();
+  installActiveRuntimeComposition(composition);
+  renderCurrentWorld();
+  return Object.freeze({
+    kind: 'im15d-scenario-reset-result',
+    scenarioId: composition.scenarioId,
+  });
+}
+
 runtime.events.on('runtime.stateChanged', ({ current }) => {
   if (statusEl) statusEl.textContent = current;
 });
 runtime.boot();
 
+const initialOwners = currentAuthoritative();
 const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
-const runtimeValidationPass = validRuntimeNavigationCount === runtimeNavigationValidations.length;
-const classificationPass = pathClassification.typeAt({ x: 1, y: 4 }) === 'PATH'
-  && pathClassification.classAt({ x: 2, y: 4 }) === 'ROAD'
-  && pathClassificationEntries.length === 2;
 if (testEl) {
-  testEl.textContent = `CR-32A — World-backed Path Classification Contract — ${classificationPass ? 'PASS' : 'FAIL'} — PATH ${pathClassification.typeAt({ x: 1, y: 4 })} / ROAD ${pathClassification.classAt({ x: 2, y: 4 })} aus realen MapStructure-Zellen — CR-31 Navigation ${runtimeValidationPass ? 'PASS' : 'FAIL'} erhalten — CR-30 Population ${housingPopulation.population.count} / Gold ${goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
-  testEl.dataset.pass = classificationPass && runtimeValidationPass ? 'true' : 'false';
+  testEl.textContent = `CR-32A — World-backed Path Classification Contract — ${initialOwners.classificationPass ? 'PASS' : 'FAIL'} — PATH ${initialOwners.pathClassification.typeAt({ x: 1, y: 4 })} / ROAD ${initialOwners.pathClassification.classAt({ x: 2, y: 4 })} aus realen MapStructure-Zellen — CR-31 Navigation ${initialOwners.runtimeValidationPass ? 'PASS' : 'FAIL'} erhalten — CR-30 Population ${initialOwners.housingPopulation.population.count} / Gold ${initialOwners.goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.dataset.pass = initialOwners.classificationPass && initialOwners.runtimeValidationPass ? 'true' : 'false';
 }
 
 window.CleanRuntime = Object.freeze({
   config: RuntimeConfig,
   runtime,
-  world,
-  map,
-  domains,
-  housingPopulation,
-  goldEconomy,
-  goldSettlement,
-  pathClassification,
-  pathClassificationEntries,
-  traversability,
-  reachabilityEvidence,
-  personNavigationValidation,
-  carrierMovementEvidence,
-  carrierNavigationValidation,
-  runtimeNavigationValidations,
+  get world() { return currentAuthoritative().world; },
+  get map() { return currentAuthoritative().map; },
+  get domains() { return currentAuthoritative().domains; },
+  get housingPopulation() { return currentAuthoritative().housingPopulation; },
+  get goldEconomy() { return currentAuthoritative().goldEconomy; },
+  get goldSettlement() { return currentAuthoritative().goldSettlement; },
+  get pathClassification() { return currentAuthoritative().pathClassification; },
+  get pathClassificationEntries() { return currentAuthoritative().pathClassificationEntries; },
+  get traversability() { return currentAuthoritative().traversability; },
+  get reachabilityEvidence() { return currentAuthoritative().reachabilityEvidence; },
+  get personNavigationValidation() { return currentAuthoritative().personNavigationValidation; },
+  get carrierMovementEvidence() { return currentAuthoritative().carrierMovementEvidence; },
+  get carrierNavigationValidation() { return currentAuthoritative().carrierNavigationValidation; },
+  get runtimeNavigationValidations() { return currentAuthoritative().runtimeNavigationValidations; },
   renderCurrentWorld,
   panCameraBy,
   zoomCameraAt,
   cameraControlLimits: DEFAULT_CAMERA_CONTROL_LIMITS,
   cameraInputOwner: 'IM-14E-UNIFIED-WORLD-INPUT',
   installActiveRuntimeComposition,
-  getActiveRuntimeComposition: () => activeRuntimeComposition,
+  getActiveRuntimeComposition: () => currentComposition(),
+  resetBaselineMiniworld,
   installDiagnosticOverlayRenderer,
   getCameraState: () => cameraState,
 });
 
-console.info('[CR-32A] World-backed Path Classification Contract', {
+console.info('[IM-15D] Controlled Guidance / Diagnostic Scenario Actions foundation', {
   build: RuntimeConfig.build,
-  classificationPass,
-  pathClassificationEntries,
-  pathAtEvidenceCell: pathClassification.typeAt({ x: 1, y: 4 }),
-  roadAtEvidenceCell: pathClassification.classAt({ x: 2, y: 4 }),
-  personNavigationValidation,
-  carrierNavigationValidation,
-  runtimeValidationPass,
-  reachabilityEvidence,
-  blockedStaticCells,
-  frozenCr31RegressionPreserved: true,
-  traversalClassesPreserved: ['NEUTRAL', 'PATH', 'ROAD'],
-  routeOwnerUnchanged: true,
-  movementOwnerUnchanged: true,
-  trafficReservationDeadlockRecoveryUnchanged: true,
-  wearNotIntroduced: true,
-  traversalCostBehaviorUnchanged: true,
-  population: housingPopulation.population.count,
-  goldBalance: goldSettlement.state.balance,
+  scenarioId: BASELINE_MINIWORLD_SCENARIO_ID,
+  classificationPass: initialOwners.classificationPass,
+  runtimeValidationPass: initialOwners.runtimeValidationPass,
+  pathClassificationEntries: initialOwners.pathClassificationEntries,
+  reachabilityEvidence: initialOwners.reachabilityEvidence,
+  blockedStaticCells: initialOwners.blockedStaticCells,
+  population: initialOwners.housingPopulation.population.count,
+  goldBalance: initialOwners.goldSettlement.state.balance,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
+  controlledActionsOnly: true,
+  stopExcluded: true,
+  arbitraryStateEditingExcluded: true,
 });
