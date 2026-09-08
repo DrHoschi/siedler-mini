@@ -16,6 +16,9 @@ function requireRuntime(runtime) {
   if (!runtime.domains?.buildings || !runtime.domains?.units) {
     throw new TypeError('IM-15C authoritative domain stores required');
   }
+  if (typeof runtime.installDiagnosticOverlayRenderer !== 'function') {
+    throw new TypeError('IM-15C read-only overlay render hook required');
+  }
   return runtime;
 }
 
@@ -193,6 +196,7 @@ export function createWorldDiagnosticOverlayController({
   canvas,
   referenceCanvas,
   selectionController = window.IM14DWorldSelectionContext,
+  selectionRefreshMs = 100,
 } = {}) {
   const source = requireRuntime(runtime);
   const ctx = requireCanvas(canvas);
@@ -200,27 +204,40 @@ export function createWorldDiagnosticOverlayController({
   if (!selectionController || typeof selectionController.getSelection !== 'function') {
     throw new TypeError('IM-15C frozen IM-14D selection read boundary required');
   }
+  if (!Number.isFinite(selectionRefreshMs) || selectionRefreshMs < 50) {
+    throw new TypeError('IM-15C selectionRefreshMs must be >= 50');
+  }
 
   let current = null;
+  let lastRenderResult = null;
+  let lastSelectionKey = 'none';
+
   function render(renderResult) {
+    lastRenderResult = renderResult;
     resizeOverlayCanvas(canvas, ctx, referenceCanvas, source.config.render.maxDevicePixelRatio);
-    current = projectWorldDiagnosticOverlay({
-      runtime: source,
-      renderResult,
-      selection: selectionController.getSelection(),
-    });
+    const selection = selectionController.getSelection();
+    current = projectWorldDiagnosticOverlay({ runtime: source, renderResult, selection });
     renderWorldDiagnosticOverlay(current, ctx);
+    lastSelectionKey = selection ? `${selection.kind}:${selection.id}` : 'none';
     return current;
   }
 
   source.installDiagnosticOverlayRenderer(render);
   const initial = source.renderCurrentWorld();
 
+  const selectionTimer = window.setInterval(() => {
+    if (!lastRenderResult) return;
+    const selection = selectionController.getSelection();
+    const key = selection ? `${selection.kind}:${selection.id}` : 'none';
+    if (key !== lastSelectionKey) render(lastRenderResult);
+  }, selectionRefreshMs);
+
   return Object.freeze({
     kind: 'im15c-world-diagnostic-overlay-controller',
     getCurrentOverlay: () => current,
-    refresh: () => render(source.renderCurrentWorld()),
+    refresh: () => source.renderCurrentWorld(),
     initial,
+    destroy() { window.clearInterval(selectionTimer); },
   });
 }
 
