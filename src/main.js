@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im16a-1';
+import { RuntimeConfig } from './runtime/config.js?v=im16b-1';
 import { Runtime } from './runtime/runtime.js';
 import {
   BASELINE_MINIWORLD_SCENARIO_ID,
@@ -130,7 +130,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `IM-16A — Authoritative Construction Placement Contract — Runtime foundation loaded — Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;
+  testEl.textContent = `IM-16B — Player Placement Interaction State & World Target Contract — Runtime foundation loaded — Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;
   testEl.dataset.pass = 'pending';
 }
 
@@ -163,7 +163,7 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[IM-16A] Authoritative Construction Placement Contract runtime foundation', {
+console.info('[IM-16B] Player Placement Interaction State & World Target Contract runtime foundation', {
   build: RuntimeConfig.build,
   scenarioId: BASELINE_MINIWORLD_SCENARIO_ID,
   classificationPass: initialOwners.classificationPass,
@@ -175,7 +175,10 @@ console.info('[IM-16A] Authoritative Construction Placement Contract runtime fou
   goldBalance: initialOwners.goldSettlement.state.balance,
   buildings: initialRender.projection.buildings.length,
   persons: initialRender.projection.persons.length,
-  constructionPlacementMutationExcluded: true,
-  playerPlacementUiExcluded: true,
+  placementStateTemporaryOnly: true,
+  authoritativeIm16aEvaluationPreserved: true,
+  confirmCommitExcluded: true,
+  previewRenderingExcluded: true,
+  buildingMutationExcluded: true,
   inspectorMutationExcluded: true,
 });
