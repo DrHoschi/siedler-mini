@@ -8,8 +8,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Whole-block branch: `feature/im-15-guidance-inspector`
-- Whole-block base: frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
+- Current documentation line: `feature/im-15-guidance-inspector`
+- Frozen development baseline: IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15 – Guidance / Inspector: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -17,6 +17,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-15C – World Diagnostic Overlay Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15D – Controlled Guidance / Diagnostic Scenario Actions: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15E – Simulation & Balancing Observation Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-16 – Player Construction & Placement Integration: DEFINED / NOT IMPLEMENTED**
 
 ## 2. Frozen IM-15 chain
 
@@ -29,6 +30,8 @@ The five frozen substep markers remain authoritative:
 - IM-15E @ `ba1c7fc80dfa0d09342d0814e3b69a682949f6cf`
 
 Whole-block frozen marker: `frozen/im-15-guidance-inspector`.
+
+Authoritative frozen IM-15 development baseline for IM-16: `9e797ab93036f6b3731442dc626edb8c091893c8`.
 
 ## 3. Frozen IM-15 capability boundary
 
@@ -110,20 +113,77 @@ Not introduced by IM-15:
 - invented metrics,
 - new Selection/Pointer/Touch/Camera semantics.
 
-## 9. Current gate
+## 9. IM-16 – Player Construction & Placement Integration
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Exact ID:** `IM-16`
+
+**Title:** Player Construction & Placement Integration
+
+**Binding baseline:** exclusively frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`.
+
+### Leitfrage
+
+„Wie wird der eingefrorene Player-UI-, Pointer-/Touch-, Selection- und Camera-Unterbau mit den bestehenden autoritativen Bau-/Gebäudegrenzen verbunden, sodass der Spieler ein Gebäude auswählen, seine Platzierung in der Welt prüfen, bestätigen oder abbrechen kann, ohne eine zweite Gameplay-, Konstruktions- oder Persistenzwahrheit einzuführen?“
+
+### Ziel
+
+IM-16 stellt erstmals den vollständigen player-facing Bauablauf her:
+
+`Gebäude auswählen → Platzierungsmodus → Position in der Welt bestimmen → gültig/ungültig erkennen → bestätigen oder abbrechen → autoritatives Bauergebnis wieder in die Player UI projizieren`.
+
+Fachliche Regeln wie Platzierbarkeit, Kosten und entstehender Gebäude-/Konstruktionszustand bleiben bei ihren bestehenden Runtime-/Domain-Ownern. Die UI darf lediglich den für die Bedienung notwendigen temporären Interaktions- und Preview-Zustand besitzen.
+
+### Scope
+
+- Player-facing Gebäudeauswahl auf Basis vorhandener Definitionen.
+- Kontrolliertes Starten und Beenden eines Placement Mode.
+- Nutzung des eingefrorenen IM-14 Pointer-/Touch-Vertrags für Weltpositionierung.
+- Verträgliches Zusammenspiel mit Selection und Camera Controls.
+- Visuelles Placement Preview/Ghost.
+- Anzeige vorhandener autoritativer Validierungsergebnisse.
+- Confirm/Cancel.
+- Übergabe einer bestätigten Platzierung an die bestehende autoritative Bau-/Domain-Grenze.
+- Anschließende Projektion des tatsächlich entstandenen autoritativen Zustands in UI/Context.
+- Desktop-/iPad-/iPhone-Verifikation.
+- Vollständige sichtbare Build-Identity-Synchronisierung.
+- Der eingefrorene IM-15-Inspector darf die daraus entstehenden Zustände weiterhin beobachten, besitzt den Bauvorgang aber nicht.
+
+### Ausschlüsse
+
+- Keine neue oder duplizierte Placement-, Kosten-, Gebäude-, Construction- oder Persistenzlogik in der UI.
+- Keine Neugestaltung von Gebäudedefinitionen, Ressourcenökonomie, Produktion, Workforce oder Balancing.
+- Kein Ausbau des Inspectors zum Baueditor.
+- Keine neuen Inspector-Mutationspfade.
+- Keine SaveGame-Neuarchitektur.
+- Keine Kampagnen-, Tutorial- oder Guidance-Progression.
+- Noch keine umfassende Gebäudeverwaltung nach der Platzierung wie Upgrade-, Abriss- oder Produktionssteuerung.
+- Keine zusätzliche Straßenbau-/Terraforming-Funktion, sofern sie nicht bereits zwingender Bestandteil einer vorhandenen autoritativen Placement-Grenze ist.
+- Keine Übernahme der alten `main`-BuildDock-Architektur als Implementierungsbasis.
+
+### Abhängigkeiten / Ownership
+
+- Ausschließliche Entwicklungsbasis ist frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`.
+- Die eingefrorene IM-13-SaveGame-Ownership bleibt unangetastet.
+- IM-14 Player UI Shell, Pointer/Touch, HUD, Selection/Context und Camera Controls werden als bestehende Interaktionsgrenzen konsumiert.
+- IM-15 Inspector-/Diagnostics-Grenzen bleiben vollständig erhalten.
+- Bereits bestehende autoritative Runtime-/Domain-/Construction-Owner werden verwendet, nicht ersetzt oder parallel nachgebaut.
+
+## 10. Current gate
 
 **IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The final frozen marker `frozen/im-15-guidance-inspector` must point at the final documentation HEAD produced by this closing gate sequence; its successful creation is the final mechanical marker operation, not a new development step.
+**IM-16 – Player Construction & Placement Integration = DEFINED / NOT IMPLEMENTED.**
 
-No next migration block is authorized in this same step.
+Diese Dokumentation autorisiert noch keinen IM-16-Branch und keine IM-16-Implementierung.
 
-After the final marker exists, the next permissible action is exclusively reconciliation of the next migration block against frozen IM-15. No implementation is automatically authorized.
+Der nächste zulässige Schritt nach diesem separaten Dokumentationsgate ist ausschließlich die Prüfung/Finalisierung dieser IM-16-Dokumentation gegen frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`. Erst nach einem sauberen Dokumentationsgate darf ein separater IM-16-Entwicklungsbranch ausdrücklich freigegeben werden.
 
-## 10. Permanent visible build identity synchronization rule
+## 11. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole Block COMPLETE / FROZEN / PASS / 0 BLOCKER after combined diff, frozen-chain, CI/Pages, ownership and cumulative real-device regression. No next migration block in this step.
+**Updated:** 2026-09-08 — IM-16 Player Construction & Placement Integration documented as DEFINED / NOT IMPLEMENTED against frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`. No branch and no implementation authorized in this step.
