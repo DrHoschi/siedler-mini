@@ -39,9 +39,11 @@ try {
 
   const zoomedIn = zoomWorldViewCameraAt(synthetic, { factor: 100, anchorX: 100, anchorY: 80 });
   const zoomedOut = zoomWorldViewCameraAt(synthetic, { factor: 0.001, anchorX: 100, anchorY: 80 });
+  const runtimeCameraPolicy = runtime.cameraControlLimits;
   const frozenCameraPolicyPass = DEFAULT_CAMERA_CONTROL_LIMITS.minZoom === 0.5
     && DEFAULT_CAMERA_CONTROL_LIMITS.maxZoom === 3
-    && runtime.cameraControlLimits === DEFAULT_CAMERA_CONTROL_LIMITS
+    && runtimeCameraPolicy?.minZoom === DEFAULT_CAMERA_CONTROL_LIMITS.minZoom
+    && runtimeCameraPolicy?.maxZoom === DEFAULT_CAMERA_CONTROL_LIMITS.maxZoom
     && zoomedIn.zoom === 3
     && zoomedOut.zoom === 0.5;
 
@@ -83,6 +85,8 @@ try {
     selectionRegressionPass,
     noDoubleProcessingPass,
     frozenCameraPolicyPass,
+    importedCameraPolicy: DEFAULT_CAMERA_CONTROL_LIMITS,
+    runtimeCameraPolicy,
     buildPass,
   });
 
