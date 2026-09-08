@@ -13,7 +13,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current migration block: **IM-14 – UI / Mobile Foundation: IN PROGRESS / NOT FROZEN**
 - IM-14A – Player UI Shell & Responsive Surface Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14B – Unified Pointer / Touch Interaction Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14C – Runtime HUD Projection: **IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN**
+- IM-14C – Runtime HUD Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
 ## 2. Frozen predecessor line
 
@@ -26,19 +26,19 @@ Frozen markers:
 - `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`
 - `frozen/im-14b-unified-pointer-touch-interaction-contract` @ `8aa7594f4debcc838382ca6f49fcdcbadf9be324`
 
-## 3. Binding IM-14C contract
+## 3. Frozen IM-14C contract
 
 IM-14C introduces only a read-only player-facing HUD projection over already authoritative Runtime data.
 
-Binding requirements:
+Frozen requirements:
 
-- the HUD source for population is exclusively `housingPopulation.population.count`,
-- the HUD source for gold is exclusively `goldEconomy.snapshot().balance`,
-- projection produces an immutable HUD view model,
+- HUD population source exclusively `housingPopulation.population.count`,
+- HUD gold source exclusively `goldEconomy.snapshot().balance`,
+- immutable deterministic HUD view model,
 - equal authoritative state produces equal projected HUD state,
-- rendering may format and display values but may not create a second authoritative truth,
-- HUD refresh must not execute simulation/domain/economy mutation,
-- the HUD owns only `authoritative runtime state -> immutable HUD view model -> DOM projection`,
+- rendering may format/display values but creates no second authoritative truth,
+- HUD refresh executes no simulation/domain/economy mutation,
+- HUD owns only `authoritative runtime state -> immutable HUD view model -> DOM projection`,
 - IM-14A layout ownership and IM-14B input ownership remain unchanged,
 - visible/build identity is `IM-14C-RUNTIME-HUD-PROJECTION`.
 
@@ -55,42 +55,41 @@ Explicitly excluded from IM-14C:
 - minimap, notifications or Inspector,
 - any new gameplay/domain/persistence owner.
 
-## 4. Implemented IM-14C surface
+## 4. IM-14C Completion / Regression / Freeze Gate
 
-The current implementation provides:
+Authoritative pre-freeze implementation/evidence head: `3b6273531fbca76ada1c6f17b44d04032951c816`.
 
-- `src/ui/runtime-hud-projection.js` as the read-only projection boundary,
-- a compact player-facing Topbar HUD for `Bevölkerung` and `Gold`,
-- population read directly from the existing derived-population truth,
-- gold read directly from `GoldEconomyOwner.snapshot()`,
-- immutable deterministic view-model projection,
-- DOM-only rendering/refresh without domain mutation,
-- responsive HUD styling inside the frozen IM-14A shell,
-- dedicated browser evidence in `src/im14c-runtime-evidence.js`,
-- synchronized page/verification/build identity.
+Regression against frozen IM-14B @ `8aa7594f4debcc838382ca6f49fcdcbadf9be324`:
 
-`src/main.js` was not changed by IM-14C. Existing camera behavior and all frozen gameplay/domain/persistence owners remain unchanged.
+- branch is 8 commits ahead / 0 behind,
+- changed surface is limited to this workflow file, roadmap, `index.html`, `src/im14c-runtime-evidence.js`, `src/runtime/config.js`, `src/ui/app.css`, and `src/ui/runtime-hud-projection.js`,
+- `src/main.js` is unchanged,
+- no IM-14D Selection/Context semantics and no new Camera/Gameplay/Persistence ownership were introduced.
+
+Technical evidence on `3b6273531fbca76ada1c6f17b44d04032951c816`:
+
+- CI Baseline run `34192108518`: **SUCCESS**,
+- Pages build/deployment run `34192108143`: **SUCCESS**.
+
+Real-device evidence:
+
+- iPhone / Safari, 2026-09-08 07:51 local: **READY / PASS / 0 BLOCKER**,
+- visible HUD: `Bevölkerung: 3`, `Gold: 3`,
+- visible gate: `IM-14C – Runtime HUD Projection – PASS`, `Population Source PASS`, `Gold Source PASS`, `Read-only Ownership PASS`, `Build Identity PASS`,
+- frozen IM-14A mobile shell remains visibly intact.
+
+**Gate result: IM-14C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 ## 5. Current gate
 
-**IM-14C = IMPLEMENTED / VERIFICATION PENDING / NOT FROZEN.**
+The complete IM-14 block remains **IN PROGRESS / NOT FROZEN**.
 
-Expected browser gate:
+No IM-14D implementation is authorized by the IM-14C freeze itself. The next permissible action is exclusively **reconciliation/definition of IM-14D – World Selection & Context Projection against frozen IM-14C**. Implementation requires separate explicit authorization after that contract is reconciled and accepted.
 
-`IM-14C — Runtime HUD Projection — PASS — Population Source PASS — Gold Source PASS — Read-only Ownership PASS — Build Identity PASS`
-
-Before any IM-14D work, IM-14C requires technical/CI verification plus real browser/device evidence and a Completion / Regression / Freeze Gate with PASS / 0 BLOCKER.
-
-The complete IM-14 block remains NOT FROZEN.
-
-## 6. Frozen predecessor preservation
-
-IM-14B, IM-14A, IM-13 and the frozen CR-31/CR-32 boundaries remain authoritative and unchanged. IM-14C is projection-only and does not become a competing Simulation, Gameplay, Selection, Camera or Persistence owner.
-
-## 7. Permanent visible build identity synchronization rule
+## 6. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-14C Runtime HUD Projection implemented against frozen IM-14B; verification pending, not frozen.
+**Updated:** 2026-09-08 — IM-14C COMPLETE / FROZEN / PASS / 0 BLOCKER after regression, CI/Pages success and real iPhone/Safari evidence. IM-14 whole block remains NOT FROZEN; next permissible action is IM-14D reconciliation/definition only.
