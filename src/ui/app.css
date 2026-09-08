@@ -78,6 +78,12 @@ button,input,select,textarea{font:inherit}
   z-index:0;
 }
 
+#diagnostic-overlay-canvas{
+  z-index:1;
+  pointer-events:none;
+  touch-action:none;
+}
+
 .verification-card{
   position:absolute;
   top:var(--shell-gap);
