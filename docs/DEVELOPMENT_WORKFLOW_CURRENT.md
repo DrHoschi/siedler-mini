@@ -8,97 +8,73 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Current whole-block branch: `feature/im-14-ui-mobile-foundation`
-- Whole-block branch base: frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
-- Current migration block: **IM-14 – UI / Mobile Foundation: IN PROGRESS / NOT FROZEN**
+- Whole-block branch: `feature/im-14-ui-mobile-foundation`
+- Whole-block base: frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
+- **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14A – Player UI Shell & Responsive Surface Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14B – Unified Pointer / Touch Interaction Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14C – Runtime HUD Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14D – World Selection & Context Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - IM-14E – Player Camera Controls Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
-## 2. Frozen predecessor line
+## 2. Frozen IM-14 composition
 
-Frozen markers:
+IM-14 freezes the complete player-facing UI/mobile foundation as the composition of five separately verified boundaries:
+
+- **IM-14A:** responsive Player UI Shell with Topbar, World/Canvas and Action regions, safe-area handling and Canvas↔World binding,
+- **IM-14B:** neutral unified Pointer/Touch lifecycle and deterministic UI-vs-WORLD classification,
+- **IM-14C:** read-only Runtime HUD projection for authoritative Population and Gold,
+- **IM-14D:** ephemeral Building/Person selection and read-only Context projection with Empty-World clear and Drag/Pinch selection guard,
+- **IM-14E:** player camera gesture integration over the shared WORLD input using the frozen camera-control functions and zoom policy.
+
+Ownership remains separated:
+
+- UI does not own simulation/domain/persistence state,
+- HUD does not create a second Population/Gold truth,
+- Selection does not mutate selected runtime/domain objects,
+- Camera integration owns gesture interpretation only,
+- SaveGame/Persistence, Inspector, minimap, gameplay/context actions and later guidance remain outside IM-14.
+
+## 3. Frozen markers
 
 - `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`
 - `frozen/im-14b-unified-pointer-touch-interaction-contract` @ `8aa7594f4debcc838382ca6f49fcdcbadf9be324`
 - `frozen/im-14c-runtime-hud-projection` @ `788358677092ef91d7edf1c0d8a6a82efacc5f21`
 - `frozen/im-14d-world-selection-context-projection` @ `72b234e0ada95afa324d62d83274ee1f320abe37`
+- `frozen/im-14e-player-camera-controls-integration` @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
 
-IM-14A remains layout owner, IM-14B neutral Pointer/Touch transport owner, IM-14C read-only HUD owner, and IM-14D ephemeral Selection/Context owner.
+## 4. IM-14 Whole-Block Completion / Regression / Freeze Gate
 
-## 3. Frozen IM-14E contract
+Authoritative final pre-whole-block-freeze branch HEAD: `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
 
-IM-14E integrates the already existing/frozen camera behavior into the IM-14 input architecture. It does not invent a new camera policy.
+Full branch regression against frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`:
 
-Frozen requirements:
+- branch is **51 commits ahead / 0 behind**,
+- changed surface is limited to IM-14 control/runtime-evidence/UI integration surfaces: workflow/roadmap, `index.html`, IM-14A/B/C/D/E evidence files, `src/main.js`, `src/runtime/config.js`, `src/ui/app.css`, and the four IM-14 UI integration modules,
+- no unrelated domain/gameplay/persistence/Inspector feature surface is introduced,
+- all planned IM-14 substeps A–E are individually frozen before the whole-block gate.
 
-- `cameraState` remains the single authoritative camera state,
-- camera mutations continue exclusively through `panWorldViewCamera`, `zoomWorldViewCameraAt`, and viewport resize through `resizeWorldViewCameraViewport`,
-- frozen zoom limits remain `0.5 .. 3.0`,
-- one WORLD pointer moving means Pan,
-- two WORLD pointers mean midpoint Pan + anchor-based Pinch Zoom,
-- Wheel means anchor-based desktop zoom,
-- Pointer Up/Cancel ends gesture state cleanly,
-- Pointer camera input reuses the same frozen IM-14D/IM-14B WORLD input boundary,
-- direct parallel Canvas pointer handling is removed so camera mutations are not double processed,
-- IM-14D Tap/Click selection remains functional and Drag/Pinch still does not select,
-- camera mutation only triggers world rerender and does not create gameplay/domain/persistence ownership,
-- browser gesture suppression remains limited to the Canvas/world interaction surface,
-- visible/build identity is `IM-14E-PLAYER-CAMERA-CONTROLS-INTEGRATION`.
+Final technical evidence:
 
-Explicitly excluded:
+- authoritative final functional/evidence state `e3df3aca45a1fa156447ba302188227fd3718125` has CI Baseline run `34203676233`: **SUCCESS** and Pages run `34203675151`: **SUCCESS**,
+- only the two control documents changed from `e3df3aca45a1fa156447ba302188227fd3718125` to final pre-whole-block-freeze HEAD `053d4cc7f8befdb747ebce9afb755f286e2b0682`,
+- Pages run `34204224161` on `053d4cc7f8befdb747ebce9afb755f286e2b0682`: **SUCCESS**.
 
-- new zoom limits or camera math,
-- world-bound camera clamps,
-- inertia/momentum,
-- edge scrolling,
-- keyboard/WASD camera controls,
-- auto-center/follow camera,
-- zoom buttons or minimap camera control,
-- new Selection/Context semantics,
-- gameplay/domain/persistence mutation,
-- Inspector.
+Combined real-device/browser evidence across the block:
 
-## 4. IM-14E Completion / Regression / Freeze Gate
+- IM-14A responsive shell verified on iPhone/Safari and iPad/Safari: **PASS / 0 BLOCKER**,
+- IM-14B unified Pointer/Touch boundary verified on iPhone/Safari and iPad/Safari: **PASS / 0 BLOCKER**,
+- IM-14C HUD verified on iPhone/Safari with Population 3 / Gold 3 and read-only ownership: **PASS / 0 BLOCKER**,
+- IM-14D Building/Person selection, Context projection, Empty-World clear, Drag/Pan and Pinch guard verified on iPhone/Safari: **PASS / 0 BLOCKER**,
+- IM-14E one-finger Pan, two-finger zoom, Pan after zoom, Building/Person selection regression, no accidental Drag/Pinch selection and corrected Frozen Camera Policy evidence verified on iPhone/Safari: **PASS / 0 BLOCKER**.
 
-Authoritative final pre-freeze branch HEAD: `e3df3aca45a1fa156447ba302188227fd3718125`.
-
-Regression against frozen IM-14D @ `72b234e0ada95afa324d62d83274ee1f320abe37`:
-
-- branch is 11 commits ahead / 0 behind,
-- changed surface is limited to this workflow file, roadmap, `index.html`, `src/im14e-runtime-evidence.js`, `src/main.js`, `src/runtime/config.js`, and `src/ui/player-camera-controls-integration.js`,
-- the former direct Canvas pointer/wheel camera pipeline is removed from `src/main.js`,
-- the single authoritative camera state and frozen camera-control functions remain in use,
-- no new camera policy, gameplay/domain/persistence ownership or Inspector was introduced.
-
-Technical evidence on `e3df3aca45a1fa156447ba302188227fd3718125`:
-
-- CI Baseline run `34203676233`: **SUCCESS**,
-- Pages build/deployment run `34203675151`: **SUCCESS**.
-
-Evidence correction history:
-
-- first real-device pass exposed only `Frozen Camera Policy FAIL` while all functional camera/selection checks passed,
-- diagnosis confirmed the failure came exclusively from JavaScript object-identity comparison across cache-versioned module instances,
-- the evidence path was corrected to compare the frozen semantic values (`minZoom = 0.5`, `maxZoom = 3.0`) and actual clamp results rather than object identity,
-- no camera behavior or policy was changed by that correction.
-
-Real-device evidence:
-
-- iPhone / Safari, 2026-09-08 10:13–10:14 local: one-finger Pan, two-finger zoom in/out, Pan after zoom, Building selection and Person selection all manually confirmed; Drag/Pinch causes no accidental selection,
-- corrected iPhone / Safari evidence, 2026-09-08 10:18 local: **READY / PASS / 0 BLOCKER**,
-- visible browser gate shows Unified Camera Input PASS, Single-Pointer Pan PASS, Pinch Zoom PASS, Wheel Zoom PASS, Selection Regression PASS, No Double Processing PASS, Frozen Camera Policy PASS and Build Identity PASS,
-- HUD, Context and responsive shell remain intact.
-
-**Gate result: IM-14E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+**Whole-block gate result: IM-14 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 ## 5. Current gate
 
-The complete IM-14 block remains **IN PROGRESS / NOT FROZEN**.
+IM-14 is now frozen as a whole block. No additional IM-14 feature implementation is authorized.
 
-IM-14E freeze does not itself freeze the whole block. The next permissible action is exclusively **IM-14 Whole-Block Completion / Regression / Freeze Gate** across frozen IM-14A/B/C/D/E and their real-device/CI evidence. No additional IM-14 feature implementation is authorized before that gate.
+The binding migration order places **IM-15 – Guidance / Inspector** after IM-14. The IM-14 freeze does not automatically authorize IM-15 implementation; the next permissible action is only reconciliation/definition of the next migration block against frozen IM-14, unless a separate repository control decision establishes another predecessor step.
 
 ## 6. Permanent visible build identity synchronization rule
 
@@ -106,4 +82,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-08 — IM-14E COMPLETE / FROZEN / PASS / 0 BLOCKER after full regression, successful CI/Pages, corrected camera-policy evidence and real iPhone/Safari interaction verification. IM-14 whole block remains NOT FROZEN; next permissible action is the separate IM-14 Whole-Block Completion / Regression / Freeze Gate only.
+**Updated:** 2026-09-08 — IM-14 UI / Mobile Foundation COMPLETE / FROZEN / PASS / 0 BLOCKER after whole-block regression of A–E, final CI/Pages verification and combined real-device evidence.
