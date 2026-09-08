@@ -13,7 +13,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current migration block: **IM-15 – Guidance / Inspector: IN PROGRESS / NOT FROZEN**
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-15B – Structured Runtime Diagnostics Projection: DEFINED / NOT IMPLEMENTED**
+- **IM-15B – Structured Runtime Diagnostics Projection: IMPLEMENTED / NOT FROZEN**
 
 ## 2. Frozen predecessor line
 
@@ -37,11 +37,11 @@ Authoritative frozen IM-15A baseline for IM-15B: `f0eb70e1501d19c60b264699dde2a2
    - visible/build identity `IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION`,
    - no runtime/domain/persistence mutation.
 
-2. **IM-15B – Structured Runtime Diagnostics Projection — DEFINED / NOT IMPLEMENTED**
-   - extend the frozen IM-15A read-only Inspector with structured diagnostics from existing authoritative runtime owners,
-   - diagnostics may be grouped into dedicated Inspector sections/lists,
-   - no second gameplay/domain/persistence truth and no direct mutation ownership,
-   - no legacy Inspector/debug architecture from `main`.
+2. **IM-15B – Structured Runtime Diagnostics Projection — IMPLEMENTED / NOT FROZEN**
+   - extends the frozen IM-15A Inspector with a separate structured read-only diagnostics projection,
+   - reads only existing authoritative runtime owners/read boundaries,
+   - visible/build identity `IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION`,
+   - no new Domain API, Runtime ownership or mutation path introduced.
 
 3. **IM-15C – World Diagnostic Overlay Foundation — PLANNED / NOT IMPLEMENTED**
 4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — PLANNED / NOT IMPLEMENTED**
@@ -57,59 +57,64 @@ Authoritative frozen IM-15A baseline for IM-15B: `f0eb70e1501d19c60b264699dde2a2
 
 ## 5. Frozen IM-15A boundary
 
-Frozen IM-15A surfaces remain unchanged:
+Frozen IM-15A remains behaviorally preserved:
 
 - separate Inspector shell,
 - Runtime/World basics,
 - Population,
 - Gold,
 - read-only Building/Person selection reuse from IM-14D,
-- responsive presentation,
-- synchronized IM-15A build identity.
+- responsive presentation.
 
-The Inspector continues to read only existing `CleanRuntime` sources and the existing `IM14DWorldSelectionContext`; it introduces no second gameplay truth and no mutation API.
+`src/ui/inspector-read-only-runtime-observation.js` remains unchanged by IM-15B.
 
-## 6. Binding IM-15B definition
+## 6. IM-15B implemented read-only scope
 
-IM-15B may add structured read-only diagnostic projection only for runtime facts that already have authoritative owners/read boundaries.
+The Definition/Implementation Gate reduced implementation to read boundaries already available in the live runtime composition.
 
-Permitted diagnostic groups:
+Implemented structured groups:
 
-- **Buildings / Stocks:** existing Building identities and already authoritative local stock state,
-- **Persons / Workforce:** existing Person identities and already authoritative workforce/assignment state,
-- **Jobs / Carriers:** existing TransportJob and Carrier state,
-- **Movement / Routes:** existing movement/navigation/route state where already authoritative and readable,
-- **Cell Occupancy / Reservations / Queues / Deadlocks:** existing traffic, occupancy, reservation, queue and deadlock state,
-- **Construction / Production:** existing construction/production state and already authoritative stock relationships,
-- **Path / Wear:** existing PATH/ROAD classification and already authoritative wear state.
+- **Buildings:** `domains.buildings.snapshot()` / existing Building records; project identity, lifecycle, position and only already present stock/construction/production fields,
+- **Persons:** `domains.units.snapshot()` / existing Person records; project identity/position and only already present resident/workforce/carrier fields,
+- **Jobs:** `domains.jobs.snapshot()`; existing TransportJob records only,
+- **Resources:** `domains.resources.snapshot()`; existing Resource records only,
+- **Movement / Navigation:** existing `carrierMovementEvidence`, `runtimeNavigationValidations` and `reachabilityEvidence` only; no new route calculation,
+- **Path Classification:** existing `pathClassification.entries()` only.
 
-Binding implementation rules:
+Explicit unavailable/currently omitted groups are surfaced as unavailable rather than synthesized:
 
-- Inspector projection remains read-only,
-- existing snapshots/stores/contracts/read methods may be used,
-- no new Domain API may be invented solely for Inspector convenience when an existing authoritative read boundary already exposes the required fact,
-- if a diagnostic group does not currently have a clean existing read boundary, it must be omitted or explicitly reported as unavailable/blocking rather than creating new ownership inside IM-15B,
-- frozen IM-15A and IM-14 Player UI/HUD/Selection/Pointer/Camera boundaries must remain unchanged.
+- live occupancy/reservations/queues/deadlocks,
+- complete live route registry,
+- live wear state.
 
-Explicitly excluded from IM-15B:
+Construction/Production/Stock/Workforce detail is displayed only when it already exists inside the authoritative current Building/Person record. Missing facts render as absent/empty rather than being reconstructed.
 
-- world diagnostic overlays, highlights or world-linked visualization — IM-15C,
-- scenario/test triggers, pause/start/step controls, repair/reset or direct state editing — IM-15D,
-- long-running throughput/history metrics, balancing analysis or automation — IM-15E,
-- gameplay/domain/persistence mutation of any kind.
+IM-15B creates no new Domain API and does not modify `src/main.js`, Domain owners or Transport owners.
 
-## 7. Current gate
+## 7. IM-15B implementation surfaces
 
-IM-15B is **DEFINED / NOT IMPLEMENTED** against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
+Relative to frozen IM-15A, IM-15B implementation is limited to:
 
-The next permissible action is exclusively the separate **IM-15B Definition/Implementation Gate** on `feature/im-15-guidance-inspector`, where the exact implementation surface must be checked against currently available authoritative read boundaries before any code change begins.
+- `src/ui/inspector-structured-runtime-diagnostics.js` — new read-only structured diagnostics projector/controller,
+- `index.html` — structured diagnostics sections and synchronized IM-15B visible identity/cache identity,
+- `src/ui/app.css` — presentation of structured diagnostics inside the existing Inspector shell,
+- `src/runtime/config.js` — synchronized IM-15B build identity,
+- this workflow file and `docs/ROADMAP_CURRENT.md` — control state.
 
-No IM-15C function and no world overlay/scenario/simulation functionality is authorized.
+No IM-15C world overlay, IM-15D action boundary or IM-15E metrics/balancing logic is present.
 
-## 8. Permanent visible build identity synchronization rule
+## 8. Current gate
+
+IM-15B is **IMPLEMENTED / NOT FROZEN** against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
+
+The next permissible action is exclusively **IM-15B – Completion / Regression / Freeze Gate**: verify the full diff against frozen IM-15A, CI/Pages, read-only ownership, IM-15A/IM-14 regression, visible build identity and real browser/device diagnostics rendering. Freeze only at **PASS / 0 BLOCKER**.
+
+No IM-15C implementation is authorized before IM-15B is separately frozen.
+
+## 9. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15B Structured Runtime Diagnostics Projection reconciled and DEFINED / NOT IMPLEMENTED against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`. Next permissible action is the separate IM-15B Definition/Implementation Gate only.
+**Updated:** 2026-09-08 — IM-15B Structured Runtime Diagnostics Projection IMPLEMENTED / NOT FROZEN within the reduced authoritative read-only scope. Next permissible action is IM-15B Completion / Regression / Freeze Gate only.
