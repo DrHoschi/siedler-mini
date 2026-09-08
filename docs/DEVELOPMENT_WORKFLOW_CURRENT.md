@@ -11,8 +11,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current whole-block branch: `feature/im-15-guidance-inspector`
 - Whole-block branch base: frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- Current migration block: **IM-15 – Guidance / Inspector: DEFINED / NOT IMPLEMENTED**
-- First planned subblock: **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**
+- Current migration block: **IM-15 – Guidance / Inspector: IN PROGRESS / NOT FROZEN**
+- **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: IMPLEMENTED / NOT FROZEN**
 
 ## 2. Frozen predecessor line
 
@@ -32,34 +32,21 @@ Frozen IM-14 substeps:
 
 Authoritative frozen IM-14 baseline for IM-15: `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
 
-## 3. IM-15 – Guidance / Inspector reconciliation
+## 3. IM-15 – Guidance / Inspector sequence
 
-IM-15 establishes a modular diagnostic, observation, guidance and later simulation/balancing surface over already authoritative runtime systems. It does not become an owner of gameplay/domain/persistence state.
+1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract — IMPLEMENTED / NOT FROZEN**
+   - separate Inspector shell alongside, not inside, Player UI ownership,
+   - read-only projection from existing authoritative runtime owners,
+   - narrow observation set: Runtime/World basics, Population, Gold and selected Building/Person identity,
+   - IM-14D Selection is reused read-only; no new selection semantics,
+   - visible/build identity synchronized to `IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION`,
+   - no runtime/domain/persistence mutation,
+   - no simulation controls, scenario triggering, world overlays, structured system diagnostics or balancing.
 
-Binding sequence:
-
-1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**
-   - establish the Inspector shell/boundary in the modular architecture, separate from the Player UI Shell,
-   - observe existing authoritative runtime state only,
-   - first narrow observation set: Runtime/World basics, Population, Gold and selected Building/Person identity,
-   - no runtime/domain mutation,
-   - no simulation controls, scenario triggering, world overlays or balancing functions yet.
-
-2. **IM-15B – Structured Runtime Diagnostics Projection**
-   - extend read-only structured diagnostics across existing authoritative owners such as Buildings/Stocks, Persons/Workforce, Jobs/Carrier, Movement/Routes, Cell Occupancy, Reservations/Queues/Deadlocks, Construction/Production and Path/Wear,
-   - no second truth and no direct mutation.
-
-3. **IM-15C – World Diagnostic Overlay Foundation**
-   - add diagnostic-only world visualization for existing runtime facts such as occupancy, path/road classification, reservations, carrier/route relationships and stable object identities,
-   - no gameplay/world mutation.
-
-4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions**
-   - allow controlled triggering of reproducible existing diagnostic/test scenarios through explicit runtime/test boundaries,
-   - Inspector must not directly repair or mutate domain state outside those boundaries.
-
-5. **IM-15E – Simulation & Balancing Observation Foundation**
-   - establish long-running observation/collection for scheduler/tick behavior, throughput, stocks, transport/wait behavior, production/population development and other balancing metrics,
-   - observation/collection only; no balancing AI or rule changes.
+2. **IM-15B – Structured Runtime Diagnostics Projection — PLANNED / NOT IMPLEMENTED**
+3. **IM-15C – World Diagnostic Overlay Foundation — PLANNED / NOT IMPLEMENTED**
+4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — PLANNED / NOT IMPLEMENTED**
+5. **IM-15E – Simulation & Balancing Observation Foundation — PLANNED / NOT IMPLEMENTED**
 
 A separate **IM-15 Whole-Block Completion / Regression / Freeze Gate** follows only after all authorized IM-15 substeps are individually complete and frozen.
 
@@ -70,22 +57,31 @@ A separate **IM-15 Whole-Block Completion / Regression / Freeze Gate** follows o
 - Later Inspector actions are allowed only through explicit diagnostic/test/runtime boundaries.
 - Automated tests remain test code; Inspector may later display results or trigger reproducible scenarios but does not replace test ownership.
 - Legacy Inspector/debug architecture from `main` must not be imported; `main` remains historical reference only.
-- No IM-15 implementation is implied by this reconciliation or by branch creation.
 
-## 5. Current gate
+## 5. IM-15A implementation boundary
 
-The IM-15 Whole-Block branch exists and is based exactly on frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
+Implemented surfaces are limited to:
 
-IM-15 is **DEFINED / NOT IMPLEMENTED**.
+- `index.html` for the separate Inspector shell and IM-15A visible identity,
+- `src/ui/app.css` for responsive Inspector-shell presentation,
+- `src/ui/inspector-read-only-runtime-observation.js` for the read-only observation projection/controller,
+- `src/runtime/config.js` for synchronized IM-15A build identity,
+- this workflow file and `docs/ROADMAP_CURRENT.md` for control-state synchronization.
 
-The next permissible action is exclusively the separate **IM-15A Definition/Implementation Gate** for **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**. This gate is not automatically executed by this control-state synchronization.
+The Inspector reads only existing `CleanRuntime` sources and the existing `IM14DWorldSelectionContext`; it introduces no second gameplay truth and no mutation API.
 
-No IM-15A runtime/UI/Inspector implementation is authorized in the same step as this synchronization.
+## 6. Current gate
 
-## 6. Permanent visible build identity synchronization rule
+IM-15A is **IMPLEMENTED / NOT FROZEN**.
+
+The next permissible action is exclusively the separate **IM-15A Completion / Regression / Freeze Gate** against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`, including branch diff, CI/Pages evidence, visible build identity and real browser/device verification.
+
+No IM-15B implementation is authorized before IM-15A reaches PASS / 0 BLOCKER and is frozen.
+
+## 7. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15 whole-block branch control state synchronized against frozen IM-14. IM-15 is DEFINED / NOT IMPLEMENTED; IM-15A is the first planned subblock and requires a separate Definition/Implementation Gate before implementation.
+**Updated:** 2026-09-08 — IM-15A implemented within the reconciled read-only shell/observation boundary. IM-15A remains NOT FROZEN; next permissible action is its separate Completion / Regression / Freeze Gate only.
