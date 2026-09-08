@@ -14,6 +14,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - Current migration block: **IM-15 – Guidance / Inspector: IN PROGRESS / NOT FROZEN**
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15B – Structured Runtime Diagnostics Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-15C – World Diagnostic Overlay Foundation: DEFINED / NOT IMPLEMENTED**
 
 ## 2. Frozen predecessor line
 
@@ -25,7 +26,9 @@ IM-14 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER** as a whole block.
 
 IM-15A remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Authoritative frozen IM-15A baseline for IM-15B: `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
+IM-15B remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+
+Authoritative frozen IM-15B baseline for IM-15C: `513636c0fbb4a892134734dc49d8b9a438b7a513`.
 
 ## 3. IM-15 sequence
 
@@ -41,7 +44,11 @@ Authoritative frozen IM-15A baseline for IM-15B: `f0eb70e1501d19c60b264699dde2a2
    - visible/build identity `IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION`,
    - no new Domain API, Runtime ownership or mutation path introduced.
 
-3. **IM-15C – World Diagnostic Overlay Foundation — PLANNED / NOT IMPLEMENTED**
+3. **IM-15C – World Diagnostic Overlay Foundation — DEFINED / NOT IMPLEMENTED**
+   - separate read-only diagnostic overlay layer over the existing world rendering,
+   - uses the same authoritative camera/world-to-screen projection as the frozen world renderer,
+   - may visualize only already authoritative Path Classification, Building/Person identity, existing Carrier Movement evidence and existing IM-14D Selection,
+   - creates no new runtime truth and changes no world, selection, camera or input semantics.
 4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — PLANNED / NOT IMPLEMENTED**
 5. **IM-15E – Simulation & Balancing Observation Foundation — PLANNED / NOT IMPLEMENTED**
 
@@ -85,62 +92,50 @@ Unavailable groups remain explicitly unavailable rather than synthesized:
 
 IM-15B creates no new Domain API and does not modify Domain or Transport owners.
 
-## 7. IM-15B implementation surfaces
+## 7. IM-15C defined capability boundary
 
-Relative to frozen IM-15A, IM-15B is limited to:
+IM-15C is defined as a separate, read-only, camera-synchronous diagnostic overlay layer. It may only project already authoritative facts into world space/screen space and must not alter the normal gameplay/world projection.
 
-- `src/ui/inspector-structured-runtime-diagnostics.js`,
-- `index.html`,
-- `src/ui/app.css`,
-- `src/runtime/config.js`,
-- `src/main.js` only for the RuntimeConfig cache-identity import `./runtime/config.js?v=im15b-1`,
-- this workflow file and `docs/ROADMAP_CURRENT.md`.
+Allowed overlay groups:
 
-No gameplay/runtime semantics in `src/main.js` were changed. No IM-15C world overlay, IM-15D action boundary or IM-15E metrics/balancing logic is present.
+- **Path / ROAD Cell Overlay:** visualize existing `pathClassification.entries()` on their existing MapStructure cells; no new classification and no Wear,
+- **Building Identity Overlay:** display existing Building IDs at already authoritative Building positions,
+- **Person Identity Overlay:** display existing Person/Unit IDs at already authoritative Person positions,
+- **Carrier Movement Relationship Overlay:** visualize only relationships/positions already present in `carrierMovementEvidence`; no route calculation or route registry,
+- **Selection Diagnostic Highlight:** visually highlight the existing IM-14D selection only; no new hit-test, selection or context semantics.
 
-## 8. IM-15B Completion / Regression / Freeze Gate
+Rendering boundary:
 
-Corrected implementation head before final gate-status synchronization: `ac6a202f8f1a70343c4064b810c73c15c8f5fd8e`.
+- the normal world renderer remains owner of world/gameplay rendering,
+- IM-15C must use the same existing camera/world-to-screen truth as the frozen renderer,
+- diagnostic overlay commands are separate from normal world commands and are rendered after the normal world projection,
+- Pan/Zoom remains owned by the frozen camera contract.
 
-Regression against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`:
+Explicitly excluded from IM-15C:
 
-- branch: **11 commits ahead / 0 behind**,
-- changed surface: exactly seven permitted files (`docs/DEVELOPMENT_WORKFLOW_CURRENT.md`, `docs/ROADMAP_CURRENT.md`, `index.html`, `src/main.js`, `src/runtime/config.js`, `src/ui/app.css`, `src/ui/inspector-structured-runtime-diagnostics.js`),
-- frozen IM-15A projector remained unchanged,
-- frozen IM-14 Player UI/HUD/Selection/Pointer/Camera ownership remained unchanged,
-- no IM-15C/IM-15D/IM-15E functionality introduced.
+- occupancy/reservation/queue/deadlock overlays while no live authoritative read owner exists,
+- Wear overlay without a live Wear owner,
+- complete route visualization without an authoritative live route registry,
+- new Path/Road computation,
+- new selection/pointer/touch/camera semantics,
+- interactive overlay elements that introduce new gameplay/selection behavior,
+- scenario/test triggers, start/pause/step, repair/reset or state editing — IM-15D,
+- long-running metrics, heatmaps, throughput history or balancing — IM-15E,
+- any gameplay/domain/persistence mutation.
 
-Read-only ownership verification:
+## 8. Frozen IM-15B freeze evidence
 
-- diagnostics use existing `DomainStore.snapshot()` data, existing movement/navigation evidence and `pathClassification.entries()`,
-- values are cloned/frozen before projection,
-- controller only refreshes projection and renders DOM,
-- no Domain/Transport mutation method is called.
+Frozen IM-15B head: `513636c0fbb4a892134734dc49d8b9a438b7a513`.
 
-Technical evidence:
-
-- CI Baseline run `34210936764` on code-corrected head `be297c924876063075bedfe6982f86f3ad1d0308`: **SUCCESS**,
-- subsequent head `ac6a202f8f1a70343c4064b810c73c15c8f5fd8e` differs only by the Roadmap control-state commit,
-- Pages build/deployment run `34210971362` on `ac6a202f8f1a70343c4064b810c73c15c8f5fd8e`: **SUCCESS**.
-
-Real-device evidence:
-
-- iPhone / Safari, 2026-09-08 11:35 local,
-- Runtime `READY`, Population `3`, Gold `3`, World `CR-32A World-backed Path Classification Contract Miniworld · 8×6 · Zelle 1`,
-- Inspector `READ ONLY`,
-- Build visibly corrected to `IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION`,
-- Structured Diagnostics visibly active with `3 Buildings · 3 Persons · 0 Jobs · 0 Resources · 2 Paths`,
-- frozen selection/context behavior remained operational (`Keine Auswahl` / `Weltobjekt antippen`).
-
-Former stale IM-15A build-identity blocker is resolved.
-
-**Gate result: IM-15B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+IM-15B remains **COMPLETE / FROZEN / PASS / 0 BLOCKER** with its previously recorded CI/Pages, read-only regression and real iPhone/Safari evidence. Its implementation and freeze boundary are predecessor regression requirements for IM-15C.
 
 ## 9. Current gate
 
-IM-15B is frozen. IM-15 as a whole remains **IN PROGRESS / NOT FROZEN**.
+IM-15C is **DEFINED / NOT IMPLEMENTED** against frozen IM-15B @ `513636c0fbb4a892134734dc49d8b9a438b7a513`.
 
-The next permissible action is exclusively the separate **reconciliation/definition of IM-15C – World Diagnostic Overlay Foundation** against the frozen IM-15B stand. No IM-15C implementation is authorized in the same step as that definition.
+No IM-15C implementation has been authorized or performed in this documentation step.
+
+The next permissible action is exclusively the separate **IM-15C Definition/Implementation Gate**: inspect the current repository to determine which defined overlay groups can be implemented using the already existing authoritative read/render/camera boundaries, then derive the exact implementation scope. No IM-15C code implementation is authorized in the same step.
 
 ## 10. Permanent visible build identity synchronization rule
 
@@ -148,4 +143,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-08 — IM-15B COMPLETE / FROZEN / PASS / 0 BLOCKER after successful read-only regression, CI/Pages and corrected real iPhone/Safari build-identity evidence. IM-15 remains IN PROGRESS / NOT FROZEN; next permissible action is IM-15C reconciliation/definition only.
+**Updated:** 2026-09-08 — IM-15C World Diagnostic Overlay Foundation documented as DEFINED / NOT IMPLEMENTED against frozen IM-15B @ `513636c0fbb4a892134734dc49d8b9a438b7a513`. No IM-15C implementation in this step.
