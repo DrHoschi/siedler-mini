@@ -159,11 +159,13 @@ export function createPlayerPlacementInteractionController({ selectionController
   });
 }
 
-const selectionController = window.IM14DWorldSelectionContext;
-const runtime = window.CleanRuntime;
-if (selectionController && runtime) {
-  window.IM16BPlayerPlacementInteraction = createPlayerPlacementInteractionController({
-    selectionController,
-    runtime,
-  });
+if (typeof window !== 'undefined') {
+  const selectionController = window.IM14DWorldSelectionContext;
+  const runtime = window.CleanRuntime;
+  if (selectionController && runtime) {
+    window.IM16BPlayerPlacementInteraction = createPlayerPlacementInteractionController({
+      selectionController,
+      runtime,
+    });
+  }
 }
