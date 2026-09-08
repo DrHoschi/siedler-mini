@@ -15,17 +15,11 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15B – Structured Runtime Diagnostics Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15C – World Diagnostic Overlay Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-15D – Controlled Guidance / Diagnostic Scenario Actions: DEFINED / NOT IMPLEMENTED**
+- **IM-15D – Controlled Guidance / Diagnostic Scenario Actions: IMPLEMENTED / NOT FROZEN**
 
 ## 2. Frozen predecessor line
 
-CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
-
-IM-13 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
-
-IM-14 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER** as a whole block.
-
-IM-15A, IM-15B and IM-15C remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+CR-25 through CR-32, IM-13, IM-14 and IM-15A/B/C remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 Authoritative frozen IM-15C baseline for IM-15D: `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`.
 
@@ -34,110 +28,133 @@ Authoritative frozen IM-15C baseline for IM-15D: `c7de361da27fede4aeff83a36c13ec
 1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-15B – Structured Runtime Diagnostics Projection — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 3. **IM-15C – World Diagnostic Overlay Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — DEFINED / NOT IMPLEMENTED**
-   - explicit allowlist-based diagnostic action boundary between Inspector and existing Runtime,
-   - controlled `START` and `PAUSE` through existing Runtime lifecycle methods,
-   - deterministic `SINGLE STEP` only while Runtime is not actively running and only with authoritative fixed `stepMs`,
-   - explicit registered reproducible diagnostic scenario load/reset, initially `BASELINE_MINIWORLD`,
-   - frozen action-result projection for observation,
-   - no arbitrary method exposure or direct Domain/Store mutation.
+4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — IMPLEMENTED / NOT FROZEN**
 5. **IM-15E – Simulation & Balancing Observation Foundation — PLANNED / NOT IMPLEMENTED**
 
 ## 4. Binding IM-15 architectural boundary
 
-- IM-15 owns no new gameplay/domain/persistence truth.
-- Inspector reads existing authoritative owners and visualizes their state.
-- Inspector actions are allowed only through explicit diagnostic/test/runtime boundaries.
+- IM-15 owns no second gameplay/domain/persistence truth.
+- Inspector observation remains read-only except for explicitly allowlisted IM-15D diagnostic actions.
 - Automated tests remain test code.
-- Legacy Inspector/debug architecture from `main` must not be imported; `main` remains historical reference only.
+- Legacy Inspector/debug architecture from `main` must not be imported.
 
 ## 5. Frozen predecessor regression boundary
 
-IM-15D must preserve frozen IM-15A/B/C and IM-14 ownership:
+IM-15D preserves:
 
-- read-only Inspector observation remains IM-15A,
-- structured diagnostics remain IM-15B,
-- world diagnostic overlays remain IM-15C,
-- selection/hit-test remains IM-14D,
-- pointer/touch/camera remains IM-14E,
-- Domain/Transport owners remain authoritative.
+- IM-15A read-only Runtime/World/Population/Gold/Selection observation,
+- IM-15B structured diagnostics,
+- IM-15C camera-synchronous read-only world overlays,
+- IM-14D selection/hit-test ownership,
+- IM-14E pointer/touch/camera ownership,
+- authoritative Domain/Transport ownership.
 
-## 6. IM-15D defined action contract
+## 6. Implemented IM-15D action contract
 
-IM-15D is not a free debug editor. It is a controlled action adapter with an explicit action allowlist.
+The implemented allowlist contains exactly:
 
-### Allowed first action set
+- `START`,
+- `PAUSE`,
+- `SINGLE_STEP`,
+- `RESET_BASELINE_MINIWORLD`.
 
-- **START:** invoke the existing Runtime lifecycle start boundary only when its existing preconditions allow it.
-- **PAUSE:** invoke the existing Runtime lifecycle pause boundary only when applicable.
-- **SINGLE STEP:** invoke exactly one Scheduler step using the authoritative configured fixed `stepMs`; allowed only when Runtime is not actively `RUNNING`; no caller-provided `dtMs`.
-- **RESET/LOAD `BASELINE_MINIWORLD`:** invoke only an explicitly registered deterministic diagnostic scenario factory/reset boundary that reproduces the known baseline miniworld composition.
+No UI path dynamically invokes arbitrary `window.CleanRuntime`, Domain Store or Scheduler methods.
 
-### Action adapter requirements
+`START` is accepted only from `READY` or `PAUSED`.
 
-- UI never receives arbitrary `window.CleanRuntime`, Domain Store or Scheduler method execution.
-- Every exposed action must exist in an explicit IM-15D allowlist/registry.
-- Preconditions are checked before execution.
-- Action results are immutable/frozen and expose only diagnostic result data such as `actionId`, `scenarioId`, previous/current Runtime state, success/failure and controlled error information.
-- IM-15A/B/C may observe resulting authoritative state/result data but do not become mutation owners.
+`PAUSE` is accepted only from `RUNNING`.
 
-## 7. Runtime / Scheduler boundary
+`SINGLE_STEP` is accepted only from `READY` or `PAUSED`, invokes exactly one Scheduler step with the Scheduler-owned configured `stepMs`, accepts no caller-provided duration, performs no loop/fast-forward and preserves Runtime lifecycle state.
 
-The existing Runtime already owns lifecycle transitions through `start()` and `pause()`.
+`RESET_BASELINE_MINIWORLD` is rejected while `RUNNING` and otherwise replaces the active scenario composition through the registered deterministic baseline factory.
 
-The existing Scheduler already owns `step(dtMs = configuredStepMs)`, but IM-15D must not expose arbitrary `dtMs`. The diagnostic adapter must use the authoritative configured fixed step only.
+`STOP` remains excluded.
 
-For `SINGLE STEP`, the contract is:
+## 7. Implemented deterministic scenario composition
 
-- Runtime must not be `RUNNING`,
-- exactly one configured fixed step is executed,
-- no loop or fast-forward,
-- Runtime lifecycle state remains unchanged by the diagnostic single-step action itself.
+New `src/diagnostics/baseline-miniworld-scenario.js` owns the deterministic `BASELINE_MINIWORLD` factory. It reconstructs the previously inline browser miniworld without duplicating gameplay truth:
 
-`STOP` is deliberately excluded from the first IM-15D action set because the existing Runtime enters `STOPPED` and has no corresponding clean restart transition from `STOPPED` through `start()`.
+- new WorldStore and MapStructure,
+- three Buildings and three Persons,
+- PATH and ROAD evidence cells,
+- Housing/Population and Gold,
+- Traversability, Reachability and Navigation validation,
+- Carrier Movement evidence.
 
-## 8. Diagnostic scenario boundary
+`src/main.js` now owns one active runtime composition. The stable `window.CleanRuntime` facade exposes scenario-dependent read properties through getters that always resolve to that active composition. Rendering, HUD, IM-15A, IM-15B and IM-15C therefore continue to observe the same authoritative active scenario after reset.
 
-The first defined registered scenario is **`BASELINE_MINIWORLD`**.
+The existing `installActiveRuntimeComposition()` remains the composition installation boundary. `resetBaselineMiniworld()` creates and installs a fresh registered baseline composition and redraws the world.
 
-It represents the already established deterministic browser miniworld composition, including its existing world/map/domain/runtime evidence. IM-15D may load/reset this scenario only through an explicit deterministic scenario boundary.
+## 8. Implemented immutable action-result contract
 
-The scenario action must not become a generic state editor. It must not expose editable Gold, Population, Building, Person, Stock, Path, Transport or other Domain values.
+New `src/diagnostics/controlled-diagnostic-action-adapter.js` returns deeply frozen results with the controlled fields:
 
-## 9. Explicit IM-15D exclusions
+- `kind: im15d-diagnostic-action-result`,
+- `actionId`,
+- `scenarioId`,
+- `status: COMPLETED | REJECTED | FAILED`,
+- `previousRuntimeState`,
+- `currentRuntimeState`,
+- `stepMs`,
+- `message`.
 
-Not part of IM-15D:
+No Domain snapshots or unrestricted error objects are exposed through the result contract.
 
-- direct Domain/Store CRUD controls,
-- arbitrary Runtime/Scheduler method invocation,
-- caller-provided tick/step duration,
-- fast-forward, repeated stepping loops or unbounded simulation execution,
-- `STOP` in the first action set,
+## 9. Implemented Inspector action surface
+
+New `src/ui/controlled-diagnostic-scenario-actions.js` binds exactly four buttons to the allowlisted adapter.
+
+The Inspector heading now distinguishes `OBSERVATION READ ONLY` from the separate `Controlled Diagnostic Actions` section.
+
+After controlled actions, the existing HUD/Inspector/Structured Diagnostics surfaces are refreshed. On successful baseline reset, the existing frozen IM-14D `clear()` selection boundary is used; no new selection mutation path is introduced.
+
+The IM-15C overlay continues to read runtime getters dynamically and therefore follows the active scenario composition.
+
+## 10. IM-15D implementation surfaces
+
+Relative to frozen IM-15C, implementation is limited to:
+
+- new `src/diagnostics/baseline-miniworld-scenario.js`,
+- new `src/diagnostics/controlled-diagnostic-action-adapter.js`,
+- new `src/ui/controlled-diagnostic-scenario-actions.js`,
+- `src/main.js` for active scenario composition/facade/reset integration,
+- `index.html`,
+- `src/ui/app.css`,
+- `src/runtime/config.js`,
+- this workflow file and `docs/ROADMAP_CURRENT.md`.
+
+Visible/build identity is `IM-15D-CONTROLLED-DIAGNOSTIC-SCENARIO-ACTIONS`.
+
+## 11. Explicit exclusions remain unimplemented
+
+- `STOP`,
+- caller-provided step duration,
+- fast-forward/repeated-step loops,
+- generic scenario parameters,
+- direct Domain/Store CRUD,
 - arbitrary Gold/Population/Building/Person/Stock/Path/Transport edits,
-- automatic repair/correction of gameplay state,
 - SaveGame manipulation,
-- new gameplay/domain/transport/reservation/deadlock/path/wear rules,
+- automatic repair,
+- new gameplay/transport/reservation/deadlock/path/wear rules,
 - new selection/pointer/touch/camera semantics,
-- long-running metrics, heatmaps, throughput histories or balancing — IM-15E.
+- IM-15E long-running metrics/balancing.
 
-## 10. Frozen IM-15C evidence remains binding
+## 12. Current implementation gate
 
-Frozen IM-15C head: `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`.
+IM-15D is **IMPLEMENTED / NOT FROZEN** against frozen IM-15C @ `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`.
 
-Its PASS / 0 BLOCKER regression, CI/Pages, read-only ownership and real iPhone camera-synchronous overlay evidence remain predecessor requirements for IM-15D and must not regress.
+Before this documentation update, the implementation diff was **9 commits ahead / 0 behind** and limited to the defined IM-15D implementation surfaces. CI Baseline `34241716956` and Pages `34241715444` on build-identity head `164788d32103c4e826e228aa42219eea073e0eb6` had been triggered and were not yet used as a freeze decision.
 
-## 11. Current gate
+No IM-15D Completion / Regression / Freeze Gate has been executed in this implementation step.
 
-IM-15D is **DEFINED / NOT IMPLEMENTED** against frozen IM-15C @ `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`.
+The next permissible action is exclusively **IM-15D – Completion / Regression / Freeze Gate**: full diff against frozen IM-15C, CI/Pages, exact allowlist/precondition/result-contract verification, active-composition consistency, predecessor regression, visible/build identity and real browser/device evidence for START/PAUSE/SINGLE STEP/RESET BASELINE. Freeze only at **PASS / 0 BLOCKER**.
 
-No IM-15D implementation has been authorized or performed in this documentation step.
+No IM-15E implementation is authorized before IM-15D freeze.
 
-The next permissible action is exclusively the separate **IM-15D Definition/Implementation Gate**: inspect the current repository to determine the exact controlled action adapter, scenario factory/reset boundary, result contract and UI integration surface that can be implemented without violating existing Runtime/Domain ownership. No IM-15D code implementation is authorized in the same step.
-
-## 12. Permanent visible build identity synchronization rule
+## 13. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15D Controlled Guidance / Diagnostic Scenario Actions documented as DEFINED / NOT IMPLEMENTED against frozen IM-15C @ `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`. No IM-15D implementation in this step.
+**Updated:** 2026-09-08 — IM-15D Controlled Guidance / Diagnostic Scenario Actions IMPLEMENTED / NOT FROZEN within the defined allowlist/scenario-composition boundary. Next permissible action is IM-15D Completion / Regression / Freeze Gate only.
