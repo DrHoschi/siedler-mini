@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im15d-1';
+import { RuntimeConfig } from './runtime/config.js?v=im15e-1';
 import { Runtime } from './runtime/runtime.js';
 import {
   BASELINE_MINIWORLD_SCENARIO_ID,
