@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im15e-1';
+import { RuntimeConfig } from './runtime/config.js?v=im15-final-1';
 import { Runtime } from './runtime/runtime.js';
 import {
   BASELINE_MINIWORLD_SCENARIO_ID,
@@ -130,7 +130,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `CR-32A — World-backed Path Classification Contract — ${initialOwners.classificationPass ? 'PASS' : 'FAIL'} — PATH ${initialOwners.pathClassification.typeAt({ x: 1, y: 4 })} / ROAD ${initialOwners.pathClassification.classAt({ x: 2, y: 4 })} aus realen MapStructure-Zellen — CR-31 Navigation ${initialOwners.runtimeValidationPass ? 'PASS' : 'FAIL'} erhalten — CR-30 Population ${initialOwners.housingPopulation.population.count} / Gold ${initialOwners.goldSettlement.state.balance} erhalten — ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons sichtbar`;
+  testEl.textContent = `IM-15 — Whole-Block Completion / Regression / Freeze Gate — ${initialOwners.classificationPass && initialOwners.runtimeValidationPass ? 'PASS' : 'FAIL'} — A/B/C/D/E foundations loaded · Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;
   testEl.dataset.pass = initialOwners.classificationPass && initialOwners.runtimeValidationPass ? 'true' : 'false';
 }
 
@@ -163,7 +163,7 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[IM-15D] Controlled Guidance / Diagnostic Scenario Actions foundation', {
+console.info('[IM-15] Guidance / Inspector whole-block foundation', {
   build: RuntimeConfig.build,
   scenarioId: BASELINE_MINIWORLD_SCENARIO_ID,
   classificationPass: initialOwners.classificationPass,
