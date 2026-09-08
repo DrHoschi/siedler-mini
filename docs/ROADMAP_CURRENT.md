@@ -1,107 +1,107 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 IN PROGRESS / NOT FROZEN; IM-15A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15E COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15A/B/C/D/E COMPLETE / FROZEN / PASS / 0 BLOCKER  
 **Repository:** `DrHoschi/siedler-mini`  
-**Current whole-block branch:** `feature/im-15-guidance-inspector`  
+**Whole-block branch:** `feature/im-15-guidance-inspector`  
 **Whole-block base:** frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
 
 ## 1. Frozen line
 
 CR-25 through CR-32, IM-13, IM-14 and IM-15A/B/C/D/E remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-Authoritative frozen predecessor for IM-15E: frozen IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`.
+IM-15 Whole Block is now **COMPLETE / FROZEN / PASS / 0 BLOCKER** after its combined completion/regression/freeze gate.
 
-## 2. Binding migration order
+Whole-block frozen marker name: `frozen/im-15-guidance-inspector`.
 
-- IM-09 – Logistics & Reservation Migration,
-- IM-10 – Housing / Population / Gold Integration,
-- Navigation – CR-31,
-- Path / Wear – CR-32,
-- **IM-13 – SaveGame — COMPLETE / FROZEN**,
-- **IM-14 – UI/Mobile — COMPLETE / FROZEN**,
-- **IM-15 – Guidance/Inspector — IN PROGRESS / NOT FROZEN**.
+## 2. Frozen IM-15 substep chain
 
-## 3. IM-15 sequence
+- IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`
+- IM-15B @ `513636c0fbb4a892134734dc49d8b9a438b7a513`
+- IM-15C @ `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`
+- IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`
+- IM-15E @ `ba1c7fc80dfa0d09342d0814e3b69a682949f6cf`
 
-- **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
-- **IM-15B – Structured Runtime Diagnostics Projection — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
-- **IM-15C – World Diagnostic Overlay Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
-- **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
-- **IM-15E – Simulation & Balancing Observation Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
-- **IM-15 Whole-Block Completion / Regression / Freeze Gate — NEXT / NOT YET EXECUTED**.
+## 3. Frozen IM-15 capability set
 
-## 4. Frozen IM-15E capability boundary
+- **IM-15A:** Inspector shell + read-only Runtime/World/Population/Gold/Selection observation.
+- **IM-15B:** structured read-only Runtime diagnostics over existing authoritative sources.
+- **IM-15C:** read-only camera-synchronous world diagnostic overlays.
+- **IM-15D:** controlled allowlist actions `START`, `PAUSE`, `SINGLE_STEP`, `RESET_BASELINE_MINIWORLD` only.
+- **IM-15E:** scheduler-synchronous bounded read-only Simulation Observation with immutable samples/deltas, session separation and history limit 120.
 
-IM-15E is a purely observational scheduler-synchronous bounded diagnostics foundation.
+## 4. Binding ownership after IM-15
 
-The frozen implementation:
+IM-15 does not become a gameplay/domain/persistence owner.
 
-- registers one `im15e.simulation-observation` system in Scheduler `maintenance`,
-- creates one sample per actual Scheduler step,
-- uses Scheduler `dtMs` as the only diagnostic time increment,
-- caps in-memory history at **120 samples**,
-- starts a new diagnostic session when the active Runtime composition changes,
-- deep-freezes samples and deltas,
-- reads authoritative Population, Gold, Buildings, Persons, Jobs and Resources facts,
-- leaves absent Stock/Production/Transport sources explicitly `UNAVAILABLE`,
-- feeds no metric or delta back into gameplay, Runtime, Scheduler, Domain, Transport or persistence owners.
+The frozen block preserves:
 
-## 5. Frozen Inspector observation surface
+- one authoritative active Runtime composition,
+- existing Domain and Transport ownership,
+- existing Runtime/Scheduler ownership,
+- IM-14 Selection/Pointer/Touch/Camera ownership,
+- SaveGame ownership,
+- read-only observation except explicit IM-15D allowlist actions,
+- no metrics/balancing feedback into simulation rules.
 
-`src/ui/simulation-balancing-observation.js` renders a separate **Simulation Observation — READ ONLY · BOUNDED 120** section.
+## 5. IM-15 Whole-Block regression
 
-The 250-ms UI refresh is presentation-only and never creates simulation samples or advances the Scheduler.
+Against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`, the pre-final-identity Whole-Block diff was:
 
-Visible/build identity remains `IM-15E-SIMULATION-BALANCING-OBSERVATION-FOUNDATION`.
+- **66 commits ahead / 0 behind**,
+- exactly **14 changed files**,
+- no Domain owner source changes,
+- no Transport owner source changes,
+- no `src/runtime/runtime.js` changes,
+- no `src/runtime/scheduler.js` changes.
 
-## 6. IM-15E freeze evidence
+All five frozen IM-15 substep markers were re-verified at their authoritative heads.
 
-Regression against frozen IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741` before freeze-status synchronization confirmed:
+## 6. Cumulative evidence
 
-- **10 commits ahead / 0 behind**,
-- exactly eight permitted changed files,
-- no Scheduler/Runtime/Domain/Transport owner modification.
+The Whole-Block decision incorporates the already frozen substep evidence:
 
-Technical evidence:
+- IM-15A/B real iPhone Inspector/Diagnostics evidence,
+- IM-15C real iPhone overlay/camera synchronization evidence,
+- IM-15D real iPad controlled action sequence evidence,
+- IM-15E seven real iPad screenshots verifying scheduler synchronization, pause stillness, +1 single-step behavior, bounded history 120 and session reset separation.
 
-- CI Baseline `34272335658` on `99a8557935a0849286d7f50d73eb1bd8c50640ac`: **SUCCESS**,
-- Pages `34272541677` on `c4f7a9451fe6c3c4ad633536cac95b5bca48ac43`: **SUCCESS**.
+CI/Pages for frozen IM-15E were successful. Final Whole-Block identity/documentation commits must also complete successfully before the final frozen marker is accepted.
 
-Seven real iPad/Safari screenshots at 2026-09-08 22:12–22:13 local confirmed:
+## 7. Final Whole-Block identity
 
-- `READY` starts at `session:0001`, Step/Samples `0/0`,
-- while `RUNNING`, Step and Samples advance together,
-- `PAUSE` stops observation advancement,
-- `SINGLE_STEP` advances exactly one sample and `100 ms`,
-- history remains capped at `120` even after Step `131`,
-- `RESET_BASELINE_MINIWORLD` creates `session:0002` and resets Step/Time/Samples to `0`,
-- core authoritative facts remain consistent,
-- unavailable optional metrics remain `UNAVAILABLE`,
-- IM-15D action controls and IM-15C world overlays remain intact.
+Visible/build identity:
 
-**Gate result: IM-15E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+`IM-15-GUIDANCE-INSPECTOR-WHOLE-BLOCK`
 
-## 7. Explicit exclusions remain outside IM-15E
+Visible verification state:
 
-- gameplay mutation from metrics,
+`IM-15 — COMPLETE / FROZEN / PASS / 0 BLOCKER`
+
+This final identity synchronization adds no new capability.
+
+## 8. Explicit exclusions remain outside frozen IM-15
+
+- arbitrary gameplay/domain/store editing,
+- generic Runtime method exposure,
+- unrestricted scenario authoring,
+- fast-forward/repeated measurement stepping,
+- caller-configurable tick duration/simulation speed,
 - automatic balancing/correction,
-- thresholds that alter simulation rules,
-- fast-forward/repeated measurement steps,
-- configurable simulation speed/tick duration,
-- Inspector-only gameplay events,
-- SaveGame persistence of observation history,
+- diagnostic feedback into gameplay rules,
+- observation-history SaveGame persistence,
 - telemetry/upload,
 - unbounded history,
 - invented metrics,
-- charts/heatmaps in this Foundation step,
-- new selection/pointer/touch/camera semantics.
+- new Selection/Pointer/Touch/Camera semantics.
 
-## 8. Current gate
+## 9. Current gate
 
-IM-15E is frozen. IM-15 remains **IN PROGRESS / NOT FROZEN**.
+**IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER**, pending only successful final CI/Pages on the Whole-Block identity/documentation head and creation/acceptance of `frozen/im-15-guidance-inspector` at that exact head.
 
-The next and only permissible action is **IM-15 Whole-Block Completion / Regression / Freeze Gate** against frozen IM-14 and the complete frozen IM-15A/B/C/D/E chain. No next migration block is authorized before that gate.
+No next migration block is authorized in this same step.
+
+After the final marker exists, the next permissible action is exclusively reconciliation of the next migration block against frozen IM-15. No implementation is automatically authorized.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15E Simulation & Balancing Observation Foundation COMPLETE / FROZEN / PASS / 0 BLOCKER. Next permissible action: IM-15 Whole-Block Completion / Regression / Freeze Gate only.
+**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole Block finalized at PASS / 0 BLOCKER; final CI/Pages and exact frozen marker head are the remaining mechanical completion checks. No next migration block in this step.
