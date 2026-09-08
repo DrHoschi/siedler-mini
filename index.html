@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-15A Inspector Shell & Read-Only Runtime Observation</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im15a-1">
+  <title>Neue Siedler – IM-15B Structured Runtime Diagnostics Projection</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im15b-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -23,9 +23,9 @@
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-15A – Inspector Shell & Read-Only Runtime Observation Contract</h1>
-        <p>Der Inspector beobachtet ausschließlich bereits autoritative Runtime-Daten. Player UI, Selection, Kamera und Domain-State bleiben unverändert in ihren eingefrorenen Ownership-Grenzen.</p>
-        <output id="test-status">IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION wird aufgebaut …</output>
+        <h1>IM-15B – Structured Runtime Diagnostics Projection</h1>
+        <p>Der Inspector erweitert den eingefrorenen IM-15A-Read-only-Shell ausschließlich um strukturierte Diagnoseprojektionen bereits autoritativer Runtime-Owner. Keine Domain-Mutation, keine Overlays und keine Scenario-Aktionen.</p>
+        <output id="test-status">IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION wird aufgebaut …</output>
       </aside>
 
       <aside class="inspector-shell" data-ui-shell="inspector" aria-label="Inspector" aria-live="polite">
@@ -41,6 +41,41 @@
           <div><dt>Gold</dt><dd id="inspector-gold">—</dd></div>
           <div><dt>Selection</dt><dd id="inspector-selection" data-selection-kind="none" data-selection-id="">Keine Auswahl</dd></div>
         </dl>
+
+        <section class="inspector-diagnostics" aria-label="Structured Runtime Diagnostics">
+          <div class="inspector-diagnostics-heading">
+            <strong>Structured Diagnostics</strong>
+            <span id="inspector-diag-summary">—</span>
+          </div>
+          <details open>
+            <summary>Buildings / Stocks / Construction / Production</summary>
+            <pre id="inspector-diag-buildings">—</pre>
+          </details>
+          <details open>
+            <summary>Persons / Workforce / Carriers</summary>
+            <pre id="inspector-diag-persons">—</pre>
+          </details>
+          <details>
+            <summary>Jobs</summary>
+            <pre id="inspector-diag-jobs">—</pre>
+          </details>
+          <details>
+            <summary>Resources</summary>
+            <pre id="inspector-diag-resources">—</pre>
+          </details>
+          <details open>
+            <summary>Movement / Navigation</summary>
+            <pre id="inspector-diag-navigation">—</pre>
+          </details>
+          <details open>
+            <summary>Path Classification</summary>
+            <pre id="inspector-diag-paths">—</pre>
+          </details>
+          <details>
+            <summary>Unavailable in current read boundary</summary>
+            <pre id="inspector-diag-unavailable">—</pre>
+          </details>
+        </section>
       </aside>
     </section>
 
@@ -49,14 +84,15 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">Inspector: nur Beobachtung · keine Runtime-Mutation</span>
+      <span class="surface-note">Inspector: strukturierte Read-only-Diagnostik · keine Runtime-Mutation</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im15a-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15a-1"></script>
-  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15a-1"></script>
-  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15a-1"></script>
-  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15a-1"></script>
+  <script type="module" src="src/main.js?v=im15b-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im15b-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im15b-1"></script>
+  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im15b-1"></script>
+  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im15b-1"></script>
+  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im15b-1"></script>
 </body>
 </html>
