@@ -1,9 +1,9 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15A/B/C/D/E COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16 DEFINED / NOT IMPLEMENTED  
 **Repository:** `DrHoschi/siedler-mini`  
-**Whole-block branch:** `feature/im-15-guidance-inspector`  
-**Whole-block base:** frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
+**Current documentation line:** `feature/im-15-guidance-inspector`  
+**Frozen IM-16 baseline:** IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`
 
 ## 1. Frozen line
 
@@ -12,6 +12,8 @@ CR-25 through CR-32, IM-13, IM-14 and IM-15A/B/C/D/E remain **COMPLETE / FROZEN 
 **IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 Whole-block frozen marker: `frozen/im-15-guidance-inspector`.
+
+Authoritative frozen IM-15 development baseline for the next capability: `9e797ab93036f6b3731442dc626edb8c091893c8`.
 
 ## 2. Frozen IM-15 substep chain
 
@@ -98,16 +100,71 @@ This final identity synchronization adds no new capability.
 - invented metrics,
 - new Selection/Pointer/Touch/Camera semantics.
 
-## 9. Current gate
+## 9. Next capability – IM-16
+
+### IM-16 – Player Construction & Placement Integration
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+This is a new binding capability decision produced by the completed reconciliation after frozen IM-15. IM-16 was not previously fixed as the successor in the frozen repository state.
+
+**Leitfrage:**
+
+„Wie wird der eingefrorene Player-UI-, Pointer-/Touch-, Selection- und Camera-Unterbau mit den bestehenden autoritativen Bau-/Gebäudegrenzen verbunden, sodass der Spieler ein Gebäude auswählen, seine Platzierung in der Welt prüfen, bestätigen oder abbrechen kann, ohne eine zweite Gameplay-, Konstruktions- oder Persistenzwahrheit einzuführen?“
+
+**Ziel:**
+
+IM-16 closes the next identified capability gap between the existing player-facing interaction foundation and the authoritative building/construction boundaries. It establishes the player-facing flow:
+
+`Gebäude auswählen → Platzierungsmodus → Position in der Welt bestimmen → gültig/ungültig erkennen → bestätigen oder abbrechen → autoritatives Bauergebnis wieder in die Player UI projizieren`.
+
+Placement validity, costs and resulting building/construction state remain owned by existing authoritative Runtime/Domain owners. UI ownership is limited to temporary interaction and preview state required for player operation.
+
+### IM-16 Scope
+
+- Player-facing building selection from existing definitions.
+- Controlled entry/exit of Placement Mode.
+- World positioning through the frozen IM-14 Pointer/Touch contract.
+- Compatible coexistence with Selection and Camera Controls.
+- Visual Placement Preview/Ghost.
+- Projection of existing authoritative validation results.
+- Confirm/Cancel.
+- Confirmed placement handed to the existing authoritative construction/domain boundary.
+- Projection of the actually created authoritative state back into Player UI/Context.
+- Desktop/iPad/iPhone verification.
+- Complete visible Build-Identity synchronization.
+- Frozen IM-15 Inspector may continue observing resulting state but does not own construction.
+
+### IM-16 Exclusions
+
+- No new or duplicated Placement, cost, building, Construction or persistence logic in UI.
+- No redesign of building definitions, resource economy, production, Workforce or balancing.
+- No Inspector expansion into a construction editor.
+- No new Inspector mutation paths.
+- No SaveGame rearchitecture.
+- No campaign, tutorial or Guidance progression.
+- No broad post-placement building management such as upgrade, demolition or production control.
+- No additional road-building or terraforming feature unless already mandatory within an existing authoritative Placement boundary.
+- No adoption of the legacy `main` BuildDock architecture as implementation basis.
+
+### IM-16 Dependencies / ownership preservation
+
+- Exclusive development baseline: frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`.
+- Frozen IM-13 SaveGame ownership remains untouched.
+- IM-14 Player UI Shell, Pointer/Touch, HUD, Selection/Context and Camera Controls are consumed as existing interaction boundaries.
+- IM-15 Inspector/Diagnostics boundaries remain intact.
+- Existing authoritative Runtime/Domain/Construction owners are consumed, not replaced or duplicated.
+
+## 10. Current gate
 
 **IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The final frozen marker `frozen/im-15-guidance-inspector` is to be created at the final documentation HEAD produced by this closing gate sequence. That marker creation is a mechanical freeze operation only.
+**IM-16 – Player Construction & Placement Integration = DEFINED / NOT IMPLEMENTED.**
 
-No next migration block is authorized in this same step.
+This documentation step does not authorize an IM-16 branch or implementation.
 
-After the final marker exists, the next permissible action is exclusively reconciliation of the next migration block against frozen IM-15. No implementation is automatically authorized.
+The next permissible action is exclusively the separate documentation verification/finalization gate for this IM-16 definition against frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`. Only after that gate is clean may creation of a separate IM-16 development branch be explicitly authorized.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole Block COMPLETE / FROZEN / PASS / 0 BLOCKER after combined diff, frozen-chain, CI/Pages, ownership and cumulative real-device regression. No next migration block in this step.
+**Updated:** 2026-09-08 — IM-16 Player Construction & Placement Integration documented as the next reconciled capability against frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`; status DEFINED / NOT IMPLEMENTED. No branch and no implementation in this step.
