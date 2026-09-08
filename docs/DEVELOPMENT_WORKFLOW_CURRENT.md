@@ -28,7 +28,7 @@ The five frozen substep markers remain authoritative:
 - IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`
 - IM-15E @ `ba1c7fc80dfa0d09342d0814e3b69a682949f6cf`
 
-Whole-block frozen marker name: `frozen/im-15-guidance-inspector`.
+Whole-block frozen marker: `frozen/im-15-guidance-inspector`.
 
 ## 3. Frozen IM-15 capability boundary
 
@@ -53,10 +53,11 @@ Frozen capabilities:
 
 ## 5. IM-15 Whole-Block Completion / Regression / Freeze Gate
 
-Whole-block regression against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682` before final Whole-Block identity synchronization confirmed:
+Whole-block regression against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682` confirmed:
 
-- **66 commits ahead / 0 behind**,
-- exactly **14 changed files**,
+- pre-identity synchronization: **66 commits ahead / 0 behind**,
+- after Whole-Block identity and initial freeze documentation: **72 commits ahead / 0 behind**,
+- exactly **14 changed files** throughout,
 - changed surfaces limited to control docs, Inspector/Diagnostics/UI, the active Runtime composition/integration in `src/main.js`, Build identity and the new diagnostic/scenario modules,
 - no Domain owner source modification,
 - no Transport owner source modification,
@@ -67,7 +68,7 @@ Frozen A→E markers were re-verified at their exact authoritative heads before 
 
 ## 6. Whole-Block regression evidence
 
-The complete frozen evidence chain remains binding and cumulative:
+The complete frozen evidence chain is binding and cumulative:
 
 - IM-15A real iPhone evidence confirmed read-only Inspector basics and authoritative world/population/gold/selection projection.
 - IM-15B real iPhone evidence confirmed structured read-only diagnostics and corrected visible Build identity.
@@ -75,19 +76,22 @@ The complete frozen evidence chain remains binding and cumulative:
 - IM-15D real iPad evidence confirmed `READY → START → RUNNING → PAUSE → PAUSED → SINGLE_STEP 100 ms → PAUSED → RESET_BASELINE_MINIWORLD` with the fixed action allowlist.
 - IM-15E seven real iPad/Safari screenshots confirmed one sample per Scheduler step, pause stillness, exactly +1 sample/100 ms for SINGLE STEP, bounded history 120 and a new session after baseline reset.
 
-Pre-Whole-Block finalization CI/Pages on frozen IM-15E were successful. Final Whole-Block identity/documentation commits must also pass CI/Pages before the final frozen marker is accepted.
+Final Whole-Block technical evidence:
+
+- CI Baseline `34274868699`: **SUCCESS**,
+- Pages `34274915778` on Whole-Block documentation head `f0012a577e804684e0ece34f015492c06f375f56`: **SUCCESS**.
 
 ## 7. Whole-Block visible/build identity
 
-Whole-Block visible/build identity is:
+Whole-Block visible/build identity:
 
 `IM-15-GUIDANCE-INSPECTOR-WHOLE-BLOCK`
 
-The verification surface must display:
+Visible verification state:
 
 `IM-15 — COMPLETE / FROZEN / PASS / 0 BLOCKER`
 
-The final synchronization changes only visible/gate/cache identity; it adds no new IM-15 capability.
+The final synchronization changed only visible/gate/cache identity and added no new IM-15 capability.
 
 ## 8. Whole-Block exclusions remain binding
 
@@ -108,11 +112,13 @@ Not introduced by IM-15:
 
 ## 9. Current gate
 
-**IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER**, subject only to successful final CI/Pages on the Whole-Block identity/documentation head before creation/acceptance of `frozen/im-15-guidance-inspector`.
+**IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+
+The final frozen marker `frozen/im-15-guidance-inspector` must point at the final documentation HEAD produced by this closing gate sequence; its successful creation is the final mechanical marker operation, not a new development step.
 
 No next migration block is authorized in this same step.
 
-The next permissible step after the final marker exists is exclusively reconciliation of the next migration block against the frozen IM-15 Whole-Block head. No implementation is automatically authorized.
+After the final marker exists, the next permissible action is exclusively reconciliation of the next migration block against frozen IM-15. No implementation is automatically authorized.
 
 ## 10. Permanent visible build identity synchronization rule
 
@@ -120,4 +126,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole-Block Completion / Regression / Freeze Gate finalized at PASS / 0 BLOCKER pending only the final CI/Pages confirmation and final frozen marker creation. No next migration block in this step.
+**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole Block COMPLETE / FROZEN / PASS / 0 BLOCKER after combined diff, frozen-chain, CI/Pages, ownership and cumulative real-device regression. No next migration block in this step.
