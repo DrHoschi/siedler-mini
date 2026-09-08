@@ -8,14 +8,12 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Whole-block branch: `feature/im-14-ui-mobile-foundation`
-- Whole-block base: frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`
+- Current control line: `feature/im-14-ui-mobile-foundation`
+- Frozen predecessor: IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14A – Player UI Shell & Responsive Surface Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14B – Unified Pointer / Touch Interaction Contract: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14C – Runtime HUD Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14D – World Selection & Context Projection: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- IM-14E – Player Camera Controls Integration: **COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-15 – Guidance / Inspector: RECONCILED / DEFINED / NOT IMPLEMENTED**
+- First planned substep: **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**
+- No IM-15 whole-block branch has been authorized or created by this reconciliation step.
 
 ## 2. Frozen IM-14 composition
 
@@ -27,15 +25,9 @@ IM-14 freezes the complete player-facing UI/mobile foundation as the composition
 - **IM-14D:** ephemeral Building/Person selection and read-only Context projection with Empty-World clear and Drag/Pinch selection guard,
 - **IM-14E:** player camera gesture integration over the shared WORLD input using the frozen camera-control functions and zoom policy.
 
-Ownership remains separated:
+Ownership remains separated: UI does not own simulation/domain/persistence state; HUD does not create a second Population/Gold truth; Selection does not mutate selected runtime/domain objects; Camera integration owns gesture interpretation only. Inspector/Guidance remained outside IM-14 and starts only as the separately reconciled IM-15 boundary below.
 
-- UI does not own simulation/domain/persistence state,
-- HUD does not create a second Population/Gold truth,
-- Selection does not mutate selected runtime/domain objects,
-- Camera integration owns gesture interpretation only,
-- SaveGame/Persistence, Inspector, minimap, gameplay/context actions and later guidance remain outside IM-14.
-
-## 3. Frozen markers
+## 3. Frozen IM-14 markers
 
 - `frozen/im-14a-player-ui-shell-responsive-surface-contract` @ `4ba4e152931058c9e6b62e2e26489f378779e80f`
 - `frozen/im-14b-unified-pointer-touch-interaction-contract` @ `8aa7594f4debcc838382ca6f49fcdcbadf9be324`
@@ -43,43 +35,62 @@ Ownership remains separated:
 - `frozen/im-14d-world-selection-context-projection` @ `72b234e0ada95afa324d62d83274ee1f320abe37`
 - `frozen/im-14e-player-camera-controls-integration` @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
 
-## 4. IM-14 Whole-Block Completion / Regression / Freeze Gate
-
-Authoritative final pre-whole-block-freeze branch HEAD: `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
-
-Full branch regression against frozen IM-13 @ `0a011af99ea8814b9e3555d7075ee091cfaf05c2`:
-
-- branch is **51 commits ahead / 0 behind**,
-- changed surface is limited to IM-14 control/runtime-evidence/UI integration surfaces: workflow/roadmap, `index.html`, IM-14A/B/C/D/E evidence files, `src/main.js`, `src/runtime/config.js`, `src/ui/app.css`, and the four IM-14 UI integration modules,
-- no unrelated domain/gameplay/persistence/Inspector feature surface is introduced,
-- all planned IM-14 substeps A–E are individually frozen before the whole-block gate.
-
-Final technical evidence:
-
-- authoritative final functional/evidence state `e3df3aca45a1fa156447ba302188227fd3718125` has CI Baseline run `34203676233`: **SUCCESS** and Pages run `34203675151`: **SUCCESS**,
-- only the two control documents changed from `e3df3aca45a1fa156447ba302188227fd3718125` to final pre-whole-block-freeze HEAD `053d4cc7f8befdb747ebce9afb755f286e2b0682`,
-- Pages run `34204224161` on `053d4cc7f8befdb747ebce9afb755f286e2b0682`: **SUCCESS**.
-
-Combined real-device/browser evidence across the block:
-
-- IM-14A responsive shell verified on iPhone/Safari and iPad/Safari: **PASS / 0 BLOCKER**,
-- IM-14B unified Pointer/Touch boundary verified on iPhone/Safari and iPad/Safari: **PASS / 0 BLOCKER**,
-- IM-14C HUD verified on iPhone/Safari with Population 3 / Gold 3 and read-only ownership: **PASS / 0 BLOCKER**,
-- IM-14D Building/Person selection, Context projection, Empty-World clear, Drag/Pan and Pinch guard verified on iPhone/Safari: **PASS / 0 BLOCKER**,
-- IM-14E one-finger Pan, two-finger zoom, Pan after zoom, Building/Person selection regression, no accidental Drag/Pinch selection and corrected Frozen Camera Policy evidence verified on iPhone/Safari: **PASS / 0 BLOCKER**.
-
 **Whole-block gate result: IM-14 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-## 5. Current gate
+## 4. IM-15 – Guidance / Inspector reconciliation
 
-IM-14 is now frozen as a whole block. No additional IM-14 feature implementation is authorized.
+IM-15 is the next migration block after frozen IM-14. Its purpose is to establish a new modular Guidance/Inspector capability for diagnosis, observation, visual verification, controlled simulation/testing support and later balancing without transferring gameplay/domain/persistence ownership into the Inspector.
 
-The binding migration order places **IM-15 – Guidance / Inspector** after IM-14. The IM-14 freeze does not automatically authorize IM-15 implementation; the next permissible action is only reconciliation/definition of the next migration block against frozen IM-14, unless a separate repository control decision establishes another predecessor step.
+Binding ownership rules:
 
-## 6. Permanent visible build identity synchronization rule
+- Inspector is not a gameplay owner and must not create a second authoritative runtime truth.
+- Runtime/domain state is observed through existing authoritative owners and explicit read-only projections.
+- The old `main` Inspector/debug architecture is not an integration target; `main` may be consulted only as historical functional/visual reference.
+- Diagnostic overlays remain observational and must not mutate world/gameplay state.
+- Later diagnostic/test actions must use explicit controlled runtime/test boundaries rather than arbitrary state mutation.
+- Automatic tests remain test code; the Inspector may later display results or trigger explicitly defined reproducible scenarios.
+
+Planned IM-15 decomposition:
+
+1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract** — establish the modular Inspector surface and first read-only observation boundary. Initial observation may expose existing runtime/world identity and selected authoritative values such as Population, Gold and Building/Person identity. No simulation controls, scenario triggers, diagnostic overlays or balancing behavior.
+2. **IM-15B – Structured Runtime Diagnostics Projection** — expose existing modular runtime systems through structured read-only diagnostics without duplicating ownership.
+3. **IM-15C – World Diagnostic Overlay Foundation** — visualize selected diagnostic state in the world while remaining strictly non-mutating.
+4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions** — allow only explicitly defined reproducible diagnostic/test actions through controlled boundaries.
+5. **IM-15E – Simulation & Balancing Observation Foundation** — establish observation/collection of suitable runtime and long-running simulation metrics without automatic balancing or domain-rule changes.
+
+After the final planned substep, IM-15 requires one combined Completion / Regression / Freeze Gate against frozen IM-14 before IM-15 may become FROZEN.
+
+## 5. IM-15A exact first boundary
+
+**IM-15A – Inspector Shell & Read-Only Runtime Observation Contract** is the first planned implementation substep, but implementation is not yet authorized.
+
+Scope when separately authorized:
+
+- new modular Inspector shell/surface separated from the player-facing IM-14 UI,
+- explicit read-only observation contract against existing authoritative runtime owners,
+- minimal first diagnostic projection sufficient to verify that the boundary works,
+- no mutation of observed runtime/domain objects.
+
+Explicit non-scope:
+
+- no IM-15B structured full-system diagnostics,
+- no world diagnostic overlays,
+- no simulation controls or arbitrary state editing,
+- no test/scenario triggering,
+- no balancing logic or automatic balancing,
+- no new gameplay/domain/persistence ownership,
+- no reuse/import of the legacy `main` Inspector architecture.
+
+## 6. Current gate
+
+The IM-15 reconciliation/definition is documented. **No IM-15 implementation and no IM-15 whole-block branch is authorized by this step.**
+
+The next permissible action is exclusively a separate decision whether to create the IM-15 whole-block branch from frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`. Only after successful branch creation may IM-15A implementation be separately authorized.
+
+## 7. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-14 UI / Mobile Foundation COMPLETE / FROZEN / PASS / 0 BLOCKER after whole-block regression of A–E, final CI/Pages verification and combined real-device evidence.
+**Updated:** 2026-09-08 — IM-15 Guidance / Inspector reconciled and defined against frozen IM-14; IM-15A fixed as first planned substep; no branch or implementation authorized.
