@@ -15,6 +15,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15B – Structured Runtime Diagnostics Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15C – World Diagnostic Overlay Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-15D – Controlled Guidance / Diagnostic Scenario Actions: DEFINED / NOT IMPLEMENTED**
 
 ## 2. Frozen predecessor line
 
@@ -24,133 +25,119 @@ IM-13 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 IM-14 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER** as a whole block.
 
-IM-15A remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+IM-15A, IM-15B and IM-15C remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-IM-15B remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
-
-Authoritative frozen IM-15B baseline for IM-15C: `513636c0fbb4a892134734dc49d8b9a438b7a513`.
+Authoritative frozen IM-15C baseline for IM-15D: `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`.
 
 ## 3. IM-15 sequence
 
 1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-15B – Structured Runtime Diagnostics Projection — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 3. **IM-15C – World Diagnostic Overlay Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-   - separate transparent read-only diagnostic canvas over the existing world canvas,
-   - same existing world/camera projection truth as the frozen renderer,
-   - PATH/ROAD cell overlay from existing `pathClassification.entries()`,
-   - existing Building IDs and Person/Unit IDs projected from existing camera-transformed render commands,
-   - existing `carrierMovementEvidence` visualized as current→target diagnostic relationship only,
-   - existing IM-14D selection read-only highlighted without new selection/hit-test semantics,
-   - overlay surface owns no pointer/touch input (`pointer-events: none`),
-   - no new gameplay/domain/persistence truth or mutation path.
-4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — PLANNED / NOT IMPLEMENTED**
+4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — DEFINED / NOT IMPLEMENTED**
+   - explicit allowlist-based diagnostic action boundary between Inspector and existing Runtime,
+   - controlled `START` and `PAUSE` through existing Runtime lifecycle methods,
+   - deterministic `SINGLE STEP` only while Runtime is not actively running and only with authoritative fixed `stepMs`,
+   - explicit registered reproducible diagnostic scenario load/reset, initially `BASELINE_MINIWORLD`,
+   - frozen action-result projection for observation,
+   - no arbitrary method exposure or direct Domain/Store mutation.
 5. **IM-15E – Simulation & Balancing Observation Foundation — PLANNED / NOT IMPLEMENTED**
 
 ## 4. Binding IM-15 architectural boundary
 
 - IM-15 owns no new gameplay/domain/persistence truth.
 - Inspector reads existing authoritative owners and visualizes their state.
-- Later Inspector actions are allowed only through explicit diagnostic/test/runtime boundaries.
+- Inspector actions are allowed only through explicit diagnostic/test/runtime boundaries.
 - Automated tests remain test code.
 - Legacy Inspector/debug architecture from `main` must not be imported; `main` remains historical reference only.
 
 ## 5. Frozen predecessor regression boundary
 
-Frozen IM-15A and IM-15B remain behaviorally preserved. IM-15C does not modify:
+IM-15D must preserve frozen IM-15A/B/C and IM-14 ownership:
 
-- `src/ui/inspector-read-only-runtime-observation.js`,
-- `src/ui/inspector-structured-runtime-diagnostics.js`,
-- IM-14D hit-test/selection ownership,
-- IM-14E pointer/touch/camera ownership,
-- Domain or Transport owner contracts.
+- read-only Inspector observation remains IM-15A,
+- structured diagnostics remain IM-15B,
+- world diagnostic overlays remain IM-15C,
+- selection/hit-test remains IM-14D,
+- pointer/touch/camera remains IM-14E,
+- Domain/Transport owners remain authoritative.
 
-## 6. Frozen IM-15C read-only overlay scope
+## 6. IM-15D defined action contract
 
-IM-15C uses only already authoritative/read-only facts:
+IM-15D is not a free debug editor. It is a controlled action adapter with an explicit action allowlist.
 
-- **Path / ROAD:** `pathClassification.entries()` joined to existing `grid-cell` render commands through the same cell ID,
-- **Building identities:** existing camera-projected Building commands and their `sourceId`,
-- **Person identities:** existing camera-projected Person commands and their `sourceId`,
-- **Carrier movement:** existing `carrierMovementEvidence.currentPosition`, `targetPosition`, `unitId`, `state`; no route/intermediate points are calculated,
-- **Selection highlight:** `window.IM14DWorldSelectionContext.getSelection()` read-only.
+### Allowed first action set
 
-The existing world renderer remains normal gameplay/world owner. IM-15C adds only a small read-only render-integration hook in `src/main.js`: normal rendering completes first, returns its immutable render result plus current view scale, then the optional diagnostic overlay renderer receives that result. Pan/zoom still call the frozen camera functions and therefore redraw the overlay through the same render path.
+- **START:** invoke the existing Runtime lifecycle start boundary only when its existing preconditions allow it.
+- **PAUSE:** invoke the existing Runtime lifecycle pause boundary only when applicable.
+- **SINGLE STEP:** invoke exactly one Scheduler step using the authoritative configured fixed `stepMs`; allowed only when Runtime is not actively `RUNNING`; no caller-provided `dtMs`.
+- **RESET/LOAD `BASELINE_MINIWORLD`:** invoke only an explicitly registered deterministic diagnostic scenario factory/reset boundary that reproduces the known baseline miniworld composition.
 
-The selection highlight is synchronized by observing the existing read-only selection value; IM-15C does not subscribe to or mutate input/selection ownership.
+### Action adapter requirements
 
-## 7. IM-15C implementation surfaces
+- UI never receives arbitrary `window.CleanRuntime`, Domain Store or Scheduler method execution.
+- Every exposed action must exist in an explicit IM-15D allowlist/registry.
+- Preconditions are checked before execution.
+- Action results are immutable/frozen and expose only diagnostic result data such as `actionId`, `scenarioId`, previous/current Runtime state, success/failure and controlled error information.
+- IM-15A/B/C may observe resulting authoritative state/result data but do not become mutation owners.
 
-Relative to frozen IM-15B, IM-15C is limited to:
+## 7. Runtime / Scheduler boundary
 
-- new `src/ui/world-diagnostic-overlay-foundation.js`,
-- `index.html`,
-- `src/ui/app.css`,
-- `src/runtime/config.js`,
-- `src/main.js` only for the read-only overlay render hook, immutable render-view metadata and RuntimeConfig cache identity,
-- this workflow file and `docs/ROADMAP_CURRENT.md`.
+The existing Runtime already owns lifecycle transitions through `start()` and `pause()`.
 
-Visible/build identity remains `IM-15C-WORLD-DIAGNOSTIC-OVERLAY-FOUNDATION`.
+The existing Scheduler already owns `step(dtMs = configuredStepMs)`, but IM-15D must not expose arbitrary `dtMs`. The diagnostic adapter must use the authoritative configured fixed step only.
 
-## 8. IM-15C Completion / Regression / Freeze Gate
+For `SINGLE STEP`, the contract is:
 
-Regression against frozen IM-15B @ `513636c0fbb4a892134734dc49d8b9a438b7a513` confirmed before freeze-status synchronization:
+- Runtime must not be `RUNNING`,
+- exactly one configured fixed step is executed,
+- no loop or fast-forward,
+- Runtime lifecycle state remains unchanged by the diagnostic single-step action itself.
 
-- branch: **10 commits ahead / 0 behind**,
-- exactly seven permitted changed files: `docs/DEVELOPMENT_WORKFLOW_CURRENT.md`, `docs/ROADMAP_CURRENT.md`, `index.html`, `src/main.js`, `src/runtime/config.js`, `src/ui/app.css`, `src/ui/world-diagnostic-overlay-foundation.js`,
-- frozen IM-15A/IM-15B projector files unchanged,
-- no Domain or Transport source files changed,
-- no IM-15D/IM-15E functionality introduced.
+`STOP` is deliberately excluded from the first IM-15D action set because the existing Runtime enters `STOPPED` and has no corresponding clean restart transition from `STOPPED` through `start()`.
 
-Read-only / ownership verification:
+## 8. Diagnostic scenario boundary
 
-- overlay canvas is separate and `pointer-events: none`,
-- overlay reads existing render commands, `pathClassification.entries()`, `carrierMovementEvidence` and IM-14D `getSelection()` only,
-- overlay projection is recursively frozen,
-- world/camera mutation remains only in frozen IM-14E camera owner,
-- no Domain/Transport mutation API is called by IM-15C.
+The first defined registered scenario is **`BASELINE_MINIWORLD`**.
 
-Technical evidence:
+It represents the already established deterministic browser miniworld composition, including its existing world/map/domain/runtime evidence. IM-15D may load/reset this scenario only through an explicit deterministic scenario boundary.
 
-- implementation CI Baseline `34236720224` on `fec9c39fd6ef500f81075024d2fd1e3277069bfa`: **SUCCESS**,
-- implementation Pages `34236765007` on `39a04cab18d8d9f7b3e2242d8e038e40afdcc6f1`: **SUCCESS**,
-- final visible-freeze-status CI Baseline `34237371166` on `5d333caa83f21f9fb8b80ef40fbb218e3fcee1c2`: **SUCCESS**,
-- final visible-freeze-status Pages `34237370186` on `5d333caa83f21f9fb8b80ef40fbb218e3fcee1c2`: **SUCCESS**.
+The scenario action must not become a generic state editor. It must not expose editable Gold, Population, Building, Person, Stock, Path, Transport or other Domain values.
 
-Real-device evidence:
+## 9. Explicit IM-15D exclusions
 
-- iPhone / Safari, 2026-09-08 16:14 local,
-- Runtime `READY`, Population `3`, Gold `3`, World Basics preserved,
-- visible build identity `IM-15C-WORLD-DIAGNOSTIC-OVERLAY-FOUNDATION`,
-- PATH and ROAD overlays visible on their world cells,
-- Building/Person IDs visible,
-- Carrier current→target diagnostic relationship visible,
-- two distinct camera positions show overlays moving synchronously with the world,
-- Inspector remains `READ ONLY`, Structured Diagnostics remains present, selection/context remains `Keine Auswahl / Weltobjekt antippen` in the supplied evidence.
+Not part of IM-15D:
 
-**Gate result: IM-15C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
-
-## 9. Explicit exclusions remain unimplemented
-
-- occupancy/reservation/queue/deadlock overlays without a live authoritative read owner,
-- Wear overlay without a live Wear owner,
-- complete route visualization without an authoritative live route registry,
-- new Path/Road computation,
+- direct Domain/Store CRUD controls,
+- arbitrary Runtime/Scheduler method invocation,
+- caller-provided tick/step duration,
+- fast-forward, repeated stepping loops or unbounded simulation execution,
+- `STOP` in the first action set,
+- arbitrary Gold/Population/Building/Person/Stock/Path/Transport edits,
+- automatic repair/correction of gameplay state,
+- SaveGame manipulation,
+- new gameplay/domain/transport/reservation/deadlock/path/wear rules,
 - new selection/pointer/touch/camera semantics,
-- interactive overlay elements,
-- scenario/test triggers, start/pause/step, repair/reset or state editing — IM-15D,
-- long-running metrics, heatmaps, throughput history or balancing — IM-15E,
-- any gameplay/domain/persistence mutation.
+- long-running metrics, heatmaps, throughput histories or balancing — IM-15E.
 
-## 10. Current gate
+## 10. Frozen IM-15C evidence remains binding
 
-IM-15C is frozen. IM-15 as a whole remains **IN PROGRESS / NOT FROZEN**.
+Frozen IM-15C head: `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`.
 
-The next permissible action is exclusively the separate **reconciliation/definition of IM-15D – Controlled Guidance / Diagnostic Scenario Actions** against the frozen IM-15C stand. No IM-15D implementation is authorized in the same step.
+Its PASS / 0 BLOCKER regression, CI/Pages, read-only ownership and real iPhone camera-synchronous overlay evidence remain predecessor requirements for IM-15D and must not regress.
 
-## 11. Permanent visible build identity synchronization rule
+## 11. Current gate
+
+IM-15D is **DEFINED / NOT IMPLEMENTED** against frozen IM-15C @ `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`.
+
+No IM-15D implementation has been authorized or performed in this documentation step.
+
+The next permissible action is exclusively the separate **IM-15D Definition/Implementation Gate**: inspect the current repository to determine the exact controlled action adapter, scenario factory/reset boundary, result contract and UI integration surface that can be implemented without violating existing Runtime/Domain ownership. No IM-15D code implementation is authorized in the same step.
+
+## 12. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15C COMPLETE / FROZEN / PASS / 0 BLOCKER after full diff, CI/Pages, read-only ownership, predecessor regression and real iPhone camera-synchronous overlay evidence. IM-15 remains IN PROGRESS / NOT FROZEN.
+**Updated:** 2026-09-08 — IM-15D Controlled Guidance / Diagnostic Scenario Actions documented as DEFINED / NOT IMPLEMENTED against frozen IM-15C @ `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`. No IM-15D implementation in this step.
