@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER / IM-15 DEFINED / NOT IMPLEMENTED  
+**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 IN PROGRESS / NOT FROZEN; IM-15A IMPLEMENTED / NOT FROZEN  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-15-guidance-inspector`  
 **Whole-block base:** frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
@@ -11,17 +11,11 @@ CR-25 through CR-32 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 IM-13 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
-**IM-14 – UI / Mobile Foundation is COMPLETE / FROZEN / PASS / 0 BLOCKER as a whole block.**
+IM-14 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER** as a whole block.
 
-Frozen IM-14 substeps:
+Authoritative frozen predecessor for IM-15:
 
-- IM-14A – Player UI Shell & Responsive Surface Contract,
-- IM-14B – Unified Pointer / Touch Interaction Contract,
-- IM-14C – Runtime HUD Projection,
-- IM-14D – World Selection & Context Projection,
-- IM-14E – Player Camera Controls Integration.
-
-Authoritative frozen IM-14 baseline for IM-15: `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
+- frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
 
 ## 2. Binding migration order
 
@@ -31,66 +25,59 @@ Authoritative frozen IM-14 baseline for IM-15: `053d4cc7f8befdb747ebce9afb755f28
 - Path / Wear – CR-32,
 - **IM-13 – SaveGame — COMPLETE / FROZEN**,
 - **IM-14 – UI/Mobile — COMPLETE / FROZEN**,
-- **IM-15 – Guidance / Inspector — DEFINED / NOT IMPLEMENTED**.
+- **IM-15 – Guidance/Inspector — IN PROGRESS / NOT FROZEN**.
 
-## 3. IM-15 sequence
+## 3. IM-15 reconciled capability boundary
 
-1. **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract — PLANNED / NOT IMPLEMENTED**
-2. **IM-15B – Structured Runtime Diagnostics Projection — PLANNED / NOT IMPLEMENTED**
-3. **IM-15C – World Diagnostic Overlay Foundation — PLANNED / NOT IMPLEMENTED**
-4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — PLANNED / NOT IMPLEMENTED**
-5. **IM-15E – Simulation & Balancing Observation Foundation — PLANNED / NOT IMPLEMENTED**
-6. **IM-15 Whole-Block Completion / Regression / Freeze Gate — LATER / NOT EXECUTED**
+IM-15 is a modular diagnostic/observation/guidance surface over existing authoritative runtime owners.
 
-## 4. Reconciled IM-15 boundaries
+Binding rules:
 
-### IM-15A – Inspector Shell & Read-Only Runtime Observation Contract
+- no new gameplay/domain/persistence truth,
+- read existing authoritative owners rather than duplicate them,
+- no legacy Inspector/debug architecture imported from `main`,
+- later actions only through explicit diagnostic/test/runtime boundaries,
+- automated tests remain test-owned.
 
-First narrow IM-15 implementation boundary:
+## 4. IM-15 sequence
 
-- create the Inspector shell/boundary in the modular architecture, separate from the Player UI Shell,
-- read/display existing authoritative runtime state only,
-- initial observation scope limited to Runtime/World basics, Population, Gold and selected Building/Person identity,
-- no simulation controls,
-- no scenario/test triggering,
-- no world diagnostic overlays,
-- no balancing functions,
-- no gameplay/domain/persistence mutation.
+- **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract — IMPLEMENTED / NOT FROZEN**,
+- **IM-15B – Structured Runtime Diagnostics Projection — PLANNED / NOT IMPLEMENTED**,
+- **IM-15C – World Diagnostic Overlay Foundation — PLANNED / NOT IMPLEMENTED**,
+- **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — PLANNED / NOT IMPLEMENTED**,
+- **IM-15E – Simulation & Balancing Observation Foundation — PLANNED / NOT IMPLEMENTED**,
+- **IM-15 Whole-Block Completion / Regression / Freeze Gate — LATER / NOT YET EXECUTED**.
 
-### IM-15B – Structured Runtime Diagnostics Projection
+## 5. IM-15A – implemented boundary
 
-Read-only structured projection of existing authoritative systems including Buildings/Stocks, Persons/Workforce, Jobs/Carrier, Movement/Routes, Cell Occupancy, Reservations/Queues/Deadlocks, Construction/Production and Path/Wear. No second truth and no direct mutation.
+IM-15A establishes only:
 
-### IM-15C – World Diagnostic Overlay Foundation
+- a separate Inspector shell distinct from the frozen IM-14 Player UI shell,
+- read-only Runtime/World basic observation,
+- read-only Population and Gold projection from existing authoritative sources,
+- read-only selected Building/Person identity reuse from the frozen IM-14D Selection owner,
+- responsive Inspector presentation,
+- synchronized visible/build identity `IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION`.
 
-Diagnostic-only visualization of existing runtime facts such as occupancy, path/road classification, reservations, route/carrier relationships and stable object identities. No world/gameplay mutation.
+Explicitly excluded and still unimplemented:
 
-### IM-15D – Controlled Guidance / Diagnostic Scenario Actions
-
-Controlled triggering of reproducible existing diagnostic/test scenarios only through explicit runtime/test boundaries. Inspector does not directly repair or mutate domain state.
-
-### IM-15E – Simulation & Balancing Observation Foundation
-
-Long-running observation/collection for scheduler/tick behavior, throughput, stocks, transport/wait behavior, production/population development and related balancing metrics. Observation/collection only; no balancing AI or rule changes.
-
-## 5. Binding architectural boundary
-
-- IM-15 owns no gameplay/domain/persistence truth.
-- Inspector consumes existing authoritative owners and visualizes them.
-- Later actions must cross explicit diagnostic/test/runtime boundaries.
-- Automated tests remain test code; Inspector may later expose results or reproducible triggers without becoming test ownership.
-- Legacy Inspector/debug architecture from `main` is not an implementation source and must not be imported.
+- Stocks/Workforce/Jobs/Carrier/Routes/Occupancy/Reservations/Queues/Deadlocks/Construction/Production/Path-Wear structured diagnostics,
+- world diagnostic overlays,
+- scenario/test trigger actions,
+- arbitrary state editing or repair,
+- long-running simulation/balancing metrics,
+- balancing automation or rule changes.
 
 ## 6. Current gate
 
-`feature/im-15-guidance-inspector` exists on frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
+IM-15A is **IMPLEMENTED / NOT FROZEN**.
 
-IM-15 is **DEFINED / NOT IMPLEMENTED**.
+The next and only permissible action is the separate **IM-15A Completion / Regression / Freeze Gate** against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
 
-The next and only permissible action is the separate **IM-15A Definition/Implementation Gate** for **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract**.
+That gate must verify the full diff, CI/Pages evidence, read-only ownership boundary, IM-14 Player UI/HUD/Selection/Pointer/Camera regressions, visible build identity and real browser/device evidence.
 
-That gate is not automatically executed by branch creation or this control-state synchronization. No IM-15A implementation is authorized in the same step.
+No IM-15B implementation is authorized before IM-15A reaches PASS / 0 BLOCKER and is frozen.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15 branch control state synchronized against frozen IM-14; IM-15 is DEFINED / NOT IMPLEMENTED and IM-15A is the first planned subblock.
+**Updated:** 2026-09-08 — IM-15A implementation complete within its narrow Inspector Shell & Read-Only Runtime Observation boundary. IM-15A remains NOT FROZEN; next permissible action is its Completion / Regression / Freeze Gate only.
