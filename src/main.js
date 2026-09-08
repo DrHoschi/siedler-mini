@@ -18,6 +18,7 @@ import { RuntimeEntityNavigationValidationIntegration } from './transport/runtim
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import {
+  DEFAULT_CAMERA_CONTROL_LIMITS,
   panWorldViewCamera,
   resizeWorldViewCameraViewport,
   zoomWorldViewCameraAt,
@@ -200,84 +201,15 @@ function renderCurrentWorld() {
   return Object.freeze({ projection, cameraState, commands });
 }
 
-function canvasPoint(event) {
-  const rect = canvas.getBoundingClientRect();
-  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+function panCameraBy({ deltaX = 0, deltaY = 0 } = {}) {
+  cameraState = panWorldViewCamera(cameraState, { deltaX, deltaY });
+  return renderCurrentWorld();
 }
 
-const activePointers = new Map();
-let previousSinglePointer = null;
-let previousPinch = null;
-
-function currentPinch() {
-  if (activePointers.size !== 2) return null;
-  const [a, b] = [...activePointers.values()];
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  return {
-    midpoint: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-    distance: Math.hypot(dx, dy),
-  };
+function zoomCameraAt({ factor, anchorX, anchorY } = {}) {
+  cameraState = zoomWorldViewCameraAt(cameraState, { factor, anchorX, anchorY });
+  return renderCurrentWorld();
 }
-
-canvas.style.touchAction = 'none';
-canvas.addEventListener('pointerdown', event => {
-  canvas.setPointerCapture?.(event.pointerId);
-  const point = canvasPoint(event);
-  activePointers.set(event.pointerId, point);
-  previousSinglePointer = activePointers.size === 1 ? point : null;
-  previousPinch = currentPinch();
-});
-canvas.addEventListener('pointermove', event => {
-  if (!activePointers.has(event.pointerId)) return;
-  const point = canvasPoint(event);
-  activePointers.set(event.pointerId, point);
-  if (activePointers.size === 1) {
-    if (previousSinglePointer) {
-      cameraState = panWorldViewCamera(cameraState, {
-        deltaX: point.x - previousSinglePointer.x,
-        deltaY: point.y - previousSinglePointer.y,
-      });
-      renderCurrentWorld();
-    }
-    previousSinglePointer = point;
-    previousPinch = null;
-    return;
-  }
-  const pinch = currentPinch();
-  if (pinch && previousPinch && previousPinch.distance > 0 && pinch.distance > 0) {
-    cameraState = panWorldViewCamera(cameraState, {
-      deltaX: pinch.midpoint.x - previousPinch.midpoint.x,
-      deltaY: pinch.midpoint.y - previousPinch.midpoint.y,
-    });
-    cameraState = zoomWorldViewCameraAt(cameraState, {
-      factor: pinch.distance / previousPinch.distance,
-      anchorX: pinch.midpoint.x,
-      anchorY: pinch.midpoint.y,
-    });
-    renderCurrentWorld();
-  }
-  previousPinch = pinch;
-  previousSinglePointer = null;
-});
-function releasePointer(event) {
-  activePointers.delete(event.pointerId);
-  const remaining = [...activePointers.values()];
-  previousSinglePointer = remaining.length === 1 ? remaining[0] : null;
-  previousPinch = currentPinch();
-}
-canvas.addEventListener('pointerup', releasePointer);
-canvas.addEventListener('pointercancel', releasePointer);
-canvas.addEventListener('wheel', event => {
-  event.preventDefault();
-  const point = canvasPoint(event);
-  cameraState = zoomWorldViewCameraAt(cameraState, {
-    factor: Math.exp(-event.deltaY * 0.0015),
-    anchorX: point.x,
-    anchorY: point.y,
-  });
-  renderCurrentWorld();
-}, { passive: false });
 
 runtime.events.on('runtime.stateChanged', ({ current }) => {
   if (statusEl) statusEl.textContent = current;
@@ -314,6 +246,10 @@ window.CleanRuntime = Object.freeze({
   carrierNavigationValidation,
   runtimeNavigationValidations,
   renderCurrentWorld,
+  panCameraBy,
+  zoomCameraAt,
+  cameraControlLimits: DEFAULT_CAMERA_CONTROL_LIMITS,
+  cameraInputOwner: 'IM-14E-UNIFIED-WORLD-INPUT',
   installActiveRuntimeComposition,
   getActiveRuntimeComposition: () => activeRuntimeComposition,
   getCameraState: () => cameraState,
