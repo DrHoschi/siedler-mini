@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 IN PROGRESS / NOT FROZEN; IM-15A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15E DEFINED / NOT IMPLEMENTED  
+**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 IN PROGRESS / NOT FROZEN; IM-15A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15E IMPLEMENTED / NOT FROZEN  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current whole-block branch:** `feature/im-15-guidance-inspector`  
 **Whole-block base:** frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
@@ -27,152 +27,101 @@ Authoritative frozen predecessor for IM-15E: frozen IM-15D @ `8fd55a68f37db84c6e
 - **IM-15B – Structured Runtime Diagnostics Projection — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
 - **IM-15C – World Diagnostic Overlay Foundation — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
 - **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — COMPLETE / FROZEN / PASS / 0 BLOCKER**,
-- **IM-15E – Simulation & Balancing Observation Foundation — DEFINED / NOT IMPLEMENTED**,
+- **IM-15E – Simulation & Balancing Observation Foundation — IMPLEMENTED / NOT FROZEN**,
 - **IM-15 Whole-Block Completion / Regression / Freeze Gate — LATER / NOT YET EXECUTED**.
 
 ## 4. Frozen IM-15D predecessor boundary
 
-The frozen IM-15D allowlist remains exactly:
+Frozen IM-15D retains the exact action allowlist `START`, `PAUSE`, `SINGLE_STEP`, `RESET_BASELINE_MINIWORLD` and one active scenario composition behind `window.CleanRuntime`.
 
-- `START`,
-- `PAUSE`,
-- `SINGLE_STEP`,
-- `RESET_BASELINE_MINIWORLD`.
+IM-15E adds no action, fast-forward, arbitrary step duration or gameplay/domain editing.
 
-The frozen single active Runtime composition remains the only scenario-dependent authoritative truth behind `window.CleanRuntime`.
+## 5. IM-15E implemented scheduler observation
 
-IM-15E must not expand IM-15D into fast-forward, repeated stepping, arbitrary step duration, generic state editing or additional lifecycle actions.
+New `src/diagnostics/simulation-balancing-observation.js` registers one observer system in the existing Scheduler `maintenance` phase:
 
-## 5. IM-15E defined capability boundary
+- system id `im15e.simulation-observation`,
+- one sample per actual Scheduler step,
+- Scheduler `dtMs` is the only diagnostic time increment,
+- no second simulation timer/clock,
+- hard bounded history maximum **120 samples**.
 
-IM-15E is a purely observational, scheduler-synchronous and bounded simulation/balancing diagnostics foundation.
+Sampling is read-only and does not modify Runtime, Scheduler, Domain, Transport or persistence owners.
 
-It may sample already authoritative Runtime/Domain facts at defined scheduler boundaries and derive clearly identified diagnostic deltas/time-series values from those facts.
+## 6. Session / composition semantics
 
-It owns no gameplay/domain/persistence truth and must never feed diagnostic metrics back into simulation rules or balancing parameters.
+The observer uses `getActiveRuntimeComposition()` as the scenario-instance read boundary.
 
-## 6. Scheduler / timeline observation
+When frozen IM-15D resets/replaces the composition, IM-15E starts a new diagnostic session, clears bounded history and restarts diagnostic step/time counters. Samples from distinct composition instances are never silently combined.
 
-The existing Scheduler remains the only simulation cadence/time-step owner.
+IM-15D remains the sole scenario-action owner.
 
-IM-15E must not introduce a second simulation timer or clock.
+## 7. Sample / delta model
 
-The preferred first sampling boundary is one read-only diagnostics sampler registered at the end of the Scheduler step in the existing `maintenance` phase.
+Deeply frozen sample data contains:
 
-Defined timeline observations:
+- Session/Scenario identity,
+- sample/step indices,
+- Scheduler step duration and derived diagnostic simulated time,
+- sampled Runtime state,
+- source facts for Population, Gold, Buildings, Persons/Units, Jobs and Resources counts,
+- Stock/Production/Transport numeric facts only when an authoritative source exists; otherwise `UNAVAILABLE`.
 
-- observed step count,
-- diagnostic simulated time derived from `stepCount × configured fixed stepMs`,
-- current Runtime lifecycle state,
-- current Scenario ID.
+Deeply frozen derived deltas compare only consecutive samples in the same session. The first sample has no synthesized delta.
 
-Derived simulated time is diagnostics only and is not gameplay time.
+## 8. Read-only Inspector surface
 
-## 7. Authoritative sample sources
+New `src/ui/simulation-balancing-observation.js` renders a separate **Simulation Observation — READ ONLY · BOUNDED 120** section.
 
-The first defined IM-15E sample may read only existing authoritative boundaries:
+It shows Session, Scenario, Runtime, Step, diagnostic Sim Time, current history Sample count, current core metrics and deltas plus optional Stock/Production/Transport observations.
 
-- Runtime state,
-- active Scenario ID,
-- Scheduler fixed `stepMs`,
-- Population,
-- Gold,
-- existing `CoreDomainStores.snapshot()` for Buildings, Persons/Units, Jobs and Resources,
-- Stock/Production/Transport fields only where they actually exist in current authoritative records/read boundaries.
+Its 250-ms UI refresh is presentation-only. Simulation samples are created only by Scheduler execution.
 
-Absent values remain unavailable rather than estimated or synthesized.
+## 9. IM-15E implementation surface
 
-## 8. First metric set
+Relative to frozen IM-15D, IM-15E is limited to:
 
-The first IM-15E observation/metric set is limited to:
+- new `src/diagnostics/simulation-balancing-observation.js`,
+- new `src/ui/simulation-balancing-observation.js`,
+- `index.html`,
+- `src/ui/app.css`,
+- `src/runtime/config.js`,
+- `src/main.js` only for cache-busted IM-15E RuntimeConfig identity,
+- `docs/DEVELOPMENT_WORKFLOW_CURRENT.md`,
+- this Roadmap.
 
-- Step count,
-- diagnostic simulated time,
-- Runtime state,
-- Scenario ID,
-- Population and delta,
-- Gold and delta,
-- Building count and delta,
-- Person/Unit count and delta,
-- Job count and delta,
-- Resource count and delta,
-- only existing Stock/Production/Transport values and supported deltas.
+Visible/build identity is `IM-15E-SIMULATION-BALANCING-OBSERVATION-FOUNDATION`.
 
-Throughput, wait time, utilization, production rate, deadlock frequency or similar metrics are unavailable until an authoritative state/event source exists for them.
+No `scheduler.js`, `runtime.js`, Domain or Transport owner source is modified.
 
-## 9. Bounded observation history
+## 10. Explicit exclusions
 
-IM-15E may hold only a bounded in-memory diagnostics history.
+Still unimplemented:
 
-Binding requirements:
-
-- explicit finite history limit,
-- immutable/frozen samples and derived results,
-- no Domain ownership,
-- no SaveGame persistence,
-- no write-back into Runtime/gameplay owners,
-- no telemetry/upload,
-- no unbounded accumulation.
-
-## 10. Scenario reset/session semantics
-
-A successful frozen IM-15D `RESET_BASELINE_MINIWORLD` replaces the active scenario composition.
-
-IM-15E must therefore begin a new observation session or clear/reinitialize the current bounded history when the active composition is replaced.
-
-Samples from distinct scenario instances must not be silently joined into one continuous time series.
-
-IM-15D remains the sole owner of reset/action execution.
-
-## 11. Inspector observation surface
-
-The first IM-15E UI surface is limited to a compact read-only **Simulation Observation** section.
-
-It may display current session/sample values including:
-
-- Step,
-- simulated diagnostic time,
-- sample count,
-- Runtime state,
-- Scenario ID,
-- Population / delta,
-- Gold / delta,
-- Buildings / Persons / Jobs / Resources counts and deltas,
-- supported existing Stock/Production/Transport observation values.
-
-No interactive balancing controls, thresholds, automatic PASS/FAIL decision logic or state editing are part of IM-15E.
-
-## 12. Explicit IM-15E exclusions
-
-Not part of IM-15E:
-
-- automatic or manual gameplay changes based on metrics,
-- automatic balancing/correction,
-- thresholds that alter production/transport/gold/population rules,
-- new Runtime/Domain/Transport gameplay rules,
-- fast-forward/repeated stepping for measurement generation,
-- caller-configurable simulation speed or tick duration,
-- new gameplay events created solely for Inspector metrics,
+- automatic/manual gameplay mutation based on metrics,
+- balancing correction/threshold actions,
+- fast-forward/repeated measurement steps,
+- configurable simulation speed/tick duration,
+- new gameplay events only for Inspector metrics,
 - SaveGame persistence of observation history,
 - telemetry/upload,
 - unbounded history,
-- invented metrics without authoritative sources,
+- estimated/invented metrics,
+- charts/heatmaps in this Foundation step,
 - new selection/pointer/touch/camera semantics.
 
-## 13. Frozen IM-15D evidence remains binding
+## 11. Current gate
 
-Frozen IM-15D head: `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`.
+IM-15E is **IMPLEMENTED / NOT FROZEN** against frozen IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`.
 
-Its PASS / 0 BLOCKER action/composition boundary, CI/Pages and real iPad evidence remain predecessor requirements for IM-15E.
+Before status documentation, the branch was **8 commits ahead / 0 behind** and limited to the two prior IM-15E definition documents plus six intended code/UI/build-identity files.
 
-## 14. Current gate
+CI Baseline and Pages were triggered on code/build-identity head `99a8557935a0849286d7f50d73eb1bd8c50640ac`. This implementation step does not perform a freeze decision.
 
-IM-15E is **DEFINED / NOT IMPLEMENTED** against frozen IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`.
+The next and only permissible action is **IM-15E – Completion / Regression / Freeze Gate**: full diff against frozen IM-15D, final CI/Pages, scheduler single-sample behavior, bounded immutable history, reset/session separation, read-only/no-feedback ownership, frozen IM-15A/B/C/D + IM-14 regression, visible/build identity and real browser/device evidence.
 
-No IM-15E implementation was performed in this documentation step.
-
-The next and only permissible action is the separate **IM-15E Definition/Implementation Gate**: inspect the current repository and derive the exact scheduler observation hook, bounded session/history contract, immutable sample/delta model and read-only Inspector integration surface that can be implemented without introducing a second simulation truth or balancing control. No IM-15E code implementation in the same step.
+Freeze only at **PASS / 0 BLOCKER**. No IM-15 Whole-Block Completion / Regression / Freeze Gate before IM-15E freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15E Simulation & Balancing Observation Foundation = DEFINED / NOT IMPLEMENTED against frozen IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`. No implementation in this step.
+**Updated:** 2026-09-08 — IM-15E Simulation & Balancing Observation Foundation IMPLEMENTED / NOT FROZEN within the defined scheduler-synchronous bounded read-only scope. Next permissible action: IM-15E Completion / Regression / Freeze Gate only.
