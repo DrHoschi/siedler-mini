@@ -13,7 +13,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current migration block: **IM-15 – Guidance / Inspector: IN PROGRESS / NOT FROZEN**
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-15B – Structured Runtime Diagnostics Projection: IMPLEMENTED / NOT FROZEN**
+- **IM-15B – Structured Runtime Diagnostics Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
 ## 2. Frozen predecessor line
 
@@ -34,12 +34,10 @@ Authoritative frozen IM-15A baseline for IM-15B: `f0eb70e1501d19c60b264699dde2a2
    - read-only projection from existing authoritative runtime owners,
    - Runtime/World basics, Population, Gold and selected Building/Person identity,
    - IM-14D Selection reused read-only; no new selection semantics,
-   - visible/build identity `IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION`,
    - no runtime/domain/persistence mutation.
 
-2. **IM-15B – Structured Runtime Diagnostics Projection — IMPLEMENTED / NOT FROZEN**
-   - extends the frozen IM-15A Inspector with a separate structured read-only diagnostics projection,
-   - reads only existing authoritative runtime owners/read boundaries,
+2. **IM-15B – Structured Runtime Diagnostics Projection — COMPLETE / FROZEN / PASS / 0 BLOCKER**
+   - structured read-only diagnostics from existing authoritative runtime owners/read boundaries,
    - visible/build identity `IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION`,
    - no new Domain API, Runtime ownership or mutation path introduced.
 
@@ -52,7 +50,7 @@ Authoritative frozen IM-15A baseline for IM-15B: `f0eb70e1501d19c60b264699dde2a2
 - IM-15 owns no new gameplay/domain/persistence truth.
 - Inspector reads existing authoritative owners and visualizes their state.
 - Later Inspector actions are allowed only through explicit diagnostic/test/runtime boundaries.
-- Automated tests remain test code; Inspector may later display results or trigger reproducible scenarios but does not replace test ownership.
+- Automated tests remain test code.
 - Legacy Inspector/debug architecture from `main` must not be imported; `main` remains historical reference only.
 
 ## 5. Frozen IM-15A boundary
@@ -66,67 +64,83 @@ Frozen IM-15A remains behaviorally preserved:
 - read-only Building/Person selection reuse from IM-14D,
 - responsive presentation.
 
-`src/ui/inspector-read-only-runtime-observation.js` remains unchanged by IM-15B.
+`src/ui/inspector-read-only-runtime-observation.js` remained unchanged by IM-15B.
 
-## 6. IM-15B implemented read-only scope
+## 6. Frozen IM-15B implementation boundary
 
-The Definition/Implementation Gate reduced implementation to read boundaries already available in the live runtime composition.
+Implemented structured read-only groups:
 
-Implemented structured groups:
-
-- **Buildings:** `domains.buildings.snapshot()` / existing Building records; project identity, lifecycle, position and only already present stock/construction/production fields,
-- **Persons:** `domains.units.snapshot()` / existing Person records; project identity/position and only already present resident/workforce/carrier fields,
-- **Jobs:** `domains.jobs.snapshot()`; existing TransportJob records only,
-- **Resources:** `domains.resources.snapshot()`; existing Resource records only,
-- **Movement / Navigation:** existing `carrierMovementEvidence`, `runtimeNavigationValidations` and `reachabilityEvidence` only; no new route calculation,
+- **Buildings:** existing `domains.buildings` records; identity, lifecycle, position and only already present Stock/Construction/Production fields,
+- **Persons:** existing `domains.units` records; identity/position and only already present Resident/Workforce/Carrier fields,
+- **Jobs:** existing `domains.jobs` records,
+- **Resources:** existing `domains.resources` records,
+- **Movement / Navigation:** existing `carrierMovementEvidence`, `runtimeNavigationValidations` and `reachabilityEvidence` only,
 - **Path Classification:** existing `pathClassification.entries()` only.
 
-Explicit unavailable/currently omitted groups are surfaced as unavailable rather than synthesized:
+Unavailable groups remain explicitly unavailable rather than synthesized:
 
 - live occupancy/reservations/queues/deadlocks,
 - complete live route registry,
 - live wear state.
 
-Construction/Production/Stock/Workforce detail is displayed only when it already exists inside the authoritative current Building/Person record. Missing facts render as absent/empty rather than being reconstructed.
-
-IM-15B creates no new Domain API and does not modify Domain owners or Transport owners.
+IM-15B creates no new Domain API and does not modify Domain or Transport owners.
 
 ## 7. IM-15B implementation surfaces
 
-Relative to frozen IM-15A, IM-15B implementation is limited to:
+Relative to frozen IM-15A, IM-15B is limited to:
 
-- `src/ui/inspector-structured-runtime-diagnostics.js` — new read-only structured diagnostics projector/controller,
-- `index.html` — structured diagnostics sections and synchronized IM-15B visible identity/cache identity,
-- `src/ui/app.css` — presentation of structured diagnostics inside the existing Inspector shell,
-- `src/runtime/config.js` — synchronized IM-15B build identity,
-- `src/main.js` — build-identity cache correction only: the existing RuntimeConfig import is versioned as `./runtime/config.js?v=im15b-1` so the live browser runtime cannot retain the stale IM-15A config module,
-- this workflow file and `docs/ROADMAP_CURRENT.md` — control state.
+- `src/ui/inspector-structured-runtime-diagnostics.js`,
+- `index.html`,
+- `src/ui/app.css`,
+- `src/runtime/config.js`,
+- `src/main.js` only for the RuntimeConfig cache-identity import `./runtime/config.js?v=im15b-1`,
+- this workflow file and `docs/ROADMAP_CURRENT.md`.
 
-No gameplay/runtime semantics in `src/main.js` were changed; only the RuntimeConfig import URL identity changed.
+No gameplay/runtime semantics in `src/main.js` were changed. No IM-15C world overlay, IM-15D action boundary or IM-15E metrics/balancing logic is present.
 
-No IM-15C world overlay, IM-15D action boundary or IM-15E metrics/balancing logic is present.
+## 8. IM-15B Completion / Regression / Freeze Gate
 
-## 8. IM-15B Build Identity Verification / Correction
+Corrected implementation head before final gate-status synchronization: `ac6a202f8f1a70343c4064b810c73c15c8f5fd8e`.
 
-Real iPhone/Safari evidence at 2026-09-08 11:33 local showed IM-15B page/title/status correctly loaded while the Inspector `Build` field still displayed `IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION`.
+Regression against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`:
 
-Repository verification confirmed:
+- branch: **11 commits ahead / 0 behind**,
+- changed surface: exactly seven permitted files (`docs/DEVELOPMENT_WORKFLOW_CURRENT.md`, `docs/ROADMAP_CURRENT.md`, `index.html`, `src/main.js`, `src/runtime/config.js`, `src/ui/app.css`, `src/ui/inspector-structured-runtime-diagnostics.js`),
+- frozen IM-15A projector remained unchanged,
+- frozen IM-14 Player UI/HUD/Selection/Pointer/Camera ownership remained unchanged,
+- no IM-15C/IM-15D/IM-15E functionality introduced.
 
-- `src/runtime/config.js` already contained the correct IM-15B build value,
-- `index.html` already versioned top-level module URLs with `?v=im15b-1`,
-- but `src/main.js` imported `./runtime/config.js` without a version query, allowing Safari to reuse the stale IM-15A config module.
+Read-only ownership verification:
 
-Correction: `src/main.js` now imports `./runtime/config.js?v=im15b-1`. No runtime/domain/transport behavior was otherwise changed.
+- diagnostics use existing `DomainStore.snapshot()` data, existing movement/navigation evidence and `pathClassification.entries()`,
+- values are cloned/frozen before projection,
+- controller only refreshes projection and renders DOM,
+- no Domain/Transport mutation method is called.
 
-IM-15B remains **IMPLEMENTED / NOT FROZEN** until the corrected identity is confirmed in real-device evidence and the Completion / Regression / Freeze Gate passes at **PASS / 0 BLOCKER**.
+Technical evidence:
+
+- CI Baseline run `34210936764` on code-corrected head `be297c924876063075bedfe6982f86f3ad1d0308`: **SUCCESS**,
+- subsequent head `ac6a202f8f1a70343c4064b810c73c15c8f5fd8e` differs only by the Roadmap control-state commit,
+- Pages build/deployment run `34210971362` on `ac6a202f8f1a70343c4064b810c73c15c8f5fd8e`: **SUCCESS**.
+
+Real-device evidence:
+
+- iPhone / Safari, 2026-09-08 11:35 local,
+- Runtime `READY`, Population `3`, Gold `3`, World `CR-32A World-backed Path Classification Contract Miniworld · 8×6 · Zelle 1`,
+- Inspector `READ ONLY`,
+- Build visibly corrected to `IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION`,
+- Structured Diagnostics visibly active with `3 Buildings · 3 Persons · 0 Jobs · 0 Resources · 2 Paths`,
+- frozen selection/context behavior remained operational (`Keine Auswahl` / `Weltobjekt antippen`).
+
+Former stale IM-15A build-identity blocker is resolved.
+
+**Gate result: IM-15B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 ## 9. Current gate
 
-IM-15B is **IMPLEMENTED / NOT FROZEN** against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
+IM-15B is frozen. IM-15 as a whole remains **IN PROGRESS / NOT FROZEN**.
 
-The next permissible action is exclusively continuation of **IM-15B – Completion / Regression / Freeze Gate** with corrected build-identity verification: full diff against frozen IM-15A, CI/Pages, read-only ownership, IM-15A/IM-14 regression, visible build identity and real browser/device diagnostics rendering. Freeze only at **PASS / 0 BLOCKER**.
-
-No IM-15C implementation is authorized before IM-15B is separately frozen.
+The next permissible action is exclusively the separate **reconciliation/definition of IM-15C – World Diagnostic Overlay Foundation** against the frozen IM-15B stand. No IM-15C implementation is authorized in the same step as that definition.
 
 ## 10. Permanent visible build identity synchronization rule
 
@@ -134,4 +148,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-08 — IM-15B remains IMPLEMENTED / NOT FROZEN. Build-identity cache-chain blocker corrected by versioning the RuntimeConfig import in `src/main.js`; real-device confirmation and freeze gate still pending.
+**Updated:** 2026-09-08 — IM-15B COMPLETE / FROZEN / PASS / 0 BLOCKER after successful read-only regression, CI/Pages and corrected real iPhone/Safari build-identity evidence. IM-15 remains IN PROGRESS / NOT FROZEN; next permissible action is IM-15C reconciliation/definition only.
