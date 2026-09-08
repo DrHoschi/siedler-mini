@@ -106,6 +106,29 @@ button,input,select,textarea{font:inherit}
   overflow-wrap:anywhere;
 }
 
+.inspector-shell{
+  position:absolute;
+  top:var(--shell-gap);
+  left:var(--shell-gap);
+  z-index:20;
+  width:min(330px,calc(100% - 2 * var(--shell-gap)));
+  max-height:calc(100% - 2 * var(--shell-gap));
+  overflow:auto;
+  padding:14px;
+  border:1px solid #4a535c;
+  border-radius:14px;
+  background:rgba(22,27,32,.9);
+  box-shadow:0 12px 36px rgba(0,0,0,.24);
+  pointer-events:none;
+}
+.inspector-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.inspector-heading strong{font-size:.92rem}
+.inspector-heading span{font-size:.62rem;letter-spacing:.12em;opacity:.7}
+.inspector-fields{margin:0;display:grid;gap:7px}
+.inspector-fields div{display:grid;grid-template-columns:88px minmax(0,1fr);gap:8px;align-items:start}
+.inspector-fields dt{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;opacity:.58}
+.inspector-fields dd{margin:0;min-width:0;font:600 .7rem/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+
 .player-action-region{
   min-height:calc(var(--action-height) + var(--safe-bottom));
   padding:8px 16px calc(8px + var(--safe-bottom));
@@ -143,6 +166,10 @@ button,input,select,textarea{font:inherit}
 }
 .surface-note{opacity:.65;letter-spacing:0;text-align:right}
 
+@media(max-width:900px){
+  .inspector-shell{top:auto;bottom:var(--shell-gap);width:min(300px,calc(100% - 2 * var(--shell-gap)));max-height:45%}
+}
+
 @media(max-width:640px){
   :root{--shell-gap:10px;--topbar-height:52px;--action-height:72px}
   .player-topbar{padding-left:14px;padding-right:14px;gap:8px}
@@ -151,6 +178,9 @@ button,input,select,textarea{font:inherit}
   .runtime-hud span{padding:5px 7px;font-size:.68rem}
   .verification-card{padding:12px;width:min(330px,calc(100% - 2 * var(--shell-gap)))}
   .verification-card p{display:none}
+  .inspector-shell{padding:10px;width:min(280px,calc(100% - 2 * var(--shell-gap)));max-height:42%}
+  .inspector-fields{gap:5px}
+  .inspector-fields div{grid-template-columns:76px minmax(0,1fr)}
   .player-action-region{padding-left:14px;padding-right:14px;align-items:flex-start}
   .selection-context{flex-direction:column;align-items:flex-start;gap:4px;max-width:62%}
   .context-kind{padding:4px 7px}
@@ -161,6 +191,8 @@ button,input,select,textarea{font:inherit}
 @media(max-width:430px){
   .player-topbar{flex-wrap:wrap}
   .runtime-hud{order:3;flex-basis:100%;justify-content:flex-start}
+  .verification-card{max-height:30%}
+  .inspector-shell{max-height:38%}
 }
 
 @media(max-height:520px) and (orientation:landscape){
@@ -171,4 +203,5 @@ button,input,select,textarea{font:inherit}
   .selection-context{flex-direction:row;align-items:center}
   .verification-card{max-width:360px;padding:10px}
   .verification-card p{display:none}
+  .inspector-shell{top:var(--shell-gap);bottom:auto;max-width:300px;max-height:calc(100% - 2 * var(--shell-gap));padding:9px}
 }
