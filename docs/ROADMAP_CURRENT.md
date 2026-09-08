@@ -81,7 +81,15 @@ Explicitly omitted/unavailable rather than synthesized:
 
 No new owner or read API is added merely to fill these gaps.
 
-## 7. IM-15B explicit exclusions
+## 7. IM-15B build identity correction
+
+Real iPhone/Safari evidence at 2026-09-08 11:33 local showed the IM-15B page/status while the Inspector `Build` field still contained the stale IM-15A RuntimeConfig build identity.
+
+Repository verification showed `src/runtime/config.js` already contained `IM-15B-STRUCTURED-RUNTIME-DIAGNOSTICS-PROJECTION`, while `src/main.js` still imported `./runtime/config.js` without the IM-15B cache identity. The top-level `main.js?v=im15b-1` query therefore did not guarantee a fresh dependency module on Safari.
+
+The correction is limited to versioning that existing import as `./runtime/config.js?v=im15b-1`. No gameplay/runtime behavior, Domain owner or Transport owner was changed.
+
+## 8. IM-15B explicit exclusions
 
 Still unimplemented:
 
@@ -92,14 +100,14 @@ Still unimplemented:
 
 The frozen IM-14 Player UI/HUD/Selection/Pointer/Camera contracts and frozen IM-15A observation behavior must remain regressionsafe.
 
-## 8. Current gate
+## 9. Current gate
 
 IM-15B is **IMPLEMENTED / NOT FROZEN** against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
 
-The next and only permissible action is **IM-15B – Completion / Regression / Freeze Gate**: full diff, CI/Pages, read-only ownership verification, frozen predecessor regression, synchronized visible/build identity and real browser/device evidence. IM-15B may be frozen only at **PASS / 0 BLOCKER**.
+The next and only permissible action is continuation of **IM-15B – Completion / Regression / Freeze Gate** with corrected real-device build-identity verification, full diff, CI/Pages, read-only ownership verification and frozen predecessor regression. IM-15B may be frozen only at **PASS / 0 BLOCKER**.
 
 No IM-15C implementation is authorized in the same step.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15B Structured Runtime Diagnostics Projection IMPLEMENTED / NOT FROZEN within the reduced live authoritative read boundary. Next permissible action is IM-15B Completion / Regression / Freeze Gate only.
+**Updated:** 2026-09-08 — IM-15B remains IMPLEMENTED / NOT FROZEN. Safari build-identity cache-chain corrected by versioning the RuntimeConfig import; real-device confirmation and freeze gate remain pending.
