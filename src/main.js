@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js';
+import { RuntimeConfig } from './runtime/config.js?v=im15b-1';
 import { Runtime } from './runtime/runtime.js';
 import { WorldStore } from './world/world-store.js';
 import { MapStructure } from './world/map-structure.js';
