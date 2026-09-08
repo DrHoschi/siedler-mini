@@ -13,6 +13,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - Current migration block: **IM-15 – Guidance / Inspector: IN PROGRESS / NOT FROZEN**
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-15B – Structured Runtime Diagnostics Projection: DEFINED / NOT IMPLEMENTED**
 
 ## 2. Frozen predecessor line
 
@@ -22,7 +23,9 @@ IM-13 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 IM-14 remains **COMPLETE / FROZEN / PASS / 0 BLOCKER** as a whole block.
 
-Authoritative frozen IM-14 baseline for IM-15: `053d4cc7f8befdb747ebce9afb755f286e2b0682`.
+IM-15A remains **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+
+Authoritative frozen IM-15A baseline for IM-15B: `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
 
 ## 3. IM-15 sequence
 
@@ -32,10 +35,14 @@ Authoritative frozen IM-14 baseline for IM-15: `053d4cc7f8befdb747ebce9afb755f28
    - Runtime/World basics, Population, Gold and selected Building/Person identity,
    - IM-14D Selection reused read-only; no new selection semantics,
    - visible/build identity `IM-15A-INSPECTOR-SHELL-READ-ONLY-RUNTIME-OBSERVATION`,
-   - no runtime/domain/persistence mutation,
-   - no simulation controls, scenario triggering, world overlays, structured system diagnostics or balancing.
+   - no runtime/domain/persistence mutation.
 
-2. **IM-15B – Structured Runtime Diagnostics Projection — PLANNED / NOT IMPLEMENTED**
+2. **IM-15B – Structured Runtime Diagnostics Projection — DEFINED / NOT IMPLEMENTED**
+   - extend the frozen IM-15A read-only Inspector with structured diagnostics from existing authoritative runtime owners,
+   - diagnostics may be grouped into dedicated Inspector sections/lists,
+   - no second gameplay/domain/persistence truth and no direct mutation ownership,
+   - no legacy Inspector/debug architecture from `main`.
+
 3. **IM-15C – World Diagnostic Overlay Foundation — PLANNED / NOT IMPLEMENTED**
 4. **IM-15D – Controlled Guidance / Diagnostic Scenario Actions — PLANNED / NOT IMPLEMENTED**
 5. **IM-15E – Simulation & Balancing Observation Foundation — PLANNED / NOT IMPLEMENTED**
@@ -48,49 +55,56 @@ Authoritative frozen IM-14 baseline for IM-15: `053d4cc7f8befdb747ebce9afb755f28
 - Automated tests remain test code; Inspector may later display results or trigger reproducible scenarios but does not replace test ownership.
 - Legacy Inspector/debug architecture from `main` must not be imported; `main` remains historical reference only.
 
-## 5. IM-15A frozen implementation boundary
+## 5. Frozen IM-15A boundary
 
-Frozen surfaces are limited to:
+Frozen IM-15A surfaces remain unchanged:
 
-- `index.html` for the separate Inspector shell and IM-15A visible identity,
-- `src/ui/app.css` for responsive Inspector-shell presentation,
-- `src/ui/inspector-read-only-runtime-observation.js` for read-only projection/controller and final gate status,
-- `src/runtime/config.js` for synchronized IM-15A build identity,
-- this workflow file and `docs/ROADMAP_CURRENT.md` for control state.
+- separate Inspector shell,
+- Runtime/World basics,
+- Population,
+- Gold,
+- read-only Building/Person selection reuse from IM-14D,
+- responsive presentation,
+- synchronized IM-15A build identity.
 
-The Inspector reads only existing `CleanRuntime` sources and the existing `IM14DWorldSelectionContext`; it introduces no second gameplay truth and no mutation API.
+The Inspector continues to read only existing `CleanRuntime` sources and the existing `IM14DWorldSelectionContext`; it introduces no second gameplay truth and no mutation API.
 
-The World Basics projection uses only the existing authoritative `MapStructure` read boundary: `map()` and `dimensions()`.
+## 6. Binding IM-15B definition
 
-## 6. IM-15A Completion / Regression / Freeze Gate
+IM-15B may add structured read-only diagnostic projection only for runtime facts that already have authoritative owners/read boundaries.
 
-Final corrected implementation head before gate-status synchronization: `e38a32268d587d3398e77211f2a4a22faa1bd79b`.
+Permitted diagnostic groups:
 
-Regression against frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`:
+- **Buildings / Stocks:** existing Building identities and already authoritative local stock state,
+- **Persons / Workforce:** existing Person identities and already authoritative workforce/assignment state,
+- **Jobs / Carriers:** existing TransportJob and Carrier state,
+- **Movement / Routes:** existing movement/navigation/route state where already authoritative and readable,
+- **Cell Occupancy / Reservations / Queues / Deadlocks:** existing traffic, occupancy, reservation, queue and deadlock state,
+- **Construction / Production:** existing construction/production state and already authoritative stock relationships,
+- **Path / Wear:** existing PATH/ROAD classification and already authoritative wear state.
 
-- branch remained 10 commits ahead / 0 behind before final gate-status synchronization,
-- changed surface remained limited to the two control files, `index.html`, `src/runtime/config.js`, `src/ui/app.css`, and `src/ui/inspector-read-only-runtime-observation.js`,
-- no IM-15B diagnostics, world overlays, scenario actions, simulation controls or balancing logic were introduced,
-- frozen IM-14 Player UI/HUD/Selection/Pointer/Camera ownership was preserved.
+Binding implementation rules:
 
-Technical evidence on corrected head `e38a32268d587d3398e77211f2a4a22faa1bd79b`:
+- Inspector projection remains read-only,
+- existing snapshots/stores/contracts/read methods may be used,
+- no new Domain API may be invented solely for Inspector convenience when an existing authoritative read boundary already exposes the required fact,
+- if a diagnostic group does not currently have a clean existing read boundary, it must be omitted or explicitly reported as unavailable/blocking rather than creating new ownership inside IM-15B,
+- frozen IM-15A and IM-14 Player UI/HUD/Selection/Pointer/Camera boundaries must remain unchanged.
 
-- CI Baseline run `34208394304`: **SUCCESS**,
-- Pages build/deployment run `34208393550`: **SUCCESS**.
+Explicitly excluded from IM-15B:
 
-Real-device evidence:
-
-- iPhone / Safari, 2026-09-08 11:12 local: Inspector shell visible and responsive; Runtime `READY`; build identity correct; Population `3`; read-only Person selection synchronized with frozen IM-14D context,
-- World Basics correction visibly confirmed as `CR-32A World-backed Path Classification Contract Miniworld · 8×6 · Zelle 1`, eliminating the former `—×— · Zelle —` blocker,
-- Player HUD, world rendering and selection context remained operational in the same device pass.
-
-**Gate result: IM-15A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- world diagnostic overlays, highlights or world-linked visualization — IM-15C,
+- scenario/test triggers, pause/start/step controls, repair/reset or direct state editing — IM-15D,
+- long-running throughput/history metrics, balancing analysis or automation — IM-15E,
+- gameplay/domain/persistence mutation of any kind.
 
 ## 7. Current gate
 
-IM-15A is frozen. IM-15 as a whole remains **IN PROGRESS / NOT FROZEN**.
+IM-15B is **DEFINED / NOT IMPLEMENTED** against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`.
 
-The next permissible action is exclusively the separate **reconciliation/definition of IM-15B – Structured Runtime Diagnostics Projection** against the frozen IM-15A stand. No IM-15B implementation is authorized in the same step as that definition.
+The next permissible action is exclusively the separate **IM-15B Definition/Implementation Gate** on `feature/im-15-guidance-inspector`, where the exact implementation surface must be checked against currently available authoritative read boundaries before any code change begins.
+
+No IM-15C function and no world overlay/scenario/simulation functionality is authorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -98,4 +112,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-08 — IM-15A COMPLETE / FROZEN / PASS / 0 BLOCKER after corrected World Basics read-only projection, successful CI/Pages and real iPhone/Safari verification. IM-15 remains IN PROGRESS / NOT FROZEN; next permissible action is IM-15B reconciliation/definition only.
+**Updated:** 2026-09-08 — IM-15B Structured Runtime Diagnostics Projection reconciled and DEFINED / NOT IMPLEMENTED against frozen IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`. Next permissible action is the separate IM-15B Definition/Implementation Gate only.
