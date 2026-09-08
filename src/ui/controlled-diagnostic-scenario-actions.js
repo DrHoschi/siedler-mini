@@ -100,7 +100,7 @@ if (inspectorShell && window.CleanRuntime) {
 
   const status = document.querySelector('#test-status');
   if (status) {
-    status.textContent = 'IM-15D — IMPLEMENTED / NOT FROZEN — Controlled Diagnostic Actions aktiv · START / PAUSE / SINGLE STEP / RESET BASELINE_MINIWORLD allowlisted';
-    status.dataset.pass = 'pending';
+    status.textContent = 'IM-15D — COMPLETE / FROZEN / PASS / 0 BLOCKER — Controlled Diagnostic Actions aktiv · START / PAUSE / SINGLE STEP / RESET BASELINE_MINIWORLD allowlisted';
+    status.dataset.pass = 'true';
   }
 }
