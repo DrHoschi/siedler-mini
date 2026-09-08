@@ -8,8 +8,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Whole-block branch: `feature/im-15-guidance-inspector`
-- Whole-block base: frozen IM-14 @ `053d4cc7f8befdb747ebce9afb755f286e2b0682`
+- Current Whole-Block branch: `feature/im-16-player-construction-placement-integration`
+- Frozen development baseline: IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15 – Guidance / Inspector: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15A – Inspector Shell & Read-Only Runtime Observation Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -17,6 +17,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-15C – World Diagnostic Overlay Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15D – Controlled Guidance / Diagnostic Scenario Actions: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15E – Simulation & Balancing Observation Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-16 – Player Construction & Placement Integration: DEFINED / NOT IMPLEMENTED**
+- **IM-16A – Authoritative Construction Placement Contract: DEFINED / NOT IMPLEMENTED**
 
 ## 2. Frozen IM-15 chain
 
@@ -30,6 +32,8 @@ The five frozen substep markers remain authoritative:
 
 Whole-block frozen marker: `frozen/im-15-guidance-inspector`.
 
+Authoritative frozen IM-15 development baseline for IM-16: `9e797ab93036f6b3731442dc626edb8c091893c8`.
+
 ## 3. Frozen IM-15 capability boundary
 
 IM-15 is a modular diagnostic/observation/guidance surface over existing authoritative runtime owners.
@@ -42,7 +46,7 @@ Frozen capabilities:
 4. **IM-15D:** explicit allowlist diagnostic actions only: `START`, `PAUSE`, `SINGLE_STEP`, `RESET_BASELINE_MINIWORLD`.
 5. **IM-15E:** scheduler-synchronous bounded read-only Simulation Observation with immutable samples/deltas, session separation and hard history limit 120.
 
-## 4. Binding ownership boundary
+## 4. Binding ownership boundary after IM-15
 
 - IM-15 owns no second gameplay/domain/persistence truth.
 - Existing Runtime, Domain, Transport, Scheduler, SaveGame, Selection and Camera owners remain authoritative.
@@ -110,20 +114,86 @@ Not introduced by IM-15:
 - invented metrics,
 - new Selection/Pointer/Touch/Camera semantics.
 
-## 9. Current gate
+## 9. IM-16 – Player Construction & Placement Integration
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Whole-Block branch:** `feature/im-16-player-construction-placement-integration`
+
+**Binding baseline:** exclusively frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`.
+
+IM-16 establishes the first complete player-facing construction flow while preserving existing Runtime/Domain/Construction, SaveGame, Selection, Pointer/Touch, Camera and Inspector ownership. UI ownership remains limited to temporary player interaction and preview state.
+
+Player-facing target flow:
+
+`Gebäude auswählen → Platzierungsmodus → Position in der Welt bestimmen → gültig/ungültig erkennen → bestätigen oder abbrechen → autoritatives Bauergebnis wieder in die Player UI projizieren`.
+
+No legacy `main` BuildDock architecture is an implementation basis.
+
+## 10. IM-16A – Authoritative Construction Placement Contract
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+### Leitfrage
+
+„Wie wird eine gewünschte Gebäudeplatzierung erstmals als eindeutige Anfrage gegen die bestehende Map-/Building-Authority beschrieben und autoritativ als zulässig oder unzulässig bewertet, ohne dass Pointer-, UI- oder Preview-Zustand selbst über Gameplay-Gültigkeit entscheiden darf?“
+
+### Ziel
+
+IM-16A closes only the missing authoritative seam between a later player-facing placement interaction and the existing world/building owners.
+
+A placement candidate refers to an existing Building `definitionId` and a real `MapStructure` cell. UI, Pointer/Touch and preview state may later submit or display such a candidate, but they never own the gameplay validity decision.
+
+### Binding contract boundary
+
+- Placement input is based on an existing Building `definitionId`.
+- Placement target is a real `MapStructure` cell, not a screen coordinate.
+- `MapStructure` remains owner of `cellId`, grid coordinates and world coordinates.
+- Existing Building/Construction Domain ownership remains authoritative for the placement decision.
+- The placement evaluation returns a clear immutable valid/invalid result containing the evaluated Building-definition and cell reference.
+- An invalid request must not mutate Building, Construction, World or persistence state.
+- A valid evaluation in IM-16A also does **not** create a Building.
+- Existing `BuildingRegistrationWorldOwnership` remains the authoritative registration boundary and is not consumed until a later explicit confirm/commit step.
+- IM-14 Pointer/Touch, Selection and Camera contracts are preserved unchanged.
+- Screen/Pointer-to-cell interaction is outside IM-16A and belongs to a later integration step above this contract.
+- Frozen IM-15 Inspector may later observe resulting state but receives no Placement mutation authority.
+
+### Explicit exclusions
+
+IM-16A does not introduce:
+
+- player-facing Build menu or building picker,
+- Placement Mode lifecycle,
+- visual Placement Ghost/Preview,
+- Pointer/Touch-to-cell controller,
+- Confirm/Cancel flow,
+- actual Building creation or registration,
+- construction progression,
+- cost/resource deduction,
+- SaveGame changes,
+- new Selection semantics,
+- new Camera semantics,
+- new Inspector mutation paths,
+- broad new terrain/distance/resource/building-type placement rules not already supported by existing authoritative owners.
+
+No speculative rule catalogue is authorized in IM-16A. The first implementation must remain limited to the narrow authoritative placement contract and only the minimum validation the current world/building model can actually support.
+
+## 11. Current gate
 
 **IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The final frozen marker `frozen/im-15-guidance-inspector` must point at the final documentation HEAD produced by this closing gate sequence; its successful creation is the final mechanical marker operation, not a new development step.
+**IM-16 – Player Construction & Placement Integration = DEFINED / NOT IMPLEMENTED.**
 
-No next migration block is authorized in this same step.
+**IM-16A – Authoritative Construction Placement Contract = DEFINED / NOT IMPLEMENTED.**
 
-After the final marker exists, the next permissible action is exclusively reconciliation of the next migration block against frozen IM-15. No implementation is automatically authorized.
+This documentation step authorizes no IM-16A implementation and no later IM-16 substep.
 
-## 10. Permanent visible build identity synchronization rule
+The next permissible step after this documentation update is exclusively a separate IM-16A documentation verification/finalization gate against frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8` and the unchanged Whole-Block branch. Only after a clean gate may IM-16A implementation be explicitly authorized.
+
+## 12. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-08 — IM-15 Guidance / Inspector Whole Block COMPLETE / FROZEN / PASS / 0 BLOCKER after combined diff, frozen-chain, CI/Pages, ownership and cumulative real-device regression. No next migration block in this step.
+**Updated:** 2026-09-08 — IM-16A Authoritative Construction Placement Contract documented as DEFINED / NOT IMPLEMENTED on `feature/im-16-player-construction-placement-integration` against frozen IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`. No implementation authorized in this step.
