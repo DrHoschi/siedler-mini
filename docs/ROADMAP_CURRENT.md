@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16 DEFINED / PARTIALLY IMPLEMENTED; IM-16A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16D COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-14 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-15 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16 DEFINED / PARTIALLY IMPLEMENTED; IM-16A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-16E DEFINED / NOT IMPLEMENTED  
 **Repository:** `DrHoschi/siedler-mini`  
 **Current Whole-Block branch:** `feature/im-16-player-construction-placement-integration`  
 **Frozen IM-16 baseline:** IM-15 @ `9e797ab93036f6b3731442dc626edb8c091893c8`
@@ -8,8 +8,6 @@
 ## 1. Frozen line
 
 CR-25 through CR-32, IM-13, IM-14 and IM-15A/B/C/D/E remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
-
-**IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 Frozen IM-16A marker: `frozen/im-16a-authoritative-construction-placement-contract`.
 Frozen IM-16A head: `5b19e57bd118d601a25c0ce042e123366e4869d0`.
@@ -20,7 +18,8 @@ Frozen IM-16B head: `0c5dfcbe7cd10ac745884c7204ce9549596c2cd2`.
 Frozen IM-16C marker: `frozen/im-16c-player-placement-preview-validity-projection-contract`.
 Frozen IM-16C head: `ddebbb4ee8b743b869e069da11d644690e0620eb`.
 
-The IM-16D frozen marker must point at the final documentation HEAD produced by this closing gate after final CI/Pages verification.
+Frozen IM-16D marker: `frozen/im-16d-authoritative-placement-commit-building-registration-contract`.
+Frozen IM-16D head and exclusive IM-16E baseline: `2d8e508b54fa97f0f9abc2bdc00e9d7b6bfd65b1`.
 
 ## 2. Binding ownership after frozen IM-16D
 
@@ -33,7 +32,7 @@ The IM-16D frozen marker must point at the final documentation HEAD produced by 
 - `BuildingRegistrationWorldOwnership` remains the authoritative Building registration boundary.
 - IM-15 remains observation/guidance except its already frozen diagnostic action allowlist.
 - IM-15C diagnostic overlay remains read-only and is not Player Placement authority.
-- No Player Confirm/Cancel control exists yet.
+- No Player Confirm/Cancel implementation exists yet.
 
 ## 3. IM-16 – Player Construction & Placement Integration
 
@@ -43,7 +42,7 @@ The IM-16D frozen marker must point at the final documentation HEAD produced by 
 
 IM-16 establishes the player-facing construction path from building selection through placement, validation, confirm/cancel and projection of the actually resulting authoritative state back into Player UI, without introducing a second gameplay, construction or persistence truth.
 
-IM-16A, IM-16B, IM-16C and IM-16D are frozen. Later IM-16 capability remains separately gated.
+IM-16A, IM-16B, IM-16C and IM-16D are frozen. IM-16E is defined but not implemented. Later IM-16 capability remains separately gated.
 
 ## 4. IM-16A – Authoritative Construction Placement Contract
 
@@ -55,91 +54,57 @@ Frozen IM-16A establishes immutable mutation-free evaluation of an existing Buil
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-Frozen IM-16B adds only the temporary Player Placement interaction-state and world-target seam above frozen IM-16A. It creates no Ghost/Preview, no Confirm/Commit and no Building mutation path.
+Frozen IM-16B adds only the temporary Player Placement interaction-state and world-target seam above frozen IM-16A.
 
 ## 6. IM-16C – Player Placement Preview & Validity Projection Contract
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-Frozen IM-16C projects only the already existing frozen-IM-16B state into a temporary player-visible world preview.
+Frozen IM-16C projects only the already existing frozen-IM-16B state into a temporary player-visible world preview. It owns no placement validity and no Building mutation.
 
-- input remains frozen IM-16B state: `definitionId`, current real `targetCellId`, unchanged frozen-IM-16A evaluation;
-- existing camera-synchronous projected world geometry remains the only visual geometry authority;
-- the target cell is visually highlighted;
-- `VALID` and `TARGET_CELL_OCCUPIED` are visually distinguishable without re-evaluating placement rules;
-- `NO TARGET` suppresses the Player Preview;
-- the simple Building Ghost is temporary render presentation only and creates no Building/Domain entity or Construction state;
-- camera pan/zoom keeps preview synchronized;
-- Selection remains independent;
-- Inspector remains read-only.
-
-Real iPhone tests also established that accumulated verification/inspector overlays are difficult to read on the narrow phone viewport. This remains a **NON-BLOCKING later UI/readability need** and was not folded into IM-16D.
+Real iPhone tests also established that accumulated verification/inspector overlays are difficult to read on the narrow phone viewport. This remains a **NON-BLOCKING later UI/readability need** and is not folded into IM-16E.
 
 ## 7. IM-16D – Authoritative Placement Commit & Building Registration Contract
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-**Exclusive implementation baseline:** frozen IM-16C @ `ddebbb4ee8b743b869e069da11d644690e0620eb`.
+**Frozen head:** `2d8e508b54fa97f0f9abc2bdc00e9d7b6bfd65b1`.
 
-### Frozen capability
+Frozen IM-16D introduces only the authoritative commit / Building registration seam behind the already frozen placement interaction and preview path. It performs final IM-16A revalidation immediately before mutation and registers through the existing Building owners. It includes no Player Confirm/Cancel or implicit live commit trigger.
 
-IM-16D introduces only the authoritative commit / Building registration seam behind the already frozen placement interaction and preview path.
+## 8. IM-16E – Player Placement Confirm / Cancel Interaction Contract
 
-- candidate input remains only existing Building `definitionId` plus real `targetCellId`;
-- immediately before any Building mutation, the candidate is re-evaluated through frozen IM-16A against current authoritative state;
-- stale cached `VALID` state from IM-16B/IM-16C is never mutation authority;
-- non-`VALID` final revalidation rejects with the authoritative IM-16A reason and produces no Building mutation;
-- stable Building ID is allocated only through the existing Building-store allocator;
-- existing `BuildingIdentityOwnershipContract` owns Building identity;
-- existing `BuildingLifecycleStateContract` owns lifecycle semantics;
-- actual registration occurs exclusively through `BuildingRegistrationWorldOwnership.register(...)`;
-- the registration owner was extended only to carry the already existing authoritative Building `position` so subsequent frozen-IM-16A occupancy checks see the committed Building on its real target cell;
-- exactly one successful registration results from one successful commit invocation;
-- the immutable commit result identifies success plus created Building ID or rejection plus authoritative reason;
-- Player UI, frozen IM-16B state and frozen IM-16C preview remain consumers only.
+**Status:** DEFINED / NOT IMPLEMENTED
 
-### Frozen exclusions
+**Exclusive baseline:** frozen IM-16D @ `2d8e508b54fa97f0f9abc2bdc00e9d7b6bfd65b1`.
 
-IM-16D includes no Player Confirm button, no Player Cancel button, no Pointer/Touch commit trigger, no automatic Placement Mode deactivation, no Player-facing live commit trigger, no cost/resource/Gold deduction, no construction progression, no workforce/production integration, no SaveGame rearchitecture, no Building rotation, no multi-cell footprints, no new placement rules, no new Camera/Selection semantics and no Inspector mutation/editor functionality.
+### Leitfrage
 
-## 8. IM-16D Completion / Regression / Freeze Gate
+„Wie darf der Spieler eine bereits vorbereitete Platzierung ausdrücklich bestätigen oder abbrechen, sodass Confirm ausschließlich den eingefrorenen autoritativen IM-16D-Commit aufruft und Cancel ausschließlich den temporären Placement-Zustand beendet, ohne eine zweite Placement-, Validity-, Building- oder Mutation-Authority einzuführen?“
 
-Frozen baseline: IM-16C @ `ddebbb4ee8b743b869e069da11d644690e0620eb`.
+### Defined capability
 
-Pre-freeze IM-16D implementation HEAD: `463ca686e0f0986573c4b96c2939e28a979c8e62`.
+IM-16E is limited to explicit Player-interaction orchestration between the already frozen owners:
 
-Full cumulative diff from frozen IM-16C to that implementation HEAD was reviewed before freeze:
+`IM-16B Placement State → IM-16C Preview → Player CONFIRM → IM-16D authoritative Commit`
 
-- **11 commits ahead / 0 behind**,
-- merge base exactly frozen IM-16C,
-- exactly **11 changed files**,
-- two changed files are the already verified IM-16D control-documentation updates,
-- nine changed files are limited to IM-16D commit/registration implementation, the narrow registration-owner extension, self-test/runtime evidence, CI wiring and visible/build identity synchronization,
-- no unrelated Runtime/Transport/Scheduler/SaveGame/Selection/Camera/Inspector ownership expansion,
-- no Player Confirm/Cancel and no IM-16E.
+or:
 
-Technical evidence:
+`IM-16B Placement State → Player CANCEL → Placement State INACTIVE`
 
-- CI Baseline `34335841839`: **SUCCESS**,
-- CI step `Run IM-16D + frozen predecessor regression`: **SUCCESS**,
-- Pages deploy `34335841057`: **SUCCESS** on implementation HEAD `463ca686e0f0986573c4b96c2939e28a979c8e62`.
+- `CONFIRM` must be an explicit Player action.
+- `CONFIRM` may run only while Placement is active and a real candidate with `definitionId` plus `targetCellId` exists.
+- Preview/validity state may guide the UI but is not mutation authority.
+- Actual mutation must go only through frozen IM-16D; IM-16D performs final frozen-IM-16A revalidation immediately before mutation.
+- A successful commit may be followed by controlled deactivation of temporary Placement state; the created Building remains owned by the frozen Building/registration owners.
+- A rejected commit preserves the authoritative IM-16D / IM-16A reason; IM-16E creates no second validity semantic.
+- `CANCEL` never commits and never mutates Building state; it only ends the temporary Placement state and preview.
+- `pointerup`, ordinary world tap, drag end, pan, pinch and `pointercancel` are not implicit confirm triggers.
+- Existing Camera, Selection, Pointer/Touch, Inspector, SaveGame, Runtime and Domain ownership remains unchanged.
 
-Real iPhone/Safari evidence on 2026-09-09 confirmed:
+### Defined exclusions
 
-- page title `IM-16D – Authoritative Placement Commit & Building Registration Contract`,
-- visible Build identity `IM-16D-AUTHORITATIVE-PLACEMENT-COMMIT-BUILDING-REGISTRATION-CONTRACT`,
-- browser evidence `IM-16D — PASS`,
-- occupied `cell:00000019` → `TARGET_CELL_OCCUPIED / NO MUTATION`,
-- free `cell:00000001` → `COMMITTED building:00000004`,
-- immediate recheck of the same target → `TARGET_CELL_OCCUPIED / NO SECOND REGISTRATION`,
-- authoritative position registered,
-- Inspector remained `OBSERVATION READ ONLY`,
-- `No Player Confirm/Cancel`,
-- Build Identity PASS.
-
-The browser evidence uses an isolated Miniworld and reports `liveRuntimeMutation: false`; the visible live runtime is not committed by the verification harness.
-
-**Gate result: PASS / 0 BLOCKER.**
+IM-16E includes no new placement-validity rules, no second Building creation/registration path, no cost/resource/Gold deduction, no construction progression, no workforce/production integration, no Building rotation, no multi-cell footprints, no new terrain/distance/resource/building-type rules, no Camera/Selection ownership change, no Inspector mutation/editor path, no SaveGame rearchitecture, no implicit world-tap commit, no complete Building catalogue/management UI and no legacy `main` BuildDock/gameplay reuse.
 
 ## 9. Current gate
 
@@ -155,12 +120,12 @@ The browser evidence uses an isolated Miniworld and reports `liveRuntimeMutation
 
 **IM-16D – Authoritative Placement Commit & Building Registration Contract = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The final frozen marker `frozen/im-16d-authoritative-placement-commit-building-registration-contract` must point at the final documentation HEAD produced by this closing gate. Marker creation is mechanical only and adds no capability.
+**IM-16E – Player Placement Confirm / Cancel Interaction Contract = DEFINED / NOT IMPLEMENTED.**
 
-No Player Confirm/Cancel and no IM-16E implementation is authorized in this same gate.
+This documentation update authorizes no IM-16E implementation.
 
-After the frozen marker exists, the next permissible action is exclusively reconciliation/definition of the next IM-16 substep against frozen IM-16D. No implementation is automatically authorized.
+The next permissible action is exclusively the IM-16E Documentation Verification / Finalization Gate against frozen IM-16D @ `2d8e508b54fa97f0f9abc2bdc00e9d7b6bfd65b1` and the resulting documentation HEAD on `feature/im-16-player-construction-placement-integration`. Only after PASS / 0 BLOCKER may IM-16E implementation be explicitly authorized.
 
 ---
 
-**Updated:** 2026-09-09 — IM-16D Completion / Regression / Freeze Gate PASS / 0 BLOCKER after full frozen-IM-16C diff review, successful CI/Pages and real iPhone evidence. No Player Confirm/Cancel and no IM-16E in this step.
+**Updated:** 2026-09-09 — IM-16E Player Placement Confirm / Cancel Interaction Contract documented as DEFINED / NOT IMPLEMENTED against frozen IM-16D. No IM-16E implementation in this step.
