@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-16F Player Building Selection & Placement Activation Contract</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im16f-1">
+  <title>Neue Siedler – IM-16G Authoritative Construction Result Player UI Projection Contract</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im16g-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -25,9 +25,9 @@
       <canvas id="player-placement-preview-canvas" aria-label="Player Placement Preview" style="z-index:2;pointer-events:none;touch-action:none"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-16F – Player Building Selection & Placement Activation Contract</h1>
-        <p>Explizite Player-Gebäudeauswahl reicht ausschließlich eine bekannte/testbare definitionId an frozen IM-16B activate(definitionId) weiter. Keine neue Building-Definition-, Validity-, Commit- oder Mutation-Authority.</p>
-        <output id="test-status">IM-16F-PLAYER-BUILDING-SELECTION-PLACEMENT-ACTIVATION-CONTRACT wird aufgebaut …</output>
+        <h1>IM-16G – Authoritative Construction Result Player UI Projection Contract</h1>
+        <p>Player-Feedback konsumiert ausschließlich das tatsächlich zurückgegebene frozen IM-16D Commit-Ergebnis. Keine Erfolgsableitung aus Preview, Controls oder World Render; keine neue Commit-, Validity- oder Building-Mutation-Authority.</p>
+        <output id="test-status">IM-16G-AUTHORITATIVE-CONSTRUCTION-RESULT-PLAYER-UI-PROJECTION-CONTRACT wird aufgebaut …</output>
       </aside>
 
       <aside class="inspector-shell" data-ui-shell="inspector" aria-label="Inspector" aria-live="polite">
@@ -97,7 +97,7 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">IM-16F Building Selection → frozen IM-16B Placement Activation · IM-16A–E Authority unverändert</span>
+      <span class="surface-note">IM-16G Result Projection ← frozen IM-16E Confirm / IM-16D Commit · IM-16A–F Authority unverändert</span>
       <div class="player-building-selection" data-im16f-controls="true" aria-label="Gebäude für Platzierung auswählen">
         <button type="button" data-im16f-definition-id="HQ">Hauptquartier</button>
         <button type="button" data-im16f-definition-id="WOODCUTTER">Holzfäller</button>
@@ -109,22 +109,24 @@
         <button type="button" data-im16e-action="CANCEL" disabled>Abbrechen</button>
         <output id="im16e-action-result">Placement inaktiv</output>
       </div>
+      <output data-im16g-result="true" aria-live="polite">Noch kein autoritatives Bauergebnis</output>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/world-selection-context-projection.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/controlled-diagnostic-scenario-actions.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/simulation-balancing-observation.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/player-placement-interaction-state-world-target.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/player-placement-preview-validity-projection.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/player-placement-confirm-cancel-interaction.js?v=im16f-1"></script>
-  <script type="module" src="src/ui/player-building-selection-placement-activation.js?v=im16f-1"></script>
-  <script type="module" src="src/im16f-runtime-evidence.js?v=im16f-1"></script>
+  <script type="module" src="src/main.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/controlled-diagnostic-scenario-actions.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/simulation-balancing-observation.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/player-placement-interaction-state-world-target.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/player-placement-preview-validity-projection.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/player-placement-confirm-cancel-interaction.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/player-building-selection-placement-activation.js?v=im16g-1"></script>
+  <script type="module" src="src/ui/authoritative-construction-result-player-ui-projection.js?v=im16g-1"></script>
+  <script type="module" src="src/im16g-runtime-evidence.js?v=im16g-1"></script>
 </body>
 </html>
