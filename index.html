@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-16B Player Placement Interaction State & World Target Contract</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im16b-1">
+  <title>Neue Siedler – IM-16C Player Placement Preview & Validity Projection Contract</title>
+  <link rel="stylesheet" href="src/ui/app.css?v=im16c-1">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -22,11 +22,12 @@
     <section class="player-stage" data-ui-region="world" aria-label="Spielwelt">
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
       <canvas id="diagnostic-overlay-canvas" aria-label="Read-only World Diagnostic Overlay"></canvas>
+      <canvas id="player-placement-preview-canvas" aria-label="Player Placement Preview" style="z-index:2;pointer-events:none;touch-action:none"></canvas>
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
-        <h1>IM-16B – Player Placement Interaction State & World Target Contract</h1>
-        <p>Temporärer Player-Placement-State über bestehendem WORLD-Input, Camera-Geometrie und frozen IM-16A Evaluation. Noch kein Ghost/Preview, Confirm/Commit oder Building-Erzeugung.</p>
-        <output id="test-status">IM-16B-PLAYER-PLACEMENT-INTERACTION-STATE-WORLD-TARGET-CONTRACT wird aufgebaut …</output>
+        <h1>IM-16C – Player Placement Preview & Validity Projection Contract</h1>
+        <p>Player-seitige, camera-synchrone Preview aus frozen IM-16B Target-State und frozen IM-16A Validity. Zielzelle + einfacher Ghost sichtbar; keine eigene Placement-Regel, kein Confirm/Commit und keine Building-Erzeugung.</p>
+        <output id="test-status">IM-16C-PLAYER-PLACEMENT-PREVIEW-VALIDITY-PROJECTION-CONTRACT wird aufgebaut …</output>
       </aside>
 
       <aside class="inspector-shell" data-ui-shell="inspector" aria-label="Inspector" aria-live="polite">
@@ -96,20 +97,21 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">IM-16B temporärer Placement-State + World Target · frozen IM-16A bleibt Validity-Authority · kein Ghost/Preview · kein Confirm/Commit</span>
+      <span class="surface-note">IM-16C Player Preview · frozen IM-16B liefert Target · frozen IM-16A liefert Validity · kein Confirm/Commit · keine Building-Mutation</span>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/world-selection-context-projection.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/controlled-diagnostic-scenario-actions.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/simulation-balancing-observation.js?v=im16b-1"></script>
-  <script type="module" src="src/ui/player-placement-interaction-state-world-target.js?v=im16b-1"></script>
-  <script type="module" src="src/im16b-runtime-evidence.js?v=im16b-1"></script>
+  <script type="module" src="src/main.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/world-selection-context-projection.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/player-camera-controls-integration.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/inspector-read-only-runtime-observation.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/inspector-structured-runtime-diagnostics.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/world-diagnostic-overlay-foundation.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/controlled-diagnostic-scenario-actions.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/simulation-balancing-observation.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/player-placement-interaction-state-world-target.js?v=im16c-1"></script>
+  <script type="module" src="src/ui/player-placement-preview-validity-projection.js?v=im16c-1"></script>
+  <script type="module" src="src/im16c-runtime-evidence.js?v=im16c-1"></script>
 </body>
 </html>
