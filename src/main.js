@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im16c-1';
+import { RuntimeConfig } from './runtime/config.js?v=im16d-1';
 import { Runtime } from './runtime/runtime.js';
 import {
   BASELINE_MINIWORLD_SCENARIO_ID,
@@ -130,7 +130,7 @@ const initialRender = renderCurrentWorld();
 window.addEventListener('resize', renderCurrentWorld, { passive: true });
 
 if (testEl) {
-  testEl.textContent = `IM-16C — Player Placement Preview & Validity Projection Contract — Runtime foundation loaded — Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;
+  testEl.textContent = `IM-16D — Authoritative Placement Commit & Building Registration Contract — Runtime foundation loaded — Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;
   testEl.dataset.pass = 'pending';
 }
 
@@ -163,7 +163,7 @@ window.CleanRuntime = Object.freeze({
   getCameraState: () => cameraState,
 });
 
-console.info('[IM-16C] Player Placement Preview & Validity Projection Contract runtime foundation', {
+console.info('[IM-16D] Authoritative Placement Commit & Building Registration Contract runtime foundation', {
   build: RuntimeConfig.build,
   scenarioId: BASELINE_MINIWORLD_SCENARIO_ID,
   classificationPass: initialOwners.classificationPass,
@@ -177,8 +177,9 @@ console.info('[IM-16C] Player Placement Preview & Validity Projection Contract r
   persons: initialRender.projection.persons.length,
   placementStateAuthority: 'IM-16B',
   placementValidityAuthority: 'IM-16A',
-  previewRenderingEnabled: true,
-  confirmCommitExcluded: true,
-  buildingMutationExcluded: true,
+  previewAuthority: 'IM-16C',
+  authoritativeCommitBoundaryEnabled: true,
+  playerConfirmCancelExcluded: true,
+  liveRuntimeCommitTriggerExcluded: true,
   inspectorMutationExcluded: true,
 });
