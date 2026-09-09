@@ -54,10 +54,14 @@ export function runIM16GSelfTest() {
       && cancelProjection === null
       && initial === null,
     controllerConsumesOnlyNewActualCommitResults:
-      firstSync === committedProjection
+      firstSync?.status === 'COMMITTED'
+      && firstSync.buildingId === committedProjection.buildingId
+      && firstSync.definitionId === committedProjection.definitionId
+      && firstSync.source === committedConfirm.commitResult
       && afterNotReady === firstSync
       && rejectedSync?.status === 'REJECTED'
-      && rejectedSync.reason === 'TARGET_CELL_OCCUPIED',
+      && rejectedSync.reason === 'TARGET_CELL_OCCUPIED'
+      && rejectedSync.source === rejectedConfirm.commitResult,
     immutableProjection:
       Object.isFrozen(committedProjection)
       && Object.isFrozen(rejectedProjection),
