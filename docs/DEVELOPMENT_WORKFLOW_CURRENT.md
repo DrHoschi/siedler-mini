@@ -170,6 +170,8 @@ Full diff frozen IM-16D `2d8e508b54fa97f0f9abc2bdc00e9d7b6bfd65b1` → pre-freez
 
 Ownership and exclusions were rechecked against the full diff. CI/Pages and final real iPhone/Safari evidence are PASS. The completion documentation is therefore synchronized as **COMPLETE / FROZEN / PASS / 0 BLOCKER**, subject only to final-head CI/Pages verification before setting the frozen marker.
 
+The two completion documents were synchronized sequentially. This final documentation touch exists only to force the CI path on the fully synchronized documentation state; it changes no IM-16E capability or ownership boundary.
+
 **IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 **IM-16 – Player Construction & Placement Integration = DEFINED / PARTIALLY IMPLEMENTED.**
