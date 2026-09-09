@@ -16,6 +16,14 @@ function requireBuildingId(value) {
   return parsed.id;
 }
 
+function normalizePosition(position) {
+  if (position == null) return null;
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) throw new TypeError('finite building position required');
+  return Object.freeze({ x, y });
+}
+
 export class BuildingRegistrationWorldOwnership {
   #buildings;
 
@@ -23,7 +31,7 @@ export class BuildingRegistrationWorldOwnership {
     this.#buildings = requireBuildingStore(domains);
   }
 
-  register({ identity, lifecycle } = {}) {
+  register({ identity, lifecycle, position = null } = {}) {
     const normalizedIdentity = BuildingIdentityOwnershipContract.define(identity);
     const normalizedLifecycle = BuildingLifecycleStateContract.define(lifecycle);
     if (normalizedIdentity.buildingId !== normalizedLifecycle.buildingId) {
@@ -31,9 +39,11 @@ export class BuildingRegistrationWorldOwnership {
     }
 
     const buildingId = normalizedIdentity.buildingId;
+    const normalizedPosition = normalizePosition(position);
     return this.#buildings.create({
       identity: normalizedIdentity,
-      lifecycle: normalizedLifecycle
+      lifecycle: normalizedLifecycle,
+      ...(normalizedPosition ? { position: normalizedPosition } : {}),
     }, { id: buildingId });
   }
 
