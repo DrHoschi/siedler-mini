@@ -20,7 +20,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-16 – Player Construction & Placement Integration: DEFINED / PARTIALLY IMPLEMENTED**
 - **IM-16A – Authoritative Construction Placement Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-16B – Player Placement Interaction State & World Target Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-16C – Player Placement Preview & Validity Projection Contract: DEFINED / NOT IMPLEMENTED**
+- **IM-16C – Player Placement Preview & Validity Projection Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
 ## 2. Frozen predecessor chain
 
@@ -35,19 +35,20 @@ Frozen IM-15 substep markers remain authoritative:
 Whole-block frozen marker: `frozen/im-15-guidance-inspector`.
 
 Frozen IM-16A marker: `frozen/im-16a-authoritative-construction-placement-contract`.
-
-Frozen IM-16A baseline for IM-16B: `5b19e57bd118d601a25c0ce042e123366e4869d0`.
+Frozen IM-16A head: `5b19e57bd118d601a25c0ce042e123366e4869d0`.
 
 Frozen IM-16B marker: `frozen/im-16b-player-placement-interaction-state-world-target-contract`.
+Frozen IM-16B head: `0c5dfcbe7cd10ac745884c7204ce9549596c2cd2`.
 
-Authoritative frozen IM-16B baseline for IM-16C: `0c5dfcbe7cd10ac745884c7204ce9549596c2cd2`.
+The IM-16C frozen marker must point at the final documentation HEAD produced by this closing gate after final CI/Pages verification.
 
-## 3. Binding ownership boundary
+## 3. Binding ownership boundary after IM-16C
 
 - Existing Runtime, Domain, Transport, Scheduler, SaveGame, Selection and Camera owners remain authoritative.
 - Frozen IM-16A remains sole placement-validity authority for the currently supported outcomes.
 - Frozen IM-16B owns only temporary Player Placement interaction state and world-target consumption.
-- Frozen IM-15 Inspector remains observer only.
+- Frozen IM-16C owns only temporary Player Placement Preview / Validity projection.
+- Frozen IM-15 Inspector remains observer only; IM-15C diagnostic overlay is not Player Placement authority.
 - Legacy `main` gameplay/UI architecture is not an implementation basis.
 
 ## 4. IM-16 – Player Construction & Placement Integration
@@ -60,13 +61,11 @@ Target flow remains:
 
 `Gebäude auswählen → Platzierungsmodus → Position in der Welt bestimmen → gültig/ungültig erkennen → bestätigen oder abbrechen → autoritatives Bauergebnis wieder in die Player UI projizieren`.
 
-IM-16A and IM-16B are frozen. IM-16C is defined but not implemented. No later IM-16 capability is authorized by this documentation step.
+IM-16A, IM-16B and IM-16C are frozen. No later IM-16 capability is authorized by this gate.
 
 ## 5. IM-16A – Authoritative Construction Placement Contract
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
-
-**Frozen marker:** `frozen/im-16a-authoritative-construction-placement-contract`
 
 Frozen head: `5b19e57bd118d601a25c0ce042e123366e4869d0`.
 
@@ -76,61 +75,38 @@ IM-16A remains the immutable, mutation-free placement-evaluation authority for a
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-**Frozen marker:** `frozen/im-16b-player-placement-interaction-state-world-target-contract`
-
 Frozen head: `0c5dfcbe7cd10ac745884c7204ce9549596c2cd2`.
 
-IM-16B establishes only temporary Player Placement interaction state plus camera-compatible targeting of real `MapStructure` cells. State is `INACTIVE` or `ACTIVE`; active state carries Building `definitionId`, current `targetCellId` when available and the immutable frozen-IM-16A evaluation result when available. It creates no Building, no Ghost/Preview and no Confirm/Commit path.
+IM-16B establishes only temporary Player Placement interaction state plus camera-compatible targeting of real `MapStructure` cells. It creates no Building and no Confirm/Commit path.
 
 ## 7. IM-16C – Player Placement Preview & Validity Projection Contract
 
-**Status:** DEFINED / NOT IMPLEMENTED
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
 **Exclusive baseline:** frozen IM-16B @ `0c5dfcbe7cd10ac745884c7204ce9549596c2cd2`.
 
-### Leitfrage
+### Frozen capability boundary
 
-„Wie wird der bereits vorhandene temporäre IM-16B-Placement-Zustand für den Spieler sichtbar in die Welt projiziert, sodass aktuelle Zielzelle und autoritatives VALID/INVALID-Ergebnis klar erkennbar sind, ohne Building-, Construction-, Placement-Validity- oder Commit-Authority zu übernehmen?“
+IM-16C adds only player-visible projection of the already existing IM-16B placement state.
 
-### Ziel
+- Input is exclusively frozen IM-16B state containing Building `definitionId`, current real `targetCellId` when available and unchanged frozen-IM-16A evaluation when available.
+- Existing camera-synchronous projected world geometry remains the only visual geometry authority.
+- Current target cell is visibly highlighted.
+- `VALID` and `TARGET_CELL_OCCUPIED` are visually distinguishable without duplicating or reinterpreting placement rules.
+- `NO TARGET` suppresses the Player Preview.
+- Any Building Ghost is temporary render presentation only and creates no Building entity, Domain entity or Construction state.
+- Camera pan/zoom keeps preview synchronized with existing world projection.
+- Existing Selection remains independent.
+- Frozen IM-15 Inspector remains read-only.
 
-IM-16C defines only the player-visible projection of the already existing frozen-IM-16B placement interaction state.
+### Frozen exclusions
 
-The Player side may visually project the current real target cell and the immutable frozen-IM-16A validity result carried by frozen IM-16B. The preview is temporary presentation only and does not become Building, Construction, Placement-validity or persistence truth.
-
-### Binding preview and validity boundary
-
-- Input is exclusively the frozen-IM-16B state containing `definitionId`, current `targetCellId` when available and the unchanged frozen-IM-16A evaluation result when available.
-- The preview must use the already camera-synchronous world projection; it must not create a second camera transform or coordinate truth.
-- The current real target cell may be visibly highlighted.
-- `VALID` and `TARGET_CELL_OCCUPIED` must be visually distinguishable without re-evaluating or reinterpreting their rules.
-- `NO TARGET` or an absent real target cell must not display a valid placement cell.
-- Any Building Ghost/Preview is temporary render presentation only. It must not create a Building entity, Domain entity or Construction state.
-- Placement validity remains exclusively owned by frozen IM-16A.
-- Target state remains exclusively supplied by frozen IM-16B.
-- Camera pan/zoom must keep the preview synchronized with the existing world projection.
-- Existing Selection remains independent and does not become preview or placement authority.
-- Frozen IM-15 Inspector remains read-only and is not the owner of Player Placement Preview.
-
-### Minimal visual scope
-
-The first IM-16C preview is intentionally narrow:
-
-- current target-cell highlight,
-- simple temporary building representation sufficient to identify placement position,
-- clear visual distinction between valid and occupied/invalid target result,
-- no-target suppression when no real cell is targeted.
-
-This contract does not require final building art, construction animation, rotation, multi-cell footprint rendering or additional placement-rule visualization.
-
-### Explicit exclusions
-
-IM-16C does **not** introduce:
+IM-16C introduces none of the following:
 
 - Confirm action,
 - Commit action,
 - actual Building creation or registration,
-- consumption of `BuildingRegistrationWorldOwnership`,
+- `BuildingRegistrationWorldOwnership`,
 - construction progression,
 - cost/resource or Gold deduction,
 - SaveGame persistence,
@@ -140,12 +116,62 @@ IM-16C does **not** introduce:
 - multi-cell footprints,
 - new Camera control semantics,
 - new Selection ownership,
-- Inspector mutation paths,
-- conversion of the IM-15C diagnostic overlay into Player Placement authority.
+- Inspector mutation paths.
 
-Confirm/commit remains deferred to a later separately authorized IM-16 substep.
+## 8. IM-16C implementation surface
 
-## 8. Current gate
+The implementation is limited to:
+
+- `src/ui/player-placement-preview-validity-projection.js`
+- `src/dev/im-16c-self-test.js`
+- `src/dev/im-16c-self-test.node.js`
+- `src/im16c-runtime-evidence.js`
+- CI wiring in `.github/workflows/ci.yml`
+- visible/browser verification synchronization in `index.html`, `src/main.js` and `src/runtime/config.js`
+
+No IM-16D implementation exists in this frozen scope.
+
+## 9. IM-16C Completion / Regression / Freeze Gate
+
+Frozen baseline: IM-16B @ `0c5dfcbe7cd10ac745884c7204ce9549596c2cd2`.
+
+Pre-freeze IM-16C implementation HEAD: `77e1c75d361f0a816d84411f9c4e402b4b4c0142`.
+
+Full cumulative diff from frozen IM-16B to that implementation HEAD was reviewed before freeze:
+
+- **10 commits ahead / 0 behind**,
+- merge base exactly frozen IM-16B,
+- exactly **10 changed files**,
+- two changed files are the already verified IM-16C control-documentation updates,
+- eight changed files are the narrow IM-16C implementation/evidence/CI/visible-identity surface listed above,
+- no unrelated Domain/Transport/Scheduler/SaveGame ownership expansion,
+- no Confirm/Commit and no Building creation path.
+
+Technical evidence:
+
+- CI Baseline `34323894551`: **SUCCESS**,
+- CI step `Run IM-16C + frozen predecessor regression`: **SUCCESS**,
+- Pages deploy `34323894385`: **SUCCESS** for visible IM-16C browser surface at `3bee01efd2525f9255bea02cc585f4b4a400bbcd`,
+- later implementation HEAD `77e1c75d...` differs only by `.github/workflows/ci.yml`, so deployed browser content is unchanged.
+
+Real-device evidence on 2026-09-09:
+
+- real iPhone/Safari displayed Build identity `IM-16C-PLAYER-PLACEMENT-PREVIEW-VALIDITY-PROJECTION-CONTRACT`,
+- browser evidence reported `IM-16C — PASS`,
+- free target `cell:00000001` → `VALID Ghost`,
+- occupied target `cell:00000019` → `INVALID / TARGET_CELL_OCCUPIED`,
+- outside target → `NO TARGET`,
+- Inspector remained `OBSERVATION READ ONLY`,
+- no Confirm/Commit,
+- no Building mutation.
+
+### Non-blocking UI/readability evidence
+
+The same iPhone test shows that the accumulated Inspector/verification surfaces are now difficult to read on the narrow phone viewport. This is recorded as a **NON-BLOCKING later UI/readability need**. It does not invalidate the IM-16C functional Preview/Validity contract and must not be silently changed inside the frozen IM-16C scope.
+
+**Gate result: PASS / 0 BLOCKER.**
+
+## 10. Current gate
 
 **IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -155,16 +181,18 @@ Confirm/commit remains deferred to a later separately authorized IM-16 substep.
 
 **IM-16B – Player Placement Interaction State & World Target Contract = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-16C – Player Placement Preview & Validity Projection Contract = DEFINED / NOT IMPLEMENTED.**
+**IM-16C – Player Placement Preview & Validity Projection Contract = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-This documentation update authorizes no IM-16C implementation and no later IM-16 capability.
+The final frozen marker `frozen/im-16c-player-placement-preview-validity-projection-contract` must point at the final documentation HEAD produced by this closing gate. Marker creation is mechanical only and adds no capability.
 
-The next permissible action is exclusively the IM-16C Documentation Verification / Finalization Gate against frozen IM-16B @ `0c5dfcbe7cd10ac745884c7204ce9549596c2cd2` and the resulting documentation HEAD on `feature/im-16-player-construction-placement-integration`. Only after PASS / 0 BLOCKER may IM-16C implementation be explicitly authorized.
+No IM-16D implementation, Confirm/Commit or Building creation is authorized in this same step.
 
-## 9. Permanent visible build identity synchronization rule
+After the frozen marker exists, the next permissible action is exclusively reconciliation/definition of the next IM-16 substep against frozen IM-16C. No implementation is automatically authorized.
+
+## 11. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-09 — IM-16C Player Placement Preview & Validity Projection Contract documented as DEFINED / NOT IMPLEMENTED against frozen IM-16B. No implementation authorized in this step.
+**Updated:** 2026-09-09 — IM-16C Player Placement Preview & Validity Projection Contract COMPLETE / FROZEN / PASS / 0 BLOCKER after full frozen-IM-16B diff review, successful CI/Pages and real iPhone evidence. Smartphone readability recorded as non-blocking later UI need. No IM-16D in this step.
