@@ -59,7 +59,8 @@ Frozen IM-16F marker: `frozen/im-16f-player-building-selection-placement-activat
 Frozen IM-16F head and exclusive IM-16G baseline: `0cf69a9253b4ec503f9f1c5b8585721722851963`.
 
 IM-16G pre-freeze implementation/evidence head: `d8c30732173bd6279c94b2023c2ebae9077652a8`.
-Final frozen IM-16G head is the completion-documentation head produced by this gate and verified by final-head CI/Pages before the frozen marker is set.
+Frozen IM-16G marker: `frozen/im-16g-authoritative-construction-result-player-ui-projection-contract`.
+Frozen IM-16G head and Whole-Block completion-gate baseline: `9022b7934e885950af8d8a3559cbecdd41a2da63`.
 
 ## 3. Binding ownership boundary after IM-16G completion
 
@@ -91,7 +92,7 @@ Target flow remains:
 
 `Gebäude auswählen → Platzierungsmodus → Position in der Welt bestimmen → gültig/ungültig erkennen → bestätigen oder abbrechen → autoritatives Bauergebnis wieder in die Player UI projizieren`.
 
-IM-16A through IM-16G are complete/frozen at substep level. No Whole-Block completion is authorized by this IM-16G freeze step. Whole-Block completion and any remaining capability/gating point must be separately reconciled after the IM-16G marker is verified.
+IM-16A through IM-16G are complete/frozen at substep level. Whole-Block reconciliation confirms that this documented target flow is fully covered. Whole-Block completion itself is not performed by this definition step and remains subject to the dedicated final gate below.
 
 ## 5. IM-16A – Authoritative Construction Placement Contract
 
@@ -210,9 +211,27 @@ Ownership and exclusions were rechecked against the full diff. Automated CI/Page
 
 Ownership and exclusions were rechecked against the full frozen-IM-16F → IM-16G range. Automated regression, Pages and both real iPad/Safari success/rejection evidence paths are **PASS / 0 BLOCKER**.
 
-The completion documentation synchronizes IM-16G as **COMPLETE / FROZEN / PASS / 0 BLOCKER**, subject only to final-head CI/Pages verification before creation of the frozen marker.
+Frozen marker `frozen/im-16g-authoritative-construction-result-player-ui-projection-contract` is verified on `9022b7934e885950af8d8a3559cbecdd41a2da63`.
 
-## 14. Current gate
+## 14. IM-16 Whole-Block Completion / Regression / Freeze Gate
+
+**Status:** DEFINED / NOT EXECUTED
+
+**Exclusive gate baseline:** frozen IM-16G @ `9022b7934e885950af8d8a3559cbecdd41a2da63`.
+
+Whole-Block reconciliation confirms that the documented IM-16 end-to-end target flow is fully covered by frozen IM-16A through IM-16G. No additional IM-16 substep is required by the current scope.
+
+This Whole-Block gate is verification/finalization only. It introduces no new gameplay capability. It must verify the complete IM-16 range from frozen IM-15 baseline `9e797ab93036f6b3731442dc626edb8c091893c8` through frozen IM-16G, verify every IM-16A→G frozen marker, regress the complete construction flow and frozen predecessor checks, reconfirm all ownership/exclusion boundaries, and preserve the already accepted real iPhone/iPad evidence.
+
+`Player Construction Runtime-State Gating` remains a **NON-BLOCKING separate reconciliation point**. The frozen Runtime contract contains no existing rule that Player/Domain mutation is allowed only while `RUNNING`; therefore the Whole-Block gate must not convert current `READY` construction behavior into a retroactive blocker or silently change Runtime-state policy.
+
+Only after the complete regression is clean may `DEVELOPMENT_WORKFLOW_CURRENT.md` and `ROADMAP_CURRENT.md` be synchronized to IM-16 Whole Block **COMPLETE / FROZEN / PASS / 0 BLOCKER**. CI and Pages must then succeed on the exact resulting final documentation head. Only after those exact-head checks may the IM-16 Whole-Block frozen marker be created and verified to resolve to that same head.
+
+Any unexpected implementation change, ownership drift, stale visible/build identity, failed frozen predecessor regression, failed exact-head CI/Pages or frozen-marker mismatch is a blocker and prevents Whole-Block freeze.
+
+No IM-16H/later capability, Runtime-state gating policy, costs/resources/Gold, construction progression, workers/production, demolition/upgrades, rotation/multi-cell footprints, catalogue/definition authority, new placement rules, SaveGame rearchitecture, Inspector mutation or legacy `main` gameplay/UI reuse belongs to this gate.
+
+## 15. Current gate
 
 **IM-15 Whole Block = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -220,12 +239,14 @@ The completion documentation synchronizes IM-16G as **COMPLETE / FROZEN / PASS /
 
 **IM-16A through IM-16G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-No IM-16 Whole-Block completion is performed here. After the frozen IM-16G marker is verified, the next permissible action is exclusively reconciliation of the IM-16 Whole Block and any still-open capability/gating points against frozen IM-16G.
+**IM-16 Whole-Block Completion / Regression / Freeze Gate = DEFINED / NOT EXECUTED.**
 
-## 15. Permanent visible build identity synchronization rule
+The next permissible action is exclusively the IM-16 Whole-Block Documentation Verification / Finalization Gate against frozen IM-16G `9022b7934e885950af8d8a3559cbecdd41a2da63`. No Whole-Block freeze or new implementation is authorized by this definition step.
+
+## 16. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-09 — IM-16G Completion / Regression / Freeze Gate synchronized after full-diff, CI/Pages and two real iPad/Safari verification recordings. No IM-16 Whole-Block completion performed.
+**Updated:** 2026-09-09 — IM-16 Whole-Block Completion / Regression / Freeze Gate defined against frozen IM-16G. No Whole-Block freeze and no new implementation performed.
