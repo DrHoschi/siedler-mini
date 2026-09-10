@@ -28,7 +28,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-16G – Authoritative Construction Result Player UI Projection Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-17 – Economic Construction Integration: IN PROGRESS**
 - **IM-17A – Player Construction Runtime Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17B through IM-17G: DEFINED / NOT IMPLEMENTED**
+- **IM-17B – Economic Construction Requirement Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-17C through IM-17G: DEFINED / NOT IMPLEMENTED**
 
 ## 2. Frozen predecessor chain
 
@@ -72,6 +73,9 @@ Frozen IM-16 Whole-Block head and exclusive IM-17 definition baseline: `99b0e7d0
 Frozen IM-17A marker: `frozen/im-17a-player-construction-runtime-admission-contract`.
 Frozen IM-17A head and exclusive IM-17B baseline: `6caf6132864e71201dee6b9a286c111f67fce016`.
 
+Frozen IM-17B marker: `frozen/im-17b-economic-construction-requirement-contract`.
+Frozen IM-17B head and exclusive IM-17C baseline: `32f219029d4f76fcd0ff5e768e66cf32a47ec50b`.
+
 ## 3. Binding ownership boundary after IM-16 completion
 
 - Existing Runtime, Domain, Transport, Scheduler, SaveGame, Selection and Camera owners remain authoritative.
@@ -90,6 +94,8 @@ Frozen IM-17A head and exclusive IM-17B baseline: `6caf6132864e71201dee6b9a286c1
 - Runtime/Render remains owner of actual visible world projection of registered Buildings.
 - Frozen IM-17A owns only the economic-construction Runtime admission decision after a real frozen-IM-16 authoritative commit result.
 - Frozen IM-17A does not retroactively change or undo frozen IM-16 Building registration and owns no demand, resource, cost, reservation, logistics, progress or completion truth.
+- Frozen IM-17B owns only the economic-construction requirement projection over the existing `ResourceDemands` authority. Stable `buildingId` is reused as `consumerId`; existing `definitionId`, `targetAmount`, `reservedAmount`, `fulfilledAmount`, `remainingAmount` and demand `status` vocabulary remains authoritative.
+- Frozen IM-17B creates no second Resource/Demand authority and owns no placement→construction initialization, transport execution, delivery→claim-consume integration, construction progress or completion.
 - World pointer/touch, `pointerup`, ordinary world tap, drag end, pan, pinch and `pointercancel` are not implicit commit triggers.
 - Frozen IM-15 Inspector remains observer only; IM-15C diagnostic overlay is not Player Placement authority.
 - Legacy `main` gameplay/UI architecture is not an implementation basis.
@@ -287,9 +293,17 @@ The same iPad evidence shows world-canvas technical labels/annotations can protr
 
 ### IM-17B – Economic Construction Requirement Contract
 
-**Status:** DEFINED / NOT IMPLEMENTED
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-Define the authoritative economic requirement of a placed Building: existing Resource/Demand identities associated with the stable `buildingId`, required quantity, reserved/fulfilled quantity and remaining need. No transport execution and no construction progress. No second resource, demand, cost or inventory truth.
+**Exclusive baseline:** frozen IM-17A @ `6caf6132864e71201dee6b9a286c111f67fce016`.
+
+**Frozen head:** `32f219029d4f76fcd0ff5e768e66cf32a47ec50b`.
+
+**Frozen marker:** `frozen/im-17b-economic-construction-requirement-contract`.
+
+IM-17B binds the stable `buildingId` to the existing `ResourceDemands` authority as `consumerId` and projects exactly the established demand vocabulary: `definitionId`, `targetAmount`, `reservedAmount`, `fulfilledAmount`, `remainingAmount` and `status`. The existing quantity invariant remains authoritative: `targetAmount = reservedAmount + fulfilledAmount + remainingAmount`. ACTIVE claims contribute to reserved quantity; consumed claims contribute to fulfilled quantity. IM-17B creates no second Resource/Demand truth.
+
+CI run `34460374866` on frozen implementation head `32f219029d4f76fcd0ff5e768e66cf32a47ec50b` completed **SUCCESS**, including IM-17B plus frozen predecessor regression. Pages run `34460373223` on the same head completed **SUCCESS**. Full implementation diff from the preceding Whole-Block documentation head `0386ca141d61b635f9b30e91bf2328378875dfaf` is exactly one commit ahead / zero behind and limited to the IM-17B contract, focused self-test/Node evidence, runtime evidence/build identity and CI integration. No IM-17C initialization, transport integration, Delivery→Claim consume, construction progress or completion functionality is present.
 
 ### IM-17C – Player Placement → Construction Initialization Integration
 
@@ -327,7 +341,7 @@ IM-17 does not introduce regular workforce assignment, regular production operat
 
 ### IM-17 execution boundary
 
-IM-17A is frozen. IM-17B through IM-17G remain defined but not implemented. No IM-17B functionality is part of the IM-17A freeze gate.
+IM-17A and IM-17B are frozen. IM-17C through IM-17G remain defined but not implemented. No IM-17C functionality is part of the IM-17B freeze gate.
 
 ## 16. IM-17A Completion / Regression / Freeze Gate
 
@@ -339,22 +353,34 @@ CI run `34394606222` completed **SUCCESS**. Fresh real iPad/Safari evidence is a
 
 The world-label/annotation positioning issue visible in the real-device evidence is explicitly recorded as NON-BLOCKING and remains outside IM-17A.
 
-## 17. Current gate
+## 17. IM-17B Completion / Regression / Freeze Gate
+
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+Frozen IM-17B capability head `32f219029d4f76fcd0ff5e768e66cf32a47ec50b` was verified against frozen IM-17A semantics and the preserved Whole-Block documentation history. CI run `34460374866` and Pages run `34460373223` both completed **SUCCESS** on the exact capability head. Frozen marker `frozen/im-17b-economic-construction-requirement-contract` resolves exactly to `32f219029d4f76fcd0ff5e768e66cf32a47ec50b`.
+
+The contract reuses the existing `ResourceDemands` vocabulary and quantity invariant and introduces no second Resource/Demand authority. Scope verification confirms zero IM-17C initialization, zero transport integration, zero Delivery→Claim consume integration and zero construction-progress/completion functionality.
+
+## 18. Current gate
 
 **IM-17 – Economic Construction Integration = IN PROGRESS.**
 
 **IM-17A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**Frozen IM-17A head = `6caf6132864e71201dee6b9a286c111f67fce016`.**
+**IM-17B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-17B through IM-17G = DEFINED / NOT IMPLEMENTED.**
+**Frozen IM-17B head = `32f219029d4f76fcd0ff5e768e66cf32a47ec50b`.**
 
-No IM-17B implementation is part of the completed IM-17A gate.
+**Frozen IM-17B marker = `frozen/im-17b-economic-construction-requirement-contract`.**
 
-## 18. Permanent visible build identity synchronization rule
+**IM-17C through IM-17G = DEFINED / NOT IMPLEMENTED.**
+
+No IM-17C implementation is part of the completed IM-17B gate.
+
+## 19. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-10 — IM-17A Player Construction Runtime Admission Contract frozen PASS / 0 BLOCKER at `6caf6132864e71201dee6b9a286c111f67fce016`; real iPad evidence accepted; world-label/annotation positioning recorded as NON-BLOCKING follow-up; IM-17B through IM-17G remain DEFINED / NOT IMPLEMENTED.
+**Updated:** 2026-09-10 — IM-17B Economic Construction Requirement Contract frozen PASS / 0 BLOCKER at `32f219029d4f76fcd0ff5e768e66cf32a47ec50b`; CI `34460374866` and Pages `34460373223` SUCCESS; frozen marker verified; IM-17C through IM-17G remain DEFINED / NOT IMPLEMENTED.
