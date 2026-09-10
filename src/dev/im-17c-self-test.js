@@ -21,6 +21,7 @@ export function runIM17CSelfTest() {
     commitResult: committed,
   });
   const initialized = PlayerPlacementConstructionInitializationIntegration.initialize(admitted);
+  runtime.stop();
 
   const runtimeBeforeRejectedInit = new Runtime(RuntimeConfig);
   runtimeBeforeRejectedInit.boot();
