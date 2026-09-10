@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im17c-1';
+import { RuntimeConfig } from './runtime/config.js?v=im17d-1';
 import { Runtime } from './runtime/runtime.js';
 import { BASELINE_MINIWORLD_SCENARIO_ID, createBaselineMiniworldScenario } from './diagnostics/baseline-miniworld-scenario.js?v=im15d-1';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
@@ -20,19 +20,20 @@ function panCameraBy({deltaX=0,deltaY=0}={}) { cameraState=panWorldViewCamera(ca
 function zoomCameraAt({factor,anchorX,anchorY}={}) { cameraState=zoomWorldViewCameraAt(cameraState,{factor,anchorX,anchorY}); return renderCurrentWorld(); }
 function resetBaselineMiniworld() { if (runtime.state==='RUNNING') throw new Error('baseline reset not allowed while RUNNING'); const c=createBaselineMiniworldScenario(); installActiveRuntimeComposition(c); renderCurrentWorld(); return Object.freeze({kind:'im15d-scenario-reset-result',scenarioId:c.scenarioId}); }
 runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); const initialOwners=currentAuthoritative(); const initialRender=renderCurrentWorld(); window.addEventListener('resize',renderCurrentWorld,{passive:true});
-if(testEl){testEl.textContent=`IM-17C — Player Placement → Construction Initialization Integration — Runtime foundation loaded — admitted placement initializes existing construction state as PENDING · Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;testEl.dataset.pass='pending';}
+if(testEl){testEl.textContent=`IM-17D — Construction Demand → Existing Logistics Integration — Runtime foundation loaded — real construction demand reuses existing claims, BuildingStock reservation and TransportJob owners · Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;testEl.dataset.pass='pending';}
 window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,get world(){return currentAuthoritative().world;},get map(){return currentAuthoritative().map;},get domains(){return currentAuthoritative().domains;},get housingPopulation(){return currentAuthoritative().housingPopulation;},get goldEconomy(){return currentAuthoritative().goldEconomy;},get goldSettlement(){return currentAuthoritative().goldSettlement;},get pathClassification(){return currentAuthoritative().pathClassification;},get pathClassificationEntries(){return currentAuthoritative().pathClassificationEntries;},get traversability(){return currentAuthoritative().traversability;},get reachabilityEvidence(){return currentAuthoritative().reachabilityEvidence;},get personNavigationValidation(){return currentAuthoritative().personNavigationValidation;},get carrierMovementEvidence(){return currentAuthoritative().carrierMovementEvidence;},get carrierNavigationValidation(){return currentAuthoritative().carrierNavigationValidation;},get runtimeNavigationValidations(){return currentAuthoritative().runtimeNavigationValidations;},renderCurrentWorld,panCameraBy,zoomCameraAt,cameraControlLimits:DEFAULT_CAMERA_CONTROL_LIMITS,cameraInputOwner:'IM-14E-UNIFIED-WORLD-INPUT',installActiveRuntimeComposition,getActiveRuntimeComposition:()=>currentComposition(),resetBaselineMiniworld,installDiagnosticOverlayRenderer,getCameraState:()=>cameraState});
 
-document.title='Neue Siedler – IM-17C Player Placement Construction Initialization Integration';
-const verificationTitle=document.querySelector('.verification-card h1'); if(verificationTitle) verificationTitle.textContent='IM-17C – Player Placement → Construction Initialization Integration';
-const verificationText=document.querySelector('.verification-card p'); if(verificationText) verificationText.textContent='An actually admitted frozen-IM-16 placement initializes the existing Building Construction state as PENDING using the same stable buildingId. Frozen IM-17B demand authority remains unchanged. No IM-17D reservation/logistics, delivery settlement, claim consumption, construction progress or completion.';
-const surfaceNote=document.querySelector('.surface-note'); if(surfaceNote) surfaceNote.textContent='IM-17C Initialization ← admitted frozen IM-16/IM-17A result · same buildingId · existing PENDING construction state · no IM-17D logistics/progress';
-console.info('[IM-17C] Player Placement → Construction Initialization Integration runtime foundation',{build:RuntimeConfig.build,scenarioId:BASELINE_MINIWORLD_SCENARIO_ID,consumesFrozenIM16Commit:true,consumesFrozenIM17AAdmission:true,preservesFrozenIM17BRequirementAuthority:true,stableBuildingIdentityPreserved:true,existingConstructionStateAuthorityReused:true,initialConstructionStatePending:true,secondBuildingIdentityCreated:false,transportIntegration:false,deliverySettlement:false,deliveryClaimConsumeIntegration:false,constructionProgressAuthority:false,completionAuthority:false});
+document.title='Neue Siedler – IM-17D Construction Demand Existing Logistics Integration';
+const verificationTitle=document.querySelector('.verification-card h1'); if(verificationTitle) verificationTitle.textContent='IM-17D – Construction Demand → Existing Logistics Integration';
+const verificationText=document.querySelector('.verification-card p'); if(verificationText) verificationText.textContent='A real IM-17B construction demand is matched and claimed through the existing Resource authority, preflighted against existing BuildingStock transport availability and handed to the existing TransportJob owner. No second logistics authority, no new routing/movement ownership and no IM-17E delivery→progress settlement.';
+const surfaceNote=document.querySelector('.surface-note'); if(surfaceNote) surfaceNote.textContent='IM-17D Logistics ← real construction demand · existing Resource Claim + BuildingStock reservation + TransportJob · no IM-17E progress';
+console.info('[IM-17D] Construction Demand → Existing Logistics Integration runtime foundation',{build:RuntimeConfig.build,scenarioId:BASELINE_MINIWORLD_SCENARIO_ID,frozenIM17BRequirementAuthorityReused:true,existingResourceMatchingReused:true,existingResourceAssignmentClaimsReused:true,existingBuildingStockReservationReused:true,existingTransportJobServiceReused:true,secondLogisticsAuthorityCreated:false,newRoutingMovementOwnership:false,deliverySettlement:false,deliveryClaimConsumeIntegration:false,constructionProgressAuthority:false,completionAuthority:false});
 
-void import('./ui/player-placement-confirm-cancel-interaction.js?v=im17c-1');
-void import('./ui/player-building-selection-placement-activation.js?v=im17c-1');
-void import('./ui/authoritative-construction-result-player-ui-projection.js?v=im17c-1');
-void import('./domain/player-construction-runtime-admission-contract.js?v=im17c-1');
-void import('./domain/economic-construction-requirement-contract.js?v=im17c-1');
-void import('./domain/player-placement-construction-initialization-integration.js?v=im17c-1');
-void import('./im17c-runtime-evidence.js?v=im17c-1');
+void import('./ui/player-placement-confirm-cancel-interaction.js?v=im17d-1');
+void import('./ui/player-building-selection-placement-activation.js?v=im17d-1');
+void import('./ui/authoritative-construction-result-player-ui-projection.js?v=im17d-1');
+void import('./domain/player-construction-runtime-admission-contract.js?v=im17d-1');
+void import('./domain/economic-construction-requirement-contract.js?v=im17d-1');
+void import('./domain/player-placement-construction-initialization-integration.js?v=im17d-1');
+void import('./domain/construction-demand-existing-logistics-integration.js?v=im17d-1');
+void import('./im17d-runtime-evidence.js?v=im17d-1');
