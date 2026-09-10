@@ -67,7 +67,7 @@ Frozen IM-16G marker: `frozen/im-16g-authoritative-construction-result-player-ui
 Frozen IM-16G head and Whole-Block completion-gate baseline: `9022b7934e885950af8d8a3559cbecdd41a2da63`.
 
 Frozen IM-16 Whole-Block marker: `frozen/im-16-player-construction-placement-integration`.
-Frozen IM-16 Whole-Block head and exclusive IM-17 baseline: `99b0e7d001b7a4f175727cf8e304dde0928c730b`.
+Frozen IM-16 Whole-Block head and exclusive IM-17 definition baseline: `99b0e7d001b7a4f175727cf8e304dde0928c730b`.
 
 Frozen IM-17A marker: `frozen/im-17a-player-construction-runtime-admission-contract`.
 Frozen IM-17A head and exclusive IM-17B baseline: `6caf6132864e71201dee6b9a286c111f67fce016`.
@@ -84,9 +84,12 @@ Frozen IM-17A head and exclusive IM-17B baseline: `6caf6132864e71201dee6b9a286c1
 - Frozen IM-16E owns only explicit Player Confirm/Cancel interaction orchestration. Confirm consumes frozen IM-16D; Cancel only deactivates the temporary placement state.
 - Frozen IM-16F owns only the narrow Player Building selection / Placement activation seam: bounded known/testable options `HQ`, `WOODCUTTER`, `STOREHOUSE` → frozen IM-16B `activate(definitionId)`.
 - Frozen IM-16G owns only temporary Player feedback projected from the actual immutable Confirm → IM-16D commit result.
+- Successful IM-16G projection may use only the real returned `definitionId` and `buildingId`; rejection may use only the unchanged authoritative reason.
+- Preview validity, enabled controls, cached IM-16A evaluation and world-render appearance are not construction-result authorities.
+- IM-16G performs no commit, Building registration, mutation, placement evaluation or lifecycle mutation.
 - Runtime/Render remains owner of actual visible world projection of registered Buildings.
 - Frozen IM-17A owns only the economic-construction Runtime admission decision after a real frozen-IM-16 authoritative commit result.
-- IM-17A does not undo, replace or re-own frozen IM-16 Building registration. It does not own demand, resources, costs, reservations, logistics, progress or completion.
+- Frozen IM-17A does not retroactively change or undo frozen IM-16 Building registration and owns no demand, resource, cost, reservation, logistics, progress or completion truth.
 - World pointer/touch, `pointerup`, ordinary world tap, drag end, pan, pinch and `pointercancel` are not implicit commit triggers.
 - Frozen IM-15 Inspector remains observer only; IM-15C diagnostic overlay is not Player Placement authority.
 - Legacy `main` gameplay/UI architecture is not an implementation basis.
@@ -133,7 +136,7 @@ IM-16C owns only the temporary player-visible world preview and unchanged validi
 
 ### Non-blocking UI/readability evidence
 
-Real iPhone evidence showed that accumulated Inspector/verification surfaces are difficult to read on a narrow phone viewport. This remains a **NON-BLOCKING later UI/readability need**.
+Real iPhone evidence showed that accumulated Inspector/verification surfaces are difficult to read on a narrow phone viewport. This remains a **NON-BLOCKING later UI/readability need** and was not silently folded into IM-16E, IM-16F or IM-16G.
 
 ## 8. IM-16D – Authoritative Placement Commit & Building Registration Contract
 
@@ -169,7 +172,7 @@ IM-16F closes only the missing Player-entry seam before frozen IM-16B: `Player B
 
 The bounded selection source exposes `HQ`, `WOODCUTTER`, `STOREHOUSE` only. Unknown options are rejected with `BUILDING_OPTION_NOT_AVAILABLE`; selection performs no validity evaluation, Building registration, mutation or commit. Frozen IM-16A through IM-16E retain their ownership.
 
-Full frozen-IM-16E → pre-freeze IM-16F diff was **12 commits ahead / 0 behind**, merge-base exactly frozen IM-16E. CI run `34355853367` and Pages run `34355852082` were **SUCCESS**. Real iPhone/Safari evidence confirmed the frozen behavior.
+Full frozen-IM-16E → pre-freeze-IM-16F diff was **12 commits ahead / 0 behind**, merge-base exactly frozen IM-16E. CI run `34355853367` and Pages run `34355852082` were **SUCCESS**. Real iPhone/Safari evidence confirmed `IM-16F — PASS`, correct Build identity, option selection/switch/inactive state, unchanged Confirm/Cancel behavior, successful existing commit flow, Inspector read-only and independent Runtime states.
 
 ## 11. IM-16G – Authoritative Construction Result Player UI Projection Contract
 
@@ -179,31 +182,74 @@ Full frozen-IM-16E → pre-freeze IM-16F diff was **12 commits ahead / 0 behind*
 
 **Pre-freeze implementation/evidence head:** `d8c30732173bd6279c94b2023c2ebae9077652a8`.
 
-IM-16G consumes only the actual immutable result from the explicit frozen IM-16E Confirm → frozen IM-16D path and projects only actual returned `definitionId`, `buildingId` or authoritative rejection reason. It performs no commit, Building registration, mutation, placement evaluation or lifecycle mutation.
+### Frozen capability
 
-CI run `34365247140` and Pages run `34365244669` were **SUCCESS**. Real iPad/Safari evidence confirmed successful and rejected paths, correct Build identity and Inspector read-only behavior.
+IM-16G closes only the final missing Player-feedback seam of the established construction path:
 
-## 12. IM-16 Whole-Block Completion / Regression / Freeze Gate
+`IM-16F Building Selection → IM-16B Placement → IM-16C Preview → IM-16E Confirm → IM-16D authoritative Commit → IM-16G Player Result Projection`.
+
+- IM-16G consumes only the actual immutable result from the explicit frozen IM-16E Confirm → frozen IM-16D path.
+- On successful commit, temporary Player feedback projects the real returned `definitionId` and `buildingId`.
+- On rejected commit, temporary Player feedback projects only the unchanged authoritative rejection reason returned by frozen IM-16D / IM-16A.
+- `NOT_READY`, Cancel, frozen IM-16C preview validity, enabled controls, cached IM-16A evaluation and world-render appearance do not create construction-result truth.
+- IM-16G performs no Building commit, registration, mutation, placement evaluation or lifecycle mutation.
+- Existing Runtime/Render remains owner of the actual visible world projection of a registered Building.
+- Frozen IM-16A remains placement-validity authority; IM-16B remains temporary Placement-state/world-target owner; IM-16C remains preview owner; IM-16D remains authoritative commit/registration owner; IM-16E remains Confirm/Cancel owner; IM-16F remains Building-selection/Placement-activation owner.
+- Existing Camera, Selection, Pointer/Touch, Inspector, SaveGame, Runtime and Domain ownership remains unchanged.
+
+### Verification evidence
+
+Full diff frozen IM-16F `0cf69a9253b4ec503f9f1c5b8585721722851963` → pre-freeze IM-16G head `d8c30732173bd6279c94b2023c2ebae9077652a8` was rechecked as **11 commits ahead / 0 behind**, merge-base exactly frozen IM-16F, with 10 changed files limited to the two control documents plus IM-16G result projection, self-test/evidence, visible entry-point/build identity and CI regression surfaces.
+
+CI run `34365247140` on the pre-freeze implementation/evidence head: **SUCCESS**, including `Run IM-16G + frozen predecessor regression`.
+
+Pages run `34365244669` on the same head: **SUCCESS**.
+
+Two real iPad/Safari recordings provide the required device evidence:
+
+- successful free-cell Confirm → visible IM-16G Player feedback `Gebaut` with the actual returned `definitionId` and `buildingId`;
+- occupied-cell Confirm → visible IM-16G Player feedback `Nicht gebaut` with unchanged authoritative `TARGET_CELL_OCCUPIED`, with no additional Building registration;
+- correct IM-16G Build identity / `IM-16G — PASS` remained visible and Inspector remained `OBSERVATION READ ONLY`.
+
+The first recording additionally demonstrated that building selection/placement/commit is currently possible while Runtime is still `READY` before Start/Play. This became the explicit IM-17A reconciliation input and was not retroactively changed in IM-16.
+
+### Explicit exclusions preserved
+
+IM-16G introduces no Building management/details after construction, costs/prices, Gold/resource deductions, construction progression, workers/production, demolition, upgrades, rotation, multi-cell footprints, new Building definitions or catalogue authority, new placement-validity/terrain/distance rules, SaveGame rearchitecture, Inspector mutation/editor path or later IM-16 capability.
+
+## 12. IM-16F Completion / Regression / Freeze Gate
+
+Full diff frozen IM-16E `a943ac93554e32a8909be2d44ae2d327dd044d58` → pre-freeze IM-16F head `e3685a4f826c4897224d89ee4ecc2900feb7977f` was rechecked as **12 commits ahead / 0 behind**, merge-base exactly frozen IM-16E, with 10 changed files limited to the two control documents plus IM-16F selection implementation, self-test/evidence, visible entry-point/build identity and CI regression surfaces.
+
+Ownership and exclusions were rechecked against the full diff. Automated CI/Pages and final real iPhone/Safari evidence are PASS. Frozen marker `frozen/im-16f-player-building-selection-placement-activation-contract` is verified on `0cf69a9253b4ec503f9f1c5b8585721722851963`.
+
+## 13. IM-16G Completion / Regression / Freeze Gate
+
+Ownership and exclusions were rechecked against the full frozen-IM-16F → IM-16G range. Automated regression, Pages and both real iPad/Safari success/rejection evidence paths are **PASS / 0 BLOCKER**.
+
+Frozen marker `frozen/im-16g-authoritative-construction-result-player-ui-projection-contract` is verified on `9022b7934e885950af8d8a3559cbecdd41a2da63`.
+
+## 14. IM-16 Whole-Block Completion / Regression / Freeze Gate
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Exclusive gate baseline:** frozen IM-16G @ `9022b7934e885950af8d8a3559cbecdd41a2da63`.
 
 **Final frozen Whole-Block head:** `99b0e7d001b7a4f175727cf8e304dde0928c730b`.
 
 **Frozen marker:** `frozen/im-16-player-construction-placement-integration`.
 
-Whole-Block reconciliation confirmed frozen IM-16A through IM-16G cover the documented target flow with 0 blocker.
+Whole-Block reconciliation confirms that the documented IM-16 end-to-end target flow is fully covered by frozen IM-16A through IM-16G. No additional IM-16 substep is required by the current scope.
 
-## 13. Post-IM-16 Capability Reconciliation Result
+The complete IM-16 history was verified from frozen IM-15 baseline `9e797ab93036f6b3731442dc626edb8c091893c8` through the Whole-Block gate documentation head: **99 commits ahead / 0 behind**, merge-base exactly frozen IM-15. All frozen IM-16A→G markers were live-verified against their expected SHAs.
 
-The shortest route toward the first closed playable economic construction loop remains:
+CI run `34376983633` on Whole-Block documentation-verification head `0797f39910a410f90b5e9a7ac548d998919937a3` completed **SUCCESS**, including `Run IM-16G + frozen predecessor regression`. Pages run `34376982564` on the same head completed **SUCCESS**. Exact-final-documentation-head CI and Pages subsequently succeeded on `99b0e7d001b7a4f175727cf8e304dde0928c730b`, and the Whole-Block frozen marker was created and verified on that exact head.
 
-`frozen IM-16 Player placement/commit → Runtime admission → economic construction requirement → construction initialization → existing logistics/material delivery → construction progress → completion → Player state projection`.
+Ownership/exclusion boundaries and the accepted real iPhone/iPad evidence remain unchanged. Player Construction Runtime-State Gating was carried forward as an explicit post-IM-16 reconciliation point rather than retroactively modifying frozen IM-16.
 
-Existing Building Construction state/progress/completion, Resource/Demand/Reservation/Claim, Transport/BuildingStock and Runtime ownership must be reused rather than duplicated. Workforce, regular production and broader catalogue/placement capability remain downstream.
+No IM-16H/later capability, Runtime-state gating policy, costs/resources/Gold, construction progression, workers/production, demolition/upgrades, rotation/multi-cell footprints, catalogue/definition authority, new placement rules, SaveGame rearchitecture, Inspector mutation or legacy `main` gameplay/UI reuse was added to IM-16.
 
-Runtime-State Gating is not a separate Whole Block. It is IM-17A.
-
-## 14. IM-17 – Economic Construction Integration
+## 15. IM-17 – Economic Construction Integration
 
 **Status:** IN PROGRESS
 
@@ -213,7 +259,11 @@ Runtime-State Gating is not a separate Whole Block. It is IM-17A.
 
 ### Whole-Block objective
 
+IM-17 answers:
+
 `How does a successfully and authoritatively placed Player Building become an economically effective construction site with real material demand, existing logistics and controlled completion without duplicating existing Building, Resource, Demand, Transport, BuildingStock or Runtime authority?`
+
+IM-17 consumes the frozen IM-16 authoritative placement result and integrates it with already existing construction-state/progress/completion, Resource/Demand/Reservation/Claim, Transport/BuildingStock and Runtime ownership. Frozen IM-16 remains unchanged.
 
 ### IM-17A – Player Construction Runtime Admission Contract
 
@@ -225,67 +275,71 @@ Runtime-State Gating is not a separate Whole Block. It is IM-17A.
 
 **Frozen marker:** `frozen/im-17a-player-construction-runtime-admission-contract`.
 
-IM-17A consumes the actual frozen-IM-16 authoritative placement commit result and the authoritative Runtime state. Economic-construction admission is granted only for `COMMITTED + RUNNING`. `READY`, `PAUSED`, `CREATED`, `BOOTING` and `STOPPED` reject economic admission with `RUNTIME_NOT_RUNNING`; a rejected placement result is never admitted. IM-17A does not retroactively change or undo frozen IM-16 Building registration.
+IM-17A consumes the actual frozen-IM-16 authoritative placement commit result and authoritative Runtime state. Economic-construction admission is granted only for `COMMITTED + RUNNING`. `READY`, `PAUSED`, `CREATED`, `BOOTING` and `STOPPED` reject economic admission with `RUNTIME_NOT_RUNNING`; a rejected placement result is never admitted. IM-17A does not retroactively change or undo frozen IM-16 Building registration.
 
-Automated CI run `34394606222` on implementation head `6caf6132864e71201dee6b9a286c111f67fce016` completed **SUCCESS**, including `Run IM-17A + frozen predecessor regression`.
+CI run `34394606222` on implementation head `6caf6132864e71201dee6b9a286c111f67fce016` completed **SUCCESS**, including `Run IM-17A + frozen predecessor regression`.
 
-Fresh real iPad/Safari evidence confirms visible build identity `IM-17A-PLAYER-CONSTRUCTION-RUNTIME-ADMISSION-CONTRACT`, runtime transition `READY → RUNNING`, successful real placement/authoritative commit while `RUNNING`, and `RUNNING → PAUSED`. This is accepted as real-device evidence for the gate.
+Fresh real iPad/Safari evidence confirms visible build identity `IM-17A-PLAYER-CONSTRUCTION-RUNTIME-ADMISSION-CONTRACT`, `READY → RUNNING`, successful real placement/authoritative commit while `RUNNING`, and `RUNNING → PAUSED`.
 
-### NON-BLOCKING UI/Render follow-up
+#### NON-BLOCKING UI/Render follow-up
 
-The same iPad evidence again shows that world-canvas technical labels/annotations can protrude awkwardly from their intended object/preview anchor, including `HQ · VALID` and long `building:*` labels. This is a **NON-BLOCKING later UI/Render follow-up**. A later bounded label/annotation projection rule should address anchor, offset and viewport/edge clamping. It is not placement-validity truth and was not silently fixed inside IM-17A.
+The same iPad evidence shows world-canvas technical labels/annotations can protrude awkwardly from the intended object/preview anchor, including `HQ · VALID` and long `building:*` labels. This is a **NON-BLOCKING later UI/Render follow-up**. A later bounded label/annotation projection rule should address anchor, offset and viewport/edge clamping. It is not placement-validity or Runtime-admission truth and was not silently fixed inside IM-17A.
 
 ### IM-17B – Economic Construction Requirement Contract
 
 **Status:** DEFINED / NOT IMPLEMENTED
 
-Define the authoritative economic requirement of a placed Building using existing Resource/Demand identities tied to the stable `buildingId`, including required quantity, reserved/fulfilled quantity and remaining need. No transport execution or progress. No second resource, demand, cost or inventory truth.
+Define the authoritative economic requirement of a placed Building: existing Resource/Demand identities associated with the stable `buildingId`, required quantity, reserved/fulfilled quantity and remaining need. No transport execution and no construction progress. No second resource, demand, cost or inventory truth.
 
 ### IM-17C – Player Placement → Construction Initialization Integration
 
 **Status:** DEFINED / NOT IMPLEMENTED
 
-Connect an admitted successful frozen-IM-16 commit to existing Building Construction state using the same stable `buildingId`, initialized as `PENDING`. Do not create a second construction-site Building identity or alter frozen IM-16 authority.
+Connect an admitted successful frozen-IM-16 commit to the existing Building Construction state using the same stable `buildingId`. Initialize construction as `PENDING`; do not create a second construction-site Building identity and do not alter frozen IM-16 placement/commit authority.
 
 ### IM-17D – Construction Demand → Existing Logistics Integration
 
 **Status:** DEFINED / NOT IMPLEMENTED
 
-Connect construction demand to existing Reservation/Claim/Transport/BuildingStock boundaries. Only authoritative available resources may be reserved and delivered. No second construction-material logistics subsystem and no routing/movement rewrite.
+Connect real construction demand to the existing Reservation/Claim/Transport/BuildingStock boundaries. Only authoritative available resources may be reserved and delivered. No second construction-material logistics subsystem and no new routing/movement ownership.
 
 ### IM-17E – Delivered Material → Construction Progress Settlement
 
 **Status:** DEFINED / NOT IMPLEMENTED
 
-Translate only authoritative delivered/settled construction material into deterministic existing Building Construction Progress. Progress remains monotonic `0…1`; `PENDING`, `IN_PROGRESS` and `COMPLETED` semantics remain authoritative. No workforce or production integration.
+Translate only authoritative delivered/settled construction material into deterministic progress through the existing Building Construction Progress contract. Progress remains monotonic `0…1`; existing `PENDING`, `IN_PROGRESS`, `COMPLETED` semantics remain authoritative. No workforce or production integration.
 
 ### IM-17F – Construction Completion Integration
 
 **Status:** DEFINED / NOT IMPLEMENTED
 
-Use the existing Building Construction Completion boundary so completion becomes effective exactly once when authoritative completion conditions are satisfied. Preserve stable Building identity and existing lifecycle ownership. No worker assignment or production start.
+Use the existing Building Construction Completion boundary so completion becomes effective exactly once when the authoritative completion conditions are satisfied. Preserve stable Building identity and existing Building lifecycle ownership. No worker assignment or production start is introduced here.
 
 ### IM-17G – Player Construction State Projection
 
 **Status:** DEFINED / NOT IMPLEMENTED
 
-Project only actual authoritative economic construction state back into Player UI, such as waiting for material, under construction, progress and completed. UI owns no admission, demand, resource, delivery, progress or completion truth.
+Project only the actual authoritative economic construction state back to Player UI: e.g. waiting for material, under construction, progress and completed. UI projection owns no admission, demand, resource, delivery, progress or completion truth.
 
 ### IM-17 Whole-Block exclusions
 
-No regular workforce assignment, regular production operation, broad Building catalogue authority, general Gold construction-price system, demolition, upgrades, rotation, multi-cell footprints, new terrain/distance placement rules, SaveGame rearchitecture, Inspector mutation/editor authority or legacy `main` gameplay/UI reuse belongs to IM-17.
+IM-17 does not introduce regular workforce assignment, regular production operation, broad Building catalogue authority, a general Gold construction-price system, demolition, upgrades, rotation, multi-cell footprints, new terrain/distance placement rules, SaveGame rearchitecture, Inspector mutation/editor authority or legacy `main` gameplay/UI reuse.
 
-## 15. IM-17A Completion / Regression / Freeze Gate
+### IM-17 execution boundary
+
+IM-17A is frozen. IM-17B through IM-17G remain defined but not implemented. No IM-17B functionality is part of the IM-17A freeze gate.
+
+## 16. IM-17A Completion / Regression / Freeze Gate
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-Full diff frozen IM-16 `99b0e7d001b7a4f175727cf8e304dde0928c730b` → IM-17A frozen head `6caf6132864e71201dee6b9a286c111f67fce016` was verified as one implementation commit ahead / zero behind with merge-base exactly frozen IM-16. Scope is limited to the IM-17A Runtime-admission contract, focused self-test/Node evidence, visible build identity/runtime evidence and CI regression integration. No IM-17B demand/resource/cost/logistics/progress/completion functionality is present.
+Full diff frozen IM-16 `99b0e7d001b7a4f175727cf8e304dde0928c730b` → IM-17A implementation/frozen head `6caf6132864e71201dee6b9a286c111f67fce016` was verified as **1 commit ahead / 0 behind**, merge-base exactly frozen IM-16. Scope is limited to the IM-17A Runtime-admission contract, self-test/Node evidence, visible build identity/runtime evidence and CI regression integration; no IM-17B demand/resource/cost/logistics/progress/completion functionality is present.
 
-CI run `34394606222` completed **SUCCESS**. Fresh iPad/Safari evidence is accepted. Frozen marker `frozen/im-17a-player-construction-runtime-admission-contract` is verified against `6caf6132864e71201dee6b9a286c111f67fce016`.
+CI run `34394606222` completed **SUCCESS**. Fresh real iPad/Safari evidence is accepted. Frozen marker `frozen/im-17a-player-construction-runtime-admission-contract` is verified against `6caf6132864e71201dee6b9a286c111f67fce016`.
 
-The label/annotation projection issue visible in the real-device evidence is recorded as NON-BLOCKING and remains outside IM-17A.
+The world-label/annotation positioning issue visible in the real-device evidence is explicitly recorded as NON-BLOCKING and remains outside IM-17A.
 
-## 16. Current gate
+## 17. Current gate
 
 **IM-17 – Economic Construction Integration = IN PROGRESS.**
 
@@ -295,9 +349,9 @@ The label/annotation projection issue visible in the real-device evidence is rec
 
 **IM-17B through IM-17G = DEFINED / NOT IMPLEMENTED.**
 
-No IM-17B implementation is part of the IM-17A freeze gate.
+No IM-17B implementation is part of the completed IM-17A gate.
 
-## 17. Permanent visible build identity synchronization rule
+## 18. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
