@@ -8,210 +8,190 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Current Whole-Block branch: `feature/im-17-economic-construction-integration`
-- Frozen development baseline: IM-16 @ `99b0e7d001b7a4f175727cf8e304dde0928c730b`
-- Frozen IM-16 Whole-Block marker: `frozen/im-16-player-construction-placement-integration`
+- Frozen development baseline: IM-18 @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`
+- Frozen IM-18 Whole-Block marker: `frozen/im-18-operational-building-workforce-production-integration`
+- Current Whole-Block branch: `feature/im-19-population-housing-gold-economy-integration`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15 – Guidance / Inspector: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-16 – Player Construction & Placement Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17 – Economic Construction Integration: WHOLE-BLOCK FINALIZATION / PASS / 0 FUNCTIONAL BLOCKER / FINAL MARKER PENDING**
-- **IM-17A – Player Construction Runtime Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17B – Economic Construction Requirement Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17C – Player Placement → Construction Initialization Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17D – Construction Demand → Existing Logistics Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17E – Delivered Material → Construction Progress Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17F – Construction Completion Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-17G – Player Construction State Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-17 – Economic Construction Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-18 – Operational Building / Workforce / Production Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-19 – Population / Housing / Gold Economy Integration: IN PROGRESS**
+- **IM-19A – Residential Building Admission Contract: COMPLETE / PASS / FREEZE GATE APPROVED / FINAL MARKER PENDING**
 
-The IM-17 Whole-Block marker is intentionally not created yet. Exact-finalization-head CI and Pages must both be `SUCCESS` before Whole-Block freeze.
+IM-19 development is active on the Whole-Block branch. IM-19A implementation is complete and has passed regression plus real iPad/Safari device verification; only exact-finalization-head CI/Pages and creation of the frozen IM-19A marker remain before IM-19B may begin.
 
 ## 2. Frozen predecessor chain
 
-Frozen IM-15 substep markers remain authoritative:
+Frozen IM-17 Whole-Block marker:
+- `frozen/im-17-economic-construction-integration` @ `53de400c2ffe57addf832b599b906b3d5b473385`
 
-- IM-15A @ `f0eb70e1501d19c60b264699dde2a2ed05a5959b`
-- IM-15B @ `513636c0fbb4a892134734dc49d8b9a438b7a513`
-- IM-15C @ `c7de361da27fede4aeff83a36c13ec0ee6d1a0dd`
-- IM-15D @ `8fd55a68f37db84c6eddf4be5aaa22219e3b2741`
-- IM-15E @ `ba1c7fc80dfa0d09342d0814e3b69a682949f6cf`
+Frozen IM-18 markers and heads:
 
-Whole-block frozen marker: `frozen/im-15-guidance-inspector`.
+- IM-18A `frozen/im-18a-operational-building-admission-contract` @ `01ad19b2064887b131b4bdd1dd7157f0a4f6724c`
+- IM-18B `frozen/im-18b-workforce-requirement-eligibility-contract` @ `42e64722b34ed7d516735111c5c4ce573631d59a`
+- IM-18C `frozen/im-18c-deterministic-workforce-assignment-integration` @ `195299b0fb7098806be88b7c0b3a577ca737ecb6`
+- IM-18D `frozen/im-18d-production-requirement-recipe-integration` @ `2e5d4fc53295a7abee92b0f9190a6bac1b5e31fe`
+- IM-18E `frozen/im-18e-operational-production-execution` @ `9d1a3bb165564b29ad7ad1a5ee8619ed2d131c20`
+- IM-18F `frozen/im-18f-input-consumption-output-settlement` @ `6cfe680eb8b66c8015026629a7200483ae4c3bdd`
+- IM-18G `frozen/im-18g-player-operational-state-projection` @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`
 
-Frozen IM-16 Whole-Block marker: `frozen/im-16-player-construction-placement-integration`.
-Frozen IM-16 Whole-Block head and exclusive IM-17 baseline: `99b0e7d001b7a4f175727cf8e304dde0928c730b`.
+Frozen IM-18 Whole-Block marker:
+- `frozen/im-18-operational-building-workforce-production-integration` @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`
 
-Frozen IM-17 markers and heads:
+## 3. Binding ownership boundary after IM-18
 
-- IM-17A `frozen/im-17a-player-construction-runtime-admission-contract` @ `6caf6132864e71201dee6b9a286c111f67fce016`
-- IM-17B `frozen/im-17b-economic-construction-requirement-contract` @ `32f219029d4f76fcd0ff5e768e66cf32a47ec50b`
-- IM-17C `frozen/im-17c-player-placement-construction-initialization-integration` @ `c30d2d7a88f7f16b2cf73e1d2b85cec867dcea40`
-- IM-17D `frozen/im-17d-construction-demand-existing-logistics-integration` @ `1c728ab4ce051abff33dda17c9e3ef40cb7c9f4c`
-- IM-17E `frozen/im-17e-delivered-material-construction-progress-settlement` @ `b46e061b185915b805332b252033fe33de9dfe74`
-- IM-17F `frozen/im-17f-construction-completion-integration` @ `a4254cacb9dd89f54950a7d0d4125f2c9827b531`
-- IM-17G `frozen/im-17g-player-construction-state-projection` @ `a6e32ac19dade82e01fdbfc7c3c4e9cad557c871`
-
-## 3. Binding ownership boundary after IM-17G
-
-- Existing Runtime, Domain, Transport, Scheduler, SaveGame, Selection and Camera owners remain authoritative.
-- Frozen IM-16 remains the complete Player placement/commit authority and is not retroactively changed by IM-17.
 - Existing Building Domain/store remains sole owner of stable Building identity, lifecycle and Building-store mutation.
-- Existing `BuildingRegistrationWorldOwnership` remains the authoritative Building registration boundary.
-- Frozen IM-17A owns only the economic-construction Runtime admission decision after a real frozen-IM-16 authoritative commit result. Admission requires `COMMITTED + RUNNING`.
-- Frozen IM-17B owns only the construction requirement seam over existing `ResourceDemands`; stable `buildingId` is reused as `consumerId` and existing demand vocabulary/invariants remain authoritative.
-- Frozen IM-17C connects admitted construction to the existing Building Construction state as `PENDING` with the same stable `buildingId`; it creates no second Building or construction identity.
-- Frozen IM-17D connects the real construction demand to existing Resource Matching / Claim / BuildingStock reservation / TransportJob boundaries. It creates no second logistics subsystem and no routing/movement authority.
-- Frozen IM-17E consumes only authoritative delivered BuildingStock settlement, consumes the corresponding ACTIVE ResourceDemand claim and derives monotonic construction progress through the existing Building Construction Progress contract.
-- Frozen IM-17F verifies the existing Building Construction Completion boundary and makes completion effective exactly once at authoritative `COMPLETED / progress 1`. It performs no Building lifecycle mutation, workforce assignment or production start.
-- Frozen IM-17G projects only actual authoritative requirement/progress/completion state into Player UI. UI owns no admission, demand, resource, delivery, progress or completion truth.
-- Existing BuildingStock transport reservations and Resource Claim reservations remain distinct authorities.
-- Existing Building lifecycle `EXISTS/RETIRED` remains separate from Building Construction state `PENDING/IN_PROGRESS/COMPLETED`.
-- Frozen IM-15 Inspector remains observer only except its already frozen diagnostic action allowlist.
-- Legacy `main` gameplay/UI architecture is not an implementation basis.
+- Frozen IM-17 remains authoritative for economic construction admission, material demand, logistics connection, delivered-material progress and exactly-once construction completion.
+- IM-18A consumes completed construction plus existing Building lifecycle and admits an operational Building only when construction is complete and the Building still exists.
+- IM-18B defines operational workforce requirement/eligibility over existing Person workforce profiles and existing Workforce assignment state.
+- IM-18C performs deterministic workforce assignment over eligible free persons and reuses existing Workforce assignment-state authority.
+- IM-18D connects an assigned operational Building to the existing production BuildingStock recipe contract. It creates no second recipe or stock authority.
+- IM-18E evaluates operational production only from assigned workforce, the integrated existing recipe and current BuildingStock inputs.
+- IM-18F is the authoritative IM-18 production settlement seam: required inputs are removed and outputs are added through existing BuildingStock mutation contracts, with duplicate settlement protection.
+- IM-18G projects authoritative operational state into Player UI only. UI owns no Building, workforce, recipe, production, BuildingStock or settlement truth.
+- Existing Runtime, Scheduler, Transport, Resource, BuildingStock, Person, Workforce, Selection, Camera and SaveGame owners remain authoritative.
+- Frozen IM-15 Inspector remains observer/guidance except its already frozen diagnostic action allowlist.
+- Legacy `main` gameplay/UI architecture remains reference only.
 
-## 4. IM-16 – Player Construction & Placement Integration
+## 4. IM-18 – Operational Building / Workforce / Production Integration
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
-**Frozen Whole-Block head:** `99b0e7d001b7a4f175727cf8e304dde0928c730b`.
+**Definition baseline:** frozen IM-17 @ `53de400c2ffe57addf832b599b906b3d5b473385`.
 
-**Frozen marker:** `frozen/im-16-player-construction-placement-integration`.
+**Frozen Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`.
 
-Frozen IM-16 remains the player-facing path from Building selection through placement, validation, explicit Confirm/Cancel, authoritative Building registration and Player result projection. IM-17 consumes its actual authoritative commit result without changing IM-16 semantics.
-
-## 5. IM-17 – Economic Construction Integration
-
-**Status:** WHOLE-BLOCK FINALIZATION / PASS / 0 FUNCTIONAL BLOCKER / FINAL MARKER PENDING
-
-**Definition baseline:** frozen IM-16 @ `99b0e7d001b7a4f175727cf8e304dde0928c730b`.
-
-**Whole-Block development branch:** `feature/im-17-economic-construction-integration`.
+**Frozen marker:** `frozen/im-18-operational-building-workforce-production-integration`.
 
 ### Whole-Block objective
 
-IM-17 answers:
+IM-18 answers:
 
-`How does a successfully and authoritatively placed Player Building become an economically effective construction site with real material demand, existing logistics and controlled completion without duplicating existing Building, Resource, Demand, Transport, BuildingStock or Runtime authority?`
+`How does an authoritatively completed existing Building become operational with real workforce, an existing production recipe, real input availability and deterministic BuildingStock settlement without duplicating Building, Person, Workforce, Recipe, Production or Stock authority?`
 
-The complete implemented flow is now:
+The implemented flow is:
 
-`frozen IM-16 authoritative placement commit → IM-17A Runtime admission → IM-17B existing ResourceDemand requirement → IM-17C existing construction PENDING state → IM-17D existing logistics/claims/BuildingStock transport → IM-17E authoritative delivered-material settlement and progress → IM-17F existing completion boundary exactly once → IM-17G read-only Player construction-state projection`.
+`frozen IM-17 completed Building → IM-18A operational admission → IM-18B workforce requirement/eligibility → IM-18C deterministic assignment → IM-18D existing production recipe integration → IM-18E operational execution readiness → IM-18F input consumption/output settlement → IM-18G read-only Player operational-state projection`.
 
-### IM-17A – Player Construction Runtime Admission Contract
+### IM-18A – Operational Building Admission Contract
 
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Frozen head:** `01ad19b2064887b131b4bdd1dd7157f0a4f6724c`
 
-**Frozen head:** `6caf6132864e71201dee6b9a286c111f67fce016`.
+Consumes existing construction completion and Building lifecycle. Operational admission requires exactly one effective completion for the same Building and lifecycle state `EXISTS`.
 
-**Frozen marker:** `frozen/im-17a-player-construction-runtime-admission-contract`.
+### IM-18B – Workforce Requirement / Eligibility Contract
 
-Economic construction is admitted only for an actual frozen-IM-16 `COMMITTED` placement result while Runtime is `RUNNING`. Non-running Runtime states reject economic admission without undoing Building registration.
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Frozen head:** `42e64722b34ed7d516735111c5c4ce573631d59a`
 
-Fresh real iPad/Safari evidence confirmed exact IM-17A build identity, `READY → RUNNING`, successful real placement/commit while RUNNING and `RUNNING → PAUSED`. The known world-label positioning issue remains a NON-BLOCKING later UI/Render follow-up.
+Defines required worker count, specialization and capabilities for an admitted operational Building and evaluates only existing Person workforce profiles plus existing Workforce assignment state. Eligibility requires matching specialization/capabilities and `FREE` assignment availability.
 
-### IM-17B – Economic Construction Requirement Contract
+### IM-18C – Deterministic Workforce Assignment Integration
 
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Frozen head:** `195299b0fb7098806be88b7c0b3a577ca737ecb6`
 
-**Frozen head:** `32f219029d4f76fcd0ff5e768e66cf32a47ec50b`.
+Selects eligible persons deterministically by stable person ID up to the required count and transitions them through the existing Workforce assignment-state contract. Insufficient eligible workforce is rejected rather than partially manufacturing assignment truth.
 
-**Frozen marker:** `frozen/im-17b-economic-construction-requirement-contract`.
+### IM-18D – Production Requirement / Recipe Integration
 
-The existing `ResourceDemands` vocabulary remains authoritative: `definitionId`, `targetAmount`, `reservedAmount`, `fulfilledAmount`, `remainingAmount`, `status`, with `targetAmount = reservedAmount + fulfilledAmount + remainingAmount`.
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Frozen head:** `2e5d4fc53295a7abee92b0f9190a6bac1b5e31fe`
 
-### IM-17C – Player Placement → Construction Initialization Integration
+Requires an assigned operational workforce and reuses the existing production BuildingStock recipe for the same Building. Existing recipe inputs and outputs remain authoritative.
 
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+### IM-18E – Operational Production Execution
 
-**Frozen head:** `c30d2d7a88f7f16b2cf73e1d2b85cec867dcea40`.
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Frozen head:** `9d1a3bb165564b29ad7ad1a5ee8619ed2d131c20`
 
-**Frozen marker:** `frozen/im-17c-player-placement-construction-initialization-integration`.
+Evaluates real BuildingStock input availability for the assigned operational Building and produces only `READY` or `BLOCKED_INPUT`. Execution is rejected when required inputs are insufficient.
 
-An admitted construction initializes the existing Building Construction state as `PENDING` using the same stable `buildingId`. The final IM-17C head includes the narrow CI lifecycle fix that stops the test Runtime after admission evidence; production semantics were unchanged.
+### IM-18F – Input Consumption / Output Settlement
 
-### IM-17D – Construction Demand → Existing Logistics Integration
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Frozen head:** `6cfe680eb8b66c8015026629a7200483ae4c3bdd`
 
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+Consumes recipe inputs and adds outputs through existing BuildingStock mutation contracts after successful IM-18E execution. A settlement ID prevents the same production settlement from being applied twice.
 
-**Frozen head:** `1c728ab4ce051abff33dda17c9e3ef40cb7c9f4c`.
+### IM-18G – Player Operational State Projection
 
-**Frozen marker:** `frozen/im-17d-construction-demand-existing-logistics-integration`.
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Frozen head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`
 
-Real construction demand flows through existing Resource Matching, Resource Assignment/claims, BuildingStock transport reservation and TransportJob ownership. No new routing, movement or logistics truth was introduced.
+Projects only existing authoritative operational state to Player UI, including no worker, waiting for input, ready to produce and production settled. It owns no gameplay mutation authority.
 
-### IM-17E – Delivered Material → Construction Progress Settlement
+### IM-18 Whole-Block exclusions
 
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+IM-18 introduces no housing assignment, population derivation, Gold economy, tax/trade system, wages, needs/happiness, migration, birth/death/aging, demolition, upgrades, new transport/routing authority, SaveGame rearchitecture, Inspector editor authority or legacy `main` gameplay reuse.
 
-**Frozen head:** `b46e061b185915b805332b252033fe33de9dfe74`.
+## 5. IM-19 – Population / Housing / Gold Economy Integration
 
-**Frozen marker:** `frozen/im-17e-delivered-material-construction-progress-settlement`.
+**Status:** IN PROGRESS
 
-Only an authoritative `DeliveredTransportBuildingStockSettlement` may consume the corresponding ACTIVE construction demand claim. The resulting real fulfilled amount derives deterministic monotonic progress through the existing Building Construction Progress authority. Workforce and production remain excluded.
+**Definition baseline:** frozen IM-18 @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`.
 
-### IM-17F – Construction Completion Integration
+**Whole-Block branch:** `feature/im-19-population-housing-gold-economy-integration`.
 
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+### IM-19A – Residential Building Admission Contract
 
-**Frozen head:** `a4254cacb9dd89f54950a7d0d4125f2c9827b531`.
+**Status:** COMPLETE / PASS / FREEZE GATE APPROVED / FINAL MARKER PENDING
 
-**Frozen marker:** `frozen/im-17f-construction-completion-integration`.
+IM-19A consumes frozen IM-18A operational admission, existing Building identity and the existing `building-housing` capability. Residential admission requires the same stable `buildingId` across those sources and positive existing housing capacity. It creates no occupancy, resident assignment, population or Gold truth.
 
-Verified progress transitions may cross the existing Building Construction Completion boundary exactly once. Completion is authoritative only at terminal `COMPLETED / progress 1`. No worker assignment, production start or Building lifecycle mutation is performed.
+Regression evidence on implementation head `c46ef9a7739fee8a82397f4c6b605c1a7a94dc94`: CI `34640779068` SUCCESS and Pages `34640777324` SUCCESS. Real iPad/Safari evidence confirmed the exact IM-19A TESTBUILD identity, correct title and the visible admission-only/non-scope boundary.
 
-### IM-17G – Player Construction State Projection
+The final documentation synchronization commit must itself receive exact-head CI + Pages SUCCESS before `frozen/im-19a-residential-building-admission-contract` is created on that same SHA.
 
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+### Whole-Block objective
 
-**Frozen head:** `a6e32ac19dade82e01fdbfc7c3c4e9cad557c871`.
+IM-19 answers:
 
-**Frozen marker:** `frozen/im-17g-player-construction-state-projection`.
+`How are real completed/operational Buildings connected to the existing Housing, Population and non-physical Gold model so that residents, available population and Gold economy become gameplay-effective without duplicating Building, Person, Workforce, Housing, Population, Production or Gold authority?`
 
-Player UI projects only real authoritative construction state, including waiting for material, under construction, progress and completed. It owns no gameplay truth and cannot manufacture demand/progress/completion state.
+### Defined substeps
 
-### IM-17 Whole-Block exclusions
+- **IM-19A – Residential Building Admission Contract**  
+  Define when an existing real Building may enter the existing Housing system. No occupancy assignment, population mutation or Gold flow yet.
 
-IM-17 introduces no regular workforce assignment, regular production operation, broad Building catalogue authority, general Gold construction-price system, demolition, upgrades, rotation, multi-cell footprints, new terrain/distance placement rules, SaveGame rearchitecture, Inspector mutation/editor authority or legacy `main` gameplay/UI reuse.
+- **IM-19B – Housing Capacity / Occupancy Integration**  
+  Connect admitted residential Buildings to existing Housing capacity/occupancy authority. No second occupancy model and no UI-owned mutation.
 
-## 6. IM-17 Substep Completion / Regression / Freeze Gates
+- **IM-19C – Resident → Housing Assignment Integration**  
+  Deterministically connect existing stable Resident/Person identities to available Housing. Housing and Workforce remain separate authorities.
 
-**IM-17A through IM-17G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- **IM-19D – Authoritative Population Projection**  
+  Derive Player population only from authoritative resident/housing state. No second mutable Player population truth.
 
-Each substep was separately implemented, regressed and frozen before its successor began. The final frozen heads are exactly those listed in §2 and §5.
+- **IM-19E – Gold Economy Admission / Flow Integration**  
+  Connect the existing non-physical Gold model to explicitly authorized real economy events. Gold is not a physical Resource or BuildingStock.
 
-Key final evidence:
+- **IM-19F – Operational Economy → Gold Settlement**  
+  Apply clearly defined economic events to authoritative Gold state without introducing trade, tax or wage systems.
 
-- IM-17C final CI `34508191830` and Pages `34508190775`: SUCCESS on `c30d2d7a88f7f16b2cf73e1d2b85cec867dcea40`.
-- IM-17D CI `34520097029` and Pages `34520094382`: SUCCESS on `1c728ab4ce051abff33dda17c9e3ef40cb7c9f4c`.
-- IM-17E CI `34523081316` and Pages `34523080482`: SUCCESS on `b46e061b185915b805332b252033fe33de9dfe74`.
-- IM-17F CI `34531232168` and Pages `34531230761`: SUCCESS on `a4254cacb9dd89f54950a7d0d4125f2c9827b531`.
-- IM-17G CI `34575744508` and Pages `34575743961`: SUCCESS on `a6e32ac19dade82e01fdbfc7c3c4e9cad557c871`.
+- **IM-19G – Player Population / Housing / Gold Projection**  
+  Read-only Player projection of authoritative population, housing occupancy/capacity and Gold state.
 
-## 7. IM-17 Whole-Block Completion / Regression / Freeze Gate
+### IM-19 explicit non-scope
 
-**Status:** REGRESSION PASS / A–G MARKERS VERIFIED / DOCUMENTATION & BUILD-IDENTITY FINALIZATION IN PROGRESS / FINAL MARKER PENDING
+No tax system, marketplace/trade system, wages, needs/happiness, births, deaths, aging, migration, demolition, upgrades, new production system, new transport system, SaveGame rearchitecture, Inspector editor authority or legacy `main` gameplay reuse.
 
-The complete IM-17 implementation range frozen IM-16 `99b0e7d001b7a4f175727cf8e304dde0928c730b` → frozen IM-17G `a6e32ac19dade82e01fdbfc7c3c4e9cad557c871` was verified as **20 commits ahead / 0 behind**, merge-base exactly frozen IM-16.
+## 6. Current gate
 
-All seven frozen IM-17A→G markers were live-verified against their expected exact SHAs. The full current CI regression includes IM-17A through IM-17G plus frozen predecessors and passed on the frozen IM-17G head.
+**IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-This finalization step changes only steering documentation and visible/build identity surfaces for the Whole-Block gate. It introduces no new gameplay capability.
+**IM-19 = IN PROGRESS.**
 
-After this exact finalization head is created, CI and Pages must both finish `SUCCESS` on that exact SHA. Only then may `frozen/im-17-economic-construction-integration` be created and verified on the same SHA. Until then IM-17 is not Whole-Block frozen.
+**IM-19A = COMPLETE / PASS / FREEZE GATE APPROVED / FINAL MARKER PENDING.**
 
-No new IM block is authorized by this finalization.
+This gate finalization changes steering documentation only; the IM-19A implementation itself remains unchanged. The next permissible action after this documentation commit is exclusively exact-head CI + Pages verification. If both succeed, create and verify `frozen/im-19a-residential-building-admission-contract` on that exact head. IM-19B is not authorized before that marker exists.
 
-## 8. Current gate
-
-**IM-17A through IM-17G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
-
-**IM-17 Whole-Block Completion / Regression / Freeze Gate = FINALIZATION HEAD PENDING EXACT-HEAD CI/PAGES / FINAL MARKER PENDING.**
-
-The next permissible action after this documentation/build-identity finalization commit is exclusively exact-head CI + Pages verification. If both succeed, the only permissible write is creation and verification of the IM-17 Whole-Block frozen marker on that same exact head.
-
-## 9. Permanent visible build identity synchronization rule
+## 7. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
 ---
 
-**Updated:** 2026-09-11 — IM-17A through IM-17G synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER. Whole-Block regression PASS / 0 functional blocker; documentation/build-identity finalization prepared; exact-finalization-head CI/Pages and Whole-Block frozen marker remain pending.
+**Updated:** 2026-09-11 — IM-19A Completion / Regression / Device / Freeze Gate PASS on implementation head; iPad/Safari evidence accepted; final steering synchronization prepared; exact-finalization-head CI/Pages and IM-19A frozen marker pending.
