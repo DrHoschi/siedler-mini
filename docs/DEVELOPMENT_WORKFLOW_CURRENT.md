@@ -194,4 +194,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-11 — IM-19A Completion / Regression / Device / Freeze Gate PASS on implementation head; iPad/Safari evidence accepted; final steering synchronization prepared; exact-finalization-head CI/Pages and IM-19A frozen marker pending.
+**Updated:** 2026-09-11 — IM-19A Completion / Regression / Device / Freeze Gate PASS on implementation head; iPad/Safari evidence accepted; both steering files synchronized on the IM-19 branch; exact-finalization-head CI/Pages and IM-19A frozen marker pending.
