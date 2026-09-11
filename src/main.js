@@ -1,4 +1,4 @@
-import { RuntimeConfig } from './runtime/config.js?v=im17-whole-1';
+import { RuntimeConfig } from './runtime/config.js?v=im18a-1';
 import { Runtime } from './runtime/runtime.js';
 import { BASELINE_MINIWORLD_SCENARIO_ID, createBaselineMiniworldScenario } from './diagnostics/baseline-miniworld-scenario.js?v=im15d-1';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
@@ -20,14 +20,14 @@ function panCameraBy({deltaX=0,deltaY=0}={}) { cameraState=panWorldViewCamera(ca
 function zoomCameraAt({factor,anchorX,anchorY}={}) { cameraState=zoomWorldViewCameraAt(cameraState,{factor,anchorX,anchorY}); return renderCurrentWorld(); }
 function resetBaselineMiniworld() { if (runtime.state==='RUNNING') throw new Error('baseline reset not allowed while RUNNING'); const c=createBaselineMiniworldScenario(); installActiveRuntimeComposition(c); renderCurrentWorld(); return Object.freeze({kind:'im15d-scenario-reset-result',scenarioId:c.scenarioId}); }
 runtime.events.on('runtime.stateChanged',({current})=>{if(statusEl)statusEl.textContent=current;}); runtime.boot(); const initialOwners=currentAuthoritative(); const initialRender=renderCurrentWorld(); window.addEventListener('resize',renderCurrentWorld,{passive:true});
-if(testEl){testEl.textContent=`IM-17 WHOLE BLOCK — Completion / Regression / Freeze Gate — A–G complete and frozen · exact-head CI/Pages required before final marker · Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;testEl.dataset.pass='pending';}
+if(testEl){testEl.textContent=`IM-18A · TESTBUILD 1 — Operational Building Admission Contract · completed + existing Building only · no workforce / production · Population ${initialOwners.housingPopulation.population.count} · Gold ${initialOwners.goldSettlement.state.balance} · ${initialRender.projection.buildings.length} Buildings / ${initialRender.projection.persons.length} Persons`;testEl.dataset.pass='pending';}
 window.CleanRuntime=Object.freeze({config:RuntimeConfig,runtime,get world(){return currentAuthoritative().world;},get map(){return currentAuthoritative().map;},get domains(){return currentAuthoritative().domains;},get housingPopulation(){return currentAuthoritative().housingPopulation;},get goldEconomy(){return currentAuthoritative().goldEconomy;},get goldSettlement(){return currentAuthoritative().goldSettlement;},get pathClassification(){return currentAuthoritative().pathClassification;},get pathClassificationEntries(){return currentAuthoritative().pathClassificationEntries;},get traversability(){return currentAuthoritative().traversability;},get reachabilityEvidence(){return currentAuthoritative().reachabilityEvidence;},get personNavigationValidation(){return currentAuthoritative().personNavigationValidation;},get carrierMovementEvidence(){return currentAuthoritative().carrierMovementEvidence;},get carrierNavigationValidation(){return currentAuthoritative().carrierNavigationValidation;},get runtimeNavigationValidations(){return currentAuthoritative().runtimeNavigationValidations;},renderCurrentWorld,panCameraBy,zoomCameraAt,cameraControlLimits:DEFAULT_CAMERA_CONTROL_LIMITS,cameraInputOwner:'IM-14E-UNIFIED-WORLD-INPUT',installActiveRuntimeComposition,getActiveRuntimeComposition:()=>currentComposition(),resetBaselineMiniworld,installDiagnosticOverlayRenderer,getCameraState:()=>cameraState});
 
-document.title='Neue Siedler – IM-17 Whole-Block Completion Gate';
-const verificationTitle=document.querySelector('.verification-card h1'); if(verificationTitle) verificationTitle.textContent='IM-17 – Whole-Block Completion / Regression / Freeze Gate';
-const verificationText=document.querySelector('.verification-card p'); if(verificationText) verificationText.textContent='IM-17A through IM-17G are complete and individually frozen. This finalization adds no gameplay capability: it synchronizes Whole-Block steering/build identity and awaits exact-head CI + Pages before the final Whole-Block marker may be created.';
-const surfaceNote=document.querySelector('.surface-note'); if(surfaceNote) surfaceNote.textContent='IM-17 Whole Block · A–G COMPLETE/FROZEN · regression PASS · exact-head CI/Pages required · final marker pending';
-console.info('[IM-17 Whole Block] Completion gate finalization runtime surface',{build:RuntimeConfig.build,scenarioId:BASELINE_MINIWORLD_SCENARIO_ID,im17AThroughGCompleteFrozen:true,wholeBlockRegressionPass:true,gameplayCapabilityAdded:false,exactHeadCIPagesRequired:true,wholeBlockMarkerCreated:false});
+document.title='Neue Siedler – IM-18A Operational Building Admission';
+const verificationTitle=document.querySelector('.verification-card h1'); if(verificationTitle) verificationTitle.textContent='IM-18A – Operational Building Admission Contract';
+const verificationText=document.querySelector('.verification-card p'); if(verificationText) verificationText.textContent='Only an authoritative frozen-IM-17 completed Building whose lifecycle still EXISTS may be admitted as operational. IM-18A introduces no workforce requirement, worker assignment, production recipe, production execution or stock mutation.';
+const surfaceNote=document.querySelector('.surface-note'); if(surfaceNote) surfaceNote.textContent='IM-18A · TESTBUILD 1 · Operational admission only · frozen IM-17 completion reused · no workforce / production';
+console.info('[IM-18A] Operational Building Admission Contract',{build:RuntimeConfig.build,scenarioId:BASELINE_MINIWORLD_SCENARIO_ID,frozenIM17CompletionReused:true,requiresBuildingExists:true,workforceAdded:false,productionAdded:false,stockMutationAdded:false});
 
 void import('./ui/player-placement-confirm-cancel-interaction.js?v=im17-whole-1');
 void import('./ui/player-building-selection-placement-activation.js?v=im17-whole-1');
@@ -40,3 +40,4 @@ void import('./domain/delivered-material-construction-progress-settlement.js?v=i
 void import('./domain/construction-completion-integration.js?v=im17-whole-1');
 void import('./ui/player-construction-state-projection.js?v=im17-whole-1');
 void import('./im17-whole-block-runtime-evidence.js?v=im17-whole-1');
+void import('./domain/operational-building-admission-contract.js?v=im18a-1');
