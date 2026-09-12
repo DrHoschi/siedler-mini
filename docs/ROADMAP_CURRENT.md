@@ -386,11 +386,30 @@ Hard boundary remains:
 
 Correction evidence: CI `34705200714` SUCCESS and Pages `34705200407` SUCCESS on corrected head `6480d00941b688437976b5b5c88899fef79faa15`; frozen marker `frozen/im-20b-post-im13-authoritative-snapshot-integration` was fast-forwarded and verified identical at that correction head.
 
+### IM-20C – Deterministic Validation & Restore Integration
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Baseline:** corrected frozen IM-20B @ `a3a5d2f5fafa1885fea7be489ea601680c432e25`.
+
+IM-20C validates the complete schema-V2 SaveGame deterministically before commit and restores new standalone authoritative owner instances only after a full validation PASS.
+
+Validation covers V1 base sections plus all corrected IM-20B persisted definitions/state and their cross-owner invariants. Invalid V2 payloads are rejected fail-closed without producing a runtime state.
+
+Restore reconstructs frozen V1 World/Map/CoreDomain/Gold/PathWear owners plus Resource definitions/allocator, Claims, Demands, Housing capabilities, Workforce profiles/requirements/assignments, Production recipes, Construction progress, BuildingStocks/reservations, Home assignments and production/Gold settlement fences.
+
+Canonical Capture→Validate→Restore→Capture identity and allocator continuity are part of the IM-20C self-test.
+
+Visible build:
+`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-1`
+
+No Derived-State Rebinding, runtime activation, browser storage or Save/Reload/Continue lifecycle is introduced in IM-20C.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-3. **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
+3. **IM-20C – Deterministic Validation & Restore Integration — IMPLEMENTED / NOT FROZEN**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
@@ -434,10 +453,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = DEFINED / NOT IMPLEMENTED.**
+**IM-20C = IMPLEMENTED / NOT FROZEN.**
 
-The next permissible development step is exclusively IM-20C – Deterministic Validation & Restore Integration, and only when separately authorized. IM-20D+ remains unauthorized.
+The next permissible step is exclusively IM-20C Completion / Regression / Freeze Gate. IM-20D+ remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-12 — IM-20B remains COMPLETE / FROZEN / PASS / 0 BLOCKER after Build Identity Reconciliation / Correction. Corrected identity head `aeebbe487429eb9889412ec36179c44a51268a1a`; CI `34703598385` and Pages `34703597830` SUCCESS. IM-20C remains DEFINED / NOT IMPLEMENTED and requires separate authorization.
+**Updated:** 2026-09-12 — IM-20C Deterministic Validation & Restore Integration IMPLEMENTED / NOT FROZEN on corrected frozen IM-20B baseline `a3a5d2f5fafa1885fea7be489ea601680c432e25`. Visible identity: `IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-1`.
