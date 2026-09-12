@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–F COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19G IMPLEMENTED / NOT FROZEN  
+**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–F COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19G COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
@@ -222,13 +222,15 @@ Regression/device evidence on implementation head `dc89ab2f0a681292299d8c99f7613
 
 ### IM-19G – Player Population / Housing / Gold Projection
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19F @ `90d1b093fe1b99b048ea68529b9b0af731b11456`.
 
 Read-only Player projection of authoritative IM-19D Population, frozen IM-19B/IM-19C Housing capacity/occupancy and frozen IM-19F Gold state. Population must equal Housing occupancy, Housing aggregate capacity invariants must hold, and IM-19F `stateAfter` must match the current non-physical Gold owner state.
 
 The Player surface exposes Population, Housing occupancy/capacity and Gold only. It owns no gameplay mutation authority and introduces no further Economy system or Inspector system graph.
+
+Regression/device evidence on implementation head `5fba2eb728adf1195473b28e578087fc37de2204`: CI `34697541542` SUCCESS and Pages `34697541497` SUCCESS. Real Safari device evidence on both iPhone and iPad confirms `READY`, exact IM-19G TESTBUILD 1 identity, correct title, Population `3`, Gold `3`, and `Siedlung · Bevölkerung 3 · Wohnen 3/3 · Gold 3`. Final exact-head CI + Pages verification is required before creating the frozen IM-19G marker.
 
 ### Future Inspector – Whole Clean-Runtime Rebuild Chain (NON-SCOPE)
 
@@ -256,10 +258,10 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 **IM-19F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19G = IMPLEMENTED / NOT FROZEN.**
+**IM-19G = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-19G Completion / Regression / Device / Freeze Gate. No successor beyond IM-19G is authorized by this implementation step.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19g-player-population-housing-gold-projection` on that exact SHA. No successor beyond IM-19G is authorized before that marker exists.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19F frozen at `90d1b093fe1b99b048ea68529b9b0af731b11456`; IM-19G Player Population / Housing / Gold Projection implemented against frozen IM-19F and remains NOT FROZEN.
+**Updated:** 2026-09-12 — IM-19G Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER on `5fba2eb728adf1195473b28e578087fc37de2204`; iPhone + iPad Safari evidence PASS; final exact-head CI/Pages and frozen marker pending.
