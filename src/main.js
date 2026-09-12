@@ -1,6 +1,6 @@
-import { RuntimeConfig } from './runtime/config.js?v=im19d-2';
+import { RuntimeConfig } from './runtime/config.js?v=im19f-1';
 import { Runtime } from './runtime/runtime.js';
-import { BASELINE_MINIWORLD_SCENARIO_ID, createBaselineMiniworldScenario } from './diagnostics/baseline-miniworld-scenario.js?v=im15d-1';
+import { BASELINE_MINIWORLD_SCENARIO_ID, createBaselineMiniworldScenario } from './diagnostics/baseline-miniworld-scenario.js?v=im19f-1';
 import { projectVisibleRuntimeState } from './render/live-runtime-render-integration.js';
 import { createWorldViewCameraState } from './render/world-view-camera-state.js';
 import { DEFAULT_CAMERA_CONTROL_LIMITS, panWorldViewCamera, resizeWorldViewCameraViewport, zoomWorldViewCameraAt } from './render/world-view-camera-control.js';
