@@ -26,7 +26,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20B–G: DEFINED / NOT IMPLEMENTED**
+- **IM-20B – Post-IM13 Authoritative Snapshot Integration: IMPLEMENTED / NOT FROZEN**
+- **IM-20C–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
 
@@ -374,9 +375,51 @@ Implementation:
 - `src/dev/im-20a-self-test.js`
 - `src/dev/im-20a-self-test.node.js`
 
+### IM-20B – Post-IM13 Authoritative Snapshot Integration
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Definition baseline:** frozen IM-20A @ `045a056535604b7adcaeb658212da403f532b4f9`.
+
+IM-20B adds a separate V2 **capture-only** SaveGame integration above the frozen IM-13 V1 snapshot contract. The frozen V1 contract remains unchanged and continues to capture `capture/world/map/domains/economy.gold/pathWear`.
+
+The IM-20B V2 capture adds exactly the post-IM13 authoritative sections defined by IM-20A:
+
+- `authoritative.resourceDemands`
+- `authoritative.resourceClaims`
+- `authoritative.constructionProgress`
+- `authoritative.buildingStocks`
+- `authoritative.buildingStockTransportReservations`
+- `authoritative.workforceAssignments`
+- `authoritative.homeAssignments`
+- `authoritative.settlementFences.production`
+- `authoritative.settlementFences.gold`
+
+Demand progress projection fields (`reservedAmount`, `fulfilledAmount`, `remainingAmount`, `status`) are deliberately excluded from persisted demand records because they derive from Claims and must not become a second truth.
+
+Capture is deterministic, deeply frozen and canonicalizable. ResourceDemand/Claim allocator continuity is captured deterministically from stable IDs. Arrays are normalized/sorted and reject duplicate identity keys before serialization.
+
+Hard IM-20B boundary:
+
+- V2 Snapshot Capture = implemented;
+- frozen IM-13 `SaveGameSnapshotContract` remains schema V1;
+- frozen IM-13 `SaveGameValidationContract` remains schema V1;
+- V2 validation = not implemented;
+- V2 restore = not implemented;
+- browser storage / Save / Continue lifecycle = not implemented;
+- no derived-state persistence;
+- no IM-20C+ capability.
+
+Implementation:
+- `src/savegame/post-im13-authoritative-snapshot-integration.js`
+- `src/dev/im-20b-self-test.js`
+- `src/dev/im-20b-self-test.node.js`
+
+The next permissible step after implementation is exclusively **IM-20B Completion / Regression / Freeze Gate**. IM-20C remains unauthorized until IM-20B is frozen.
+
 ### Remaining defined substeps
 
-- **IM-20B – Post-IM13 Authoritative Snapshot Integration — DEFINED / NOT IMPLEMENTED**
+- **IM-20B – Post-IM13 Authoritative Snapshot Integration — IMPLEMENTED / NOT FROZEN**
 - **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
 - **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 - **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
@@ -421,9 +464,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20B = DEFINED / NOT IMPLEMENTED.**
+**IM-20B = IMPLEMENTED / NOT FROZEN.**
 
-The next permissible development step after this completed freeze is exclusively IM-20B – Post-IM13 Authoritative Snapshot Integration, and only when separately authorized. No IM-20C+ capability is authorized.
+The next permissible step is exclusively IM-20B Completion / Regression / Freeze Gate. IM-20C+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -431,4 +474,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-20A COMPLETE / FROZEN / PASS / 0 BLOCKER. Frozen marker: `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`. IM-20B remains DEFINED / NOT IMPLEMENTED and requires a separate authorization.
+**Updated:** 2026-09-12 — IM-20A remains COMPLETE / FROZEN / PASS / 0 BLOCKER at `045a056535604b7adcaeb658212da403f532b4f9`. IM-20B Post-IM13 Authoritative Snapshot Integration is IMPLEMENTED / NOT FROZEN; IM-20C–G remain DEFINED / NOT IMPLEMENTED.
