@@ -19,9 +19,10 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19 – Population / Housing / Gold Economy Integration: IN PROGRESS**
 - **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19C – Resident → Housing Assignment Integration: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
+- **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-19D – Authoritative Population Projection: IMPLEMENTED / NOT FROZEN**
 
-IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`; IM-19B is frozen at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`. IM-19C is implemented on top of frozen IM-19B and is not yet frozen.
+IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, and IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`. IM-19D is implemented on top of frozen IM-19C and is not yet frozen.
 
 ## 2. Frozen predecessor chain
 
@@ -46,6 +47,9 @@ Frozen IM-19A marker:
 
 Frozen IM-19B marker:
 - `frozen/im-19b-housing-capacity-occupancy-integration` @ `3ba5a17761ac7f8bce3f01a49cbaef515728c355`
+
+Frozen IM-19C marker:
+- `frozen/im-19c-resident-housing-assignment-integration` @ `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -169,7 +173,10 @@ Exact-head CI and Pages succeeded on `b528081409407ad531a450e5deb832ee7a0031e7`;
 
 ### IM-19C – Resident → Housing Assignment Integration
 
-**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen head:** `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`  
+**Frozen marker:** `frozen/im-19c-resident-housing-assignment-integration`
 
 **Definition baseline:** frozen IM-19B @ `3ba5a17761ac7f8bce3f01a49cbaef515728c355`.
 
@@ -177,9 +184,19 @@ IM-19C consumes only existing stable Resident/Person identities, frozen-IM-19B H
 
 No Person/Resident creation, Population derivation, Workforce mutation or Gold mutation is part of IM-19C.
 
-Regression evidence on implementation head `7830c46123f0b294f82065d9be78cd1935149e41`: CI `34683508659` SUCCESS and Pages `34683506756` SUCCESS. Real **iPhone/Safari** evidence confirms `READY`, exact `IM-19C-RESIDENT-HOUSING-ASSIGNMENT-INTEGRATION-TESTBUILD-1`, the IM-19C title and the visible no-population/no-gold/no-workforce-mutation scope. No iPad evidence is claimed for IM-19C.
+Final evidence: real **iPhone/Safari** device PASS plus CI `34686333542` SUCCESS and Pages `34686333201` SUCCESS on exact frozen head `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`. No iPad evidence is claimed for IM-19C.
 
-This final steering commit must itself receive exact-head CI + Pages SUCCESS before `frozen/im-19c-resident-housing-assignment-integration` is created.
+### IM-19D – Authoritative Population Projection
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Definition baseline:** frozen IM-19C @ `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`.
+
+IM-19D is a read-only Player population projection over frozen-IM-19C Resident→Home truth and existing stable Resident identities. Only valid existing Residents with active authoritative homes are counted; projected Population must remain exactly consistent with the frozen-IM-19B Housing occupancy state.
+
+The projection also exposes immutable `population-count-trace` entries (`personId → homeBuildingId → COUNTED`) so the existing read-only diagnostics/Inspector can later visualize the step chain and branches. This is **data preparation only**: IM-19D adds no Inspector UI, no diagnostic mutation and no new Inspector authority.
+
+No Person creation/mutation, Housing mutation, Home assignment mutation, Workforce mutation or Gold mutation is part of IM-19D.
 
 ### Whole-Block objective
 
@@ -224,9 +241,11 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19C = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-19C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19c-resident-housing-assignment-integration` on that exact SHA. IM-19D is not authorized before that marker exists.
+**IM-19D = IMPLEMENTED / NOT FROZEN.**
+
+The next permissible step is exclusively IM-19D Completion / Regression / Device / Freeze Gate. IM-19E is not authorized before IM-19D passes that gate and receives its frozen marker.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -234,4 +253,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19C Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER with real iPhone/Safari evidence; exact-finalization-head CI/Pages and frozen IM-19C marker pending.
+**Updated:** 2026-09-12 — IM-19C synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19D Authoritative Population Projection implemented against frozen IM-19C and remains NOT FROZEN.
