@@ -27,13 +27,27 @@ function asStableRef(value, name, expectedKind = null) {
   return id;
 }
 
+function requireRestoreState(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('resource demand restore state required');
+  if (!Number.isSafeInteger(state.revision) || state.revision < 0) throw new TypeError('invalid resource demand revision');
+  if (!state.items || typeof state.items !== 'object' || Array.isArray(state.items)) throw new TypeError('invalid resource demand items');
+  const next = clone(state);
+  for (const [id, item] of Object.entries(next.items)) {
+    const parsed = parseStableId(id);
+    if (!parsed || parsed.kind !== 'demand') throw new TypeError(`invalid demand id: ${id}`);
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError(`invalid demand item: ${id}`);
+    if (item.id !== id || item.kind !== 'demand') throw new Error(`demand id/kind mismatch: ${id}`);
+  }
+  return next;
+}
+
 export class ResourceDemands {
   #resourceState;
   #claims;
   #store;
   #ids;
 
-  constructor({ resourceState, claims }) {
+  constructor({ resourceState, claims, restoreState = null, allocator = null }) {
     if (!resourceState || typeof resourceState.getDefinition !== 'function') {
       throw new TypeError('ResourceState-compatible instance required');
     }
@@ -42,8 +56,11 @@ export class ResourceDemands {
     }
     this.#resourceState = resourceState;
     this.#claims = claims;
-    this.#store = new Store('resource.demands', { revision: 0, items: {} });
-    this.#ids = new StableIdAllocator();
+    this.#store = new Store(
+      'resource.demands',
+      restoreState == null ? { revision: 0, items: {} } : requireRestoreState(restoreState)
+    );
+    this.#ids = allocator instanceof StableIdAllocator ? allocator : new StableIdAllocator();
   }
 
   static get states() { return DEMAND_STATES; }
@@ -170,6 +187,14 @@ export class ResourceDemands {
     const items = {};
     for (const id of this.ids()) items[id] = this.get(id);
     return deepFreeze({ revision: this.#store.snapshot().revision, items });
+  }
+
+  rawSnapshot() {
+    return this.#store.snapshot();
+  }
+
+  idSnapshot() {
+    return this.#ids.snapshot();
   }
 
   #deriveStatus(demand, reserved, fulfilled, remaining) {
