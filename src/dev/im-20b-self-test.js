@@ -31,6 +31,13 @@ function fixture() {
 
   const resources = new ResourceState({ world, resourceStore: domains.resources });
   const definition = resources.createDefinition({ technicalName: 'wood', label: 'Wood' }, { id: 'resource-type:00000001' });
+  try {
+    resources.createDefinition({ technicalName: 'INVALID NAME' });
+  } catch {
+    // Intentionally consume allocator sequence 2 without creating a definition.
+    // IM-20B completeness correction must persist the real allocator continuation (=3),
+    // not reconstruct max(existing definition id)+1 (=2).
+  }
   const resource = resources.createResource({
     definitionId: definition.id,
     amount: 5,
@@ -95,8 +102,38 @@ function fixture() {
     })
   ];
 
+  const housingCapabilities = [
+    Object.freeze({ kind: 'building-housing', buildingId: sourceBuildingId, capacity: 2 })
+  ];
+  const workforceProfiles = [
+    Object.freeze({
+      kind: 'person-workforce-profile',
+      personId,
+      specialization: 'GENERAL_RESIDENT',
+      capabilities: Object.freeze(['CAN_MOVE'])
+    })
+  ];
+  const workforceRequirements = [
+    Object.freeze({
+      kind: 'operational-building-workforce-requirement',
+      buildingId: targetBuildingId,
+      count: 1,
+      requiredSpecialization: 'GENERAL_RESIDENT',
+      requiredCapabilities: Object.freeze(['CAN_MOVE'])
+    })
+  ];
+  const productionRecipes = [
+    Object.freeze({
+      kind: 'production-building-stock',
+      buildingId: targetBuildingId,
+      inputs: Object.freeze([{ resourceTypeId: definition.id, quantity: 1 }]),
+      outputs: Object.freeze([{ resourceTypeId: definition.id, quantity: 1 }])
+    })
+  ];
+
   return {
-    world, map, domains, gold, wear, demands, claims,
+    world, map, domains, gold, wear, resources, demands, claims,
+    housingCapabilities, workforceProfiles, workforceRequirements, productionRecipes,
     constructionProgress, buildingStocks, reservations,
     workforceAssignments, homeAssignments
   };
@@ -110,8 +147,13 @@ function capture(f) {
     domains: f.domains,
     gold: f.gold,
     wear: f.wear,
+    resourceState: f.resources,
     resourceDemands: f.demands,
     resourceClaims: f.claims,
+    housingCapabilities: f.housingCapabilities,
+    workforceProfiles: f.workforceProfiles,
+    workforceRequirements: f.workforceRequirements,
+    productionRecipes: f.productionRecipes,
     constructionProgress: f.constructionProgress,
     buildingStocks: f.buildingStocks,
     buildingStockTransportReservations: f.reservations,
@@ -129,6 +171,8 @@ export function runIM20BSelfTest() {
   const demand = snapshotA.authoritative.resourceDemands.state.items['demand:00000001'];
   const claim = snapshotA.authoritative.resourceClaims.state.items['claim:00000001'];
   const capabilities = PostIM13AuthoritativeSnapshotIntegration.capabilities();
+  const definitions = snapshotA.authoritative.definitions;
+  const resourceDefinition = definitions.resourceTypes.state.items['resource-type:00000001'];
 
   const checks = Object.freeze({
     v2CaptureBuiltOverFrozenV1Base:
@@ -142,6 +186,21 @@ export function runIM20BSelfTest() {
     frozenIM13ContractRemainsV1:
       SaveGameSnapshotContract.schemaVersion === 1
       && SaveGameValidationContract.schemaVersion === 1,
+    snapshotCompletenessDefinitionsCaptured:
+      resourceDefinition.kind === 'resource-type'
+      && resourceDefinition.technicalName === 'wood'
+      && definitions.resourceTypes.allocator['resource-type'] === 3
+      && definitions.housingCapabilities.length === 1
+      && definitions.housingCapabilities[0].capacity === 2
+      && definitions.workforceProfiles.length === 1
+      && definitions.workforceProfiles[0].personId === f.workforceProfiles[0].personId
+      && definitions.workforceRequirements.length === 1
+      && definitions.workforceRequirements[0].kind === 'operational-building-workforce-requirement-definition'
+      && definitions.productionRecipes.length === 1,
+    completenessCorrectionSectionsDeclared:
+      PostIM13AuthoritativeSnapshotIntegration.completenessCorrectionSections().length === 5
+      && PostIM13AuthoritativeSnapshotIntegration.completenessCorrectionSections()
+        .includes('authoritative.definitions.resourceTypes'),
     resourceDemandTruthCapturedWithoutDerivedProgressDuplication:
       demand.id === 'demand:00000001'
       && demand.targetAmount === 2
@@ -177,16 +236,22 @@ export function runIM20BSelfTest() {
       && !('housing' in snapshotA)
       && !('playerProjection' in snapshotA)
       && !('camera' in snapshotA)
-      && !('inspector' in snapshotA.authoritative),
+      && !('inspector' in snapshotA.authoritative)
+      && !('economicConstructionRequirements' in definitions),
     deterministicSerialization:
       PostIM13AuthoritativeSnapshotIntegration.serialize(snapshotA)
         === PostIM13AuthoritativeSnapshotIntegration.serialize(snapshotB),
     immutableSnapshot:
       Object.isFrozen(snapshotA)
       && Object.isFrozen(snapshotA.authoritative)
+      && Object.isFrozen(snapshotA.authoritative.definitions)
+      && Object.isFrozen(snapshotA.authoritative.definitions.resourceTypes)
       && Object.isFrozen(snapshotA.authoritative.settlementFences),
     noIM20CPlusCapability:
       capabilities.v2Capture === true
+      && capabilities.snapshotCompletenessCorrection === true
+      && capabilities.authoritativeDefinitionSourcesPersisted === true
+      && capabilities.resourceDefinitionAllocatorContinuity === true
       && capabilities.v2Validation === false
       && capabilities.v2Restore === false
       && capabilities.browserStorage === false
@@ -206,8 +271,13 @@ export function runIM20BSelfTest() {
       domains: f.domains,
       gold: f.gold,
       wear: f.wear,
+      resourceState: f.resources,
       resourceDemands: f.demands,
       resourceClaims: f.claims,
+      housingCapabilities: f.housingCapabilities,
+      workforceProfiles: f.workforceProfiles,
+      workforceRequirements: f.workforceRequirements,
+      productionRecipes: f.productionRecipes,
       constructionProgress: f.constructionProgress,
       buildingStocks: f.buildingStocks,
       workforceAssignments: f.workforceAssignments,
@@ -223,6 +293,12 @@ export function runIM20BSelfTest() {
     checks,
     evidence: Object.freeze({
       schemaVersion: snapshotA.schemaVersion,
+      resourceDefinitionCount: Object.keys(snapshotA.authoritative.definitions.resourceTypes.state.items).length,
+      resourceDefinitionNextId: snapshotA.authoritative.definitions.resourceTypes.allocator['resource-type'],
+      housingCapabilityCount: snapshotA.authoritative.definitions.housingCapabilities.length,
+      workforceProfileCount: snapshotA.authoritative.definitions.workforceProfiles.length,
+      workforceRequirementCount: snapshotA.authoritative.definitions.workforceRequirements.length,
+      productionRecipeCount: snapshotA.authoritative.definitions.productionRecipes.length,
       demandCount: Object.keys(snapshotA.authoritative.resourceDemands.state.items).length,
       claimCount: Object.keys(snapshotA.authoritative.resourceClaims.state.items).length,
       constructionProgressCount: snapshotA.authoritative.constructionProgress.length,
