@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19C IMPLEMENTED / NOT FROZEN  
+**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19B COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19C COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
@@ -121,13 +121,17 @@ Final evidence: CI `34682616074` SUCCESS and Pages `34682615729` SUCCESS on exac
 
 ### IM-19C – Resident → Housing Assignment Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19B @ `3ba5a17761ac7f8bce3f01a49cbaef515728c355`.
 
 Consumes existing stable `person-resident-identity` contracts and frozen-IM-19B Housing integration states. Candidate persons and Housing are ordered deterministically by stable ID; persons that already have an active home are preserved and never reassigned. New home assignments are created only through the existing `HousingHomeCapacityIntegrationContract.assignHome(...)` authority and never exceed existing Housing capacity.
 
 IM-19C creates no new Person/Resident, derives no Population, changes no Workforce state and touches no Gold state.
+
+Regression evidence on implementation head `7830c46123f0b294f82065d9be78cd1935149e41`: CI `34683508659` SUCCESS and Pages `34683506756` SUCCESS. Real **iPhone/Safari** evidence confirms `READY`, the exact `IM-19C-RESIDENT-HOUSING-ASSIGNMENT-INTEGRATION-TESTBUILD-1` identity, the IM-19C title and the visible no-population/no-gold/no-workforce-mutation boundary. No iPad evidence is claimed for this gate.
+
+A final exact-head CI + Pages rerun is required after this gate-documentation finalization. Only then may `frozen/im-19c-resident-housing-assignment-integration` be created on that exact SHA.
 
 ### Whole-Block question
 
@@ -170,10 +174,10 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 **IM-19B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19C = IMPLEMENTED / NOT FROZEN.**
+**IM-19C = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-19C Completion / Regression / Device / Freeze Gate. IM-19D is not authorized before IM-19C is frozen.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19c-resident-housing-assignment-integration` on that exact SHA. IM-19D remains blocked until that marker exists.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19B synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER with iPhone/Safari-only device evidence; IM-19C implemented against frozen IM-19B and remains NOT FROZEN.
+**Updated:** 2026-09-12 — IM-19C Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER with real iPhone/Safari evidence; exact-finalization-head CI/Pages and frozen IM-19C marker pending.
