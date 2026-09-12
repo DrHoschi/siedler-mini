@@ -284,7 +284,7 @@ No snapshot capture, restore, browser storage or Continue lifecycle is changed b
 
 ### IM-20B – Post-IM13 Authoritative Snapshot Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Baseline:** frozen IM-20A @ `045a056535604b7adcaeb658212da403f532b4f9`.
 
@@ -294,10 +294,12 @@ Derived demand progress fields are not persisted. Population, Housing projection
 
 No V2 validation, V2 restore, browser storage or Continue lifecycle is introduced by IM-20B.
 
+Implementation head `d04acc61f7bfca07b23c912f16fad1edf40038a4` passed CI `34702294625` with full predecessor regression plus IM-20B self-test. Exact-finalization-head CI remains required before the IM-20B frozen marker is created.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — IMPLEMENTED / NOT FROZEN**
+2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING**
 3. **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
@@ -340,10 +342,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20B = IMPLEMENTED / NOT FROZEN.**
+**IM-20B = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-20B Completion / Regression / Freeze Gate. IM-20C+ remains unauthorized.
+The next permissible action is exclusively exact-finalization-head CI verification and, on SUCCESS, creation of the IM-20B frozen marker. IM-20C+ remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-12 — IM-20A remains COMPLETE / FROZEN / PASS / 0 BLOCKER at `045a056535604b7adcaeb658212da403f532b4f9`. IM-20B Post-IM13 Authoritative Snapshot Integration is IMPLEMENTED / NOT FROZEN; IM-20C–G remain DEFINED / NOT IMPLEMENTED.
+**Updated:** 2026-09-12 — IM-20B Completion / Regression / Freeze Gate PASS / 0 BLOCKER on `d04acc61f7bfca07b23c912f16fad1edf40038a4`; CI `34702294625` SUCCESS; exact-finalization-head CI and frozen marker pending. IM-20C–G remain DEFINED / NOT IMPLEMENTED.
