@@ -282,10 +282,22 @@ Derived/rebuilt state includes Housing occupancy, Population, operational/readin
 
 No snapshot capture, restore, browser storage or Continue lifecycle is changed by IM-20A.
 
+### IM-20B – Post-IM13 Authoritative Snapshot Integration
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Baseline:** frozen IM-20A @ `045a056535604b7adcaeb658212da403f532b4f9`.
+
+Adds schema V2 capture-only integration over the frozen IM-13 V1 snapshot. Existing V1 capture remains untouched. V2 adds only the IM-20A-authorized post-IM13 authoritative sections for ResourceDemands/Claims, construction progress, local BuildingStock, BuildingStock transport reservations, Workforce assignments, Resident→Home assignments and production/Gold settlement fences.
+
+Derived demand progress fields are not persisted. Population, Housing projection, operational/readiness projections, UI/Inspector state, routes/caches and other `REBUILD_DERIVE` state remain absent from the V2 snapshot.
+
+No V2 validation, V2 restore, browser storage or Continue lifecycle is introduced by IM-20B.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — DEFINED / NOT IMPLEMENTED**
+2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — IMPLEMENTED / NOT FROZEN**
 3. **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
@@ -328,10 +340,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20B = DEFINED / NOT IMPLEMENTED.**
+**IM-20B = IMPLEMENTED / NOT FROZEN.**
 
-The next permissible development step is exclusively IM-20B – Post-IM13 Authoritative Snapshot Integration, and only when separately authorized. No IM-20C+ capability is authorized.
+The next permissible step is exclusively IM-20B Completion / Regression / Freeze Gate. IM-20C+ remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-12 — IM-20A COMPLETE / FROZEN / PASS / 0 BLOCKER. Frozen marker: `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`. IM-20B remains DEFINED / NOT IMPLEMENTED and requires separate authorization.
+**Updated:** 2026-09-12 — IM-20A remains COMPLETE / FROZEN / PASS / 0 BLOCKER at `045a056535604b7adcaeb658212da403f532b4f9`. IM-20B Post-IM13 Authoritative Snapshot Integration is IMPLEMENTED / NOT FROZEN; IM-20C–G remain DEFINED / NOT IMPLEMENTED.
