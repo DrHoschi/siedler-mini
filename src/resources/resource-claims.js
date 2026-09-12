@@ -25,18 +25,35 @@ function asStableRef(value, name) {
   return id;
 }
 
+function requireRestoreState(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('resource claim restore state required');
+  if (!Number.isSafeInteger(state.revision) || state.revision < 0) throw new TypeError('invalid resource claim revision');
+  if (!state.items || typeof state.items !== 'object' || Array.isArray(state.items)) throw new TypeError('invalid resource claim items');
+  const next = clone(state);
+  for (const [id, item] of Object.entries(next.items)) {
+    const parsed = parseStableId(id);
+    if (!parsed || parsed.kind !== 'claim') throw new TypeError(`invalid claim id: ${id}`);
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError(`invalid claim item: ${id}`);
+    if (item.id !== id || item.kind !== 'claim') throw new Error(`claim id/kind mismatch: ${id}`);
+  }
+  return next;
+}
+
 export class ResourceClaims {
   #resourceState;
   #store;
   #ids;
 
-  constructor({ resourceState }) {
+  constructor({ resourceState, restoreState = null, allocator = null }) {
     if (!resourceState || typeof resourceState.get !== 'function' || typeof resourceState.setState !== 'function') {
       throw new TypeError('ResourceState-compatible instance required');
     }
     this.#resourceState = resourceState;
-    this.#store = new Store('resource.claims', { revision: 0, items: {} });
-    this.#ids = new StableIdAllocator();
+    this.#store = new Store(
+      'resource.claims',
+      restoreState == null ? { revision: 0, items: {} } : requireRestoreState(restoreState)
+    );
+    this.#ids = allocator instanceof StableIdAllocator ? allocator : new StableIdAllocator();
   }
 
   static get states() { return CLAIM_STATES; }
@@ -140,6 +157,10 @@ export class ResourceClaims {
 
   snapshot() {
     return this.#store.snapshot();
+  }
+
+  idSnapshot() {
+    return this.#ids.snapshot();
   }
 
   #requireResource(resourceId) {
