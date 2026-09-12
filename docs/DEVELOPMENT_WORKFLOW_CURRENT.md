@@ -16,7 +16,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-16 – Player Construction & Placement Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-17 – Economic Construction Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-18 – Operational Building / Workforce / Production Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19 – Population / Housing / Gold Economy Integration: IN PROGRESS**
+- **IM-19 – Population / Housing / Gold Economy Integration: WHOLE-BLOCK RECONCILIATION PASS / FREEZE AUTHORIZATION PENDING**
 - **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -25,7 +25,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19F – Operational Economy → Gold Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
-IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is frozen at `8284c48b3e6b8c75709a58951acacbc59dd81184`, and IM-19F is frozen at `90d1b093fe1b99b048ea68529b9b0af731b11456`. IM-19G is implemented on top of frozen IM-19F and is not yet frozen.
+IM-19 development has completed its defined A–G chain on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block itself is reconciled but not yet frozen.
 
 ## 2. Frozen predecessor chain
 
@@ -62,6 +62,9 @@ Frozen IM-19E marker:
 
 Frozen IM-19F marker:
 - `frozen/im-19f-operational-economy-gold-settlement` @ `90d1b093fe1b99b048ea68529b9b0af731b11456`
+
+Frozen IM-19G marker:
+- `frozen/im-19g-player-population-housing-gold-projection` @ `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -153,7 +156,7 @@ IM-18 introduces no housing assignment, population derivation, Gold economy, tax
 
 ## 5. IM-19 – Population / Housing / Gold Economy Integration
 
-**Status:** IN PROGRESS
+**Status:** WHOLE-BLOCK RECONCILIATION PASS / FREEZE AUTHORIZATION PENDING
 
 **Definition baseline:** frozen IM-18 @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`.
 
@@ -251,6 +254,7 @@ Final evidence: real Safari device PASS, CI `34691298234` SUCCESS and Pages `346
 
 **Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
+**Frozen head:** `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`  
 **Frozen marker:** `frozen/im-19g-player-population-housing-gold-projection`
 
 **Definition baseline:** frozen IM-19F @ `90d1b093fe1b99b048ea68529b9b0af731b11456`.
@@ -292,6 +296,27 @@ IM-19 answers:
 - **IM-19G – Player Population / Housing / Gold Projection**  
   Read-only Player projection of authoritative population, housing occupancy/capacity and Gold state.
 
+### IM-19 Whole-Block Completion / Reconciliation
+
+**Status:** PASS / 0 BLOCKER / WHOLE-BLOCK FREEZE AUTHORIZATION PENDING
+
+**Baseline:** frozen IM-18 Whole-Block @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
+**Reconciled A–G head:** `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`
+
+Whole-Block reconciliation confirms:
+
+- IM-19A through IM-19G are each COMPLETE / FROZEN / PASS / 0 BLOCKER and all seven frozen markers exist.
+- The Whole-Block branch is identical to frozen IM-19G.
+- Against frozen IM-18 the IM-19 line is forward-only: 90 commits ahead / 0 behind.
+- The Whole-Block diff is limited to IM-19 domain/integration contracts, A–G self-tests, required Runtime/UI projection wiring, CI and steering documentation; no unrelated gameplay system, CSS redesign, SaveGame rearchitecture or Inspector system graph was introduced.
+- CI contains the complete IM-19A→G regression chain.
+- Final reconciled-head evidence: CI `34698054759` SUCCESS and Pages `34698054480` SUCCESS on `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`.
+- Real device evidence includes the required individual substep checks, with final IM-19G PASS on both iPhone/Safari and iPad/Safari.
+
+The defined Whole-Block question is therefore satisfied by the frozen A–G chain without duplicating Building, Person, Workforce, Housing, Population, Production or Gold authority.
+
+This reconciliation does **not** freeze IM-19 as a Whole-Block. A separate explicit IM-19 Whole-Block Freeze Authorization / Freeze Decision is required before creating a Whole-Block frozen marker.
+
 ### Future Inspector – Whole Clean-Runtime Rebuild Chain (NON-SCOPE)
 
 The intended later Inspector chain visualization is the **complete Clean-Runtime rebuild**, not merely an individual Resident/Population trace. It should be able to represent the CR/IM capability graph from the clean foundation through the current integration blocks, including sequential steps, branches, ownership boundaries, frozen baselines/gates and relevant runtime evidence. Local traces such as IM-19D `personId → homeBuildingId → COUNTED` are only optional evidence nodes inside that broader system graph.
@@ -306,7 +331,7 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19 = IN PROGRESS.**
+**IM-19 = WHOLE-BLOCK RECONCILIATION PASS / 0 BLOCKER / FREEZE AUTHORIZATION PENDING.**
 
 **IM-19A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -322,7 +347,7 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-No successor beyond IM-19G is authorized by this freeze. Any next work requires a separate Whole-Block reconciliation/authorization step. No further Economy expansion or Inspector system graph is authorized.
+The next permissible step is exclusively the separate **IM-19 Whole-Block Freeze Authorization / Freeze Decision**. No Whole-Block marker may be created before that explicit authorization. No successor, further Economy expansion or Inspector system graph is authorized.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -330,4 +355,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19G COMPLETE / FROZEN / PASS / 0 BLOCKER; iPhone + iPad Safari evidence PASS; final steering synchronization only, with no successor automatically authorized.
+**Updated:** 2026-09-12 — IM-19A–G COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 Whole-Block Completion / Reconciliation PASS / 0 BLOCKER; separate Whole-Block Freeze Authorization pending; no successor automatically authorized.
