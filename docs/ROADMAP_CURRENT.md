@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19D IMPLEMENTED / NOT FROZEN  
+**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19D COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
@@ -139,7 +139,7 @@ Final evidence: real **iPhone/Safari** device PASS plus CI `34686333542` SUCCESS
 
 ### IM-19D – Authoritative Population Projection
 
-**Status:** IMPLEMENTED / RUNTIME WIRING CORRECTED / DEVICE RE-TEST REQUIRED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19C @ `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`.
 
@@ -147,7 +147,7 @@ Projects Population read-only from frozen-IM-19C active Resident→Home assignme
 
 The projection includes immutable trace entries `personId → homeBuildingId → COUNTED` as a future read-only diagnostics source for the Inspector. **No Inspector UI/visualization is implemented in IM-19D.** No Person creation, Housing mutation, Home assignment mutation, Workforce mutation or Gold mutation is added.
 
-Freeze-gate correction: the first IM-19D device evidence showed the correct build identity but the visible Population still came from the older CR-30B `housingPopulation.population` runtime path. This was a BLOCKER. The current branch now creates the real frozen-IM-19A→B→C residential assignment chain in the baseline composition, exposes `CleanRuntime.populationProjection`, and makes HUD + read-only Inspector consume that IM-19D projection. Existing Gold continues to use its prior owner/path; IM-19E is not pre-implemented. A fresh iPhone/Safari device test is required on the corrected deployment and is valid only when the visible build identity is `IM-19D-AUTHORITATIVE-POPULATION-PROJECTION-TESTBUILD-2`.
+Freeze-gate correction: the first IM-19D device evidence showed the correct build identity but the visible Population still came from the older CR-30B `housingPopulation.population` runtime path. This was a BLOCKER. The current branch now creates the real frozen-IM-19A→B→C residential assignment chain in the baseline composition, exposes `CleanRuntime.populationProjection`, and makes HUD + read-only Inspector consume that IM-19D projection. Existing Gold continues to use its prior owner/path; IM-19E is not pre-implemented. The corrected deployment has now passed the fresh real **iPhone/Safari TESTBUILD 2** re-test. The screenshots visibly confirm `IM-19D-AUTHORITATIVE-POPULATION-PROJECTION-TESTBUILD-2`, `READY`, Population `3` in HUD and Inspector, and `IM-19D · TESTBUILD 2` on the lower surface. CI `34687205200` and Pages `34687204928` both succeeded on exact implementation head `149f37fbdc2aa3d1f05301a38ee3eb9452abec40`. A final documentation-only exact-head CI + Pages verification is required before the frozen IM-19D marker is created.
 
 ### Whole-Block question
 
@@ -192,10 +192,10 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 **IM-19C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19D = IMPLEMENTED / RUNTIME WIRING CORRECTED / DEVICE RE-TEST REQUIRED / NOT FROZEN.**
+**IM-19D = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step remains exclusively IM-19D Completion / Regression / Device / Freeze Gate: exact-head CI + Pages on the corrected runtime wiring, then a fresh real iPhone/Safari re-test. IM-19E is not authorized before IM-19D is frozen.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19d-authoritative-population-projection` on that exact SHA. IM-19E remains blocked until that marker exists.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19D freeze gate found and corrected stale CR-30B visible-population wiring; corrected IM-19D runtime projection now feeds HUD/Inspector; fresh iPhone/Safari re-test required; NOT FROZEN.
+**Updated:** 2026-09-12 — corrected IM-19D TESTBUILD 2 passed real iPhone/Safari device re-test plus exact implementation-head CI/Pages; freeze gate PASS / 0 BLOCKER; final documentation-head CI/Pages and frozen marker pending.
