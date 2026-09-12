@@ -8,9 +8,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Frozen development baseline: IM-18 @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`
-- Frozen IM-18 Whole-Block marker: `frozen/im-18-operational-building-workforce-production-integration`
-- Current Whole-Block branch: `feature/im-19-population-housing-gold-economy-integration`
+- Frozen development baseline: IM-19 @ `f9c9202014deded496d96adfb96a430a230f06f2`
+- Frozen IM-19 Whole-Block marker: `frozen/im-19-population-housing-gold-economy-integration`
+- Current Whole-Block branch: `feature/im-20-authoritative-savegame-continue-integration`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15 – Guidance / Inspector: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-16 – Player Construction & Placement Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -24,6 +24,9 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19E – Gold Economy Admission / Flow Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19F – Operational Economy → Gold Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
+- **IM-20A – Persistent State Inventory & SaveGame Schema Contract: IMPLEMENTED / NOT FROZEN**
+- **IM-20B–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed its defined A–G chain on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block itself is reconciled but not yet frozen.
 
@@ -327,7 +330,68 @@ No such Inspector graph UI is implemented or authorized by IM-19G.
 
 No tax system, marketplace/trade system, wages, needs/happiness, births, deaths, aging, migration, demolition, upgrades, new production system, new transport system, SaveGame rearchitecture, Inspector editor authority or legacy `main` gameplay reuse.
 
-## 6. Current gate
+## 6. IM-20 – Authoritative SaveGame / Continue Integration
+
+**Status:** IN PROGRESS
+
+**Definition baseline:** frozen IM-19 Whole-Block @ `f9c9202014deded496d96adfb96a430a230f06f2`.  
+**Whole-Block branch:** `feature/im-20-authoritative-savegame-continue-integration`.
+
+### Whole-Block question
+
+`How does the fully rebuilt frozen-IM19 game state survive Save → Reload → Continue as the same authoritative state without additive defaults, lost assignments/stocks, duplicated settlements or persisted second truths?`
+
+### IM-20A – Persistent State Inventory & SaveGame Schema Contract
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+IM-20A defines a declarative persistence inventory and a target SaveGame **schemaVersion 2** boundary without activating that schema in the existing IM-13 SaveGame implementation.
+
+The inventory classifies each relevant state as exactly one of:
+
+- `PERSIST` — authoritative truth whose loss/replay would change gameplay after Continue.
+- `REBUILD_DERIVE` — deterministic projection/cache/runtime binding that must be reconstructed from restored owners and must not become a persisted second truth.
+
+**PERSIST coverage includes** the existing IM-13 truth (capture boundary, World, Map, CoreDomainStores, Gold and Path/Wear) plus post-IM13 authoritative state required for frozen IM-19 continuity: ResourceDemands, ResourceClaims, construction progress, local BuildingStock, BuildingStock transport reservations, Workforce assignment state, Resident→Home assignment state, production settlement fences and Gold settlement fences.
+
+**REBUILD / DERIVE coverage includes** Housing occupancy/status, authoritative Population projection, operational Building admission, workforce eligibility/read projection, production readiness/recipe integration, completion projection, Gold admission/read views, Player projections, transient transport recovery bindings, navigation/reachability/routes/caches, path classification/traversability, scheduler registrations/subscriptions and renderer/camera/selection/Inspector runtime state.
+
+Hard IM-20A boundary:
+
+- target schema = V2, status `DEFINED_NOT_ACTIVE`;
+- active `SaveGameSnapshotContract.schemaVersion` remains V1;
+- active `SaveGameValidationContract.schemaVersion` remains V1;
+- no snapshot capture field is added by IM-20A;
+- no restore path is extended by IM-20A;
+- no browser storage / Save / Continue lifecycle is introduced by IM-20A;
+- no silent fallback to New Game is permitted by the target contract;
+- legacy `main` save migration remains out of scope.
+
+Implementation:
+- `src/savegame/persistent-state-inventory-schema-contract.js`
+- `src/dev/im-20a-self-test.js`
+- `src/dev/im-20a-self-test.node.js`
+
+### Remaining defined substeps
+
+- **IM-20B – Post-IM13 Authoritative Snapshot Integration — DEFINED / NOT IMPLEMENTED**
+- **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
+- **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
+- **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
+- **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
+- **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
+
+### IM-20 explicit non-scope
+
+No multi-slot SaveGame menu, cloud save, multiplayer synchronization, autosave system, legacy `main` save migration, final responsive Game-UI/wireframe redesign, new Economy capability or Inspector Clean-Runtime system graph.
+
+Responsive Game UI remains a later dedicated scope with separate iPhone, iPad and Desktop layout planning.
+
+### IM-20A current gate
+
+The next permissible step is exclusively **IM-20A Completion / Regression / Freeze Gate**. IM-20B is not authorized until IM-20A passes that gate and receives its frozen marker.
+
+## 7. Current gate
 
 **IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -349,7 +413,7 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 The next permissible step is exclusively the separate **IM-19 Whole-Block Freeze Authorization / Freeze Decision**. No Whole-Block marker may be created before that explicit authorization. No successor, further Economy expansion or Inspector system graph is authorized.
 
-## 7. Permanent visible build identity synchronization rule
+## 8. Permanent visible build identity synchronization rule
 
 Every browser/device-verifiable CR/IM substep or Whole-Block gate must update all applicable visible/build identity surfaces in the same gate step. A stale predecessor label is a verification defect and blocks PASS/freeze.
 
