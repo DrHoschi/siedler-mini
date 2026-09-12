@@ -19,7 +19,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19 – Population / Housing / Gold Economy Integration: IN PROGRESS**
 - **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19C – Resident → Housing Assignment Integration: IMPLEMENTED / NOT FROZEN**
+- **IM-19C – Resident → Housing Assignment Integration: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
 
 IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`; IM-19B is frozen at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`. IM-19C is implemented on top of frozen IM-19B and is not yet frozen.
 
@@ -169,13 +169,17 @@ Exact-head CI and Pages succeeded on `b528081409407ad531a450e5deb832ee7a0031e7`;
 
 ### IM-19C – Resident → Housing Assignment Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19B @ `3ba5a17761ac7f8bce3f01a49cbaef515728c355`.
 
 IM-19C consumes only existing stable Resident/Person identities, frozen-IM-19B Housing integration states and existing active home assignments. Housing and candidate persons are ordered deterministically by stable ID. Existing homes are preserved; only previously unassigned existing persons may receive a new home, and that assignment is created solely through the existing `HousingHomeCapacityIntegrationContract.assignHome(...)` authority.
 
 No Person/Resident creation, Population derivation, Workforce mutation or Gold mutation is part of IM-19C.
+
+Regression evidence on implementation head `7830c46123f0b294f82065d9be78cd1935149e41`: CI `34683508659` SUCCESS and Pages `34683506756` SUCCESS. Real **iPhone/Safari** evidence confirms `READY`, exact `IM-19C-RESIDENT-HOUSING-ASSIGNMENT-INTEGRATION-TESTBUILD-1`, the IM-19C title and the visible no-population/no-gold/no-workforce-mutation scope. No iPad evidence is claimed for IM-19C.
+
+This final steering commit must itself receive exact-head CI + Pages SUCCESS before `frozen/im-19c-resident-housing-assignment-integration` is created.
 
 ### Whole-Block objective
 
@@ -220,9 +224,9 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19C = IMPLEMENTED / NOT FROZEN.**
+**IM-19C = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-19C Completion / Regression / Device / Freeze Gate. IM-19D is not authorized before IM-19C passes that gate and receives its frozen marker.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19c-resident-housing-assignment-integration` on that exact SHA. IM-19D is not authorized before that marker exists.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -230,4 +234,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19B synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER with corrected iPhone/Safari-only device evidence; IM-19C implemented against frozen IM-19B and remains NOT FROZEN.
+**Updated:** 2026-09-12 — IM-19C Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER with real iPhone/Safari evidence; exact-finalization-head CI/Pages and frozen IM-19C marker pending.
