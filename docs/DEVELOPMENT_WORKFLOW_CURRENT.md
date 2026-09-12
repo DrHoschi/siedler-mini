@@ -17,9 +17,10 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-17 – Economic Construction Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-18 – Operational Building / Workforce / Production Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19 – Population / Housing / Gold Economy Integration: IN PROGRESS**
-- **IM-19A – Residential Building Admission Contract: COMPLETE / PASS / FREEZE GATE APPROVED / FINAL MARKER PENDING**
+- **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-19B – Housing Capacity / Occupancy Integration: IMPLEMENTED / NOT FROZEN**
 
-IM-19 development is active on the Whole-Block branch. IM-19A implementation is complete and has passed regression plus real iPad/Safari device verification; only exact-finalization-head CI/Pages and creation of the frozen IM-19A marker remain before IM-19B may begin.
+IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`. IM-19B is implemented on top of that frozen baseline and is not yet frozen.
 
 ## 2. Frozen predecessor chain
 
@@ -38,6 +39,9 @@ Frozen IM-18 markers and heads:
 
 Frozen IM-18 Whole-Block marker:
 - `frozen/im-18-operational-building-workforce-production-integration` @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`
+
+Frozen IM-19A marker:
+- `frozen/im-19a-residential-building-admission-contract` @ `b528081409407ad531a450e5deb832ee7a0031e7`
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -63,6 +67,14 @@ Frozen IM-18 Whole-Block marker:
 **Frozen Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`.
 
 **Frozen marker:** `frozen/im-18-operational-building-workforce-production-integration`.
+
+### IM-19B – Housing Capacity / Occupancy Integration
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Definition baseline:** frozen IM-19A @ `b528081409407ad531a450e5deb832ee7a0031e7`.
+
+IM-19B consumes only a frozen-IM-19A admitted residential Building plus existing `resident-home-assignment` state. It reuses `HousingCapacityOccupancy` as the sole authority for `capacity`, `occupancy`, `availableSlots` and the capacity invariant. IM-19B derives only `AVAILABLE` or `FULL`; it creates or mutates no resident assignment and introduces no Person, Population or Gold authority.
 
 ### Whole-Block objective
 
@@ -137,13 +149,16 @@ IM-18 introduces no housing assignment, population derivation, Gold economy, tax
 
 ### IM-19A – Residential Building Admission Contract
 
-**Status:** COMPLETE / PASS / FREEZE GATE APPROVED / FINAL MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen head:** `b528081409407ad531a450e5deb832ee7a0031e7`  
+**Frozen marker:** `frozen/im-19a-residential-building-admission-contract`
 
 IM-19A consumes frozen IM-18A operational admission, existing Building identity and the existing `building-housing` capability. Residential admission requires the same stable `buildingId` across those sources and positive existing housing capacity. It creates no occupancy, resident assignment, population or Gold truth.
 
 Regression evidence on implementation head `c46ef9a7739fee8a82397f4c6b605c1a7a94dc94`: CI `34640779068` SUCCESS and Pages `34640777324` SUCCESS. Real iPad/Safari evidence confirmed the exact IM-19A TESTBUILD identity, correct title and the visible admission-only/non-scope boundary.
 
-The final documentation synchronization commit must itself receive exact-head CI + Pages SUCCESS before `frozen/im-19a-residential-building-admission-contract` is created on that same SHA.
+Exact-head CI and Pages succeeded on `b528081409407ad531a450e5deb832ee7a0031e7`; the frozen IM-19A marker was created and verified identical to the Whole-Block branch.
 
 ### Whole-Block objective
 
@@ -184,9 +199,11 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19 = IN PROGRESS.**
 
-**IM-19A = COMPLETE / PASS / FREEZE GATE APPROVED / FINAL MARKER PENDING.**
+**IM-19A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-This gate finalization changes steering documentation only; the IM-19A implementation itself remains unchanged. The next permissible action after this documentation commit is exclusively exact-head CI + Pages verification. If both succeed, create and verify `frozen/im-19a-residential-building-admission-contract` on that exact head. IM-19B is not authorized before that marker exists.
+**IM-19B = IMPLEMENTED / NOT FROZEN.**
+
+The next permissible step is exclusively IM-19B Completion / Regression / Device / Freeze Gate. IM-19C is not authorized before IM-19B passes that gate and receives its frozen marker.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -194,4 +211,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-11 — IM-19A Completion / Regression / Device / Freeze Gate PASS on implementation head; iPad/Safari evidence accepted; both steering files synchronized on the IM-19 branch; exact-finalization-head CI/Pages and IM-19A frozen marker pending.
+**Updated:** 2026-09-12 — IM-19A synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `b528081409407ad531a450e5deb832ee7a0031e7`; IM-19B implemented against frozen IM-19A and remains NOT FROZEN.
