@@ -214,7 +214,7 @@ No taxes, marketplace/trade, wages or physical/BuildingStock Gold are introduced
 
 ### Future Inspector – Whole Clean-Runtime Rebuild Chain (NON-SCOPE)
 
-Later Inspector visualization should cover the **entire CR/IM Clean-Runtime rebuild graph** with sequential steps, branches, ownership boundaries and frozen gates. Individual gameplay traces such as the IM-19D Resident→Home count trace are only subordinate evidence and are not the intended scope of the overall chain view. No Inspector graph UI is implemented in IM-19E.
+Later Inspector visualization should cover the **entire CR/IM Clean-Runtime rebuild graph** with sequential steps, branches, ownership boundaries and frozen gates. Individual gameplay traces such as the IM-19D Resident→Home count trace are only subordinate evidence and are not the intended scope of the overall chain view. No Inspector graph UI is implemented in IM-19F.
 
 ## 5. IM-19 exclusions
 
