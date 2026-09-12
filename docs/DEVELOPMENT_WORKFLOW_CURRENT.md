@@ -22,9 +22,10 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19D – Authoritative Population Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19E – Gold Economy Admission / Flow Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19F – Operational Economy → Gold Settlement: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
+- **IM-19F – Operational Economy → Gold Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-19G – Player Population / Housing / Gold Projection: IMPLEMENTED / NOT FROZEN**
 
-IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is frozen at `8284c48b3e6b8c75709a58951acacbc59dd81184`. IM-19F is implemented on top of frozen IM-19E and is not yet frozen.
+IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is frozen at `8284c48b3e6b8c75709a58951acacbc59dd81184`, and IM-19F is frozen at `90d1b093fe1b99b048ea68529b9b0af731b11456`. IM-19G is implemented on top of frozen IM-19F and is not yet frozen.
 
 ## 2. Frozen predecessor chain
 
@@ -59,6 +60,9 @@ Frozen IM-19D marker:
 Frozen IM-19E marker:
 - `frozen/im-19e-gold-economy-admission-flow-integration` @ `8284c48b3e6b8c75709a58951acacbc59dd81184`
 
+Frozen IM-19F marker:
+- `frozen/im-19f-operational-economy-gold-settlement` @ `90d1b093fe1b99b048ea68529b9b0af731b11456`
+
 ## 3. Binding ownership boundary after IM-18
 
 - Existing Building Domain/store remains sole owner of stable Building identity, lifecycle and Building-store mutation.
@@ -83,22 +87,6 @@ Frozen IM-19E marker:
 **Frozen Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`.
 
 **Frozen marker:** `frozen/im-18-operational-building-workforce-production-integration`.
-
-### IM-19F – Operational Economy → Gold Settlement
-
-**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
-
-**Definition baseline:** frozen IM-19E @ `8284c48b3e6b8c75709a58951acacbc59dd81184`.
-
-IM-19F consumes only a frozen-IM-19E `POPULATION_INCOME` admission and applies its existing `derived-gold-income` exactly once to the existing non-physical `GoldEconomyOwner`. The settlement validates that the admission's `stateBefore` is still the current Gold state before applying the admitted income through the existing owner mutation authority.
-
-Settlement identity is explicit. `settleOnce(..., settledIds)` rejects a duplicate settlement ID before a second Gold mutation. The result exposes immutable `stateBefore` and `stateAfter`; Gold remains non-physical.
-
-The active baseline Runtime now follows `IM-19D authoritative Population → IM-19E Admission → IM-19F Settlement` for visible Gold. The older CR-30C direct-settlement shortcut is no longer the active Gold path.
-
-No tax, trade, wages, physical Resource Gold, BuildingStock Gold, new Gold owner, IM-19G projection or Inspector graph UI is introduced.
-
-Regression/device evidence on implementation head `dc89ab2f0a681292299d8c99f7613d81b55443cd`: CI `34690758162` SUCCESS and Pages `34690757726` SUCCESS. Real Safari device evidence confirms `READY`, exact `IM-19F-OPERATIONAL-ECONOMY-GOLD-SETTLEMENT-TESTBUILD-1`, the IM-19F title, visible Population `3`, visible Gold `3`, lower `IM-19F · TESTBUILD 1`, and `IM-17 WHOLE BLOCK – PASS`. Source verification confirms visible Gold is read from `currentGoldSettlement().stateAfter.balance`, the baseline uses `OperationalEconomyGoldSettlement.settleOnce(...)`, and the older direct `goldEconomy.settle(...)` shortcut is absent from the active Runtime path. A final documentation-only exact-head CI + Pages verification is required before the IM-19F frozen marker is created.
 
 ### Whole-Block objective
 
@@ -244,6 +232,33 @@ No taxes, trade, wages, physical Resources, BuildingStock Gold, transport or Ins
 
 Regression/device evidence on implementation head `9319c87192532bc2dae92015b7dabfa190d48e19`: CI `34689680807` SUCCESS and Pages `34689680511` SUCCESS. Real Safari device evidence confirms `READY`, exact `IM-19E-GOLD-ECONOMY-ADMISSION-FLOW-INTEGRATION-TESTBUILD-1`, the IM-19E title, and `IM-17 WHOLE BLOCK – PASS`. The earlier transient `IM-16G — FAIL · buildIdentity=false` view is not the current deployment evidence; the refreshed device view shows the frozen predecessor regression PASS. A final documentation-only exact-head CI + Pages verification is required before the IM-19E frozen marker is created.
 
+### IM-19F – Operational Economy → Gold Settlement
+
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen head:** `90d1b093fe1b99b048ea68529b9b0af731b11456`  
+**Frozen marker:** `frozen/im-19f-operational-economy-gold-settlement`
+
+**Definition baseline:** frozen IM-19E @ `8284c48b3e6b8c75709a58951acacbc59dd81184`.
+
+IM-19F consumes only a frozen-IM-19E `POPULATION_INCOME` admission and applies its existing `derived-gold-income` exactly once to the existing non-physical `GoldEconomyOwner`. It rejects stale admissions and duplicate settlement IDs before a second Gold mutation and exposes immutable `stateBefore` / `stateAfter`.
+
+The active visible Gold path is `IM-19D Population → IM-19E Admission → IM-19F Settlement`; the older direct CR-30C settlement shortcut is not the active Runtime path.
+
+Final evidence: real Safari device PASS, CI `34691298234` SUCCESS and Pages `34691298046` SUCCESS on exact frozen head `90d1b093fe1b99b048ea68529b9b0af731b11456`. Frozen marker verification is identical / 0 ahead / 0 behind.
+
+### IM-19G – Player Population / Housing / Gold Projection
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Definition baseline:** frozen IM-19F @ `90d1b093fe1b99b048ea68529b9b0af731b11456`.
+
+IM-19G is a read-only Player projection over frozen authoritative Population, Housing and Gold truth. Population comes from IM-19D, Housing capacity/occupancy from the frozen IM-19B/IM-19C chain, and Gold from IM-19F `stateAfter` cross-checked against the current `GoldEconomyOwner` snapshot.
+
+The projection aggregates residential Building count, capacity, occupancy and available slots, requires projected Population to equal authoritative Housing occupancy, rejects stale Gold state, and renders only Player-facing state such as `Siedlung · Bevölkerung 3 · Wohnen 3/3 · Gold 3`.
+
+IM-19G owns no Population, Resident, Housing, Home-assignment, Gold, Settlement or other Economy mutation authority. No further Economy capability and no Inspector system graph is introduced.
+
 ### Whole-Block objective
 
 IM-19 answers:
@@ -277,7 +292,7 @@ IM-19 answers:
 
 The intended later Inspector chain visualization is the **complete Clean-Runtime rebuild**, not merely an individual Resident/Population trace. It should be able to represent the CR/IM capability graph from the clean foundation through the current integration blocks, including sequential steps, branches, ownership boundaries, frozen baselines/gates and relevant runtime evidence. Local traces such as IM-19D `personId → homeBuildingId → COUNTED` are only optional evidence nodes inside that broader system graph.
 
-No such Inspector graph UI is implemented or authorized by IM-19F.
+No such Inspector graph UI is implemented or authorized by IM-19G.
 
 ### IM-19 explicit non-scope
 
@@ -299,9 +314,11 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19F = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-19F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19f-operational-economy-gold-settlement` on that exact SHA. IM-19G is not authorized before that marker exists.
+**IM-19G = IMPLEMENTED / NOT FROZEN.**
+
+The next permissible step is exclusively IM-19G Completion / Regression / Device / Freeze Gate. No successor beyond IM-19G is authorized by this implementation step.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -309,4 +326,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19F Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER on `dc89ab2f0a681292299d8c99f7613d81b55443cd`; exact-finalization-head CI/Pages and frozen marker pending.
+**Updated:** 2026-09-12 — IM-19F synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `90d1b093fe1b99b048ea68529b9b0af731b11456`; IM-19G Player Population / Housing / Gold Projection implemented against frozen IM-19F and remains NOT FROZEN.
