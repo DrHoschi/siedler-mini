@@ -156,7 +156,10 @@ export function runIM19CSelfTest() {
       && result.createdAssignments[1].personId === person2.personId
       && result.createdAssignments[1].homeBuildingId === building2,
     existingHomePreservedWithoutReassignment:
-      result.assignments.includes(existingForPerson3)
+      result.assignments.some((value) =>
+        value.personId === person3.personId
+        && value.homeBuildingId === building1
+      )
       && result.createdAssignments.every((value) => value.personId !== person3.personId),
     capacityRespectedAfterAssignment:
       result.housingStates.length === 2
