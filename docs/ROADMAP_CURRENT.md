@@ -298,6 +298,38 @@ No V2 validation, V2 restore, browser storage or Continue lifecycle is introduce
 
 Freeze evidence: implementation CI `34702294625` SUCCESS on `d04acc61f7bfca07b23c912f16fad1edf40038a4`; finalization CI `34702517357` SUCCESS and Pages `34702517124` SUCCESS on `e9b1df016ecf0ce64510e7f8dcafae1bbcb35993`; marker `frozen/im-20b-post-im13-authoritative-snapshot-integration` created and verified identical at freeze time.
 
+### IM-20B – Build Identity Reconciliation / Correction
+
+**Status:** PASS / 0 BLOCKER / FROZEN STATE CORRECTED
+
+A post-freeze verification found stale predecessor identity surfaces even though the IM-20B SaveGame implementation itself was correct:
+
+- `RuntimeConfig.build` still identified IM-19G;
+- runtime verification text/title/surface note still identified IM-19G;
+- the static `index.html` fallback still identified IM-16G;
+- Safari could therefore load/display predecessor identity through stale cache keys.
+
+Correction scope is intentionally limited to:
+- `src/runtime/config.js`
+- `src/main.js`
+- `index.html`
+
+Corrected visible build identity:
+`IM-20B-POST-IM13-AUTHORITATIVE-SNAPSHOT-INTEGRATION-TESTBUILD-1`
+
+Required cache invalidation was applied to the changed `main.js` entry and `RuntimeConfig` import only. Functional predecessor-specific data attributes and cache keys for unchanged modules remain untouched.
+
+Corrected code head:
+`aeebbe487429eb9889412ec36179c44a51268a1a`
+
+Verification:
+- CI `34703598385` — SUCCESS
+- Pages `34703597830` — SUCCESS
+- diff against the prior frozen IM-20B head contains only the three identity files above
+- no SaveGame contract, capture semantics, validation, restore, browser storage, Continue lifecycle, gameplay authority or layout behavior changed.
+
+The IM-20B frozen marker remains the authoritative ref and is fast-forwarded only after this final steering synchronization also passes exact-head verification.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -352,4 +384,4 @@ The next permissible development step is exclusively IM-20C – Deterministic Va
 
 ---
 
-**Updated:** 2026-09-12 — IM-20B COMPLETE / FROZEN / PASS / 0 BLOCKER. Frozen marker: `frozen/im-20b-post-im13-authoritative-snapshot-integration`. IM-20C remains DEFINED / NOT IMPLEMENTED and requires separate authorization.
+**Updated:** 2026-09-12 — IM-20B remains COMPLETE / FROZEN / PASS / 0 BLOCKER after Build Identity Reconciliation / Correction. Corrected identity head `aeebbe487429eb9889412ec36179c44a51268a1a`; CI `34703598385` and Pages `34703597830` SUCCESS. IM-20C remains DEFINED / NOT IMPLEMENTED and requires separate authorization.
