@@ -26,7 +26,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20B – Post-IM13 Authoritative Snapshot Integration: SNAPSHOT COMPLETENESS CORRECTION IMPLEMENTED / REGRESSION GATE PENDING**
+- **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20C–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
@@ -457,7 +457,7 @@ The IM-20B frozen marker remains the authoritative ref and is fast-forwarded onl
 
 ### IM-20B – Snapshot Completeness Reconciliation / Correction
 
-**Status:** IMPLEMENTED / REGRESSION GATE PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
 The IM-20C restore preflight found that the previously frozen IM-20B V2 snapshot did not yet contain every authoritative definition source required to reconstruct the post-IM13 runtime without guessing.
 
@@ -509,7 +509,7 @@ Hard boundary remains:
 - browser Save/Reload/Continue = not implemented;
 - IM-20C+ = not implemented.
 
-The next permissible action is exclusively **IM-20B Snapshot Completeness Completion / Regression / Freeze Gate**. IM-20C remains blocked until the corrected IM-20B marker is fast-forwarded to a PASS / 0 BLOCKER head.
+Correction evidence: CI `34705200714` SUCCESS and Pages `34705200407` SUCCESS on corrected head `6480d00941b688437976b5b5c88899fef79faa15`; frozen marker `frozen/im-20b-post-im13-authoritative-snapshot-integration` was fast-forwarded to that head and verified identical / 0 ahead / 0 behind.
 
 ### Remaining defined substeps
 
@@ -558,11 +558,11 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20B = SNAPSHOT COMPLETENESS CORRECTION IMPLEMENTED / REGRESSION GATE PENDING.**
+**IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = DEFINED / NOT IMPLEMENTED / BLOCKED UNTIL IM-20B RE-FREEZE.**
+**IM-20C = DEFINED / NOT IMPLEMENTED.**
 
-The next permissible action is exclusively IM-20B Snapshot Completeness Completion / Regression / Freeze Gate. IM-20C and IM-20D+ remain unauthorized until corrected IM-20B is frozen.
+The next permissible development step is exclusively IM-20C – Deterministic Validation & Restore Integration, and only when separately authorized. IM-20D+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
