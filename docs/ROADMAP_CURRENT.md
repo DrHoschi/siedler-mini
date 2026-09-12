@@ -147,7 +147,7 @@ Projects Population read-only from frozen-IM-19C active Resident→Home assignme
 
 The projection includes immutable trace entries `personId → homeBuildingId → COUNTED` as a future read-only diagnostics source for the Inspector. **No Inspector UI/visualization is implemented in IM-19D.** No Person creation, Housing mutation, Home assignment mutation, Workforce mutation or Gold mutation is added.
 
-Freeze-gate correction: the first IM-19D device evidence showed the correct build identity but the visible Population still came from the older CR-30B `housingPopulation.population` runtime path. This was a BLOCKER. The current branch now creates the real frozen-IM-19A→B→C residential assignment chain in the baseline composition, exposes `CleanRuntime.populationProjection`, and makes HUD + read-only Inspector consume that IM-19D projection. Existing Gold continues to use its prior owner/path; IM-19E is not pre-implemented. A fresh iPhone/Safari device test is required on the corrected deployment.
+Freeze-gate correction: the first IM-19D device evidence showed the correct build identity but the visible Population still came from the older CR-30B `housingPopulation.population` runtime path. This was a BLOCKER. The current branch now creates the real frozen-IM-19A→B→C residential assignment chain in the baseline composition, exposes `CleanRuntime.populationProjection`, and makes HUD + read-only Inspector consume that IM-19D projection. Existing Gold continues to use its prior owner/path; IM-19E is not pre-implemented. A fresh iPhone/Safari device test is required on the corrected deployment and is valid only when the visible build identity is `IM-19D-AUTHORITATIVE-POPULATION-PROJECTION-TESTBUILD-2`.
 
 ### Whole-Block question
 
