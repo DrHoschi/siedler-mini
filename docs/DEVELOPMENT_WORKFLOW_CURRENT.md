@@ -198,7 +198,7 @@ The projection also exposes immutable `population-count-trace` entries (`personI
 
 No Person creation/mutation, Housing mutation, Home assignment mutation, Workforce mutation or Gold mutation is part of IM-19D.
 
-Freeze-gate correction: the first IM-19D browser/device evidence had the correct TESTBUILD identity, but source inspection proved that HUD and Inspector still read Population from legacy CR-30B `housingPopulation.population`. That blocked freeze. The corrected runtime composition now executes the real frozen-IM-19A→B→C Housing/Resident assignment chain, exposes `CleanRuntime.populationProjection`, and routes HUD plus read-only Inspector Population through IM-19D. Gold remains on its existing pre-IM-19E owner/path. The previous screenshot is therefore historical evidence only; a fresh iPhone/Safari re-test on the corrected deployment is mandatory.
+Freeze-gate correction: the first IM-19D browser/device evidence had the correct TESTBUILD identity, but source inspection proved that HUD and Inspector still read Population from legacy CR-30B `housingPopulation.population`. That blocked freeze. The corrected runtime composition now executes the real frozen-IM-19A→B→C Housing/Resident assignment chain, exposes `CleanRuntime.populationProjection`, and routes HUD plus read-only Inspector Population through IM-19D. Gold remains on its existing pre-IM-19E owner/path. The previous screenshot is therefore historical evidence only; a fresh iPhone/Safari re-test on the corrected deployment is mandatory and must visibly show `IM-19D-AUTHORITATIVE-POPULATION-PROJECTION-TESTBUILD-2`.
 
 ### Whole-Block objective
 
