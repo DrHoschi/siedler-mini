@@ -2,8 +2,8 @@ function requireRuntime(runtime) {
   if (!runtime?.config || !runtime?.runtime || !runtime?.map || !runtime?.domains) {
     throw new TypeError('IM-15A authoritative runtime boundary required');
   }
-  if (!runtime?.housingPopulation?.population || !runtime?.goldEconomy) {
-    throw new TypeError('IM-15A population and gold sources required');
+  if (!runtime?.populationProjection || !runtime?.goldEconomy) {
+    throw new TypeError('IM-15A/IM-19D population projection and gold sources required');
   }
   return runtime;
 }
@@ -36,7 +36,7 @@ export function projectInspectorRuntimeObservation({
   selectionController = window.IM14DWorldSelectionContext,
 } = {}) {
   const source = requireRuntime(runtime);
-  const population = source.housingPopulation.population;
+  const population = source.populationProjection;
   const gold = source.goldEconomy.snapshot();
   const mapStructure = source.map;
   const worldMap = mapStructure.map();
