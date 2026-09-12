@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19E IMPLEMENTED / NOT FROZEN  
+**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19E COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
@@ -157,13 +157,15 @@ Freeze-gate correction: the first IM-19D device evidence showed the correct buil
 
 ### IM-19E – Gold Economy Admission / Flow Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19D @ `0847d27b60f13a99cb76d220b56b58107e832950`.
 
 Admits only `POPULATION_INCOME` from frozen-IM-19D authoritative Population into the existing non-physical `GoldEconomyOwner` derivation path. The derived amount is read-only at this stage: admission must leave the existing Gold balance unchanged.
 
 No `applyIncome`, Gold settlement, settlement ID or balance-after state is part of IM-19E. Those remain IM-19F scope. Taxes, trade, wages and physical/BuildingStock Gold remain excluded.
+
+Regression/device evidence on implementation head `9319c87192532bc2dae92015b7dabfa190d48e19`: CI `34689680807` SUCCESS and Pages `34689680511` SUCCESS. Real Safari device evidence confirms `READY`, exact IM-19E TESTBUILD 1 identity, correct title and frozen predecessor regression PASS. Final documentation-only exact-head CI + Pages verification is required before creating the frozen IM-19E marker.
 
 ### Whole-Block question
 
@@ -214,10 +216,10 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 **IM-19D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19E = IMPLEMENTED / NOT FROZEN.**
+**IM-19E = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-19E Completion / Regression / Device / Freeze Gate. IM-19F remains blocked until IM-19E is frozen.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19e-gold-economy-admission-flow-integration` on that exact SHA. IM-19F remains blocked until that marker exists.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19D frozen at `0847d27b60f13a99cb76d220b56b58107e832950`; IM-19E implemented against frozen IM-19D and remains NOT FROZEN; future Inspector chain clarified as the whole Clean-Runtime CR/IM rebuild graph.
+**Updated:** 2026-09-12 — IM-19E Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER on `9319c87192532bc2dae92015b7dabfa190d48e19`; final exact-head CI/Pages and frozen marker pending; future Inspector chain remains the whole Clean-Runtime CR/IM rebuild graph.
