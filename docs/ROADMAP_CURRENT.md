@@ -270,7 +270,7 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 ### IM-20A – Persistent State Inventory & SaveGame Schema Contract
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING
 
 IM-20A inventories the frozen-IM19 runtime state and classifies every covered state as `PERSIST` or `REBUILD_DERIVE`. It defines target SaveGame schema V2 as **DEFINED_NOT_ACTIVE** while leaving the active IM-13 snapshot/validation schema on V1.
 
@@ -282,7 +282,7 @@ No snapshot capture, restore, browser storage or Continue lifecycle is changed b
 
 ### Remaining sequence
 
-1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — IMPLEMENTED / NOT FROZEN**
+1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — DEFINED / NOT IMPLEMENTED**
 3. **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
@@ -298,13 +298,15 @@ Responsive Game UI remains a later dedicated scope with separate iPhone, iPad an
 
 ### Current IM-20 gate
 
-The next permissible step is exclusively IM-20A Completion / Regression / Freeze Gate. IM-20B remains blocked until IM-20A is frozen.
+Implementation head `e1cc7e94f84d2ba9bf666aece318366c7a90f00f` passed CI `34700519373` with the full predecessor regression and IM-20A self-test. Target schema V2 remains definition-only; active SaveGame snapshot/validation remain V1 and no capture/restore/browser-storage implementation is present.
+
+The next permissible action is exclusively exact-finalization-head CI verification and, on SUCCESS, creation of `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`. IM-20B remains blocked until that marker exists.
 
 ## 7. Current gate
 
 **IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19 = WHOLE-BLOCK RECONCILIATION PASS / 0 BLOCKER / FREEZE AUTHORIZATION PENDING.**
+**IM-19 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 **IM-19A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -320,8 +322,12 @@ The next permissible step is exclusively IM-20A Completion / Regression / Freeze
 
 **IM-19G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible step is exclusively the separate **IM-19 Whole-Block Freeze Authorization / Freeze Decision**. No Whole-Block frozen marker or successor is authorized before that explicit decision. No further Economy expansion or Inspector system graph is authorized.
+**IM-20 = IN PROGRESS.**
+
+**IM-20A = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
+
+The next permissible action is exclusively exact-finalization-head CI verification and the IM-20A frozen marker on SUCCESS. IM-20B remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19A–G COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 Whole-Block Completion / Reconciliation PASS / 0 BLOCKER; separate Whole-Block Freeze Authorization pending; no successor automatically authorized.
+**Updated:** 2026-09-12 — frozen IM-19 synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `f9c9202014deded496d96adfb96a430a230f06f2`; IM-20A Completion / Regression / Freeze Gate PASS on `e1cc7e94f84d2ba9bf666aece318366c7a90f00f`; exact-finalization-head CI and marker pending.
