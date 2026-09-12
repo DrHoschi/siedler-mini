@@ -395,7 +395,7 @@ Implementation head `e1cc7e94f84d2ba9bf666aece318366c7a90f00f` passed the comple
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-Finalization CI `34700971956` succeeded on `ac82d35b1c886b850efa6818322b124f7279c7ec`. This final steering-only synchronization is re-verified before the marker is created on the final consistent head.
+Freeze evidence includes implementation CI `34700519373`, finalization CI `34700971956`, exact-head regression PASS and the frozen marker `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`. The marker is the authoritative frozen ref for IM-20A.
 
 ## 7. Current gate
 
@@ -421,7 +421,9 @@ Finalization CI `34700971956` succeeded on `ac82d35b1c886b850efa6818322b124f7279
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively final exact-head CI verification and creation of the IM-20A frozen marker. IM-20B remains unauthorized until that marker exists.
+**IM-20B = DEFINED / NOT IMPLEMENTED.**
+
+The next permissible development step after this completed freeze is exclusively IM-20B – Post-IM13 Authoritative Snapshot Integration, and only when separately authorized. No IM-20C+ capability is authorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -429,4 +431,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-20A COMPLETE / FROZEN / PASS / 0 BLOCKER after implementation CI `34700519373` and finalization CI `34700971956`; final steering-only exact-head CI and frozen marker pending.
+**Updated:** 2026-09-12 — IM-20A COMPLETE / FROZEN / PASS / 0 BLOCKER. Frozen marker: `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`. IM-20B remains DEFINED / NOT IMPLEMENTED and requires a separate authorization.
