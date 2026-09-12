@@ -1,6 +1,6 @@
 function requireRuntime(runtime) {
-  if (!runtime?.housingPopulation?.population || !runtime?.goldEconomy) {
-    throw new TypeError('authoritative population and gold runtime sources required');
+  if (!runtime?.populationProjection || !runtime?.goldEconomy) {
+    throw new TypeError('IM-19D population projection and gold runtime sources required');
   }
   return runtime;
 }
@@ -15,11 +15,11 @@ function freezeViewModel({ populationCount, goldBalance }) {
 
 export function projectRuntimeHud(runtime = window.CleanRuntime) {
   const source = requireRuntime(runtime);
-  const population = source.housingPopulation.population;
+  const population = source.populationProjection;
   const goldState = source.goldEconomy.snapshot();
 
-  if (population?.kind !== 'derived-population' || !Number.isInteger(population.count) || population.count < 0) {
-    throw new TypeError('derived population source required');
+  if (population?.kind !== 'authoritative-population-projection' || !Number.isInteger(population.count) || population.count < 0) {
+    throw new TypeError('IM-19D authoritative population projection required');
   }
   if (goldState?.kind !== 'gold-economy-state' || !Number.isSafeInteger(goldState.balance) || goldState.balance < 0) {
     throw new TypeError('gold economy state source required');
