@@ -18,7 +18,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-18 – Operational Building / Workforce / Production Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19 – Population / Housing / Gold Economy Integration: IN PROGRESS**
 - **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19B – Housing Capacity / Occupancy Integration: IMPLEMENTED / NOT FROZEN**
+- **IM-19B – Housing Capacity / Occupancy Integration: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
 
 IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`. IM-19B is implemented on top of that frozen baseline and is not yet frozen.
 
@@ -70,11 +70,15 @@ Frozen IM-19A marker:
 
 ### IM-19B – Housing Capacity / Occupancy Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19A @ `b528081409407ad531a450e5deb832ee7a0031e7`.
 
 IM-19B consumes only a frozen-IM-19A admitted residential Building plus existing `resident-home-assignment` state. It reuses `HousingCapacityOccupancy` as the sole authority for `capacity`, `occupancy`, `availableSlots` and the capacity invariant. IM-19B derives only `AVAILABLE` or `FULL`; it creates or mutates no resident assignment and introduces no Person, Population or Gold authority.
+
+Regression evidence: CI `34681581301` SUCCESS on `3c65b27d2e69060187cb4036f34750593cb2b1f7`; Pages `34681581184` SUCCESS on `7f58534bb6fbaecded558d7ecd16d22ef6bdacd9`. Real iPad/Safari and iPhone/Safari screenshots confirm the exact `IM-19B-HOUSING-CAPACITY-OCCUPANCY-INTEGRATION-TESTBUILD-1` identity and IM-19B title. The narrow iPhone viewport overlap is NON-BLOCKING for IM-19B because the complete IM-19B diff contains no CSS/layout change.
+
+This final steering commit must itself receive exact-head CI + Pages SUCCESS before `frozen/im-19b-housing-capacity-occupancy-integration` is created.
 
 ### Whole-Block objective
 
@@ -201,9 +205,9 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19B = IMPLEMENTED / NOT FROZEN.**
+**IM-19B = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-19B Completion / Regression / Device / Freeze Gate. IM-19C is not authorized before IM-19B passes that gate and receives its frozen marker.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19b-housing-capacity-occupancy-integration` on that exact SHA. IM-19C is not authorized before that marker exists.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -211,4 +215,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19A synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `b528081409407ad531a450e5deb832ee7a0031e7`; IM-19B implemented against frozen IM-19A and remains NOT FROZEN.
+**Updated:** 2026-09-12 — IM-19B Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER with real iPad/iPhone evidence; exact-finalization-head CI/Pages and frozen IM-19B marker pending.
