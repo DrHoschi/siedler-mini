@@ -76,17 +76,6 @@ Frozen IM-19C marker:
 
 **Frozen marker:** `frozen/im-18-operational-building-workforce-production-integration`.
 
-### IM-19B – Housing Capacity / Occupancy Integration
-
-**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
-
-**Frozen head:** `3ba5a17761ac7f8bce3f01a49cbaef515728c355`  
-**Frozen marker:** `frozen/im-19b-housing-capacity-occupancy-integration`
-
-IM-19B consumes only a frozen-IM-19A admitted residential Building plus existing `resident-home-assignment` state. It reuses `HousingCapacityOccupancy` as the sole authority for `capacity`, `occupancy`, `availableSlots` and the capacity invariant. IM-19B derives only `AVAILABLE` or `FULL`; it creates or mutates no resident assignment and introduces no Person, Population or Gold authority.
-
-Final evidence: CI `34682616074` SUCCESS and Pages `34682615729` SUCCESS on exact frozen head `3ba5a17761ac7f8bce3f01a49cbaef515728c355`. The real device evidence was **iPhone/Safari only**. Earlier steering wording that additionally claimed iPad evidence was incorrect and is corrected on this active Whole-Block branch.
-
 ### Whole-Block objective
 
 IM-18 answers:
@@ -170,6 +159,17 @@ IM-19A consumes frozen IM-18A operational admission, existing Building identity 
 Regression evidence on implementation head `c46ef9a7739fee8a82397f4c6b605c1a7a94dc94`: CI `34640779068` SUCCESS and Pages `34640777324` SUCCESS. Real iPad/Safari evidence confirmed the exact IM-19A TESTBUILD identity, correct title and the visible admission-only/non-scope boundary.
 
 Exact-head CI and Pages succeeded on `b528081409407ad531a450e5deb832ee7a0031e7`; the frozen IM-19A marker was created and verified identical to the Whole-Block branch.
+
+### IM-19B – Housing Capacity / Occupancy Integration
+
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen head:** `3ba5a17761ac7f8bce3f01a49cbaef515728c355`  
+**Frozen marker:** `frozen/im-19b-housing-capacity-occupancy-integration`
+
+IM-19B consumes only a frozen-IM-19A admitted residential Building plus existing `resident-home-assignment` state. It reuses `HousingCapacityOccupancy` as the sole authority for `capacity`, `occupancy`, `availableSlots` and the capacity invariant. IM-19B derives only `AVAILABLE` or `FULL`; it creates or mutates no resident assignment and introduces no Person, Population or Gold authority.
+
+Final evidence: CI `34682616074` SUCCESS and Pages `34682615729` SUCCESS on exact frozen head `3ba5a17761ac7f8bce3f01a49cbaef515728c355`. The real device evidence was **iPhone/Safari only**. Earlier steering wording that additionally claimed iPad evidence was incorrect and is corrected on this active Whole-Block branch.
 
 ### IM-19C – Resident → Housing Assignment Integration
 
