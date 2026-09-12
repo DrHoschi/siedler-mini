@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19B IMPLEMENTED / NOT FROZEN  
+**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19B COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING  
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
@@ -107,11 +107,15 @@ Implementation head `c46ef9a7739fee8a82397f4c6b605c1a7a94dc94` passed its first 
 
 ### IM-19B – Housing Capacity / Occupancy Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19A @ `b528081409407ad531a450e5deb832ee7a0031e7`.
 
 Connects an admitted residential Building to the existing `HousingCapacityOccupancy` authority and derives existing occupancy, available slots and `AVAILABLE/FULL` state. Existing `resident-home-assignment` contracts are input only; IM-19B creates no assignment and no Population or Gold truth.
+
+Regression evidence: CI `34681581301` SUCCESS on the implementation/documentation head `3c65b27d2e69060187cb4036f34750593cb2b1f7`; Pages `34681581184` SUCCESS on `7f58534bb6fbaecded558d7ecd16d22ef6bdacd9`. Real iPad/Safari and iPhone/Safari evidence confirms the exact IM-19B TESTBUILD identity and title. The narrow iPhone layout/overlap is not an IM-19B regression because no CSS/layout file changed in the IM-19B diff.
+
+A final exact-head CI + Pages rerun is required after this gate documentation finalization. Only then may `frozen/im-19b-housing-capacity-occupancy-integration` be created on that exact SHA.
 
 ### Whole-Block question
 
@@ -152,10 +156,10 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 **IM-19A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19B = IMPLEMENTED / NOT FROZEN.**
+**IM-19B = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-Next permissible step: IM-19B Completion / Regression / Device / Freeze Gate. IM-19C remains blocked until IM-19B is frozen.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19b-housing-capacity-occupancy-integration` on that same SHA. IM-19C remains blocked until the marker exists.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19A frozen and synchronized; IM-19B implemented against frozen IM-19A and remains NOT FROZEN.
+**Updated:** 2026-09-12 — IM-19B regression and real iPad/iPhone device gate PASS / 0 BLOCKER; exact-finalization-head CI/Pages and frozen IM-19B marker pending.
