@@ -26,7 +26,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-20B – Post-IM13 Authoritative Snapshot Integration: SNAPSHOT COMPLETENESS CORRECTION IMPLEMENTED / REGRESSION GATE PENDING**
 - **IM-20C–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
@@ -455,6 +455,62 @@ Verification:
 
 The IM-20B frozen marker remains the authoritative ref and is fast-forwarded only after this final steering synchronization also passes exact-head verification.
 
+### IM-20B – Snapshot Completeness Reconciliation / Correction
+
+**Status:** IMPLEMENTED / REGRESSION GATE PENDING
+
+The IM-20C restore preflight found that the previously frozen IM-20B V2 snapshot did not yet contain every authoritative definition source required to reconstruct the post-IM13 runtime without guessing.
+
+Completeness reconciliation result:
+
+- **Resource Type Definitions — PERSIST REQUIRED**  
+  `ResourceState` owns a separate authoritative definition store outside `CoreDomainStores`. V2 now captures definition state plus the real `resource-type` StableIdAllocator continuation through read-only `definitionSnapshot()` / `definitionIdSnapshot()`.
+
+- **Housing Capabilities — PERSIST REQUIRED**  
+  Building housing capacity is a separate `building-housing` capability input and is not stored in the Building DomainStore. V2 now captures `buildingId + capacity`.
+
+- **Person Workforce Profiles — PERSIST REQUIRED**  
+  Specialization/capabilities are required to rebuild workforce eligibility but are not stored in the Unit DomainStore. V2 now captures normalized Person workforce profiles.
+
+- **Building Workforce Requirements — PERSIST REQUIRED**  
+  Count/specialization/capability requirements are separate operational inputs and cannot be reconstructed from Workforce assignment state alone. V2 now captures the definition form without persisting derived OperationalAdmission.
+
+- **Production Recipes — PERSIST REQUIRED**  
+  Inputs/outputs are separate production definitions and are not stored in BuildingStock or the Building DomainStore. V2 now captures normalized production recipes.
+
+Not duplicated:
+- `EconomicConstructionRequirementContract` remains **REBUILD / DERIVE** because its authoritative quantity/reference truth already exists in persisted `ResourceDemand`.
+- Building identity/lifecycle remain in `domains.buildings`.
+- Person identity and Carrier data remain in `domains.units`.
+- Population/Housing occupancy, workforce eligibility, production readiness and Player/Inspector projections remain derived and are not persisted as second truth.
+
+Corrected V2 definition source boundary:
+- `authoritative.definitions.resourceTypes`
+- `authoritative.definitions.housingCapabilities`
+- `authoritative.definitions.workforceProfiles`
+- `authoritative.definitions.workforceRequirements`
+- `authoritative.definitions.productionRecipes`
+
+The frozen IM-20A inventory contract is not rewritten retroactively. IM-20B carries this explicit completeness amendment discovered by restore preflight.
+
+Build identity for the corrected snapshot:
+`IM-20B-POST-IM13-AUTHORITATIVE-SNAPSHOT-INTEGRATION-TESTBUILD-2`
+
+Real-device evidence before this correction:
+- the supplied screenshots both came from **iPhone / Safari**;
+- one screenshot used reduced page zoom to make the whole development UI readable;
+- they verified TESTBUILD 1 build identity only and are **not iPad evidence**.
+
+Hard boundary remains:
+- V2 capture = implemented and completeness-corrected;
+- V2 validation = not implemented;
+- V2 restore = not implemented;
+- Derived-State Rebinding = not implemented;
+- browser Save/Reload/Continue = not implemented;
+- IM-20C+ = not implemented.
+
+The next permissible action is exclusively **IM-20B Snapshot Completeness Completion / Regression / Freeze Gate**. IM-20C remains blocked until the corrected IM-20B marker is fast-forwarded to a PASS / 0 BLOCKER head.
+
 ### Remaining defined substeps
 
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -502,11 +558,11 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+**IM-20B = SNAPSHOT COMPLETENESS CORRECTION IMPLEMENTED / REGRESSION GATE PENDING.**
 
-**IM-20C = DEFINED / NOT IMPLEMENTED.**
+**IM-20C = DEFINED / NOT IMPLEMENTED / BLOCKED UNTIL IM-20B RE-FREEZE.**
 
-The next permissible development step after this completed freeze is exclusively IM-20C – Deterministic Validation & Restore Integration, and only when separately authorized. IM-20D+ remains unauthorized.
+The next permissible action is exclusively IM-20B Snapshot Completeness Completion / Regression / Freeze Gate. IM-20C and IM-20D+ remain unauthorized until corrected IM-20B is frozen.
 
 ## 8. Permanent visible build identity synchronization rule
 
