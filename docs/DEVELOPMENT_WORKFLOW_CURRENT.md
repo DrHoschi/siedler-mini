@@ -21,7 +21,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19D – Authoritative Population Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19E – Gold Economy Admission / Flow Integration: IMPLEMENTED / NOT FROZEN**
+- **IM-19E – Gold Economy Admission / Flow Integration: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
 
 IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is implemented on top of frozen IM-19D and is not yet frozen.
 
@@ -209,7 +209,7 @@ Freeze-gate correction: the first IM-19D browser/device evidence had the correct
 
 ### IM-19E – Gold Economy Admission / Flow Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19D @ `0847d27b60f13a99cb76d220b56b58107e832950`.
 
@@ -218,6 +218,8 @@ IM-19E connects frozen-IM-19D authoritative Population to the existing non-physi
 Admission produces an immutable `gold-economy-admission-flow` containing the source Population, rate and derived amount, while proving that `GoldEconomyOwner.balance` remains unchanged. `applyIncome(...)`, `settle(...)`, settlement IDs and any balance-after state remain IM-19F scope.
 
 No taxes, trade, wages, physical Resources, BuildingStock Gold, transport or Inspector mutation authority is introduced.
+
+Regression/device evidence on implementation head `9319c87192532bc2dae92015b7dabfa190d48e19`: CI `34689680807` SUCCESS and Pages `34689680511` SUCCESS. Real Safari device evidence confirms `READY`, exact `IM-19E-GOLD-ECONOMY-ADMISSION-FLOW-INTEGRATION-TESTBUILD-1`, the IM-19E title, and `IM-17 WHOLE BLOCK – PASS`. The earlier transient `IM-16G — FAIL · buildIdentity=false` view is not the current deployment evidence; the refreshed device view shows the frozen predecessor regression PASS. A final documentation-only exact-head CI + Pages verification is required before the IM-19E frozen marker is created.
 
 ### Whole-Block objective
 
@@ -272,9 +274,9 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19E = IMPLEMENTED / NOT FROZEN.**
+**IM-19E = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-19E Completion / Regression / Device / Freeze Gate. IM-19F is not authorized before IM-19E passes that gate and receives its frozen marker.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19e-gold-economy-admission-flow-integration` on that exact SHA. IM-19F is not authorized before that marker exists.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -282,4 +284,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19D synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `0847d27b60f13a99cb76d220b56b58107e832950`; IM-19E Gold Economy Admission / Flow Integration implemented against frozen IM-19D; NOT FROZEN. Future Inspector note clarified as whole Clean-Runtime CR/IM rebuild graph.
+**Updated:** 2026-09-12 — IM-19E Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER on implementation head `9319c87192532bc2dae92015b7dabfa190d48e19`; exact-finalization-head CI/Pages and frozen marker pending. Future Inspector note remains whole Clean-Runtime CR/IM rebuild graph.
