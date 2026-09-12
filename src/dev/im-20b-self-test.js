@@ -34,8 +34,8 @@ function fixture() {
   const resource = resources.createResource({
     definitionId: definition.id,
     amount: 5,
-    location: { kind: 'owner', refId: sourceBuildingId },
-    ownerId: sourceBuildingId
+    location: null,
+    ownerId: null
   }, { id: 'resource:00000001' });
 
   const claims = new ResourceClaims({ resourceState: resources });
