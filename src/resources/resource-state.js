@@ -50,13 +50,28 @@ function normalizeOwnerId(value) {
   return id;
 }
 
+function requireDefinitionRestoreState(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('resource definition restore state required');
+  if (!Number.isSafeInteger(state.revision) || state.revision < 0) throw new TypeError('invalid resource definition revision');
+  if (!state.items || typeof state.items !== 'object' || Array.isArray(state.items)) throw new TypeError('invalid resource definition items');
+  const next = clone(state);
+  for (const [id, item] of Object.entries(next.items)) {
+    const parsed = parseStableId(id);
+    if (!parsed || parsed.kind !== 'resource-type') throw new TypeError(`invalid resource definition id: ${id}`);
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError(`invalid resource definition item: ${id}`);
+    if (item.id !== id || item.kind !== 'resource-type') throw new Error(`resource definition id/kind mismatch: ${id}`);
+    normalizeTechnicalName(item.technicalName);
+  }
+  return next;
+}
+
 export class ResourceState {
   #world;
   #resources;
   #definitions;
   #definitionIds;
 
-  constructor({ world, resourceStore }) {
+  constructor({ world, resourceStore, restoreDefinitions = null, definitionAllocator = null }) {
     if (!world || typeof world.get !== 'function' || typeof world.snapshot !== 'function') {
       throw new TypeError('WorldStore-compatible world required');
     }
@@ -65,8 +80,13 @@ export class ResourceState {
     }
     this.#world = world;
     this.#resources = resourceStore;
-    this.#definitions = new Store('resource.definitions', { revision: 0, items: {} });
-    this.#definitionIds = new StableIdAllocator();
+    this.#definitions = new Store(
+      'resource.definitions',
+      restoreDefinitions == null ? { revision: 0, items: {} } : requireDefinitionRestoreState(restoreDefinitions)
+    );
+    this.#definitionIds = definitionAllocator instanceof StableIdAllocator
+      ? definitionAllocator
+      : new StableIdAllocator();
   }
 
   static get states() { return RESOURCE_STATES; }
