@@ -16,7 +16,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-16 – Player Construction & Placement Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-17 – Economic Construction Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-18 – Operational Building / Workforce / Production Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19 – Population / Housing / Gold Economy Integration: WHOLE-BLOCK RECONCILIATION PASS / FREEZE AUTHORIZATION PENDING**
+- **IM-19 – Population / Housing / Gold Economy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -25,10 +25,10 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19F – Operational Economy → Gold Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
-- **IM-20A – Persistent State Inventory & SaveGame Schema Contract: IMPLEMENTED / NOT FROZEN**
+- **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING**
 - **IM-20B–G: DEFINED / NOT IMPLEMENTED**
 
-IM-19 development has completed its defined A–G chain on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block itself is reconciled but not yet frozen.
+IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
 
 ## 2. Frozen predecessor chain
 
@@ -343,7 +343,7 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 ### IM-20A – Persistent State Inventory & SaveGame Schema Contract
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING
 
 IM-20A defines a declarative persistence inventory and a target SaveGame **schemaVersion 2** boundary without activating that schema in the existing IM-13 SaveGame implementation.
 
@@ -389,13 +389,17 @@ Responsive Game UI remains a later dedicated scope with separate iPhone, iPad an
 
 ### IM-20A current gate
 
-The next permissible step is exclusively **IM-20A Completion / Regression / Freeze Gate**. IM-20B is not authorized until IM-20A passes that gate and receives its frozen marker.
+Implementation head `e1cc7e94f84d2ba9bf666aece318366c7a90f00f` passed the complete predecessor regression plus IM-20A self-test in CI `34700519373` with SUCCESS. Source verification confirms target schema V2 remains `DEFINED_NOT_ACTIVE`, active snapshot/validation stay on V1, and no capture/restore/browser-storage implementation was introduced.
+
+**IM-20A = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
+
+The next permissible action is exclusively exact-finalization-head CI verification. If it succeeds, create `frozen/im-20a-persistent-state-inventory-savegame-schema-contract` on that exact SHA. IM-20B remains unauthorized until the marker exists.
 
 ## 7. Current gate
 
 **IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19 = WHOLE-BLOCK RECONCILIATION PASS / 0 BLOCKER / FREEZE AUTHORIZATION PENDING.**
+**IM-19 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 **IM-19A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -411,7 +415,11 @@ The next permissible step is exclusively **IM-20A Completion / Regression / Free
 
 **IM-19G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible step is exclusively the separate **IM-19 Whole-Block Freeze Authorization / Freeze Decision**. No Whole-Block marker may be created before that explicit authorization. No successor, further Economy expansion or Inspector system graph is authorized.
+**IM-20 = IN PROGRESS.**
+
+**IM-20A = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
+
+The next permissible action is exclusively exact-finalization-head CI verification and, on SUCCESS, creation of the IM-20A frozen marker. IM-20B remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -419,4 +427,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19A–G COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 Whole-Block Completion / Reconciliation PASS / 0 BLOCKER; separate Whole-Block Freeze Authorization pending; no successor automatically authorized.
+**Updated:** 2026-09-12 — frozen IM-19 synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `f9c9202014deded496d96adfb96a430a230f06f2`; IM-20A Completion / Regression / Freeze Gate PASS on implementation head `e1cc7e94f84d2ba9bf666aece318366c7a90f00f`; exact-finalization-head CI and marker pending.
