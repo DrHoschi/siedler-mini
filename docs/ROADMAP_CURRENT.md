@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19E COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING  
+**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 IN PROGRESS; IM-19A–E COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19F IMPLEMENTED / NOT FROZEN  
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
@@ -37,6 +37,9 @@ Frozen IM-19C:
 
 Frozen IM-19D:
 - `frozen/im-19d-authoritative-population-projection` @ `0847d27b60f13a99cb76d220b56b58107e832950`
+
+Frozen IM-19E:
+- `frozen/im-19e-gold-economy-admission-flow-integration` @ `8284c48b3e6b8c75709a58951acacbc59dd81184`
 
 ## 2. Binding ownership after IM-18
 
@@ -157,7 +160,10 @@ Freeze-gate correction: the first IM-19D device evidence showed the correct buil
 
 ### IM-19E – Gold Economy Admission / Flow Integration
 
-**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen head:** `8284c48b3e6b8c75709a58951acacbc59dd81184`  
+**Marker:** `frozen/im-19e-gold-economy-admission-flow-integration`
 
 **Definition baseline:** frozen IM-19D @ `0847d27b60f13a99cb76d220b56b58107e832950`.
 
@@ -191,6 +197,18 @@ Regression/device evidence on implementation head `9319c87192532bc2dae92015b7dab
 6. **IM-19F – Operational Economy → Gold Settlement**  
    Apply defined economic events to authoritative Gold state without expanding into taxes, wages or trade.
 
+### IM-19F – Operational Economy → Gold Settlement
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Definition baseline:** frozen IM-19E @ `8284c48b3e6b8c75709a58951acacbc59dd81184`.
+
+Consumes an admitted `POPULATION_INCOME` flow and mutates the existing non-physical `GoldEconomyOwner` exactly once. Settlement checks the admitted Gold `stateBefore` against the current owner state, uses the existing `applyIncome(...)` authority, records an explicit settlement ID and rejects duplicate IDs before a second mutation.
+
+The active baseline visible Gold path is now IM-19D authoritative Population → IM-19E Admission → IM-19F Settlement. The older CR-30C direct settlement is no longer the active Runtime shortcut.
+
+No taxes, marketplace/trade, wages or physical/BuildingStock Gold are introduced.
+
 7. **IM-19G – Player Population / Housing / Gold Projection**  
    Read-only Player projection of actual population, housing capacity/occupancy and Gold state.
 
@@ -216,10 +234,12 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 **IM-19D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19E = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-19E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19e-gold-economy-admission-flow-integration` on that exact SHA. IM-19F remains blocked until that marker exists.
+**IM-19F = IMPLEMENTED / NOT FROZEN.**
+
+The next permissible step is exclusively IM-19F Completion / Regression / Device / Freeze Gate. IM-19G remains blocked until IM-19F is frozen.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19E Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER on `9319c87192532bc2dae92015b7dabfa190d48e19`; final exact-head CI/Pages and frozen marker pending; future Inspector chain remains the whole Clean-Runtime CR/IM rebuild graph.
+**Updated:** 2026-09-12 — IM-19E frozen at `8284c48b3e6b8c75709a58951acacbc59dd81184`; IM-19F Operational Economy → Gold Settlement implemented against frozen IM-19E and remains NOT FROZEN.
