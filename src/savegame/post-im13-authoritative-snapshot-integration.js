@@ -6,9 +6,18 @@ import { BuildingStockContract } from '../domain/building-stock-contract.js';
 import { BuildingStockTransportReservationContract } from '../domain/building-stock-transport-reservation-contract.js';
 import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment-state-contract.js';
 import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignment-contract.js';
+import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
+import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
 
 const SAVEGAME_KIND = 'savegame-snapshot';
 const CAPTURE_KIND = 'post-im13-authoritative-snapshot-capture';
+const COMPLETENESS_CORRECTION_SECTIONS = Object.freeze([
+  'authoritative.definitions.resourceTypes',
+  'authoritative.definitions.housingCapabilities',
+  'authoritative.definitions.workforceProfiles',
+  'authoritative.definitions.workforceRequirements',
+  'authoritative.definitions.productionRecipes'
+]);
 
 function clone(value) {
   return value == null ? value : structuredClone(value);
@@ -55,6 +64,51 @@ function normalizeRevision(snapshot, label) {
     throw new TypeError(`${label} revision must be a non-negative safe integer`);
   }
   return revision;
+}
+
+function normalizeResourceDefinition(value, expectedId) {
+  if (!value || value.id !== expectedId || value.kind !== 'resource-type') {
+    throw new TypeError(`invalid resource definition: ${expectedId}`);
+  }
+  const parsed = parseStableId(value.id);
+  if (!parsed || parsed.kind !== 'resource-type') {
+    throw new TypeError(`invalid resource definition id: ${value.id}`);
+  }
+  const technicalName = String(value.technicalName ?? '').trim();
+  if (!/^[a-z][a-z0-9._-]*$/.test(technicalName)) {
+    throw new TypeError(`invalid resource technicalName: ${value.technicalName}`);
+  }
+  return deepFreeze({
+    id: parsed.id,
+    kind: 'resource-type',
+    technicalName,
+    label: String(value.label ?? ''),
+    metadata: clone(value.metadata ?? {})
+  });
+}
+
+function captureResourceDefinitions(resourceState) {
+  const owner = requireCompatible('ResourceState', resourceState, ['definitionSnapshot', 'definitionIdSnapshot']);
+  const snapshot = owner.definitionSnapshot();
+  const items = snapshot?.items;
+  if (!items || typeof items !== 'object' || Array.isArray(items)) {
+    throw new TypeError('ResourceState definition snapshot items required');
+  }
+  const normalizedItems = {};
+  for (const id of Object.keys(items).sort((a, b) => a.localeCompare(b))) {
+    normalizedItems[id] = normalizeResourceDefinition(items[id], id);
+  }
+  const allocator = clone(owner.definitionIdSnapshot());
+  if (!allocator || typeof allocator !== 'object' || Array.isArray(allocator)) {
+    throw new TypeError('ResourceState definition allocator snapshot required');
+  }
+  return deepFreeze({
+    state: {
+      revision: normalizeRevision(snapshot, 'ResourceState definitions'),
+      items: normalizedItems
+    },
+    allocator
+  });
 }
 
 function normalizeDemandRecord(value, expectedId) {
@@ -164,6 +218,57 @@ function normalizeUniqueArray(values, normalize, keyOf, label) {
   return Object.freeze(result);
 }
 
+function requireStableKind(value, kind, label) {
+  const parsed = parseStableId(value);
+  if (!parsed || parsed.kind !== kind) throw new TypeError(`invalid ${label}: ${value}`);
+  return parsed.id;
+}
+
+function normalizeHousingCapability(value) {
+  if (!value || value.kind !== 'building-housing') {
+    throw new TypeError('building housing capability required');
+  }
+  const capacity = Number(value.capacity);
+  if (!Number.isSafeInteger(capacity) || capacity < 0) {
+    throw new TypeError('housing capacity must be a non-negative safe integer');
+  }
+  return deepFreeze({
+    kind: 'building-housing',
+    buildingId: requireStableKind(value.buildingId, 'building', 'housing building id'),
+    capacity
+  });
+}
+
+function normalizeWorkforceRequirementDefinition(value) {
+  if (!value || value.kind !== 'operational-building-workforce-requirement') {
+    throw new TypeError('operational building workforce requirement required');
+  }
+  const count = Number(value.count);
+  if (!Number.isSafeInteger(count) || count < 1) {
+    throw new TypeError('workforce requirement count must be a positive safe integer');
+  }
+  const specialization = String(value.requiredSpecialization ?? '').trim().toUpperCase();
+  if (!Object.values(PersonWorkforceProfileContract.specializations).includes(specialization)) {
+    throw new TypeError(`invalid workforce requirement specialization: ${value.requiredSpecialization}`);
+  }
+  if (!Array.isArray(value.requiredCapabilities) || value.requiredCapabilities.length < 1) {
+    throw new TypeError('workforce requirement capabilities required');
+  }
+  const capabilities = [...new Set(value.requiredCapabilities.map((item) => String(item ?? '').trim().toUpperCase()))]
+    .sort((a, b) => a.localeCompare(b));
+  const allowed = new Set(Object.values(PersonWorkforceProfileContract.capabilities));
+  if (capabilities.some((item) => !allowed.has(item))) {
+    throw new TypeError('invalid workforce requirement capability');
+  }
+  return deepFreeze({
+    kind: 'operational-building-workforce-requirement-definition',
+    buildingId: requireStableKind(value.buildingId, 'building', 'workforce requirement building id'),
+    count,
+    requiredSpecialization: specialization,
+    requiredCapabilities: Object.freeze(capabilities)
+  });
+}
+
 function normalizeSettlementIds(values, label) {
   if (!Array.isArray(values)) throw new TypeError(`${label} must be an array`);
   const normalized = values.map((value) => {
@@ -177,8 +282,13 @@ function normalizeSettlementIds(values, label) {
 }
 
 function capturePostIM13({
+  resourceState,
   resourceDemands,
   resourceClaims,
+  housingCapabilities = [],
+  workforceProfiles = [],
+  workforceRequirements = [],
+  productionRecipes = [],
   constructionProgress = [],
   buildingStocks = [],
   buildingStockTransportReservations = [],
@@ -188,6 +298,33 @@ function capturePostIM13({
   goldSettlementIds = []
 } = {}) {
   return deepFreeze({
+    definitions: deepFreeze({
+      resourceTypes: captureResourceDefinitions(resourceState),
+      housingCapabilities: normalizeUniqueArray(
+        housingCapabilities,
+        normalizeHousingCapability,
+        (value) => value.buildingId,
+        'housing capabilities'
+      ),
+      workforceProfiles: normalizeUniqueArray(
+        workforceProfiles,
+        (value) => PersonWorkforceProfileContract.define(value),
+        (value) => value.personId,
+        'workforce profiles'
+      ),
+      workforceRequirements: normalizeUniqueArray(
+        workforceRequirements,
+        normalizeWorkforceRequirementDefinition,
+        (value) => value.buildingId,
+        'workforce requirements'
+      ),
+      productionRecipes: normalizeUniqueArray(
+        productionRecipes,
+        (value) => ProductionBuildingStockContract.define(value),
+        (value) => value.buildingId,
+        'production recipes'
+      )
+    }),
     resourceDemands: captureDemands(resourceDemands),
     resourceClaims: captureClaims(resourceClaims),
     constructionProgress: normalizeUniqueArray(
@@ -255,6 +392,10 @@ export class PostIM13AuthoritativeSnapshotIntegration {
     return PersistentStateInventorySaveGameSchemaContract.targetSchemaVersion;
   }
 
+  static completenessCorrectionSections() {
+    return COMPLETENESS_CORRECTION_SECTIONS;
+  }
+
   static capture({
     boundary,
     world,
@@ -262,8 +403,13 @@ export class PostIM13AuthoritativeSnapshotIntegration {
     domains,
     gold,
     wear,
+    resourceState,
     resourceDemands,
     resourceClaims,
+    housingCapabilities = [],
+    workforceProfiles = [],
+    workforceRequirements = [],
+    productionRecipes = [],
     constructionProgress = [],
     buildingStocks = [],
     buildingStockTransportReservations = [],
@@ -274,8 +420,13 @@ export class PostIM13AuthoritativeSnapshotIntegration {
   } = {}) {
     const base = SaveGameSnapshotContract.capture({ boundary, world, map, domains, gold, wear });
     const authoritative = capturePostIM13({
+      resourceState,
       resourceDemands,
       resourceClaims,
+      housingCapabilities,
+      workforceProfiles,
+      workforceRequirements,
+      productionRecipes,
       constructionProgress,
       buildingStocks,
       buildingStockTransportReservations,
@@ -307,6 +458,9 @@ export class PostIM13AuthoritativeSnapshotIntegration {
     return Object.freeze({
       v2Capture: true,
       postIM13AuthoritativeCapture: true,
+      snapshotCompletenessCorrection: true,
+      authoritativeDefinitionSourcesPersisted: true,
+      resourceDefinitionAllocatorContinuity: true,
       v2Validation: false,
       v2Restore: false,
       derivedStatePersistence: false,
