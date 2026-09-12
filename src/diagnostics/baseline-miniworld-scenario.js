@@ -13,6 +13,9 @@ import { ResidentialBuildingAdmissionContract } from '../domain/residential-buil
 import { ResidentialHousingCapacityOccupancyIntegration } from '../domain/residential-housing-capacity-occupancy-integration.js';
 import { ResidentHousingAssignmentIntegration } from '../domain/resident-housing-assignment-integration.js';
 import { GoldEconomyOwner } from '../domain/gold-economy-owner.js';
+import { GoldEconomyAdmissionFlowIntegration } from '../domain/gold-economy-admission-flow-integration.js';
+import { OperationalEconomyGoldSettlement } from '../domain/operational-economy-gold-settlement.js';
+import { projectAuthoritativePopulation } from '../ui/authoritative-population-projection.js';
 import { CarrierContract } from '../transport/carrier-contract.js';
 import { CarrierMovementContract } from '../transport/carrier-movement-contract.js';
 import { WorldBackedTraversabilitySource } from '../transport/world-backed-traversability-source.js';
@@ -144,11 +147,28 @@ export function createBaselineMiniworldScenario() {
     assignments: [],
   });
 
+  const populationProjection = projectAuthoritativePopulation({
+    assignmentIntegration: residentHousingAssignment,
+    personIdentities: [
+      carrierPerson.identity,
+      secondPerson.identity,
+      thirdPerson.identity,
+    ],
+  });
+
   const goldEconomy = new GoldEconomyOwner({ initialGold: 0 });
-  const goldSettlement = goldEconomy.settle({
-    population: housingPopulation.population,
+  const goldFlowAdmission = GoldEconomyAdmissionFlowIntegration.admit({
+    goldOwner: goldEconomy,
+    populationProjection,
     goldPerResident: 1,
   });
+  const goldSettlementResult = OperationalEconomyGoldSettlement.settleOnce({
+    goldOwner: goldEconomy,
+    admittedFlow: goldFlowAdmission,
+    settlementId: 'gold-settlement:baseline:00000001',
+  });
+  const goldSettlement = goldSettlementResult.settlement;
+  const goldSettlementIds = goldSettlementResult.settledIds;
 
   const pathClassification = new WorldBackedPathClassificationSource({ map, world });
   const pathClassificationEntries = pathClassification.entries();
@@ -199,8 +219,11 @@ export function createBaselineMiniworldScenario() {
       domains,
       housingPopulation,
       residentHousingAssignment,
+      populationProjection,
       goldEconomy,
+      goldFlowAdmission,
       goldSettlement,
+      goldSettlementIds,
       pathClassification,
       pathClassificationEntries,
       traversability,
