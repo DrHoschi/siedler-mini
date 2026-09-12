@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19A–G COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 DEFINED / NOT IMPLEMENTED  
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
@@ -267,7 +267,61 @@ Later Inspector visualization should cover the **entire CR/IM Clean-Runtime rebu
 
 IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births, deaths, aging, migration, demolition, upgrades, a new production subsystem, new routing/transport authority, SaveGame rearchitecture, Inspector editor authority or legacy `main` gameplay reuse.
 
-## 6. Current gate
+## 6. IM-20 – Authoritative SaveGame / Continue Integration
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Definition baseline:** frozen IM-19 Whole-Block @ `f9c9202014deded496d96adfb96a430a230f06f2`.  
+**Planned branch:** `feature/im-20-authoritative-savegame-continue-integration` — **NOT CREATED**.
+
+### Objective
+
+Close the post-IM13 SaveGame/Continue gap created by the completed IM-16–19 authoritative runtime integration without introducing a second state owner.
+
+Whole-Block question:
+
+`How does the fully rebuilt frozen-IM19 game state survive Save → Reload → Continue as the same authoritative state without additive defaults, lost assignments/stocks, duplicated settlements or persisted second truths?`
+
+### Defined sequence
+
+1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — DEFINED / NOT IMPLEMENTED**  
+   Classify every relevant frozen-IM19 state as `PERSIST` or `REBUILD / DERIVE` and define the versioned schema boundary.
+
+2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — DEFINED / NOT IMPLEMENTED**  
+   Persist only authoritative post-IM13 state that must survive Continue, including required assignment/stock/exactly-once fence truth.
+
+3. **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**  
+   Validate IDs, references, assignments, stocks and settlement fences before atomic restore; fail closed on invalid/incompatible saves.
+
+4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**  
+   Recompute Population/Housing projections, operational readiness, Gold admission/player projections and other derived/transient runtime state from restored owners instead of persisting duplicate truth.
+
+5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**  
+   Wire the SaveGame foundation to real browser save/reload/continue lifecycle with completed-step capture, validated restore, atomic activation and delayed runtime/scheduler start.
+
+6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**  
+   Prevent replayed settlements, additive defaults, lost Home/Workforce assignments/local stocks and duplicate scheduler/subscription registration; reconstruct only explicitly transient state.
+
+7. **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**  
+   Real post-IM19 Save → Reload → Continue equivalence test with Safari device evidence on iPhone and iPad before Whole-Block freeze reconciliation.
+
+### Persistence boundary
+
+IM-20 must preserve authoritative owner truth but must not serialize derived projections/caches merely for convenience. Population, Housing occupancy/status, operational readiness, Gold admission/player projection, navigation/render caches and Inspector observations are rebuild/derive candidates unless IM-20A proves otherwise.
+
+### Explicit non-scope
+
+No multi-slot SaveGame menu, cloud save, multiplayer sync, autosave system, legacy `main` save migration, final responsive Game-UI/wireframe redesign, new Economy capability or Inspector Clean-Runtime graph UI.
+
+Responsive Game UI remains a later dedicated scope with separate iPhone, iPad and Desktop layout planning.
+
+### Entry gate
+
+IM-20 is **DEFINED / NOT IMPLEMENTED** only. No IM-20 branch exists yet and no IM-20A implementation is authorized by this documentation step.
+
+The next permissible step is exclusively creation of `feature/im-20-authoritative-savegame-continue-integration` **exactly from frozen IM-19 `f9c9202014deded496d96adfb96a430a230f06f2`**. IM-20A must not be implemented in the same step.
+
+## 7. Current gate
 
 **IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -287,8 +341,10 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 **IM-19G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-No successor is automatically authorized by the IM-19 freeze. Any next work requires a separate successor Reconciliation / Definition step. No further Economy expansion or Inspector system graph is authorized by this freeze.
+**IM-20 = DEFINED / NOT IMPLEMENTED.**
+
+The next permissible step is exclusively the separate IM-20 Whole-Block branch creation from frozen IM-19. No IM-20A implementation, further Economy expansion or Inspector system graph is authorized in that same step.
 
 ---
 
-**Updated:** 2026-09-12 — IM-19A–G and IM-19 Whole-Block COMPLETE / FROZEN / PASS / 0 BLOCKER. Whole-Block marker `frozen/im-19-population-housing-gold-economy-integration` @ `f9c9202014deded496d96adfb96a430a230f06f2`. No successor automatically authorized.
+**Updated:** 2026-09-12 — IM-19 Whole-Block remains COMPLETE / FROZEN / PASS / 0 BLOCKER at `f9c9202014deded496d96adfb96a430a230f06f2`. IM-20 – Authoritative SaveGame / Continue Integration is DEFINED / NOT IMPLEMENTED against frozen IM-19. Planned branch is NOT CREATED.
