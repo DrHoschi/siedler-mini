@@ -97,23 +97,13 @@ export function runIM19DSelfTest() {
 
   const unknownResidentAssignment = Object.freeze({
     ...assignmentIntegration,
-    assignments: Object.freeze([
-      ...assignmentIntegration.assignments,
-      Object.freeze({
-        kind: 'resident-home-assignment',
-        personId: 'unit:00000099',
-        state: 'ASSIGNED',
-        homeBuildingId: assignmentIntegration.housingStates[0].buildingId
-      })
-    ]),
-    housingStates: Object.freeze(assignmentIntegration.housingStates.map((state, index) =>
+    assignments: Object.freeze(assignmentIntegration.assignments.map((assignment, index) =>
       index === 0
         ? Object.freeze({
-            ...state,
-            occupancy: state.occupancy + 1,
-            availableSlots: state.availableSlots - 1
+            ...assignment,
+            personId: 'unit:00000099'
           })
-        : state
+        : assignment
     ))
   });
 
