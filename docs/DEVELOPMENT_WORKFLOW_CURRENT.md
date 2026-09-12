@@ -25,7 +25,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19F – Operational Economy → Gold Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
-- **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING**
+- **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20B–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
@@ -343,7 +343,9 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 ### IM-20A – Persistent State Inventory & SaveGame Schema Contract
 
-**Status:** COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen marker:** `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`
 
 IM-20A defines a declarative persistence inventory and a target SaveGame **schemaVersion 2** boundary without activating that schema in the existing IM-13 SaveGame implementation.
 
@@ -391,9 +393,9 @@ Responsive Game UI remains a later dedicated scope with separate iPhone, iPad an
 
 Implementation head `e1cc7e94f84d2ba9bf666aece318366c7a90f00f` passed the complete predecessor regression plus IM-20A self-test in CI `34700519373` with SUCCESS. Source verification confirms target schema V2 remains `DEFINED_NOT_ACTIVE`, active snapshot/validation stay on V1, and no capture/restore/browser-storage implementation was introduced.
 
-**IM-20A = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI verification. If it succeeds, create `frozen/im-20a-persistent-state-inventory-savegame-schema-contract` on that exact SHA. IM-20B remains unauthorized until the marker exists.
+Finalization CI `34700971956` succeeded on `ac82d35b1c886b850efa6818322b124f7279c7ec`. This final steering-only synchronization is re-verified before the marker is created on the final consistent head.
 
 ## 7. Current gate
 
@@ -417,9 +419,9 @@ The next permissible action is exclusively exact-finalization-head CI verificati
 
 **IM-20 = IN PROGRESS.**
 
-**IM-20A = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI verification and, on SUCCESS, creation of the IM-20A frozen marker. IM-20B remains unauthorized.
+The next permissible action is exclusively final exact-head CI verification and creation of the IM-20A frozen marker. IM-20B remains unauthorized until that marker exists.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -427,4 +429,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — frozen IM-19 synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `f9c9202014deded496d96adfb96a430a230f06f2`; IM-20A Completion / Regression / Freeze Gate PASS on implementation head `e1cc7e94f84d2ba9bf666aece318366c7a90f00f`; exact-finalization-head CI and marker pending.
+**Updated:** 2026-09-12 — IM-20A COMPLETE / FROZEN / PASS / 0 BLOCKER after implementation CI `34700519373` and finalization CI `34700971956`; final steering-only exact-head CI and frozen marker pending.
