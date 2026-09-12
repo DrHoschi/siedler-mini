@@ -261,7 +261,46 @@ Later Inspector visualization should cover the **entire CR/IM Clean-Runtime rebu
 
 IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births, deaths, aging, migration, demolition, upgrades, a new production subsystem, new routing/transport authority, SaveGame rearchitecture, Inspector editor authority or legacy `main` gameplay reuse.
 
-## 6. Current gate
+## 6. IM-20 – Authoritative SaveGame / Continue Integration
+
+**Status:** IN PROGRESS
+
+**Definition baseline:** frozen IM-19 Whole-Block @ `f9c9202014deded496d96adfb96a430a230f06f2`.  
+**Branch:** `feature/im-20-authoritative-savegame-continue-integration`.
+
+### IM-20A – Persistent State Inventory & SaveGame Schema Contract
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+IM-20A inventories the frozen-IM19 runtime state and classifies every covered state as `PERSIST` or `REBUILD_DERIVE`. It defines target SaveGame schema V2 as **DEFINED_NOT_ACTIVE** while leaving the active IM-13 snapshot/validation schema on V1.
+
+Persisted-authority coverage includes existing IM-13 World/Map/CoreDomain/Gold/PathWear state plus post-IM13 ResourceDemands/Claims, construction progress, local BuildingStock, BuildingStock transport reservations, Workforce assignments, Resident→Home assignments and production/Gold exactly-once settlement fences.
+
+Derived/rebuilt state includes Housing occupancy, Population, operational/readiness projections, Player projections, transient transport/navigation/runtime bindings, scheduler registrations and presentation/Inspector state.
+
+No snapshot capture, restore, browser storage or Continue lifecycle is changed by IM-20A.
+
+### Remaining sequence
+
+1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — IMPLEMENTED / NOT FROZEN**
+2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — DEFINED / NOT IMPLEMENTED**
+3. **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
+4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
+5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
+6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
+7. **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
+
+### Non-scope
+
+No multi-slot Save UI, cloud save, multiplayer sync, autosave, legacy-main save migration, final responsive Game-UI/wireframe redesign, further Economy capability or Inspector system graph.
+
+Responsive Game UI remains a later dedicated scope with separate iPhone, iPad and Desktop planning.
+
+### Current IM-20 gate
+
+The next permissible step is exclusively IM-20A Completion / Regression / Freeze Gate. IM-20B remains blocked until IM-20A is frozen.
+
+## 7. Current gate
 
 **IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
