@@ -84,6 +84,20 @@ Frozen IM-19E marker:
 
 **Frozen marker:** `frozen/im-18-operational-building-workforce-production-integration`.
 
+### IM-19F – Operational Economy → Gold Settlement
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Definition baseline:** frozen IM-19E @ `8284c48b3e6b8c75709a58951acacbc59dd81184`.
+
+IM-19F consumes only a frozen-IM-19E `POPULATION_INCOME` admission and applies its existing `derived-gold-income` exactly once to the existing non-physical `GoldEconomyOwner`. The settlement validates that the admission's `stateBefore` is still the current Gold state before applying the admitted income through the existing owner mutation authority.
+
+Settlement identity is explicit. `settleOnce(..., settledIds)` rejects a duplicate settlement ID before a second Gold mutation. The result exposes immutable `stateBefore` and `stateAfter`; Gold remains non-physical.
+
+The active baseline Runtime now follows `IM-19D authoritative Population → IM-19E Admission → IM-19F Settlement` for visible Gold. The older CR-30C direct-settlement shortcut is no longer the active Gold path.
+
+No tax, trade, wages, physical Resource Gold, BuildingStock Gold, new Gold owner, IM-19G projection or Inspector graph UI is introduced.
+
 ### Whole-Block objective
 
 IM-18 answers:
@@ -261,7 +275,7 @@ IM-19 answers:
 
 The intended later Inspector chain visualization is the **complete Clean-Runtime rebuild**, not merely an individual Resident/Population trace. It should be able to represent the CR/IM capability graph from the clean foundation through the current integration blocks, including sequential steps, branches, ownership boundaries, frozen baselines/gates and relevant runtime evidence. Local traces such as IM-19D `personId → homeBuildingId → COUNTED` are only optional evidence nodes inside that broader system graph.
 
-No such Inspector graph UI is implemented or authorized by IM-19E.
+No such Inspector graph UI is implemented or authorized by IM-19F.
 
 ### IM-19 explicit non-scope
 
