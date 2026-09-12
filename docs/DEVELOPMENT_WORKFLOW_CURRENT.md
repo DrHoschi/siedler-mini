@@ -16,7 +16,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-16 – Player Construction & Placement Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-17 – Economic Construction Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-18 – Operational Building / Workforce / Production Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19 – Population / Housing / Gold Economy Integration: WHOLE-BLOCK RECONCILIATION PASS / FREEZE AUTHORIZATION PENDING**
+- **IM-19 – Population / Housing / Gold Economy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -25,7 +25,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19F – Operational Economy → Gold Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
-IM-19 development has completed its defined A–G chain on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block itself is reconciled but not yet frozen.
+IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
 
 ## 2. Frozen predecessor chain
 
@@ -65,6 +65,9 @@ Frozen IM-19F marker:
 
 Frozen IM-19G marker:
 - `frozen/im-19g-player-population-housing-gold-projection` @ `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`
+
+Frozen IM-19 Whole-Block marker:
+- `frozen/im-19-population-housing-gold-economy-integration` @ `f9c9202014deded496d96adfb96a430a230f06f2`
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -156,7 +159,10 @@ IM-18 introduces no housing assignment, population derivation, Gold economy, tax
 
 ## 5. IM-19 – Population / Housing / Gold Economy Integration
 
-**Status:** WHOLE-BLOCK RECONCILIATION PASS / FREEZE AUTHORIZATION PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen Whole-Block head:** `f9c9202014deded496d96adfb96a430a230f06f2`  
+**Frozen Whole-Block marker:** `frozen/im-19-population-housing-gold-economy-integration`
 
 **Definition baseline:** frozen IM-18 @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`.
 
@@ -298,7 +304,7 @@ IM-19 answers:
 
 ### IM-19 Whole-Block Completion / Reconciliation
 
-**Status:** PASS / 0 BLOCKER / WHOLE-BLOCK FREEZE AUTHORIZATION PENDING
+**Status:** PASS / 0 BLOCKER / FROZEN
 
 **Baseline:** frozen IM-18 Whole-Block @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
 **Reconciled A–G head:** `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`
@@ -315,7 +321,7 @@ Whole-Block reconciliation confirms:
 
 The defined Whole-Block question is therefore satisfied by the frozen A–G chain without duplicating Building, Person, Workforce, Housing, Population, Production or Gold authority.
 
-This reconciliation does **not** freeze IM-19 as a Whole-Block. A separate explicit IM-19 Whole-Block Freeze Authorization / Freeze Decision is required before creating a Whole-Block frozen marker.
+The separate IM-19 Whole-Block Freeze Authorization / Freeze Decision passed. The Whole-Block marker `frozen/im-19-population-housing-gold-economy-integration` was created on exact authorized head `f9c9202014deded496d96adfb96a430a230f06f2` and verified identical / 0 ahead / 0 behind at freeze time.
 
 ### Future Inspector – Whole Clean-Runtime Rebuild Chain (NON-SCOPE)
 
@@ -331,7 +337,7 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-18 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19 = WHOLE-BLOCK RECONCILIATION PASS / 0 BLOCKER / FREEZE AUTHORIZATION PENDING.**
+**IM-19 = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 **IM-19A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -347,7 +353,7 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible step is exclusively the separate **IM-19 Whole-Block Freeze Authorization / Freeze Decision**. No Whole-Block marker may be created before that explicit authorization. No successor, further Economy expansion or Inspector system graph is authorized.
+No successor is automatically authorized by the IM-19 freeze. Any next work requires a separate successor Reconciliation / Definition step. No further Economy expansion or Inspector system graph is authorized by this freeze.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -355,4 +361,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19A–G COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 Whole-Block Completion / Reconciliation PASS / 0 BLOCKER; separate Whole-Block Freeze Authorization pending; no successor automatically authorized.
+**Updated:** 2026-09-12 — IM-19A–G and IM-19 Whole-Block COMPLETE / FROZEN / PASS / 0 BLOCKER. Whole-Block marker `frozen/im-19-population-housing-gold-economy-integration` @ `f9c9202014deded496d96adfb96a430a230f06f2`. No successor automatically authorized.
