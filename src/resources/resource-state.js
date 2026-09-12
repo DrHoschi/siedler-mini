@@ -103,6 +103,14 @@ export class ResourceState {
     return Object.freeze(Object.keys(this.#definitions.snapshot().items).sort());
   }
 
+  definitionSnapshot() {
+    return deepFreeze(clone(this.#definitions.snapshot()));
+  }
+
+  definitionIdSnapshot() {
+    return this.#definitionIds.snapshot();
+  }
+
   createResource({ definitionId, amount = 1, state = 'AVAILABLE', location = null, ownerId = null, metadata = {} } = {}, { id = null } = {}) {
     const definition = this.getDefinition(definitionId);
     if (!definition) throw new TypeError(`unknown resource definition id: ${definitionId}`);
