@@ -270,7 +270,9 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 ### IM-20A – Persistent State Inventory & SaveGame Schema Contract
 
-**Status:** COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Marker:** `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`
 
 IM-20A inventories the frozen-IM19 runtime state and classifies every covered state as `PERSIST` or `REBUILD_DERIVE`. It defines target SaveGame schema V2 as **DEFINED_NOT_ACTIVE** while leaving the active IM-13 snapshot/validation schema on V1.
 
@@ -282,7 +284,7 @@ No snapshot capture, restore, browser storage or Continue lifecycle is changed b
 
 ### Remaining sequence
 
-1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING**
+1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — DEFINED / NOT IMPLEMENTED**
 3. **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
@@ -300,7 +302,7 @@ Responsive Game UI remains a later dedicated scope with separate iPhone, iPad an
 
 Implementation head `e1cc7e94f84d2ba9bf666aece318366c7a90f00f` passed CI `34700519373` with the full predecessor regression and IM-20A self-test. Target schema V2 remains definition-only; active SaveGame snapshot/validation remain V1 and no capture/restore/browser-storage implementation is present.
 
-The next permissible action is exclusively exact-finalization-head CI verification and, on SUCCESS, creation of `frozen/im-20a-persistent-state-inventory-savegame-schema-contract`. IM-20B remains blocked until that marker exists.
+Finalization CI `34700971956` succeeded on `ac82d35b1c886b850efa6818322b124f7279c7ec`. This final steering-only synchronization is re-verified before creating `frozen/im-20a-persistent-state-inventory-savegame-schema-contract` on the final consistent head. IM-20B remains blocked until that marker exists.
 
 ## 7. Current gate
 
@@ -324,10 +326,10 @@ The next permissible action is exclusively exact-finalization-head CI verificati
 
 **IM-20 = IN PROGRESS.**
 
-**IM-20A = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI verification and the IM-20A frozen marker on SUCCESS. IM-20B remains unauthorized.
+The next permissible action is exclusively final exact-head CI verification and creation of the IM-20A frozen marker. IM-20B remains unauthorized until that marker exists.
 
 ---
 
-**Updated:** 2026-09-12 — frozen IM-19 synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `f9c9202014deded496d96adfb96a430a230f06f2`; IM-20A Completion / Regression / Freeze Gate PASS on `e1cc7e94f84d2ba9bf666aece318366c7a90f00f`; exact-finalization-head CI and marker pending.
+**Updated:** 2026-09-12 — IM-20A COMPLETE / FROZEN / PASS / 0 BLOCKER after implementation CI `34700519373` and finalization CI `34700971956`; final steering-only exact-head CI and frozen marker pending.
