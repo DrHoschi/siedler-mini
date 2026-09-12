@@ -21,9 +21,10 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19D – Authoritative Population Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19E – Gold Economy Admission / Flow Integration: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
+- **IM-19E – Gold Economy Admission / Flow Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-19F – Operational Economy → Gold Settlement: IMPLEMENTED / NOT FROZEN**
 
-IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is implemented on top of frozen IM-19D and is not yet frozen.
+IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is frozen at `8284c48b3e6b8c75709a58951acacbc59dd81184`. IM-19F is implemented on top of frozen IM-19E and is not yet frozen.
 
 ## 2. Frozen predecessor chain
 
@@ -54,6 +55,9 @@ Frozen IM-19C marker:
 
 Frozen IM-19D marker:
 - `frozen/im-19d-authoritative-population-projection` @ `0847d27b60f13a99cb76d220b56b58107e832950`
+
+Frozen IM-19E marker:
+- `frozen/im-19e-gold-economy-admission-flow-integration` @ `8284c48b3e6b8c75709a58951acacbc59dd81184`
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -209,7 +213,10 @@ Freeze-gate correction: the first IM-19D browser/device evidence had the correct
 
 ### IM-19E – Gold Economy Admission / Flow Integration
 
-**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen head:** `8284c48b3e6b8c75709a58951acacbc59dd81184`  
+**Frozen marker:** `frozen/im-19e-gold-economy-admission-flow-integration`
 
 **Definition baseline:** frozen IM-19D @ `0847d27b60f13a99cb76d220b56b58107e832950`.
 
@@ -274,9 +281,11 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19E = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-19E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19e-gold-economy-admission-flow-integration` on that exact SHA. IM-19F is not authorized before that marker exists.
+**IM-19F = IMPLEMENTED / NOT FROZEN.**
+
+The next permissible step is exclusively IM-19F Completion / Regression / Device / Freeze Gate. IM-19G is not authorized before IM-19F passes that gate and receives its frozen marker.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -284,4 +293,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19E Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER on implementation head `9319c87192532bc2dae92015b7dabfa190d48e19`; exact-finalization-head CI/Pages and frozen marker pending. Future Inspector note remains whole Clean-Runtime CR/IM rebuild graph.
+**Updated:** 2026-09-12 — IM-19E synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `8284c48b3e6b8c75709a58951acacbc59dd81184`; IM-19F Operational Economy → Gold Settlement implemented against frozen IM-19E; NOT FROZEN.
