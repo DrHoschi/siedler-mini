@@ -12,3 +12,5 @@ export const RuntimeConfig = Object.freeze({
   render: Object.freeze({ maxDevicePixelRatio: 2 }),
   dev: Object.freeze({ selfTestOnBoot: true })
 });
+
+// IM-19D final freeze verification: comment-only; no runtime semantics changed.
