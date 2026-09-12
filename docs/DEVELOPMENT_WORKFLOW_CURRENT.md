@@ -511,10 +511,72 @@ Hard boundary remains:
 
 Correction evidence: CI `34705200714` SUCCESS and Pages `34705200407` SUCCESS on corrected head `6480d00941b688437976b5b5c88899fef79faa15`; frozen marker `frozen/im-20b-post-im13-authoritative-snapshot-integration` was fast-forwarded to that head and verified identical / 0 ahead / 0 behind.
 
+### IM-20C – Deterministic Validation & Restore Integration
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Baseline:** corrected frozen IM-20B @ `a3a5d2f5fafa1885fea7be489ea601680c432e25`.
+
+IM-20C adds a separate schema-V2 validation/restore layer above the frozen IM-13 V1 SaveGame contracts. The frozen V1 validator/restore remain unchanged.
+
+Validation now covers the complete IM-20B V2 snapshot before any restore owner is committed:
+
+- frozen V1 `capture/world/map/domains/economy.gold/pathWear` validation is reused as the base boundary;
+- Resource-Type definitions and allocator continuity;
+- Housing capability references/capacity;
+- Person workforce profiles;
+- Building workforce requirements;
+- Production recipes and Resource-Type references;
+- ResourceDemands / ResourceClaims structure, allocator continuity and Demand↔Claim↔Resource invariants;
+- construction progress;
+- local BuildingStock;
+- BuildingStock transport reservations;
+- Workforce assignments;
+- Resident→Home assignments;
+- production/Gold exactly-once settlement fences;
+- cross-owner stable-ID/reference checks.
+
+Restore is fail-closed and atomic at this contract boundary:
+
+1. validate the entire V2 payload;
+2. reject without `runtimeState` when invalid;
+3. restore the frozen V1 owners into new standalone instances;
+4. restore ResourceState definition state/allocator, Claims, Demands and the remaining persisted authoritative contracts;
+5. expose a new `restored-post-im13-authoritative-runtime-state` only after successful preparation.
+
+IM-20C extends the existing Owner constructors only with restore inputs following the already frozen DomainStore pattern. Normal ResourceState/ResourceClaims/ResourceDemands mutation semantics remain unchanged.
+
+Deterministic self-test includes canonical:
+
+`Capture A → Validate → Restore B → Capture B`
+
+identity, Stable-ID allocator continuity, exactly-once fence recovery and fail-closed rejection of invalid cross-owner references.
+
+Implementation:
+- `src/savegame/post-im13-savegame-validation-contract.js`
+- `src/savegame/post-im13-savegame-restore-integration.js`
+- `src/dev/im-20c-self-test.js`
+- `src/dev/im-20c-self-test.node.js`
+- restore-only constructor support in `src/resources/resource-state.js`, `resource-claims.js`, `resource-demands.js`
+
+Visible verification identity:
+`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-1`
+
+Hard IM-20C boundary:
+- V2 Validation = implemented;
+- V2 Restore into new standalone authoritative owners = implemented;
+- invalid payload = fail-closed before commit;
+- Derived-State Rebinding = not implemented;
+- restored runtime activation = not implemented;
+- browser storage / Save / Reload / Continue = not implemented;
+- no IM-20D+ capability.
+
+The next permissible step is exclusively **IM-20C Completion / Regression / Freeze Gate**. IM-20D remains unauthorized until IM-20C is frozen.
+
 ### Remaining defined substeps
 
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20C – Deterministic Validation & Restore Integration — DEFINED / NOT IMPLEMENTED**
+- **IM-20C – Deterministic Validation & Restore Integration — IMPLEMENTED / NOT FROZEN**
 - **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 - **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 - **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
@@ -560,9 +622,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = DEFINED / NOT IMPLEMENTED.**
+**IM-20C = IMPLEMENTED / NOT FROZEN.**
 
-The next permissible development step is exclusively IM-20C – Deterministic Validation & Restore Integration, and only when separately authorized. IM-20D+ remains unauthorized.
+The next permissible step is exclusively IM-20C Completion / Regression / Freeze Gate. IM-20D+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -570,4 +632,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-20B remains COMPLETE / FROZEN / PASS / 0 BLOCKER after Build Identity Reconciliation / Correction. Corrected identity head `aeebbe487429eb9889412ec36179c44a51268a1a`; CI `34703598385` and Pages `34703597830` SUCCESS. IM-20C remains DEFINED / NOT IMPLEMENTED and requires separate authorization.
+**Updated:** 2026-09-12 — IM-20C Deterministic Validation & Restore Integration IMPLEMENTED / NOT FROZEN on corrected frozen IM-20B baseline `a3a5d2f5fafa1885fea7be489ea601680c432e25`. Visible identity: `IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-1`. Next permissible step is IM-20C Completion / Regression / Freeze Gate only.
