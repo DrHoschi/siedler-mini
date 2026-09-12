@@ -26,8 +26,8 @@
 
       <aside class="verification-card" data-ui-region="verification" aria-live="polite">
         <h1>IM-20B – Post-IM13 Authoritative Snapshot Integration</h1>
-        <p>IM-20B ergänzt ausschließlich den schema-V2 Capture-Pfad für post-IM13 autoritativen SaveGame-State. V2 Validation, Restore, Browser-Storage und Continue bleiben weiterhin nicht implementiert; bestehende Gameplay- und UI-Authorities bleiben unverändert.</p>
-        <output id="test-status">IM-20B-POST-IM13-AUTHORITATIVE-SNAPSHOT-INTEGRATION-TESTBUILD-1 wird aufgebaut …</output>
+        <p>IM-20B schema V2 Capture enthält jetzt zusätzlich die Snapshot-Completeness-Korrektur für externe autoritative Definitionsquellen und Resource-Type-Allocator-Continuity. V2 Validation, Restore, Browser-Storage und Continue bleiben weiterhin nicht implementiert.</p>
+        <output id="test-status">IM-20B-POST-IM13-AUTHORITATIVE-SNAPSHOT-INTEGRATION-TESTBUILD-2 wird aufgebaut …</output>
       </aside>
 
       <aside class="inspector-shell" data-ui-shell="inspector" aria-label="Inspector" aria-live="polite">
@@ -97,7 +97,7 @@
         <span id="context-kind" class="context-kind" data-selection="none">Keine Auswahl</span>
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
-      <span class="surface-note">IM-20B · TESTBUILD 1 · V2 authoritative snapshot capture only · no Validation / Restore / Continue</span>
+      <span class="surface-note">IM-20B · TESTBUILD 2 · V2 authoritative snapshot capture · completeness corrected · no Validation / Restore / Continue</span>
       <div class="player-building-selection" data-im16f-controls="true" aria-label="Gebäude für Platzierung auswählen">
         <button type="button" data-im16f-definition-id="HQ">Hauptquartier</button>
         <button type="button" data-im16f-definition-id="WOODCUTTER">Holzfäller</button>
@@ -113,7 +113,7 @@
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im20b-build-identity-1"></script>
+  <script type="module" src="src/main.js?v=im20b-snapshot-completeness-2"></script>
   <script type="module" src="src/ui/runtime-hud-projection.js?v=im16g-1"></script>
   <script type="module" src="src/ui/world-selection-context-projection.js?v=im16g-1"></script>
   <script type="module" src="src/ui/player-camera-controls-integration.js?v=im16g-1"></script>
