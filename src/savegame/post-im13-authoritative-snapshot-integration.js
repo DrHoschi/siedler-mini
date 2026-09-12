@@ -240,7 +240,7 @@ function normalizeHousingCapability(value) {
 }
 
 function normalizeWorkforceRequirementDefinition(value) {
-  if (!value || value.kind !== 'operational-building-workforce-requirement') {
+  if (!value || !['operational-building-workforce-requirement', 'operational-building-workforce-requirement-definition'].includes(value.kind)) {
     throw new TypeError('operational building workforce requirement required');
   }
   const count = Number(value.count);
