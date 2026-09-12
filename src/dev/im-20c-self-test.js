@@ -212,6 +212,9 @@ export function runIM20CSelfTest() {
   const snapshotB = recapture(state);
   const serializedA = PostIM13AuthoritativeSnapshotIntegration.serialize(snapshotA);
   const serializedB = PostIM13AuthoritativeSnapshotIntegration.serialize(snapshotB);
+  const restoredDefinitionBeforeAllocatorProbe = state.resourceState.getDefinition('resource-type:00000001');
+  const restoredClaimBeforeAllocatorProbe = state.resourceClaims.get('claim:00000001');
+  const restoredDemandBeforeAllocatorProbe = state.resourceDemands.get('demand:00000001');
 
   const nextDefinition = state.resourceState.createDefinition({ technicalName: 'stone', label: 'Stone' });
   const nextDemand = state.resourceDemands.create({
@@ -256,9 +259,9 @@ export function runIM20CSelfTest() {
       && state.map.mapId === snapshotA.map.mapId
       && state.goldEconomy.balance === 9,
     restoredPostIM13Owners:
-      state.resourceState.getDefinition('resource-type:00000001')?.technicalName === 'wood'
-      && state.resourceClaims.get('claim:00000001')?.state === 'ACTIVE'
-      && state.resourceDemands.get('demand:00000001')?.reservedAmount === 1
+      restoredDefinitionBeforeAllocatorProbe?.technicalName === 'wood'
+      && restoredClaimBeforeAllocatorProbe?.state === 'ACTIVE'
+      && restoredDemandBeforeAllocatorProbe?.reservedAmount === 1
       && state.buildingStocks.length === 2
       && state.workforceAssignments.length === 1
       && state.homeAssignments.length === 1,
