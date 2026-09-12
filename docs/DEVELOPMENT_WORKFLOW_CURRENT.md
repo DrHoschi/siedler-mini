@@ -26,7 +26,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20B – Post-IM13 Authoritative Snapshot Integration: IMPLEMENTED / NOT FROZEN**
+- **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING**
 - **IM-20C–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
@@ -377,7 +377,7 @@ Implementation:
 
 ### IM-20B – Post-IM13 Authoritative Snapshot Integration
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-20A @ `045a056535604b7adcaeb658212da403f532b4f9`.
 
@@ -415,7 +415,11 @@ Implementation:
 - `src/dev/im-20b-self-test.js`
 - `src/dev/im-20b-self-test.node.js`
 
-The next permissible step after implementation is exclusively **IM-20B Completion / Regression / Freeze Gate**. IM-20C remains unauthorized until IM-20B is frozen.
+Implementation head `d04acc61f7bfca07b23c912f16fad1edf40038a4` passed the complete predecessor regression plus IM-20B self-test in CI `34702294625` with SUCCESS. Source verification confirms V2 capture only: frozen V1 Snapshot/Validation remain unchanged, V2 validation/restore are absent, and browser storage/Continue are absent.
+
+**IM-20B = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
+
+The next permissible action is exclusively exact-finalization-head CI verification. If it succeeds, create `frozen/im-20b-post-im13-authoritative-snapshot-integration` on that exact SHA. IM-20C remains unauthorized until the marker exists.
 
 ### Remaining defined substeps
 
@@ -464,9 +468,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20B = IMPLEMENTED / NOT FROZEN.**
+**IM-20B = COMPLETION / REGRESSION / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-20B Completion / Regression / Freeze Gate. IM-20C+ remains unauthorized.
+The next permissible action is exclusively exact-finalization-head CI verification and, on SUCCESS, creation of the IM-20B frozen marker. IM-20C+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -474,4 +478,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-20A remains COMPLETE / FROZEN / PASS / 0 BLOCKER at `045a056535604b7adcaeb658212da403f532b4f9`. IM-20B Post-IM13 Authoritative Snapshot Integration is IMPLEMENTED / NOT FROZEN; IM-20C–G remain DEFINED / NOT IMPLEMENTED.
+**Updated:** 2026-09-12 — IM-20B Completion / Regression / Freeze Gate PASS / 0 BLOCKER on `d04acc61f7bfca07b23c912f16fad1edf40038a4`; CI `34702294625` SUCCESS; exact-finalization-head CI and frozen marker pending. IM-20C–G remain DEFINED / NOT IMPLEMENTED.
