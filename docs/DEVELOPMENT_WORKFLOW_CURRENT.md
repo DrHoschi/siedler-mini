@@ -20,9 +20,10 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19A – Residential Building Admission Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19B – Housing Capacity / Occupancy Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19C – Resident → Housing Assignment Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19D – Authoritative Population Projection: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
+- **IM-19D – Authoritative Population Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-19E – Gold Economy Admission / Flow Integration: IMPLEMENTED / NOT FROZEN**
 
-IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, and IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`. IM-19D is implemented on top of frozen IM-19C and is not yet frozen.
+IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is implemented on top of frozen IM-19D and is not yet frozen.
 
 ## 2. Frozen predecessor chain
 
@@ -50,6 +51,9 @@ Frozen IM-19B marker:
 
 Frozen IM-19C marker:
 - `frozen/im-19c-resident-housing-assignment-integration` @ `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`
+
+Frozen IM-19D marker:
+- `frozen/im-19d-authoritative-population-projection` @ `0847d27b60f13a99cb76d220b56b58107e832950`
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -188,7 +192,10 @@ Final evidence: real **iPhone/Safari** device PASS plus CI `34686333542` SUCCESS
 
 ### IM-19D – Authoritative Population Projection
 
-**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen head:** `0847d27b60f13a99cb76d220b56b58107e832950`  
+**Frozen marker:** `frozen/im-19d-authoritative-population-projection`
 
 **Definition baseline:** frozen IM-19C @ `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`.
 
@@ -199,6 +206,18 @@ The projection also exposes immutable `population-count-trace` entries (`personI
 No Person creation/mutation, Housing mutation, Home assignment mutation, Workforce mutation or Gold mutation is part of IM-19D.
 
 Freeze-gate correction: the first IM-19D browser/device evidence had the correct TESTBUILD identity, but source inspection proved that HUD and Inspector still read Population from legacy CR-30B `housingPopulation.population`. That blocked freeze. The corrected runtime composition now executes the real frozen-IM-19A→B→C Housing/Resident assignment chain, exposes `CleanRuntime.populationProjection`, and routes HUD plus read-only Inspector Population through IM-19D. Gold remains on its existing pre-IM-19E owner/path. The previous TESTBUILD 1 screenshot remains historical evidence only. The corrected deployment has now passed a fresh real **iPhone/Safari TESTBUILD 2** re-test: screenshots visibly confirm `IM-19D-AUTHORITATIVE-POPULATION-PROJECTION-TESTBUILD-2`, `READY`, Population `3` in both HUD and read-only Inspector, and `IM-19D · TESTBUILD 2` on the lower surface. CI `34687205200` and Pages `34687204928` both succeeded on exact implementation head `149f37fbdc2aa3d1f05301a38ee3eb9452abec40`. This final steering commit must itself receive exact-head CI + Pages SUCCESS before `frozen/im-19d-authoritative-population-projection` is created.
+
+### IM-19E – Gold Economy Admission / Flow Integration
+
+**Status:** IMPLEMENTED / NOT FROZEN
+
+**Definition baseline:** frozen IM-19D @ `0847d27b60f13a99cb76d220b56b58107e832950`.
+
+IM-19E connects frozen-IM-19D authoritative Population to the existing non-physical `GoldEconomyOwner` without mutating its balance. The only admitted flow type in this block is `POPULATION_INCOME`. The existing owner remains the sole Gold authority and its existing `deriveIncome(...)` path is reused through a strict adapter from the IM-19D projection.
+
+Admission produces an immutable `gold-economy-admission-flow` containing the source Population, rate and derived amount, while proving that `GoldEconomyOwner.balance` remains unchanged. `applyIncome(...)`, `settle(...)`, settlement IDs and any balance-after state remain IM-19F scope.
+
+No taxes, trade, wages, physical Resources, BuildingStock Gold, transport or Inspector mutation authority is introduced.
 
 ### Whole-Block objective
 
@@ -229,6 +248,12 @@ IM-19 answers:
 - **IM-19G – Player Population / Housing / Gold Projection**  
   Read-only Player projection of authoritative population, housing occupancy/capacity and Gold state.
 
+### Future Inspector – Whole Clean-Runtime Rebuild Chain (NON-SCOPE)
+
+The intended later Inspector chain visualization is the **complete Clean-Runtime rebuild**, not merely an individual Resident/Population trace. It should be able to represent the CR/IM capability graph from the clean foundation through the current integration blocks, including sequential steps, branches, ownership boundaries, frozen baselines/gates and relevant runtime evidence. Local traces such as IM-19D `personId → homeBuildingId → COUNTED` are only optional evidence nodes inside that broader system graph.
+
+No such Inspector graph UI is implemented or authorized by IM-19E.
+
 ### IM-19 explicit non-scope
 
 No tax system, marketplace/trade system, wages, needs/happiness, births, deaths, aging, migration, demolition, upgrades, new production system, new transport system, SaveGame rearchitecture, Inspector editor authority or legacy `main` gameplay reuse.
@@ -245,9 +270,11 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19D = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
+**IM-19D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19d-authoritative-population-projection` on that exact SHA. IM-19E is not authorized before that marker exists.
+**IM-19E = IMPLEMENTED / NOT FROZEN.**
+
+The next permissible step is exclusively IM-19E Completion / Regression / Device / Freeze Gate. IM-19F is not authorized before IM-19E passes that gate and receives its frozen marker.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -255,4 +282,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — corrected IM-19D TESTBUILD 2 passed real iPhone/Safari device re-test plus exact implementation-head CI/Pages; freeze gate PASS / 0 BLOCKER; final documentation-head CI/Pages and frozen marker pending.
+**Updated:** 2026-09-12 — IM-19D synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `0847d27b60f13a99cb76d220b56b58107e832950`; IM-19E Gold Economy Admission / Flow Integration implemented against frozen IM-19D; NOT FROZEN. Future Inspector note clarified as whole Clean-Runtime CR/IM rebuild graph.
