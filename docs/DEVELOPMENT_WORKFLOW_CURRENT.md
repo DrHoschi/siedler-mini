@@ -23,7 +23,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19D – Authoritative Population Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19E – Gold Economy Admission / Flow Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-19F – Operational Economy → Gold Settlement: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-19G – Player Population / Housing / Gold Projection: IMPLEMENTED / NOT FROZEN**
+- **IM-19G – Player Population / Housing / Gold Projection: COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
 
 IM-19 development is active on the Whole-Block branch. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, and IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`. IM-19E is frozen at `8284c48b3e6b8c75709a58951acacbc59dd81184`, and IM-19F is frozen at `90d1b093fe1b99b048ea68529b9b0af731b11456`. IM-19G is implemented on top of frozen IM-19F and is not yet frozen.
 
@@ -249,7 +249,7 @@ Final evidence: real Safari device PASS, CI `34691298234` SUCCESS and Pages `346
 
 ### IM-19G – Player Population / Housing / Gold Projection
 
-**Status:** IMPLEMENTED / NOT FROZEN
+**Status:** COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-19F @ `90d1b093fe1b99b048ea68529b9b0af731b11456`.
 
@@ -258,6 +258,8 @@ IM-19G is a read-only Player projection over frozen authoritative Population, Ho
 The projection aggregates residential Building count, capacity, occupancy and available slots, requires projected Population to equal authoritative Housing occupancy, rejects stale Gold state, and renders only Player-facing state such as `Siedlung · Bevölkerung 3 · Wohnen 3/3 · Gold 3`.
 
 IM-19G owns no Population, Resident, Housing, Home-assignment, Gold, Settlement or other Economy mutation authority. No further Economy capability and no Inspector system graph is introduced.
+
+Regression/device evidence on implementation head `5fba2eb728adf1195473b28e578087fc37de2204`: CI `34697541542` SUCCESS and Pages `34697541497` SUCCESS. Real Safari device evidence on both iPhone and iPad confirms `READY`, exact `IM-19G-PLAYER-POPULATION-HOUSING-GOLD-PROJECTION-TESTBUILD-1`, the IM-19G title, visible Population `3`, visible Gold `3`, and the Player line `Siedlung · Bevölkerung 3 · Wohnen 3/3 · Gold 3`. The Player projection is read-only and remains consistent with authoritative Housing occupancy and frozen IM-19F Gold state. A final exact-head CI + Pages verification is required before the IM-19G frozen marker is created.
 
 ### Whole-Block objective
 
@@ -316,9 +318,9 @@ No tax system, marketplace/trade system, wages, needs/happiness, births, deaths,
 
 **IM-19F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-19G = IMPLEMENTED / NOT FROZEN.**
+**IM-19G = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-19G Completion / Regression / Device / Freeze Gate. No successor beyond IM-19G is authorized by this implementation step.
+The next permissible action is exclusively exact-finalization-head CI + Pages verification. If both succeed, create and verify `frozen/im-19g-player-population-housing-gold-projection` on that exact SHA. No successor beyond IM-19G is authorized before that marker exists.
 
 ## 7. Permanent visible build identity synchronization rule
 
@@ -326,4 +328,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-12 — IM-19F synchronized as COMPLETE / FROZEN / PASS / 0 BLOCKER at `90d1b093fe1b99b048ea68529b9b0af731b11456`; IM-19G Player Population / Housing / Gold Projection implemented against frozen IM-19F and remains NOT FROZEN.
+**Updated:** 2026-09-12 — IM-19G Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER on `5fba2eb728adf1195473b28e578087fc37de2204`; iPhone + iPad Safari evidence PASS; exact-finalization-head CI/Pages and frozen marker pending.
