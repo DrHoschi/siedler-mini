@@ -12,6 +12,8 @@ import { BuildingStockContract } from '../domain/building-stock-contract.js';
 import { BuildingStockTransportReservationContract } from '../domain/building-stock-transport-reservation-contract.js';
 import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment-state-contract.js';
 import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignment-contract.js';
+import { CarrierContract } from '../transport/carrier-contract.js';
+import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 import { PostIM13AuthoritativeSnapshotIntegration } from '../savegame/post-im13-authoritative-snapshot-integration.js';
 import { PostIM13SaveGameValidationContract } from '../savegame/post-im13-savegame-validation-contract.js';
 import { PostIM13SaveGameRestoreIntegration } from '../savegame/post-im13-savegame-restore-integration.js';
@@ -28,7 +30,15 @@ function fixture() {
   const targetBuildingId = domains.buildings.allocateId();
   domains.buildings.create({ definitionId: 'WORKSHOP', position: { x: 2, y: 1 } }, { id: targetBuildingId });
   const personId = domains.units.allocateId();
-  domains.units.create({ position: { x: 0, y: 0 } }, { id: personId });
+  domains.units.create({
+    position: { x: 0, y: 0 },
+    carrier: CarrierContract.define({
+      unitId: personId,
+      capacity: 2,
+      state: 'OCCUPIED',
+      location: { kind: 'owner', refId: sourceBuildingId }
+    })
+  }, { id: personId });
 
   const resourceState = new ResourceState({ world, resourceStore: domains.resources });
   const wood = resourceState.createDefinition({ technicalName: 'wood', label: 'Wood' }, { id: 'resource-type:00000001' });
@@ -40,8 +50,8 @@ function fixture() {
   const resource = resourceState.createResource({
     definitionId: wood.id,
     amount: 5,
-    location: null,
-    ownerId: null
+    location: { kind: 'owner', refId: sourceBuildingId },
+    ownerId: sourceBuildingId
   }, { id: 'resource:00000001' });
 
   const resourceClaims = new ResourceClaims({ resourceState });
@@ -52,12 +62,23 @@ function fixture() {
     amount: 2,
     metadata: { purpose: 'construction' }
   }, { id: 'demand:00000001' });
-  resourceDemands.reserve({
+  const claim = resourceDemands.reserve({
     demandId: demand.id,
     resourceId: resource.id,
     amount: 1,
     metadata: { source: 'im20c-test' }
   });
+  const jobId = domains.jobs.allocateId();
+  domains.jobs.create({
+    claimId: claim.id,
+    demandId: demand.id,
+    resourceId: resource.id,
+    definitionId: wood.id,
+    sourceLocation: resource.location,
+    targetId: targetBuildingId,
+    amount: 1,
+    status: 'PENDING'
+  }, { id: jobId });
 
   const goldEconomy = new GoldEconomyOwner({ initialGold: 9 });
   const wearCellId = map.cellIdAt(1, 0);
@@ -130,6 +151,27 @@ function fixture() {
         assignmentId: 'assignment:00000001'
       })
     ]),
+    workforceBindings: Object.freeze([
+      Object.freeze({
+        kind: 'workforce-building-binding',
+        assignmentId: 'assignment:00000001',
+        buildingId: targetBuildingId
+      })
+    ]),
+    carrierBindings: Object.freeze([
+      Object.freeze({
+        kind: 'carrier-job-binding',
+        jobId,
+        unitId: personId
+      })
+    ]),
+    transportExecutions: Object.freeze([
+      TransportExecutionContract.define({
+        jobId,
+        unitId: personId,
+        state: 'TO_DROPOFF'
+      })
+    ]),
     homeAssignments: Object.freeze([
       ResidentHomeAssignmentContract.define({
         personId,
@@ -161,6 +203,9 @@ function capture(f, stepIndex = 31) {
     buildingStocks: f.buildingStocks,
     buildingStockTransportReservations: f.buildingStockTransportReservations,
     workforceAssignments: f.workforceAssignments,
+    workforceBindings: f.workforceBindings,
+    carrierBindings: f.carrierBindings,
+    transportExecutions: f.transportExecutions,
     homeAssignments: f.homeAssignments,
     productionSettlementIds: [...f.productionSettlementIds],
     goldSettlementIds: [...f.goldSettlementIds]
@@ -186,6 +231,9 @@ function recapture(state) {
     buildingStocks: state.buildingStocks,
     buildingStockTransportReservations: state.buildingStockTransportReservations,
     workforceAssignments: state.workforceAssignments,
+    workforceBindings: state.workforceBindings,
+    carrierBindings: state.carrierBindings,
+    transportExecutions: state.transportExecutions,
     homeAssignments: state.homeAssignments,
     productionSettlementIds: [...state.productionSettlementIds],
     goldSettlementIds: [...state.goldSettlementIds]
@@ -241,6 +289,18 @@ export function runIM20CSelfTest() {
   badClaimDemand.authoritative.resourceClaims.state.items['claim:00000001'].consumerId = initial.buildingStockTransportReservations[0].sourceBuildingId;
   const badClaimDemandValidation = PostIM13SaveGameValidationContract.validate(badClaimDemand);
 
+  const missingWorkforceBinding = structuredClone(snapshotA);
+  missingWorkforceBinding.authoritative.workforceBindings = [];
+  const missingWorkforceBindingValidation = PostIM13SaveGameValidationContract.validate(missingWorkforceBinding);
+
+  const carrierMismatch = structuredClone(snapshotA);
+  carrierMismatch.authoritative.transportExecutions[0].unitId = 'unit:99999999';
+  const carrierMismatchValidation = PostIM13SaveGameValidationContract.validate(carrierMismatch);
+
+  const missingExecutionBinding = structuredClone(snapshotA);
+  missingExecutionBinding.authoritative.carrierBindings = [];
+  const missingExecutionBindingValidation = PostIM13SaveGameValidationContract.validate(missingExecutionBinding);
+
   const badHome = structuredClone(snapshotA);
   badHome.authoritative.homeAssignments[0].homeBuildingId = initial.workforceRequirements[0].buildingId;
   const badHomeValidation = PostIM13SaveGameValidationContract.validate(badHome);
@@ -264,6 +324,10 @@ export function runIM20CSelfTest() {
       && restoredDemandBeforeAllocatorProbe?.reservedAmount === 1
       && state.buildingStocks.length === 2
       && state.workforceAssignments.length === 1
+      && state.workforceBindings.length === 1
+      && state.carrierBindings.length === 1
+      && state.transportExecutions.length === 1
+      && state.transportExecutions[0].state === 'TO_DROPOFF'
       && state.homeAssignments.length === 1,
     canonicalRoundTripIdentity: serializedA === serializedB,
     resourceDefinitionAllocatorContinuity: nextDefinition.id === 'resource-type:00000003',
@@ -284,6 +348,15 @@ export function runIM20CSelfTest() {
     claimDemandMismatchRejected:
       badClaimDemandValidation.status === 'INVALID'
       && hasCode(badClaimDemandValidation, 'CLAIM_DEMAND_CONSUMER_MISMATCH'),
+    missingWorkforceBindingRejected:
+      missingWorkforceBindingValidation.status === 'INVALID'
+      && hasCode(missingWorkforceBindingValidation, 'MISSING_WORKFORCE_BUILDING_BINDING'),
+    transportCarrierMismatchRejected:
+      carrierMismatchValidation.status === 'INVALID'
+      && hasCode(carrierMismatchValidation, 'TRANSPORT_EXECUTION_CARRIER_MISMATCH'),
+    executionWithoutCarrierBindingRejected:
+      missingExecutionBindingValidation.status === 'INVALID'
+      && hasCode(missingExecutionBindingValidation, 'TRANSPORT_EXECUTION_WITHOUT_CARRIER_BINDING'),
     homeWithoutHousingCapabilityRejected:
       badHomeValidation.status === 'INVALID'
       && hasCode(badHomeValidation, 'HOME_WITHOUT_HOUSING_CAPABILITY'),
@@ -312,6 +385,9 @@ export function runIM20CSelfTest() {
       restoredClaims: state.resourceClaims.ids().length,
       restoredBuildingStocks: state.buildingStocks.length,
       restoredWorkforceAssignments: state.workforceAssignments.length,
+      restoredWorkforceBindings: state.workforceBindings.length,
+      restoredCarrierBindings: state.carrierBindings.length,
+      restoredTransportExecutions: state.transportExecutions.length,
       restoredHomeAssignments: state.homeAssignments.length,
       productionFenceCount: state.productionSettlementIds.size,
       goldFenceCount: state.goldSettlementIds.size
