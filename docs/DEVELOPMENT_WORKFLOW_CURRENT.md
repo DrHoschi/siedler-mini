@@ -26,7 +26,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-19G – Player Population / Housing / Gold Projection: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
+- **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20C – Deterministic Validation & Restore Integration: IMPLEMENTED / VERIFICATION SURFACE FIX APPLIED / DEVICE RE-TEST PENDING / NOT FROZEN**
 - **IM-20D–G: DEFINED / NOT IMPLEMENTED**
 
@@ -420,7 +420,7 @@ Implementation:
 
 Implementation head `d04acc61f7bfca07b23c912f16fad1edf40038a4` passed the complete predecessor regression plus IM-20B self-test in CI `34702294625` with SUCCESS. Source verification confirms V2 capture only: frozen V1 Snapshot/Validation remain unchanged, V2 validation/restore are absent, and browser storage/Continue are absent.
 
-**IM-20B = CONTINUITY CORRECTION PASS / RE-FREEZE PENDING / 0 BLOCKER.**
+**IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER — Rebinding prerequisite continuity correction incorporated.**
 
 Freeze evidence: implementation CI `34702294625` SUCCESS on `d04acc61f7bfca07b23c912f16fad1edf40038a4`; finalization CI `34702517357` SUCCESS and Pages `34702517124` SUCCESS on `e9b1df016ecf0ce64510e7f8dcafae1bbcb35993`; marker `frozen/im-20b-post-im13-authoritative-snapshot-integration` created and verified identical at freeze time.
 
@@ -670,7 +670,7 @@ Freeze evidence: final gate documentation head `a5f720ca870617e5ae611fec5ea50846
 
 ### IM-20B/C – Rebinding Prerequisite Continuity Correction
 
-**Status:** IMPLEMENTED / REGRESSION PASS / RE-FREEZE PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
 IM-20D preflight against frozen IM-20C exposed three non-derivable continuity gaps. Persisting only the previous owner state was insufficient to reconstruct these relationships without guessing:
 
@@ -710,7 +710,7 @@ Regression evidence on code head `90931a8410cf43254193839fe893ed744c1104c8`:
 
 Scope diff from prior frozen IM-20C is ahead-only / 0 behind and limited to the six SaveGame/test files required by this correction. No IM-20D+ implementation exists.
 
-The next permissible action is exclusively final steering-document CI followed by fast-forwarding the existing IM-20B and IM-20C frozen markers to the corrected exact head. IM-20D remains blocked until both markers are corrected.
+Corrected freeze evidence: steering-document head `c77840995fd7b7a06d9b14d392fe9dcd0ffda134` passed CI `34753353620`. Both existing frozen markers were fast-forwarded to that exact head and verified identical / 0 ahead / 0 behind against the Whole-Block branch.
 
 ### Remaining defined substeps
 
@@ -761,9 +761,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = CONTINUITY CORRECTION PASS / RE-FREEZE PENDING / 0 BLOCKER.**
+**IM-20C = COMPLETE / FROZEN / PASS / 0 BLOCKER — Rebinding prerequisite continuity correction incorporated.**
 
-The next permissible action is exclusively final CI and re-freeze of corrected IM-20B/IM-20C. IM-20D remains blocked until both corrected frozen markers are established. IM-20E+ remains unauthorized.
+The next permissible development step is exclusively IM-20D – Derived-State Rebinding after Continue, building on the corrected frozen IM-20C. IM-20E+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -771,4 +771,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-13 — IM-20B/C Rebinding Prerequisite Continuity Correction IMPLEMENTED / REGRESSION PASS / RE-FREEZE PENDING. Code head `90931a8410cf43254193839fe893ed744c1104c8`; CI `34753225971` SUCCESS; Pages `34753225982` SUCCESS. IM-20D remains NOT IMPLEMENTED and blocked until corrected IM-20B/IM-20C markers are fast-forwarded.
+**Updated:** 2026-09-13 — IM-20B/C Rebinding Prerequisite Continuity Correction COMPLETE / FROZEN / PASS / 0 BLOCKER. Corrected code head `90931a8410cf43254193839fe893ed744c1104c8`: CI `34753225971` SUCCESS, Pages `34753225982` SUCCESS. Steering gate head `c77840995fd7b7a06d9b14d392fe9dcd0ffda134`: CI `34753353620` SUCCESS. Both IM-20B and IM-20C markers were fast-forwarded and verified identical. IM-20D is now the next permissible step; IM-20E+ remains unauthorized.
