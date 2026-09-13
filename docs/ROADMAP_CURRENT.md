@@ -1,14 +1,14 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-18 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-19 WHOLE-BLOCK RECONCILIATION PASS / FREEZE AUTHORIZATION PENDING; IM-19A–G COMPLETE / FROZEN / PASS / 0 BLOCKER  
+**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20D–G DEFINED / NOT IMPLEMENTED
 **Repository:** `DrHoschi/siedler-mini`  
-**Frozen IM-18 Whole-Block head:** `2d068aa357ec5d1fe8f53eb867037021d04caddf`  
-**Frozen IM-18 Whole-Block marker:** `frozen/im-18-operational-building-workforce-production-integration`  
-**Current Whole-Block branch:** `feature/im-19-population-housing-gold-economy-integration`
+**Frozen IM-20C baseline head:** `37b81f1e9e37069e855bb2c3a3fb4b76bfb13930`
+**Frozen IM-20C marker:** `frozen/im-20c-deterministic-validation-restore-integration`
+**Current Whole-Block branch:** `feature/im-20-authoritative-savegame-continue-integration`
 
 ## 1. Frozen line
 
-CR-25 through CR-32 and IM-13 through IM-18 remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+CR-25 through CR-32, IM-13 through IM-19 and IM-20A–C remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 Frozen IM-17 Whole-Block:
 - `frozen/im-17-economic-construction-integration` @ `53de400c2ffe57addf832b599b906b3d5b473385`
