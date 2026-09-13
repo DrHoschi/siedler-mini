@@ -102,7 +102,8 @@ if (inspectorShell && window.CleanRuntime) {
   });
 
   const status = document.querySelector('#test-status');
-  if (status) {
+  const ownsVisibleVerificationSurface = /^IM-15(?:[A-Z]|-|$)/.test(String(window.CleanRuntime?.config?.build ?? ''));
+  if (status && ownsVisibleVerificationSurface) {
     status.textContent = 'IM-15 — COMPLETE / FROZEN / PASS / 0 BLOCKER — Guidance / Inspector Whole Block · A/B/C/D/E frozen · Observation read-only · Actions allowlisted · Metrics ohne Runtime-Rückwirkung';
     status.dataset.pass = 'true';
   }
