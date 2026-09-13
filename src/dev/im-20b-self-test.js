@@ -13,6 +13,8 @@ import { BuildingStockContract } from '../domain/building-stock-contract.js';
 import { BuildingStockTransportReservationContract } from '../domain/building-stock-transport-reservation-contract.js';
 import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment-state-contract.js';
 import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignment-contract.js';
+import { CarrierContract } from '../transport/carrier-contract.js';
+import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 import { PostIM13AuthoritativeSnapshotIntegration } from '../savegame/post-im13-authoritative-snapshot-integration.js';
 
 function fixture() {
@@ -27,7 +29,15 @@ function fixture() {
   const targetBuildingId = domains.buildings.allocateId();
   domains.buildings.create({ definitionId: 'WORKSHOP', position: { x: 2, y: 1 } }, { id: targetBuildingId });
   const personId = domains.units.allocateId();
-  domains.units.create({ position: { x: 0, y: 0 } }, { id: personId });
+  domains.units.create({
+    position: { x: 0, y: 0 },
+    carrier: CarrierContract.define({
+      unitId: personId,
+      capacity: 2,
+      state: 'OCCUPIED',
+      location: { kind: 'owner', refId: sourceBuildingId }
+    })
+  }, { id: personId });
 
   const resources = new ResourceState({ world, resourceStore: domains.resources });
   const definition = resources.createDefinition({ technicalName: 'wood', label: 'Wood' }, { id: 'resource-type:00000001' });
@@ -41,8 +51,8 @@ function fixture() {
   const resource = resources.createResource({
     definitionId: definition.id,
     amount: 5,
-    location: null,
-    ownerId: null
+    location: { kind: 'owner', refId: sourceBuildingId },
+    ownerId: sourceBuildingId
   }, { id: 'resource:00000001' });
 
   const claims = new ResourceClaims({ resourceState: resources });
@@ -53,12 +63,23 @@ function fixture() {
     amount: 2,
     metadata: { purpose: 'construction' }
   }, { id: 'demand:00000001' });
-  demands.reserve({
+  const claim = demands.reserve({
     demandId: demand.id,
     resourceId: resource.id,
     amount: 1,
     metadata: { source: 'im20b-test' }
   });
+  const jobId = domains.jobs.allocateId();
+  domains.jobs.create({
+    claimId: claim.id,
+    demandId: demand.id,
+    resourceId: resource.id,
+    definitionId: definition.id,
+    sourceLocation: resource.location,
+    targetId: targetBuildingId,
+    amount: 1,
+    status: 'PENDING'
+  }, { id: jobId });
 
   const gold = new GoldEconomyOwner({ initialGold: 9 });
   const wearCellId = map.cellIdAt(1, 0);
@@ -92,6 +113,27 @@ function fixture() {
       personId,
       availability: 'ASSIGNED',
       assignmentId: 'assignment:00000001'
+    })
+  ];
+  const workforceBindings = [
+    Object.freeze({
+      kind: 'workforce-building-binding',
+      assignmentId: 'assignment:00000001',
+      buildingId: targetBuildingId
+    })
+  ];
+  const carrierBindings = [
+    Object.freeze({
+      kind: 'carrier-job-binding',
+      jobId,
+      unitId: personId
+    })
+  ];
+  const transportExecutions = [
+    TransportExecutionContract.define({
+      jobId,
+      unitId: personId,
+      state: 'TO_DROPOFF'
     })
   ];
   const homeAssignments = [
@@ -135,7 +177,7 @@ function fixture() {
     world, map, domains, gold, wear, resources, demands, claims,
     housingCapabilities, workforceProfiles, workforceRequirements, productionRecipes,
     constructionProgress, buildingStocks, reservations,
-    workforceAssignments, homeAssignments
+    workforceAssignments, workforceBindings, carrierBindings, transportExecutions, homeAssignments
   };
 }
 
@@ -158,6 +200,9 @@ function capture(f) {
     buildingStocks: f.buildingStocks,
     buildingStockTransportReservations: f.reservations,
     workforceAssignments: f.workforceAssignments,
+    workforceBindings: f.workforceBindings,
+    carrierBindings: f.carrierBindings,
+    transportExecutions: f.transportExecutions,
     homeAssignments: f.homeAssignments,
     productionSettlementIds: ['production-settlement:00000002', 'production-settlement:00000001'],
     goldSettlementIds: ['gold-settlement:00000001']
@@ -227,6 +272,12 @@ export function runIM20BSelfTest() {
     workforceAndHomeAssignmentsCaptured:
       snapshotA.authoritative.workforceAssignments[0].availability === 'ASSIGNED'
       && snapshotA.authoritative.homeAssignments[0].state === 'ASSIGNED',
+    rebindingPrerequisiteContinuityCaptured:
+      snapshotA.authoritative.workforceBindings[0].assignmentId === 'assignment:00000001'
+      && snapshotA.authoritative.workforceBindings[0].buildingId === f.workforceRequirements[0].buildingId
+      && snapshotA.authoritative.carrierBindings[0].jobId === f.transportExecutions[0].jobId
+      && snapshotA.authoritative.carrierBindings[0].unitId === f.transportExecutions[0].unitId
+      && snapshotA.authoritative.transportExecutions[0].state === 'TO_DROPOFF',
     exactlyOnceFencesCapturedAndCanonicalized:
       snapshotA.authoritative.settlementFences.production.join('|')
         === 'production-settlement:00000001|production-settlement:00000002'
@@ -305,6 +356,9 @@ export function runIM20BSelfTest() {
       buildingStockCount: snapshotA.authoritative.buildingStocks.length,
       reservationCount: snapshotA.authoritative.buildingStockTransportReservations.length,
       workforceAssignmentCount: snapshotA.authoritative.workforceAssignments.length,
+      workforceBindingCount: snapshotA.authoritative.workforceBindings.length,
+      carrierBindingCount: snapshotA.authoritative.carrierBindings.length,
+      transportExecutionCount: snapshotA.authoritative.transportExecutions.length,
       homeAssignmentCount: snapshotA.authoritative.homeAssignments.length,
       productionFenceCount: snapshotA.authoritative.settlementFences.production.length,
       goldFenceCount: snapshotA.authoritative.settlementFences.gold.length
