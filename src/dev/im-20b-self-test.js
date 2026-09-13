@@ -35,7 +35,7 @@ function fixture() {
       unitId: personId,
       capacity: 2,
       state: 'OCCUPIED',
-      location: { kind: 'owner', refId: sourceBuildingId }
+      location: { kind: 'cell', refId: map.cellIdAt(0, 0) }
     })
   }, { id: personId });
 
@@ -52,7 +52,7 @@ function fixture() {
     definitionId: definition.id,
     amount: 5,
     location: { kind: 'owner', refId: sourceBuildingId },
-    ownerId: sourceBuildingId
+    ownerId: null
   }, { id: 'resource:00000001' });
 
   const claims = new ResourceClaims({ resourceState: resources });
