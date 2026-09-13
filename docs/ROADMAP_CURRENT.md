@@ -499,6 +499,50 @@ Scope diff against frozen IM-20B is ahead-only / 0 behind and limited to IM-20C 
 
 Freeze evidence: final gate documentation head `a5f720ca870617e5ae611fec5ea50846588272ff` passed CI `34748598823` with the full IM-20C + frozen predecessor regression. Marker `frozen/im-20c-deterministic-validation-restore-integration` was created on that exact head and verified identical / 0 ahead / 0 behind. Real iPhone/Safari TESTBUILD 3 evidence confirms correct IM-20C visible verification ownership with READY, Population 3, Gold 3, Housing 3/3 and 3 Buildings / 3 Persons.
 
+### IM-20B/C – Rebinding Prerequisite Continuity Correction
+
+**Status:** IMPLEMENTED / REGRESSION PASS / RE-FREEZE PENDING
+
+IM-20D preflight against frozen IM-20C exposed three non-derivable continuity gaps. Persisting only the previous owner state was insufficient to reconstruct these relationships without guessing:
+
+1. workforce `assignmentId ↔ buildingId`;
+2. carrier `jobId ↔ unitId`;
+3. active `TransportExecutionContract` state (`TO_PICKUP / PICKED_UP / TO_DROPOFF / DELIVERED`).
+
+The V2 persistence boundary is therefore corrected with three authoritative continuity sections:
+
+- `authoritative.workforceBindings[]` — `workforce-building-binding { assignmentId, buildingId }`;
+- `authoritative.carrierBindings[]` — `carrier-job-binding { jobId, unitId }`;
+- `authoritative.transportExecutions[]` — existing `transport-execution { jobId, unitId, state }`.
+
+Validation is fail-closed:
+- every ASSIGNED workforce assignment must resolve to exactly one workforce-building binding;
+- workforce bindings may not reference unknown Buildings or orphan assignment IDs;
+- carrier bindings require a PENDING TransportJob and an OCCUPIED matching carrier Unit;
+- one carrier Unit may not own two active job bindings;
+- every OCCUPIED carrier must have a persisted job binding;
+- persisted transport execution must match the same jobId↔unitId carrier binding;
+- post-IM13 TransportJobs resolve claimId/demandId against V2 authoritative ResourceClaims/ResourceDemands and are revalidated through the existing TransportJobContract.
+
+Restore behavior:
+- frozen V1 SaveGame contracts remain unchanged;
+- the IM-20C V2 adapter restores World/Map/Gold/Wear through the frozen V1 owner path;
+- after successful V2 validation, CoreDomainStores including Jobs are restored from the original V2 snapshot with allocator continuity, avoiding the older V1-only dangling-reference interpretation for post-IM13 Claim/Demand links;
+- the three new continuity arrays are restored immutable;
+- no derived rebinding, activation, scheduler registration, browser storage or Continue lifecycle is introduced.
+
+Regression evidence on code head `90931a8410cf43254193839fe893ed744c1104c8`:
+- CI `34753225971` — SUCCESS;
+- Pages `34753225982` — SUCCESS;
+- IM-20B capture test — PASS;
+- IM-20C V2 validation/restore canonical roundtrip — PASS;
+- missing workforce binding, carrier/execution mismatch and execution-without-binding are rejected fail-closed;
+- full frozen predecessor regression remains green.
+
+Scope diff from prior frozen IM-20C is ahead-only / 0 behind and limited to the six SaveGame/test files required by this correction. No IM-20D+ implementation exists.
+
+The next permissible action is exclusively final steering-document CI followed by fast-forwarding the existing IM-20B and IM-20C frozen markers to the corrected exact head. IM-20D remains blocked until both markers are corrected.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -545,12 +589,12 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+**IM-20B = CONTINUITY CORRECTION PASS / RE-FREEZE PENDING / 0 BLOCKER.**
 
-**IM-20C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+**IM-20C = CONTINUITY CORRECTION PASS / RE-FREEZE PENDING / 0 BLOCKER.**
 
-The next permissible development step is exclusively IM-20D – Derived-State Rebinding after Continue, and only when separately authorized. IM-20E+ remains unauthorized.
+The next permissible action is exclusively final CI and re-freeze of corrected IM-20B/IM-20C. IM-20D remains blocked until both corrected frozen markers are established. IM-20E+ remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-13 — IM-20C COMPLETE / FROZEN / PASS / 0 BLOCKER. Frozen marker: `frozen/im-20c-deterministic-validation-restore-integration`. Final gate CI `34748598823` SUCCESS on `a5f720ca870617e5ae611fec5ea50846588272ff`; real iPhone/Safari TESTBUILD 3 evidence PASS. IM-20D remains DEFINED / NOT IMPLEMENTED and requires separate authorization.
+**Updated:** 2026-09-13 — IM-20B/C Rebinding Prerequisite Continuity Correction IMPLEMENTED / REGRESSION PASS / RE-FREEZE PENDING. Code head `90931a8410cf43254193839fe893ed744c1104c8`; CI `34753225971` SUCCESS; Pages `34753225982` SUCCESS. IM-20D remains NOT IMPLEMENTED and blocked until corrected IM-20B/IM-20C markers are fast-forwarded.
