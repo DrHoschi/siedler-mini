@@ -137,7 +137,8 @@ if (inspectorShell && window.CleanRuntime) {
   });
 
   const status = document.querySelector('#test-status');
-  if (status) {
+  const ownsVisibleVerificationSurface = /^IM-15(?:[A-Z]|-|$)/.test(String(window.CleanRuntime?.config?.build ?? ''));
+  if (status && ownsVisibleVerificationSurface) {
     status.textContent = 'IM-15A — COMPLETE / FROZEN / PASS / 0 BLOCKER — Inspector Shell aktiv · Runtime/World/Population/Gold/Selection ausschließlich read-only projiziert';
     status.dataset.pass = 'true';
   }
