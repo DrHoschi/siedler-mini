@@ -7,6 +7,7 @@ import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment
 import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignment-contract.js';
 import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
 import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
+import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 
 const RESULT_KIND = 'post-im13-savegame-validation-result';
 const SCHEMA_VERSION = 2;
@@ -375,6 +376,107 @@ function validateContractArray(values, path, normalize, keyOf, refs, collector, 
   return out;
 }
 
+function validateRebindingContinuity(snapshot, workforceAssignments, refs, collector) {
+  const auth = snapshot?.authoritative ?? {};
+  const buildings = snapshot?.domains?.buildings?.state?.items ?? {};
+  const units = snapshot?.domains?.units?.state?.items ?? {};
+  const jobs = snapshot?.domains?.jobs?.state?.items ?? {};
+
+  const assignedIds = new Set(
+    workforceAssignments
+      .filter(value => value.availability === 'ASSIGNED')
+      .map(value => value.assignmentId)
+  );
+
+  const workforceBindings = new Map();
+  if (!Array.isArray(auth.workforceBindings)) {
+    collector.add('INVALID_WORKFORCE_BINDINGS', 'authoritative.workforceBindings');
+  } else {
+    auth.workforceBindings.forEach((value, index) => {
+      const path = `authoritative.workforceBindings.${index}`;
+      if (!isObject(value) || value.kind !== 'workforce-building-binding') {
+        collector.add('INVALID_WORKFORCE_BINDING', path);
+        return;
+      }
+      const assignment = validateStableId(value.assignmentId, 'assignment', `${path}.assignmentId`, collector);
+      const building = validateStableId(value.buildingId, 'building', `${path}.buildingId`, collector);
+      if (assignment) {
+        if (workforceBindings.has(assignment.id)) collector.add('DUPLICATE_WORKFORCE_BINDING', `${path}.assignmentId`);
+        workforceBindings.set(assignment.id, value);
+        if (!assignedIds.has(assignment.id)) collector.add('ORPHAN_WORKFORCE_BINDING', `${path}.assignmentId`);
+      }
+      if (building && !buildings[building.id]) collector.add('DANGLING_WORKFORCE_BINDING_BUILDING', `${path}.buildingId`);
+    });
+  }
+  for (const assignmentId of assignedIds) {
+    if (!workforceBindings.has(assignmentId)) {
+      collector.add('MISSING_WORKFORCE_BUILDING_BINDING', 'authoritative.workforceBindings');
+    }
+  }
+
+  const carrierBindings = new Map();
+  const boundUnits = new Set();
+  if (!Array.isArray(auth.carrierBindings)) {
+    collector.add('INVALID_CARRIER_BINDINGS', 'authoritative.carrierBindings');
+  } else {
+    auth.carrierBindings.forEach((value, index) => {
+      const path = `authoritative.carrierBindings.${index}`;
+      if (!isObject(value) || value.kind !== 'carrier-job-binding') {
+        collector.add('INVALID_CARRIER_BINDING', path);
+        return;
+      }
+      const job = validateStableId(value.jobId, 'transport-job', `${path}.jobId`, collector);
+      const unit = validateStableId(value.unitId, 'unit', `${path}.unitId`, collector);
+      if (job) {
+        if (carrierBindings.has(job.id)) collector.add('DUPLICATE_CARRIER_JOB_BINDING', `${path}.jobId`);
+        carrierBindings.set(job.id, value);
+        const jobRecord = jobs[job.id];
+        if (!jobRecord) collector.add('DANGLING_CARRIER_BINDING_JOB', `${path}.jobId`);
+        else if (String(jobRecord.status ?? '').toUpperCase() !== 'PENDING') collector.add('CARRIER_BINDING_NON_PENDING_JOB', `${path}.jobId`);
+      }
+      if (unit) {
+        if (boundUnits.has(unit.id)) collector.add('DUPLICATE_CARRIER_UNIT_BINDING', `${path}.unitId`);
+        boundUnits.add(unit.id);
+        const unitRecord = units[unit.id];
+        if (!unitRecord) collector.add('DANGLING_CARRIER_BINDING_UNIT', `${path}.unitId`);
+        else {
+          if (unitRecord.carrier?.unitId !== unit.id) collector.add('CARRIER_BINDING_UNIT_CONTRACT_MISMATCH', `${path}.unitId`);
+          if (String(unitRecord.carrier?.state ?? '').toUpperCase() !== 'OCCUPIED') collector.add('CARRIER_BINDING_REQUIRES_OCCUPIED', `${path}.unitId`);
+        }
+      }
+    });
+  }
+
+  for (const [unitId, unitRecord] of Object.entries(units)) {
+    if (String(unitRecord?.carrier?.state ?? '').toUpperCase() === 'OCCUPIED' && !boundUnits.has(unitId)) {
+      collector.add('OCCUPIED_CARRIER_WITHOUT_JOB_BINDING', `domains.units.state.items.${unitId}.carrier.state`);
+    }
+  }
+
+  if (!Array.isArray(auth.transportExecutions)) {
+    collector.add('INVALID_TRANSPORT_EXECUTIONS', 'authoritative.transportExecutions');
+  } else {
+    const seenJobs = new Set();
+    auth.transportExecutions.forEach((value, index) => {
+      const path = `authoritative.transportExecutions.${index}`;
+      let execution;
+      try {
+        execution = TransportExecutionContract.define(value);
+      } catch {
+        collector.add('INVALID_TRANSPORT_EXECUTION', path);
+        return;
+      }
+      if (seenJobs.has(execution.jobId)) collector.add('DUPLICATE_TRANSPORT_EXECUTION', `${path}.jobId`);
+      seenJobs.add(execution.jobId);
+      const binding = carrierBindings.get(execution.jobId);
+      if (!binding) collector.add('TRANSPORT_EXECUTION_WITHOUT_CARRIER_BINDING', `${path}.jobId`);
+      else if (binding.unitId !== execution.unitId) collector.add('TRANSPORT_EXECUTION_CARRIER_MISMATCH', `${path}.unitId`);
+      if (!refs.has(execution.jobId)) collector.add('DANGLING_TRANSPORT_EXECUTION_JOB', `${path}.jobId`);
+      if (!refs.has(execution.unitId)) collector.add('DANGLING_TRANSPORT_EXECUTION_UNIT', `${path}.unitId`);
+    });
+  }
+}
+
 function validateSettlementFences(value, collector) {
   const path = 'authoritative.settlementFences';
   if (!isObject(value)) {
@@ -459,7 +561,7 @@ export class PostIM13SaveGameValidationContract {
           if (!resourceTypeIds.has(value.resourceTypeId)) collector.add('DANGLING_RESOURCE_TYPE_REFERENCE', `${path}.resourceTypeId`);
         }
       );
-      validateContractArray(
+      const workforceAssignments = validateContractArray(
         auth?.workforceAssignments,
         'authoritative.workforceAssignments',
         value => WorkforceAssignmentStateContract.define(value),
@@ -486,6 +588,7 @@ export class PostIM13SaveGameValidationContract {
           }
         }
       );
+      validateRebindingContinuity(snapshot, workforceAssignments, refs, collector);
       validateSettlementFences(auth?.settlementFences, collector);
     }
 
