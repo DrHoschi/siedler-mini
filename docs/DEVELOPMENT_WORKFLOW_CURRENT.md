@@ -561,7 +561,7 @@ Implementation:
 - restore-only constructor support in `src/resources/resource-state.js`, `resource-claims.js`, `resource-demands.js`
 
 Visible verification identity:
-`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-2`
+`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-3`
 
 Hard IM-20C boundary:
 - V2 Validation = implemented;
@@ -594,7 +594,7 @@ Correction boundary:
 - no Derived-State Rebinding, runtime activation, browser storage, Continue lifecycle or IM-20D+ capability added.
 
 Corrected visible build identity:
-`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-2`
+`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-3`
 
 Files in this correction:
 - `src/im16g-runtime-evidence.js`
@@ -604,6 +604,44 @@ Files in this correction:
 - `index.html`
 
 The next permissible action remains exclusively **IM-20C Completion / Regression / Device / Freeze Gate**. A new real iPhone/Safari check must confirm TESTBUILD 2 and absence of the stale IM-16G visible FAIL before IM-20C may freeze.
+
+### IM-20C – Predecessor Verification Surface Ownership Correction 2
+
+**Status:** IMPLEMENTED / AUTOMATED REGRESSION PASS / DEVICE RE-TEST PENDING / NOT FROZEN
+
+Real-device TESTBUILD 2 evidence removed the stale IM-16G FAIL, but exposed the same shared-surface ownership defect one layer earlier: the visible IM-20C verification card was overwritten by frozen IM-15 Inspector/Guidance modules, ending with:
+
+`IM-15 – COMPLETE / FROZEN / PASS / 0 BLOCKER — Guidance / Inspector Whole Block ...`
+
+Root cause:
+- IM-15A Inspector Runtime Observation,
+- IM-15B Structured Runtime Diagnostics,
+- IM-15C World Diagnostic Overlay,
+- IM-15D Controlled Diagnostic Actions,
+- IM-15E / IM-15 Whole-Block Simulation Observation
+
+all still wrote directly to shared `#test-status` whenever their controller activated.
+
+Correction:
+- all IM-15A–E predecessor capabilities continue to initialize and operate unchanged;
+- they may own/write the shared visible verification surface only while the active build belongs to IM-15;
+- on successor hosts such as IM-20C they remain functional but do not overwrite successor verification evidence;
+- the previously corrected IM-16G and IM-17 predecessor evidence ownership rule remains in force.
+
+No SaveGame validation/restore semantics, runtime authority, Inspector behavior, Derived-State Rebinding, activation, browser storage or Continue capability changed.
+
+Corrected visible identity:
+`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-3`
+
+Corrected code head:
+`41dc32495fe3098fa8bb23053eea088784a80fad`
+
+Automated evidence:
+- CI `34746060489` — SUCCESS
+- `Run IM-20C + frozen predecessor regression` — SUCCESS
+- Pages `34746060336` — SUCCESS
+
+Freeze remains blocked pending a new real-device TESTBUILD 3 check confirming that the IM-20C verification surface is no longer replaced by IM-15/16/17 predecessor status.
 
 ### Remaining defined substeps
 
@@ -654,9 +692,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = IMPLEMENTED / VERIFICATION SURFACE FIX APPLIED / DEVICE RE-TEST PENDING / NOT FROZEN.**
+**IM-20C = IMPLEMENTED / PREDECESSOR VERIFICATION SURFACE FIXES APPLIED / AUTOMATED REGRESSION PASS / DEVICE RE-TEST PENDING / NOT FROZEN.**
 
-The next permissible step is exclusively IM-20C Completion / Regression / Device / Freeze Gate. Freeze remains blocked until TESTBUILD 2 is confirmed on real iPhone/Safari without the stale IM-16G visible FAIL. IM-20D+ remains unauthorized.
+The next permissible step is exclusively IM-20C Completion / Regression / Device / Freeze Gate. Freeze remains blocked until TESTBUILD 3 is confirmed on real device without stale IM-15/IM-16G/IM-17 visible predecessor status. IM-20D+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -664,4 +702,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-13 — IM-20C remains NOT FROZEN. Real iPhone/Safari TESTBUILD 1 exposed stale predecessor verification-surface ownership (`IM-16G FAIL / buildIdentity=false`) despite correct IM-20C RuntimeConfig identity. Verification Surface Ownership Correction is implemented as TESTBUILD 2; automated regression and new iPhone/Safari re-test are required before freeze.
+**Updated:** 2026-09-13 — IM-20C remains NOT FROZEN. TESTBUILD 1 exposed IM-16G verification ownership; TESTBUILD 2 removed IM-16G but exposed remaining IM-15A–E/Whole-Block ownership. TESTBUILD 3 contains the full predecessor verification-surface ownership correction. CI `34746060489` and Pages `34746060336` PASS on code head `41dc32495fe3098fa8bb23053eea088784a80fad`. Real-device TESTBUILD 3 re-test remains the only device gate before freeze.
