@@ -8,7 +8,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Frozen development baseline: corrected IM-20C @ `37b81f1e9e37069e855bb2c3a3fb4b76bfb13930`
+- Frozen development baseline: corrected IM-20C @ `ce84bacef4d2802f045ce522e7f7140b7b173fd8`
 - Frozen IM-20C marker: `frozen/im-20c-deterministic-validation-restore-integration`
 - Current Whole-Block branch: `feature/im-20-authoritative-savegame-continue-integration`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -28,7 +28,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20C – Deterministic Validation & Restore Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
-- **IM-20D–G: DEFINED / NOT IMPLEMENTED**
+- **IM-20D – Derived-State Rebinding after Continue: IMPLEMENTED / LOCAL PASS / CI + DEVICE/FREEZE PENDING / NOT FROZEN**
+- **IM-20E–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
 
@@ -712,11 +713,50 @@ Scope diff from prior frozen IM-20C is ahead-only / 0 behind and limited to the 
 
 Corrected freeze evidence: steering-document head `c77840995fd7b7a06d9b14d392fe9dcd0ffda134` passed CI `34753353620`. Both existing frozen markers were fast-forwarded to that exact head and verified identical / 0 ahead / 0 behind against the Whole-Block branch.
 
+### IM-20D – Derived-State Rebinding after Continue
+
+**Status:** IMPLEMENTED / LOCAL PASS / CI + DEVICE/FREEZE PENDING / NOT FROZEN
+
+**Baseline:** corrected frozen IM-20C @ `ce84bacef4d2802f045ce522e7f7140b7b173fd8`.
+
+IM-20D adds a fail-closed, side-effect-free rebinding seam that accepts only the exact IM-20C `RESTORED` result. It builds a candidate derived graph from the restored B owners without publishing that graph into the active Runtime.
+
+Rebuilt state:
+- construction-completion evidence and operational admission from restored Building/lifecycle/progress truth, without replaying completion effects;
+- residential admission, Housing capacity/occupancy and Population from restored capabilities, Person identities and persisted Home assignments, without creating new assignments;
+- operational workforce projection from persisted `assignmentId ↔ buildingId`, including exact restored Person assignment states;
+- production-recipe integration and `READY` / `BLOCKED_INPUT` state from restored BuildingStock, without production settlement;
+- Player Population/Housing/Gold and operational read models; Gold uses current restored balance plus the complete settlement-fence view and does not fabricate/replay a historical last settlement;
+- CarrierAssignmentService state from persisted `jobId ↔ unitId`, plus exact `TransportExecutionContract` state and an explicit recovery action;
+- fresh restored-B path classification, traversability, reachability, entity-validation, on-demand routing and render projections; serialized route caches remain empty;
+- a deterministic scheduler registration plan and presentation/Inspector reset/read models, all marked uninstalled/unpublished.
+
+Fail-closed boundary:
+- a raw snapshot or raw runtime-state object is rejected;
+- a structurally restored but semantically inconsistent derived graph is rejected with no candidate graph;
+- workforce assignment, carrier assignment and transport execution identities are never guessed;
+- authoritative snapshot content remains canonically unchanged across Rebind.
+
+Visible build:
+`IM-20D-DERIVED-STATE-REBINDING-AFTER-CONTINUE-TESTBUILD-1`
+
+Local evidence:
+- `npm run ci` — PASS / 0 BLOCKER;
+- `node src/dev/im-20d-self-test.node.js` — PASS;
+- Housing `2/2`, Population `2`, Gold `9` rebuilt from restored B;
+- Workforce `assignment:00000001 ↔ building:00000002` rebound;
+- Carrier `transport-job:00000001 ↔ unit:00000001` rebound;
+- transport execution state `TO_DROPOFF` preserved with `CONTINUE_TO_DROPOFF` recovery action;
+- canonical authoritative Capture→Restore→Rebind→Capture identity preserved;
+- inconsistent workforce-on-non-operational-Building graph rejected fail-closed.
+
+Hard boundary: no active-runtime publication, Scheduler installation, browser persistence, Save/Reload/Continue lifecycle, settlement replay/reconciliation or other IM-20E+ capability is implemented.
+
 ### Remaining defined substeps
 
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
+- **IM-20D – Derived-State Rebinding after Continue — IMPLEMENTED / LOCAL PASS / CI + DEVICE/FREEZE PENDING / NOT FROZEN**
 - **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 - **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
 - **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
@@ -763,7 +803,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20C = COMPLETE / FROZEN / PASS / 0 BLOCKER — Rebinding prerequisite continuity correction incorporated.**
 
-The next permissible development step is exclusively IM-20D – Derived-State Rebinding after Continue, building on the corrected frozen IM-20C. IM-20E+ remains unauthorized.
+**IM-20D = IMPLEMENTED / LOCAL PASS / CI + DEVICE/FREEZE PENDING / NOT FROZEN.**
+
+The next permissible action is exclusively the IM-20D Completion / Regression / Device / Freeze Gate. IM-20E+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -771,4 +813,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-13 — IM-20B/C Rebinding Prerequisite Continuity Correction COMPLETE / FROZEN / PASS / 0 BLOCKER. Corrected code head `90931a8410cf43254193839fe893ed744c1104c8`: CI `34753225971` SUCCESS, Pages `34753225982` SUCCESS. Steering gate head `c77840995fd7b7a06d9b14d392fe9dcd0ffda134`: CI `34753353620` SUCCESS. Both IM-20B and IM-20C markers were fast-forwarded and verified identical. IM-20D is now the next permissible step; IM-20E+ remains unauthorized.
+**Updated:** 2026-09-13 — IM-20D implementation is locally PASS on corrected frozen IM-20C `ce84bacef4d2802f045ce522e7f7140b7b173fd8`; CI, Pages, real-device confirmation and freeze remain pending. The next permissible action is only the IM-20D Completion / Regression / Device / Freeze Gate. IM-20E+ remains unauthorized.

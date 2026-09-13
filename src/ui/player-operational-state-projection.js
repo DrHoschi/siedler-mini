@@ -6,7 +6,12 @@ const PLAYER_OPERATIONAL_STATES = Object.freeze({
 });
 
 function requireAdmission(value) {
-  if (!value || value.kind !== 'operational-building-admission' || value.status !== 'OPERATIONAL') {
+  const acceptedLegacyProjection = value?.status === 'OPERATIONAL';
+  const acceptedAdmissionContract = value?.status === 'ADMITTED'
+    && value?.admitted === true
+    && value?.operational === true;
+  if (!value || value.kind !== 'operational-building-admission'
+    || (!acceptedLegacyProjection && !acceptedAdmissionContract)) {
     throw new TypeError('frozen IM-18A operational building admission required');
   }
   return value;

@@ -94,21 +94,21 @@ function sameGoldState(left, right) {
     && left.physical === right.physical;
 }
 
-export function projectPlayerPopulationHousingGold({
-  populationProjection,
-  housingAssignmentIntegration,
-  goldSettlement,
-  currentGoldState
-} = {}) {
-  const population = requirePopulation(populationProjection);
-  const housingAssignment = requireHousingAssignment(housingAssignmentIntegration);
-  const housingStates = normalizeHousingStates(housingAssignment.housingStates);
-  const settlement = requireGoldSettlement(goldSettlement);
-  const goldState = requireGoldState(currentGoldState);
-
-  if (!sameGoldState(settlement.stateAfter, goldState)) {
-    throw new Error('Player Gold projection does not match authoritative current Gold state');
+function requireSettlementIds(values) {
+  if (!Array.isArray(values)) throw new TypeError('gold settlement ids must be an array');
+  const normalized = values.map((value) => {
+    const id = typeof value === 'string' ? value.trim() : '';
+    if (!id) throw new TypeError('gold settlement ids must contain non-empty strings');
+    return id;
+  });
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error('gold settlement ids contain duplicates');
   }
+  return Object.freeze(normalized.sort((a, b) => a.localeCompare(b)));
+}
+
+function projectCurrentState({ population, housingAssignment, goldState, gold }) {
+  const housingStates = normalizeHousingStates(housingAssignment.housingStates);
 
   const totalCapacity = housingStates.reduce((sum, value) => sum + value.capacity, 0);
   const totalOccupancy = housingStates.reduce((sum, value) => sum + value.occupancy, 0);
@@ -141,16 +141,86 @@ export function projectPlayerPopulationHousingGold({
       availableSlots: totalAvailableSlots,
       buildings: housingStates
     }),
-    gold: Object.freeze({
-      balance: goldState.balance,
-      physical: false,
-      settlementId: settlement.settlementId
-    }),
+    gold: Object.freeze(gold),
     sources: Object.freeze({
       populationProjection: population,
       housingAssignmentIntegration: housingAssignment,
-      goldSettlement: settlement,
       currentGoldState: goldState
+    })
+  });
+}
+
+export function projectPlayerPopulationHousingGold({
+  populationProjection,
+  housingAssignmentIntegration,
+  goldSettlement,
+  currentGoldState
+} = {}) {
+  const population = requirePopulation(populationProjection);
+  const housingAssignment = requireHousingAssignment(housingAssignmentIntegration);
+  const settlement = requireGoldSettlement(goldSettlement);
+  const goldState = requireGoldState(currentGoldState);
+
+  if (!sameGoldState(settlement.stateAfter, goldState)) {
+    throw new Error('Player Gold projection does not match authoritative current Gold state');
+  }
+
+  const projection = projectCurrentState({
+    population,
+    housingAssignment,
+    goldState,
+    gold: {
+      balance: goldState.balance,
+      physical: false,
+      settlementId: settlement.settlementId
+    }
+  });
+
+  return Object.freeze({
+    ...projection,
+    sources: Object.freeze({
+      ...projection.sources,
+      goldSettlement: settlement
+    })
+  });
+}
+
+export function projectPlayerPopulationHousingGoldFromCurrentState({
+  populationProjection,
+  housingAssignmentIntegration,
+  currentGoldState,
+  goldSettlementIds = []
+} = {}) {
+  const population = requirePopulation(populationProjection);
+  const housingAssignment = requireHousingAssignment(housingAssignmentIntegration);
+  const goldState = requireGoldState(currentGoldState);
+  const settlementIds = requireSettlementIds(goldSettlementIds);
+
+  const projection = projectCurrentState({
+    population,
+    housingAssignment,
+    goldState,
+    gold: {
+      balance: goldState.balance,
+      physical: false,
+      settlementId: null,
+      settlementIds,
+      recoveredFromCurrentState: true,
+      settlementReplay: false
+    }
+  });
+
+  return Object.freeze({
+    ...projection,
+    sources: Object.freeze({
+      ...projection.sources,
+      goldSettlementFenceView: Object.freeze({
+        kind: 'post-continue-gold-settlement-fence-view',
+        settlementIds,
+        currentGoldState: goldState,
+        historicalLastSettlementNotDerived: true,
+        settlementReplay: false
+      })
     })
   });
 }
@@ -207,6 +277,7 @@ export function refreshPlayerPopulationHousingGoldProjection(
 
 export const PlayerPopulationHousingGoldProjection = Object.freeze({
   project: projectPlayerPopulationHousingGold,
+  projectFromCurrentState: projectPlayerPopulationHousingGoldFromCurrentState,
   projectFromRuntime,
   render: renderPlayerPopulationHousingGoldProjection,
   refresh: refreshPlayerPopulationHousingGoldProjection,

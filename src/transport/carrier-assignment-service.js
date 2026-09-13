@@ -29,12 +29,28 @@ export class CarrierAssignmentService {
   #carriers = new Map();
   #assignments = new Map();
 
-  constructor({ carriers = [] } = {}) {
+  constructor({ carriers = [], assignments = [] } = {}) {
     if (!Array.isArray(carriers)) throw new TypeError('carriers must be an array');
     for (const input of carriers) {
       const carrier = CarrierContract.define(input);
       if (this.#carriers.has(carrier.unitId)) throw new Error(`duplicate carrier unit id: ${carrier.unitId}`);
       this.#carriers.set(carrier.unitId, carrier);
+    }
+
+    if (!Array.isArray(assignments)) throw new TypeError('carrier assignments must be an array');
+    const assignedUnits = new Set();
+    for (const input of assignments) {
+      const jobId = asTransportJobId(input?.jobId);
+      const unitId = String(input?.unitId || '').trim();
+      const carrier = this.#carriers.get(unitId);
+      if (!carrier) throw new Error(`restored carrier assignment references unknown carrier: ${unitId}`);
+      if (carrier.state !== 'OCCUPIED') {
+        throw new Error(`restored carrier assignment requires OCCUPIED carrier: ${unitId}`);
+      }
+      if (this.#assignments.has(jobId)) throw new Error(`duplicate restored carrier job assignment: ${jobId}`);
+      if (assignedUnits.has(unitId)) throw new Error(`duplicate restored carrier unit assignment: ${unitId}`);
+      this.#assignments.set(jobId, unitId);
+      assignedUnits.add(unitId);
     }
   }
 
