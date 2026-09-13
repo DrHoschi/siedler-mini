@@ -212,7 +212,8 @@ if (inspectorShell && window.CleanRuntime) {
   });
 
   const status = document.querySelector('#test-status');
-  if (status) {
+  const ownsVisibleVerificationSurface = /^IM-15(?:[A-Z]|-|$)/.test(String(window.CleanRuntime?.config?.build ?? ''));
+  if (status && ownsVisibleVerificationSurface) {
     status.textContent = 'IM-15B — IMPLEMENTED / NOT FROZEN — Structured Runtime Diagnostics aktiv · Buildings/Persons/Jobs/Resources/Navigation/Paths ausschließlich read-only projiziert';
     status.dataset.pass = 'pending';
   }
