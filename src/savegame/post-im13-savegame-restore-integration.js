@@ -1,4 +1,5 @@
 import { StableIdAllocator } from '../world/stable-id.js';
+import { CoreDomainStores } from '../domain/core-domain-stores.js';
 import { SaveGameRestoreContract } from './savegame-restore-contract.js';
 import { PostIM13SaveGameValidationContract } from './post-im13-savegame-validation-contract.js';
 import { ResourceState } from '../resources/resource-state.js';
@@ -54,6 +55,31 @@ function restoreCarrierBindings(values) {
 
 function restoreTransportExecutions(values) {
   return Object.freeze(values.map(value => TransportExecutionContract.define(value)));
+}
+
+function restoreValidatedV2BaseState(snapshot) {
+  const originalBase = baseSnapshotFrom(snapshot);
+  const compatibilityBase = clone(originalBase);
+  compatibilityBase.domains.jobs.state.items = {};
+
+  const restored = SaveGameRestoreContract.restore(compatibilityBase);
+  if (restored.status !== 'RESTORED') return restored;
+
+  const restoreDomains = {};
+  const allocators = {};
+  for (const name of ['buildings', 'units', 'resources', 'jobs']) {
+    restoreDomains[name] = clone(originalBase.domains[name].state);
+    allocators[name] = allocatorFrom(originalBase.domains[name].allocator);
+  }
+  const domains = new CoreDomainStores({ restoreDomains, allocators });
+
+  return Object.freeze({
+    ...restored,
+    runtimeState: Object.freeze({
+      ...restored.runtimeState,
+      domains
+    })
+  });
 }
 
 function freezeArray(values) {
@@ -132,7 +158,7 @@ export class PostIM13SaveGameRestoreIntegration {
       });
     }
 
-    const baseRestore = SaveGameRestoreContract.restore(baseSnapshotFrom(snapshot));
+    const baseRestore = restoreValidatedV2BaseState(snapshot);
     if (baseRestore.status !== 'RESTORED') {
       return Object.freeze({
         kind: RESULT_KIND,
