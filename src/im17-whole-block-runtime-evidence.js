@@ -18,12 +18,13 @@ function isCompatiblePredecessorHostBuild(build) {
 
 const result = runIM17GSelfTest();
 const testEl = document.querySelector('#test-status');
+const ownsVisibleSurface = RuntimeConfig.build === EXPECTED_BUILD;
 const buildPass = isCompatiblePredecessorHostBuild(RuntimeConfig.build);
 const pass = result.pass && buildPass;
 
 if (pass) renderPlayerConstructionStateProjection(result.evidence.completed);
 
-if (testEl) {
+if (testEl && ownsVisibleSurface) {
   testEl.textContent = pass
     ? `IM-17 WHOLE BLOCK — PASS · A–G frozen regression chain present · ${result.evidence.waiting.status} 0% → ${result.evidence.underConstruction.status} 33% → ${result.evidence.completed.status} 100% · predecessor host build compatible`
     : `IM-17 WHOLE BLOCK — FAIL · im17gSelfTest=${result.pass} · predecessorHostBuild=${buildPass}`;
@@ -34,6 +35,7 @@ console.info('[IM-17 Whole Block] Frozen predecessor regression evidence', {
   pass,
   build: RuntimeConfig.build,
   frozenBuild: EXPECTED_BUILD,
+  visibleSurfaceOwner: ownsVisibleSurface,
   predecessorHostBuildCompatible: buildPass,
   im17gProjectionRegression: result,
   im17AThroughGCompleteFrozen: true,
