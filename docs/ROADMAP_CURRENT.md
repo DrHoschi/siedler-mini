@@ -474,11 +474,36 @@ Automated evidence:
 
 Freeze remains blocked pending a new real-device TESTBUILD 3 check confirming that the IM-20C verification surface is no longer replaced by IM-15/16/17 predecessor status.
 
+### IM-20C – Completion / Regression / Device / Freeze Gate
+
+**Status:** PASS / 0 BLOCKER / FINAL MARKER PENDING
+
+Final real-device evidence on **iPhone / Safari** confirms TESTBUILD 3 after both predecessor verification-surface ownership corrections:
+
+- visible build: `IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-3`;
+- title remains `IM-20C – Deterministic Validation & Restore Integration`;
+- current verification card remains owned by IM-20C;
+- no stale IM-15, IM-16G or IM-17 predecessor status is visible;
+- Runtime = `READY`;
+- Population = `3`;
+- Gold = `3`;
+- Housing = `3/3`;
+- visible projection reports `3 Buildings / 3 Persons`.
+
+Automated evidence on the current pre-finalization head:
+- CI `34746139822` — SUCCESS;
+- `Run IM-20C + frozen predecessor regression` — SUCCESS;
+- Pages `34746139270` — SUCCESS.
+
+Scope diff against frozen IM-20B is ahead-only / 0 behind and limited to IM-20C validation/restore, restore-only Owner support, IM-20C tests/CI/build identity, steering documentation, and the necessary predecessor verification-surface ownership fixes. No IM-20D+ capability is present.
+
+The next permissible action is exclusively final exact-head CI/Pages verification and, on SUCCESS, creation of `frozen/im-20c-deterministic-validation-restore-integration` on that exact head. IM-20D remains unauthorized until the marker exists.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-3. **IM-20C – Deterministic Validation & Restore Integration — IMPLEMENTED / PREDECESSOR VERIFICATION SURFACE FIXES APPLIED / AUTOMATED REGRESSION PASS / DEVICE RE-TEST PENDING / NOT FROZEN**
+3. **IM-20C – Deterministic Validation & Restore Integration — COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
@@ -522,10 +547,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = IMPLEMENTED / PREDECESSOR VERIFICATION SURFACE FIXES APPLIED / AUTOMATED REGRESSION PASS / DEVICE RE-TEST PENDING / NOT FROZEN.**
+**IM-20C = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / 0 BLOCKER / FINAL MARKER PENDING.**
 
-The next permissible step is exclusively IM-20C Completion / Regression / Device / Freeze Gate. Freeze remains blocked until TESTBUILD 3 is confirmed on real device without stale IM-15/IM-16G/IM-17 predecessor verification output. IM-20D+ remains unauthorized.
+The next permissible action is exclusively final exact-head CI/Pages verification and, on SUCCESS, creation of the IM-20C frozen marker. IM-20D+ remains unauthorized until that marker exists.
 
 ---
 
-**Updated:** 2026-09-13 — IM-20C remains NOT FROZEN. TESTBUILD 1 exposed IM-16G verification ownership; TESTBUILD 2 removed IM-16G but exposed remaining IM-15A–E/Whole-Block ownership. TESTBUILD 3 contains the full predecessor verification-surface ownership correction. CI `34746060489` and Pages `34746060336` PASS on code head `41dc32495fe3098fa8bb23053eea088784a80fad`. Real-device TESTBUILD 3 re-test remains required.
+**Updated:** 2026-09-13 — IM-20C Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER. Real iPhone/Safari TESTBUILD 3 confirms correct IM-20C build/title/status ownership, READY, Population 3, Gold 3, Housing 3/3 and 3 Buildings / 3 Persons. Final exact-head CI/Pages and frozen marker remain pending.
