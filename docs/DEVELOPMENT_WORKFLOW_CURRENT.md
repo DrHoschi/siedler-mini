@@ -8,8 +8,8 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 
 - Repository: `DrHoschi/siedler-mini`
 - Default branch: `main` — historical old-game reference only
-- Frozen development baseline: IM-19 @ `f9c9202014deded496d96adfb96a430a230f06f2`
-- Frozen IM-19 Whole-Block marker: `frozen/im-19-population-housing-gold-economy-integration`
+- Frozen development baseline: corrected IM-20C @ `37b81f1e9e37069e855bb2c3a3fb4b76bfb13930`
+- Frozen IM-20C marker: `frozen/im-20c-deterministic-validation-restore-integration`
 - Current Whole-Block branch: `feature/im-20-authoritative-savegame-continue-integration`
 - **IM-14 – UI / Mobile Foundation: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-15 – Guidance / Inspector: COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -27,7 +27,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-20 – Authoritative SaveGame / Continue Integration: IN PROGRESS**
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
-- **IM-20C – Deterministic Validation & Restore Integration: IMPLEMENTED / VERIFICATION SURFACE FIX APPLIED / DEVICE RE-TEST PENDING / NOT FROZEN**
+- **IM-20C – Deterministic Validation & Restore Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20D–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
