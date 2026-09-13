@@ -99,7 +99,8 @@ if (inspectorShell && window.CleanRuntime) {
   });
 
   const status = document.querySelector('#test-status');
-  if (status) {
+  const ownsVisibleVerificationSurface = /^IM-15(?:[A-Z]|-|$)/.test(String(window.CleanRuntime?.config?.build ?? ''));
+  if (status && ownsVisibleVerificationSurface) {
     status.textContent = 'IM-15D — COMPLETE / FROZEN / PASS / 0 BLOCKER — Controlled Diagnostic Actions aktiv · START / PAUSE / SINGLE STEP / RESET BASELINE_MINIWORLD allowlisted';
     status.dataset.pass = 'true';
   }
