@@ -401,15 +401,46 @@ Restore reconstructs frozen V1 World/Map/CoreDomain/Gold/PathWear owners plus Re
 Canonical Capture→Validate→Restore→Capture identity and allocator continuity are part of the IM-20C self-test.
 
 Visible build:
-`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-1`
+`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-2`
 
 No Derived-State Rebinding, runtime activation, browser storage or Save/Reload/Continue lifecycle is introduced in IM-20C.
+
+### IM-20C – Verification Surface Ownership Correction
+
+**Status:** IMPLEMENTED / DEVICE RE-TEST PENDING / NOT FROZEN
+
+Real iPhone/Safari evidence on IM-20C TESTBUILD 1 showed a contradictory visible state:
+
+- Inspector/Runtime build identity correctly showed `IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-1`;
+- IM-20C title and explanatory text were correct;
+- the shared verification output nevertheless displayed `IM-16G — FAIL · selfTest=true · buildIdentity=false`.
+
+Root cause: frozen predecessor browser-evidence scripts still wrote directly to the shared `#test-status` surface. In particular `src/im16g-runtime-evidence.js` required the historical IM-16G build identity and overwrote the current IM-20C status. `src/im17-whole-block-runtime-evidence.js` could also race for the same visible surface.
+
+Correction boundary:
+- predecessor evidence still executes for regression/console evidence on compatible successor builds;
+- IM-16G and IM-17 predecessor scripts may write `#test-status` only when they own their exact historical build;
+- successor builds retain ownership of their current visible verification surface;
+- no IM-20C validation/restore semantics changed;
+- no Derived-State Rebinding, runtime activation, browser storage, Continue lifecycle or IM-20D+ capability added.
+
+Corrected visible build identity:
+`IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-2`
+
+Files in this correction:
+- `src/im16g-runtime-evidence.js`
+- `src/im17-whole-block-runtime-evidence.js`
+- `src/runtime/config.js`
+- `src/main.js`
+- `index.html`
+
+The next permissible action remains exclusively **IM-20C Completion / Regression / Device / Freeze Gate**. A new real iPhone/Safari check must confirm TESTBUILD 2 and absence of the stale IM-16G visible FAIL before IM-20C may freeze.
 
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-3. **IM-20C – Deterministic Validation & Restore Integration — IMPLEMENTED / NOT FROZEN**
+3. **IM-20C – Deterministic Validation & Restore Integration — IMPLEMENTED / VERIFICATION SURFACE FIX APPLIED / DEVICE RE-TEST PENDING / NOT FROZEN**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
@@ -453,10 +484,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = IMPLEMENTED / NOT FROZEN.**
+**IM-20C = IMPLEMENTED / VERIFICATION SURFACE FIX APPLIED / DEVICE RE-TEST PENDING / NOT FROZEN.**
 
-The next permissible step is exclusively IM-20C Completion / Regression / Freeze Gate. IM-20D+ remains unauthorized.
+The next permissible step is exclusively IM-20C Completion / Regression / Device / Freeze Gate. Freeze remains blocked until TESTBUILD 2 is confirmed on real iPhone/Safari without stale IM-16G visible failure. IM-20D+ remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-12 — IM-20C Deterministic Validation & Restore Integration IMPLEMENTED / NOT FROZEN on corrected frozen IM-20B baseline `a3a5d2f5fafa1885fea7be489ea601680c432e25`. Visible identity: `IM-20C-DETERMINISTIC-VALIDATION-RESTORE-INTEGRATION-TESTBUILD-1`.
+**Updated:** 2026-09-13 — IM-20C remains NOT FROZEN. Real iPhone/Safari TESTBUILD 1 exposed stale predecessor verification-surface ownership (`IM-16G FAIL / buildIdentity=false`) despite correct IM-20C build identity. TESTBUILD 2 contains the verification ownership correction; automated regression and device re-test remain required.
