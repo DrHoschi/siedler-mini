@@ -51,7 +51,7 @@ function fixture() {
   const resource = resources.createResource({
     definitionId: definition.id,
     amount: 5,
-    location: { kind: 'owner', refId: sourceBuildingId },
+    location: { kind: 'cell', refId: map.cellIdAt(0, 0) },
     ownerId: null
   }, { id: 'resource:00000001' });
 
