@@ -8,6 +8,7 @@ import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignme
 import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
 import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
 import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
+import { TransportJobContract } from '../transport/transport-job-contract.js';
 
 const RESULT_KIND = 'post-im13-savegame-validation-result';
 const SCHEMA_VERSION = 2;
@@ -376,6 +377,41 @@ function validateContractArray(values, path, normalize, keyOf, refs, collector, 
   return out;
 }
 
+function isResolvedPostIM13JobReferenceError(error, snapshot, demands, claims) {
+  if (error?.code !== 'DANGLING_DOMAIN_REFERENCE') return false;
+  const match = /^domains\.jobs\.state\.items\.(transport-job:[^.]+)\.(claimId|demandId)$/.exec(String(error.path ?? ''));
+  if (!match) return false;
+  const [, jobId, field] = match;
+  const job = snapshot?.domains?.jobs?.state?.items?.[jobId];
+  if (!job) return false;
+  if (field === 'claimId') return claims.has(job.claimId);
+  return demands.has(job.demandId);
+}
+
+function validatePostIM13TransportJobLinks(snapshot, demands, claims, collector) {
+  const jobs = snapshot?.domains?.jobs?.state?.items ?? {};
+  const resources = snapshot?.domains?.resources?.state?.items ?? {};
+  for (const [jobId, job] of Object.entries(jobs)) {
+    if (job?.kind !== 'transport-job') continue;
+    const path = `domains.jobs.state.items.${jobId}`;
+    const claim = claims.get(job.claimId);
+    const demand = demands.get(job.demandId);
+    const resource = resources[job.resourceId];
+    if (!claim) collector.add('DANGLING_TRANSPORT_JOB_CLAIM', `${path}.claimId`);
+    if (!demand) collector.add('DANGLING_TRANSPORT_JOB_DEMAND', `${path}.demandId`);
+    if (!resource) collector.add('DANGLING_TRANSPORT_JOB_RESOURCE', `${path}.resourceId`);
+    if (!claim || !demand || !resource) continue;
+    try {
+      TransportJobContract.validateLinks(job, { claim, demand: {
+        ...demand,
+        status: demand.state
+      }, resource });
+    } catch {
+      collector.add('POST_IM13_TRANSPORT_JOB_LINK_MISMATCH', path);
+    }
+  }
+}
+
 function validateRebindingContinuity(snapshot, workforceAssignments, refs, collector) {
   const auth = snapshot?.authoritative ?? {};
   const buildings = snapshot?.domains?.buildings?.state?.items ?? {};
@@ -514,7 +550,7 @@ export class PostIM13SaveGameValidationContract {
       const base = clone(snapshot);
       base.schemaVersion = SaveGameValidationContract.schemaVersion;
       delete base.authoritative;
-      collector.addAll(SaveGameValidationContract.validate(base).errors);
+      const baseErrors = SaveGameValidationContract.validate(base).errors;
 
       const refs = existingRefs(snapshot);
       const resourceTypeIds = validateResourceDefinitions(snapshot, collector);
@@ -523,6 +559,10 @@ export class PostIM13SaveGameValidationContract {
       const demands = validateDemands(snapshot, resourceTypeIds, refs, collector);
       const claims = validateClaims(snapshot, demands, refs, collector);
       validateDemandClaimInvariants(demands, claims, collector);
+      collector.addAll(baseErrors.filter(error =>
+        !isResolvedPostIM13JobReferenceError(error, snapshot, demands, claims)
+      ));
+      validatePostIM13TransportJobLinks(snapshot, demands, claims, collector);
 
       const auth = snapshot.authoritative;
       validateContractArray(
