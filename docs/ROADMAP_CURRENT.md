@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20D IMPLEMENTED / LOCAL PASS / NOT FROZEN; IM-20E–G DEFINED / NOT IMPLEMENTED
+**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–C COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20D IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / NOT FROZEN; IM-20E–G DEFINED / NOT IMPLEMENTED
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-20C baseline head:** `ce84bacef4d2802f045ce522e7f7140b7b173fd8`
 **Frozen IM-20C marker:** `frozen/im-20c-deterministic-validation-restore-integration`
@@ -545,7 +545,7 @@ Corrected freeze evidence: steering-document head `c77840995fd7b7a06d9b14d392fe9
 
 ### IM-20D – Derived-State Rebinding after Continue
 
-**Status:** IMPLEMENTED / LOCAL PASS / CI + DEVICE/FREEZE PENDING / NOT FROZEN
+**Status:** IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / DEVICE/FREEZE PENDING / NOT FROZEN
 
 **Baseline:** corrected frozen IM-20C @ `ce84bacef4d2802f045ce522e7f7140b7b173fd8`.
 
@@ -561,7 +561,9 @@ No authoritative mutation occurs during Rebind. Home assignments are not regener
 Visible build:
 `IM-20D-DERIVED-STATE-REBINDING-AFTER-CONTINUE-TESTBUILD-1`
 
-Local evidence: `npm run ci` PASS / 0 BLOCKER and `node src/dev/im-20d-self-test.node.js` PASS. Exact GitHub CI/Pages and real-device evidence remain pending.
+Local evidence: `npm run ci` PASS / 0 BLOCKER and `node src/dev/im-20d-self-test.node.js` PASS.
+
+Remote implementation evidence: head `1dea166edc10460ef17080c4b95264815a513aec`; CI `34767700678` SUCCESS including the full IM-20D + frozen predecessor regression; Pages `34767700128` SUCCESS. The diff from corrected frozen IM-20C is ahead-only / 0 behind and limited to the 12 IM-20D implementation, test, build-identity, CI and steering-document files. Real-device evidence remains pending.
 
 No Runtime activation/publication, Scheduler installation, browser storage, Save/Reload/Continue lifecycle, exactly-once recovery reconciliation or IM-20E+ capability is included.
 
@@ -570,7 +572,7 @@ No Runtime activation/publication, Scheduler installation, browser storage, Save
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 3. **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-4. **IM-20D – Derived-State Rebinding after Continue — IMPLEMENTED / LOCAL PASS / CI + DEVICE/FREEZE PENDING / NOT FROZEN**
+4. **IM-20D – Derived-State Rebinding after Continue — IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / DEVICE/FREEZE PENDING / NOT FROZEN**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
 7. **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
@@ -615,10 +617,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20C = COMPLETE / FROZEN / PASS / 0 BLOCKER — Rebinding prerequisite continuity correction incorporated.**
 
-**IM-20D = IMPLEMENTED / LOCAL PASS / CI + DEVICE/FREEZE PENDING / NOT FROZEN.**
+**IM-20D = IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / DEVICE/FREEZE PENDING / NOT FROZEN.**
 
-The next permissible action is exclusively the IM-20D Completion / Regression / Device / Freeze Gate. IM-20E+ remains unauthorized.
+The next permissible action is exclusively IM-20D real-device verification. A freeze decision remains separate and requires explicit authorization. IM-20E+ remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-13 — IM-20D implementation is locally PASS on corrected frozen IM-20C `ce84bacef4d2802f045ce522e7f7140b7b173fd8`; CI, Pages, real-device confirmation and freeze remain pending. The next permissible action is only the IM-20D Completion / Regression / Device / Freeze Gate. IM-20E+ remains unauthorized.
+**Updated:** 2026-09-13 — IM-20D implementation head `1dea166edc10460ef17080c4b95264815a513aec` is local/CI PASS / 0 BLOCKER; CI `34767700678` and Pages `34767700128` succeeded. Real-device confirmation remains pending; a freeze decision requires separate explicit authorization. The next permissible action is only IM-20D real-device verification. IM-20E+ remains unauthorized.
