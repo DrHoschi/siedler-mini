@@ -11,6 +11,7 @@ import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment
 import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignment-contract.js';
 import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
 import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
+import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 
 const RESULT_KIND = 'post-im13-savegame-restore-result';
 
@@ -33,6 +34,26 @@ function baseSnapshotFrom(snapshot) {
   base.schemaVersion = 1;
   delete base.authoritative;
   return base;
+}
+
+function restoreWorkforceBindings(values) {
+  return Object.freeze(values.map(value => Object.freeze({
+    kind: 'workforce-building-binding',
+    assignmentId: String(value.assignmentId),
+    buildingId: String(value.buildingId)
+  })));
+}
+
+function restoreCarrierBindings(values) {
+  return Object.freeze(values.map(value => Object.freeze({
+    kind: 'carrier-job-binding',
+    jobId: String(value.jobId),
+    unitId: String(value.unitId)
+  })));
+}
+
+function restoreTransportExecutions(values) {
+  return Object.freeze(values.map(value => TransportExecutionContract.define(value)));
 }
 
 function freezeArray(values) {
@@ -71,6 +92,9 @@ function restoreAuthoritative(snapshot, baseState) {
     auth.buildingStockTransportReservations.map(value => BuildingStockTransportReservationContract.define(value))
   );
   const workforceAssignments = Object.freeze(auth.workforceAssignments.map(value => WorkforceAssignmentStateContract.define(value)));
+  const workforceBindings = restoreWorkforceBindings(auth.workforceBindings);
+  const carrierBindings = restoreCarrierBindings(auth.carrierBindings);
+  const transportExecutions = restoreTransportExecutions(auth.transportExecutions);
   const homeAssignments = Object.freeze(auth.homeAssignments.map(value => ResidentHomeAssignmentContract.define(value)));
 
   return Object.freeze({
@@ -85,6 +109,9 @@ function restoreAuthoritative(snapshot, baseState) {
     buildingStocks,
     buildingStockTransportReservations,
     workforceAssignments,
+    workforceBindings,
+    carrierBindings,
+    transportExecutions,
     homeAssignments,
     productionSettlementIds: new Set(auth.settlementFences.production),
     goldSettlementIds: new Set(auth.settlementFences.gold)
@@ -159,6 +186,9 @@ export class PostIM13SaveGameRestoreIntegration {
       buildingStocks: auth.buildingStocks,
       buildingStockTransportReservations: auth.buildingStockTransportReservations,
       workforceAssignments: auth.workforceAssignments,
+      workforceBindings: auth.workforceBindings,
+      carrierBindings: auth.carrierBindings,
+      transportExecutions: auth.transportExecutions,
       homeAssignments: auth.homeAssignments,
       productionSettlementIds: auth.productionSettlementIds,
       goldSettlementIds: auth.goldSettlementIds
