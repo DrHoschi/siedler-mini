@@ -151,7 +151,34 @@ const INVENTORY = deepFreeze([
     section: 'authoritative.workforceAssignments',
     source: 'CR-26 / IM-18C',
     rationale: 'FREE/ASSIGNED/UNAVAILABLE workforce truth must survive Continue without reassigning a different Person.',
-    continuity: 'personId, availability and assignmentId'
+    continuity: 'personId, availability and assignmentId; ASSIGNED assignmentId is resolved through authoritative.workforceBindings'
+  }),
+  entry({
+    id: 'workforce-building-bindings',
+    policy: POLICY.PERSIST,
+    authority: 'IM-18C operational workforce assignment continuity',
+    section: 'authoritative.workforceBindings',
+    source: 'IM-18C / IM-20B-C continuity correction',
+    rationale: 'WorkforceAssignmentState preserves assignmentId but not which operational Building owns that assignment; Continue must not guess assignmentId→buildingId.',
+    continuity: 'one binding per active assignmentId; buildingId must remain stable'
+  }),
+  entry({
+    id: 'carrier-job-bindings',
+    policy: POLICY.PERSIST,
+    authority: 'CarrierAssignmentService active assignment continuity',
+    section: 'authoritative.carrierBindings',
+    source: 'CR-05 / IM-20B-C continuity correction',
+    rationale: 'Carrier OCCUPIED state alone does not preserve which PENDING transport job owns the carrier.',
+    continuity: 'one jobId→unitId binding; no carrier may be bound to two active jobs'
+  }),
+  entry({
+    id: 'transport-execution-state',
+    policy: POLICY.PERSIST,
+    authority: 'TransportExecutionContract',
+    section: 'authoritative.transportExecutions',
+    source: 'CR-06 / IM-20B-C continuity correction',
+    rationale: 'TO_PICKUP/PICKED_UP/TO_DROPOFF/DELIVERED execution position is not derivable from job/carrier identity without replay or guessing.',
+    continuity: 'jobId, unitId and execution state round-trip unchanged'
   }),
   entry({
     id: 'resident-home-assignments',
