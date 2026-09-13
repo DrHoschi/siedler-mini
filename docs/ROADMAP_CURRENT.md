@@ -497,13 +497,13 @@ Automated evidence on the current pre-finalization head:
 
 Scope diff against frozen IM-20B is ahead-only / 0 behind and limited to IM-20C validation/restore, restore-only Owner support, IM-20C tests/CI/build identity, steering documentation, and the necessary predecessor verification-surface ownership fixes. No IM-20D+ capability is present.
 
-The next permissible action is exclusively final exact-head CI/Pages verification and, on SUCCESS, creation of `frozen/im-20c-deterministic-validation-restore-integration` on that exact head. IM-20D remains unauthorized until the marker exists.
+Freeze evidence: final gate documentation head `a5f720ca870617e5ae611fec5ea50846588272ff` passed CI `34748598823` with the full IM-20C + frozen predecessor regression. Marker `frozen/im-20c-deterministic-validation-restore-integration` was created on that exact head and verified identical / 0 ahead / 0 behind. Real iPhone/Safari TESTBUILD 3 evidence confirms correct IM-20C visible verification ownership with READY, Population 3, Gold 3, Housing 3/3 and 3 Buildings / 3 Persons.
 
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-3. **IM-20C – Deterministic Validation & Restore Integration — COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / FINAL MARKER PENDING**
+3. **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 4. **IM-20D – Derived-State Rebinding after Continue — DEFINED / NOT IMPLEMENTED**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
@@ -547,10 +547,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20B = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20C = COMPLETION / REGRESSION / DEVICE / FREEZE GATE PASS / 0 BLOCKER / FINAL MARKER PENDING.**
+**IM-20C = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively final exact-head CI/Pages verification and, on SUCCESS, creation of the IM-20C frozen marker. IM-20D+ remains unauthorized until that marker exists.
+The next permissible development step is exclusively IM-20D – Derived-State Rebinding after Continue, and only when separately authorized. IM-20E+ remains unauthorized.
 
 ---
 
-**Updated:** 2026-09-13 — IM-20C Completion / Regression / Device / Freeze Gate PASS / 0 BLOCKER. Real iPhone/Safari TESTBUILD 3 confirms correct IM-20C build/title/status ownership, READY, Population 3, Gold 3, Housing 3/3 and 3 Buildings / 3 Persons. Final exact-head CI/Pages and frozen marker remain pending.
+**Updated:** 2026-09-13 — IM-20C COMPLETE / FROZEN / PASS / 0 BLOCKER. Frozen marker: `frozen/im-20c-deterministic-validation-restore-integration`. Final gate CI `34748598823` SUCCESS on `a5f720ca870617e5ae611fec5ea50846588272ff`; real iPhone/Safari TESTBUILD 3 evidence PASS. IM-20D remains DEFINED / NOT IMPLEMENTED and requires separate authorization.
