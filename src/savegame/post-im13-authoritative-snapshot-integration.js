@@ -8,6 +8,7 @@ import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment
 import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignment-contract.js';
 import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
 import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
+import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 
 const SAVEGAME_KIND = 'savegame-snapshot';
 const CAPTURE_KIND = 'post-im13-authoritative-snapshot-capture';
@@ -269,6 +270,38 @@ function normalizeWorkforceRequirementDefinition(value) {
   });
 }
 
+function normalizeWorkforceBinding(value) {
+  if (!value || value.kind !== 'workforce-building-binding') {
+    throw new TypeError('workforce building binding required');
+  }
+  return deepFreeze({
+    kind: 'workforce-building-binding',
+    assignmentId: requireStableKind(value.assignmentId, 'assignment', 'workforce binding assignment id'),
+    buildingId: requireStableKind(value.buildingId, 'building', 'workforce binding building id')
+  });
+}
+
+function normalizeCarrierBinding(value) {
+  if (!value || value.kind !== 'carrier-job-binding') {
+    throw new TypeError('carrier job binding required');
+  }
+  return deepFreeze({
+    kind: 'carrier-job-binding',
+    jobId: requireStableKind(value.jobId, 'transport-job', 'carrier binding job id'),
+    unitId: requireStableKind(value.unitId, 'unit', 'carrier binding unit id')
+  });
+}
+
+function normalizeTransportExecution(value) {
+  const normalized = TransportExecutionContract.define(value);
+  return deepFreeze({
+    kind: 'transport-execution',
+    jobId: normalized.jobId,
+    unitId: normalized.unitId,
+    state: normalized.state
+  });
+}
+
 function normalizeSettlementIds(values, label) {
   if (!Array.isArray(values)) throw new TypeError(`${label} must be an array`);
   const normalized = values.map((value) => {
@@ -293,6 +326,9 @@ function capturePostIM13({
   buildingStocks = [],
   buildingStockTransportReservations = [],
   workforceAssignments = [],
+  workforceBindings = [],
+  carrierBindings = [],
+  transportExecutions = [],
   homeAssignments = [],
   productionSettlementIds = [],
   goldSettlementIds = []
@@ -351,6 +387,24 @@ function capturePostIM13({
       (value) => value.personId,
       'workforce assignments'
     ),
+    workforceBindings: normalizeUniqueArray(
+      workforceBindings,
+      normalizeWorkforceBinding,
+      (value) => value.assignmentId,
+      'workforce bindings'
+    ),
+    carrierBindings: normalizeUniqueArray(
+      carrierBindings,
+      normalizeCarrierBinding,
+      (value) => value.jobId,
+      'carrier bindings'
+    ),
+    transportExecutions: normalizeUniqueArray(
+      transportExecutions,
+      normalizeTransportExecution,
+      (value) => value.jobId,
+      'transport executions'
+    ),
     homeAssignments: normalizeUniqueArray(
       homeAssignments,
       (value) => ResidentHomeAssignmentContract.define(value),
@@ -373,6 +427,9 @@ function assertSchemaBoundary(authoritative) {
     'authoritative.buildingStocks',
     'authoritative.buildingStockTransportReservations',
     'authoritative.workforceAssignments',
+    'authoritative.workforceBindings',
+    'authoritative.carrierBindings',
+    'authoritative.transportExecutions',
     'authoritative.homeAssignments',
     'authoritative.settlementFences.production',
     'authoritative.settlementFences.gold'
@@ -414,6 +471,9 @@ export class PostIM13AuthoritativeSnapshotIntegration {
     buildingStocks = [],
     buildingStockTransportReservations = [],
     workforceAssignments = [],
+    workforceBindings = [],
+    carrierBindings = [],
+    transportExecutions = [],
     homeAssignments = [],
     productionSettlementIds = [],
     goldSettlementIds = []
@@ -431,6 +491,9 @@ export class PostIM13AuthoritativeSnapshotIntegration {
       buildingStocks,
       buildingStockTransportReservations,
       workforceAssignments,
+      workforceBindings,
+      carrierBindings,
+      transportExecutions,
       homeAssignments,
       productionSettlementIds,
       goldSettlementIds
