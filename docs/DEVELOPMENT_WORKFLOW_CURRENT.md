@@ -28,7 +28,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-20A – Persistent State Inventory & SaveGame Schema Contract: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20C – Deterministic Validation & Restore Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
-- **IM-20D – Derived-State Rebinding after Continue: IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / DEVICE/FREEZE PENDING / NOT FROZEN**
+- **IM-20D – Derived-State Rebinding after Continue: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20E–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
@@ -71,6 +71,9 @@ Frozen IM-19F marker:
 
 Frozen IM-19G marker:
 - `frozen/im-19g-player-population-housing-gold-projection` @ `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`
+
+Frozen IM-20D marker:
+- `frozen/im-20d-derived-state-rebinding-after-continue` @ final freeze-gate head
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -715,7 +718,9 @@ Corrected freeze evidence: steering-document head `c77840995fd7b7a06d9b14d392fe9
 
 ### IM-20D – Derived-State Rebinding after Continue
 
-**Status:** IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / DEVICE/FREEZE PENDING / NOT FROZEN
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen marker:** `frozen/im-20d-derived-state-rebinding-after-continue`
 
 **Baseline:** corrected frozen IM-20C @ `ce84bacef4d2802f045ce522e7f7140b7b173fd8`.
 
@@ -756,13 +761,19 @@ Remote implementation evidence:
 - Pages `34767700128` — SUCCESS;
 - diff from corrected frozen IM-20C is ahead-only / 0 behind and limited to the 12 IM-20D implementation, test, build-identity, CI and steering-document files.
 
-Hard boundary: no active-runtime publication, Scheduler installation, browser persistence, Save/Reload/Continue lifecycle, settlement replay/reconciliation or other IM-20E+ capability is implemented.
+Freeze-gate evidence:
+- documentation/evidence head `d1ebc1204257516709c51effcf17543befa02262` passed CI `34767886051` with the full IM-20D + frozen predecessor regression;
+- real iPhone/Safari evidence confirms `READY`, exact `IM-20D-DERIVED-STATE-REBINDING-AFTER-CONTINUE-TESTBUILD-1`, the IM-20D title, Population `3`, Gold `3`, Housing `3/3`, and the lower IM-20D TESTBUILD 1 surface;
+- real iPad/Safari evidence confirms `READY`, exact `IM-20D-DERIVED-STATE-REBINDING-AFTER-CONTINUE-TESTBUILD-1`, the IM-20D title, Population `3`, Gold `3`, Housing `3/3`, and the Player line `Siedlung · Bevölkerung 3 · Wohnen 3/3 · Gold 3`;
+- no cache regression to IM-20C is visible on either device.
+
+Hard boundary: no active-runtime publication, Scheduler installation, browser persistence, Save/Reload/Continue lifecycle, settlement replay/reconciliation or other IM-20E+ capability is implemented or authorized.
 
 ### Remaining defined substeps
 
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20D – Derived-State Rebinding after Continue — IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / DEVICE/FREEZE PENDING / NOT FROZEN**
+- **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
 - **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
 - **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
@@ -809,9 +820,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20C = COMPLETE / FROZEN / PASS / 0 BLOCKER — Rebinding prerequisite continuity correction incorporated.**
 
-**IM-20D = IMPLEMENTED / AUTOMATED PASS / 0 BLOCKER / DEVICE/FREEZE PENDING / NOT FROZEN.**
+**IM-20D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively IM-20D real-device verification. A freeze decision remains separate and requires explicit authorization. IM-20E+ remains unauthorized.
+The next permissible action is exclusively separate IM-20E reconciliation/definition authorization. IM-20E+ implementation remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -819,4 +830,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-13 — IM-20D implementation head `1dea166edc10460ef17080c4b95264815a513aec` is local/CI PASS / 0 BLOCKER; CI `34767700678` and Pages `34767700128` succeeded. Real-device confirmation remains pending; a freeze decision requires separate explicit authorization. The next permissible action is only IM-20D real-device verification. IM-20E+ remains unauthorized.
+**Updated:** 2026-09-14 — IM-20D Completion / Regression / Freeze Gate completed with automated CI PASS, Pages PASS, real iPhone/iPad Safari PASS and 0 BLOCKER. IM-20D is frozen at marker `frozen/im-20d-derived-state-rebinding-after-continue`. The next permissible action is only separate IM-20E reconciliation/definition authorization; IM-20E+ implementation remains unauthorized.
