@@ -574,6 +574,31 @@ Real Safari device evidence confirms PASS on both iPhone and iPad: `READY`, exac
 
 No Runtime activation/publication, Scheduler installation, browser storage, Save/Reload/Continue lifecycle, exactly-once recovery reconciliation or IM-20E+ capability is included or authorized.
 
+### IM-20E – Browser Save / Reload / Continue Lifecycle Integration
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Definition baseline:** frozen IM-20D @ `7758bff83164c90793dacc75d437b2d9f3d64c66`.
+
+IM-20E is the first real browser lifecycle integration over the frozen IM-20A–D chain:
+
+`completed simulation step → canonical V2 capture → single technical browser save → browser reload → IM-20C validation/restore → IM-20D rebinding → atomic activation/scheduler installation → Continue`.
+
+Definition:
+- capture only at a confirmed completed-step boundary; never mid-step;
+- one stable same-origin technical `localStorage` entry containing the canonical serialized V2 payload, with no second gameplay authority and no partial overwrite on write failure;
+- after reload, parse, full IM-20C validation/restore and full IM-20D rebinding complete before any candidate is published;
+- Continue accepts only an IM-20D `REBOUND` result and atomically publishes the restored owners and derived projections, installs the deterministic IM-20D scheduler plan, resets camera/selection and only then starts or resumes Runtime/Scheduler;
+- duplicate or partial scheduler installation rejects or rolls back; every parse/validation/restore/rebind/install/publish failure preserves the previous active composition and scheduler state;
+- no construction, production, delivery or Gold settlement replay and no guessed Workforce/Carrier/TransportExecution identity;
+- only minimal technical Save/Continue verification access is allowed, not a final player-facing Save menu.
+
+Acceptance requires canonical pre-Save/post-Continue identity, real reload persistence, fail-closed invalid-storage and activation failures, preserved workforce/carrier/execution continuity, rebuilt transient state, activation-before-start ordering and full IM-20D plus frozen predecessor regression.
+
+IM-20E may execute only the normal continuation actions already resolved by IM-20D. Crash-window settlement reconciliation, new exactly-once/recovery fences, ambiguous-state repair, replay reconciliation and new recovery decisions remain exclusively IM-20F.
+
+Non-scope: multi-slot Save UI, cloud save, multiplayer synchronization, autosave, legacy-main migration, final Save-menu/wireframe or responsive UI redesign, Economy expansion, Inspector system graph, IM-20F Exactly-once & Recovery Reconciliation and IM-20G Player/Device Verification.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -626,8 +651,8 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively separate IM-20E reconciliation/definition authorization. IM-20E+ implementation remains unauthorized.
+The next permissible action is exclusively IM-20E Definition Documentation Verification / Scope Gate against frozen IM-20D. No implementation, no implementation branch and no IM-20F+ capability is authorized.
 
 ---
 
-**Updated:** 2026-09-14 — IM-20D Completion / Regression / Freeze Gate completed with automated CI PASS, Pages PASS, real iPhone/iPad Safari PASS and 0 BLOCKER. IM-20D is frozen at marker `frozen/im-20d-derived-state-rebinding-after-continue`. The next permissible action is only separate IM-20E reconciliation/definition authorization; IM-20E+ implementation remains unauthorized.
+**Updated:** 2026-09-16 — IM-20E Reconciliation / Definition Gate completed and documented as DEFINED / NOT IMPLEMENTED against frozen IM-20D. The next permissible action is only IM-20E Definition Documentation Verification / Scope Gate; no implementation, no implementation branch and no IM-20F+ capability is authorized.
