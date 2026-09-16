@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20E–G DEFINED / NOT IMPLEMENTED
+**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20E IMPLEMENTED / TESTBUILD 1 / NOT FROZEN; IM-20F–G DEFINED / NOT IMPLEMENTED
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-20C baseline head:** `ce84bacef4d2802f045ce522e7f7140b7b173fd8`
 **Frozen IM-20C marker:** `frozen/im-20c-deterministic-validation-restore-integration`
@@ -576,7 +576,7 @@ No Runtime activation/publication, Scheduler installation, browser storage, Save
 
 ### IM-20E – Browser Save / Reload / Continue Lifecycle Integration
 
-**Status:** DEFINED / NOT IMPLEMENTED
+**Status:** IMPLEMENTED / TESTBUILD 1 / NOT FROZEN
 
 **Definition baseline:** frozen IM-20D @ `7758bff83164c90793dacc75d437b2d9f3d64c66`.
 
@@ -605,7 +605,7 @@ Non-scope: multi-slot Save UI, cloud save, multiplayer synchronization, autosave
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 3. **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 4. **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — DEFINED / NOT IMPLEMENTED**
+5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — IMPLEMENTED / TESTBUILD 1 / NOT FROZEN**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
 7. **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
 
@@ -651,8 +651,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively IM-20E Definition Documentation Verification / Scope Gate against frozen IM-20D. No implementation, no implementation branch and no IM-20F+ capability is authorized.
+**IM-20E = IMPLEMENTED / TESTBUILD 1 / NOT FROZEN.**
+
+The next permissible action is exclusively the IM-20E Implementation Verification / Regression Gate. No freeze and no IM-20F+ capability is authorized.
 
 ---
 
-**Updated:** 2026-09-16 — IM-20E Reconciliation / Definition Gate completed and documented as DEFINED / NOT IMPLEMENTED against frozen IM-20D. The next permissible action is only IM-20E Definition Documentation Verification / Scope Gate; no implementation, no implementation branch and no IM-20F+ capability is authorized.
+**Updated:** 2026-09-16 — IM-20E Browser Save / Reload / Continue Lifecycle Integration implemented as TESTBUILD 1 on its dedicated branch. The next permissible action is only its separate Implementation Verification / Regression Gate; IM-20F+ remains unauthorized.

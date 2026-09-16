@@ -22,6 +22,12 @@ import { WorldBackedTraversabilitySource } from '../transport/world-backed-trave
 import { WorldBackedPathClassificationSource } from '../transport/world-backed-path-classification-source.js';
 import { DeterministicWorldReachabilityIntegration } from '../transport/deterministic-world-reachability-integration.js';
 import { RuntimeEntityNavigationValidationIntegration } from '../transport/runtime-entity-navigation-validation-integration.js';
+import { ResourceState } from '../resources/resource-state.js';
+import { ResourceClaims } from '../resources/resource-claims.js';
+import { ResourceDemands } from '../resources/resource-demands.js';
+import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
+import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment-state-contract.js';
+import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 
 export const BASELINE_MINIWORLD_SCENARIO_ID = 'BASELINE_MINIWORLD';
 
@@ -31,7 +37,7 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-export function createBaselineMiniworldScenario() {
+export function createBaselineMiniworldScenario({ includeSaveContinuity = false } = {}) {
   const world = new WorldStore();
   const map = new MapStructure(world, {
     name: 'CR-32A World-backed Path Classification Contract Miniworld',
@@ -62,7 +68,7 @@ export function createBaselineMiniworldScenario() {
     });
   }
 
-  function createVisiblePerson(position, { carrierCapacity = null } = {}) {
+  function createVisiblePerson(position, { carrierCapacity = null, carrierState = 'AVAILABLE' } = {}) {
     const personId = domains.units.allocateId();
     const data = {
       identity: PersonResidentIdentityContract.define({ personId }),
@@ -72,6 +78,7 @@ export function createBaselineMiniworldScenario() {
       data.carrier = CarrierContract.define({
         unitId: personId,
         capacity: carrierCapacity,
+        state: carrierState,
         location: {
           kind: 'cell',
           refId: map.cellIdAt(Math.floor(position.x), Math.floor(position.y)),
@@ -97,9 +104,12 @@ export function createBaselineMiniworldScenario() {
   map.setTileAt(2, 4, roadTile.id);
 
   const hq = createVisibleBuilding('HQ', { x: 2, y: 2 });
-  createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
+  const woodcutter = createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
   const storehouse = createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
-  const carrierPerson = createVisiblePerson({ x: 1.25, y: 1.5 }, { carrierCapacity: 2 });
+  const carrierPerson = createVisiblePerson({ x: 1.25, y: 1.5 }, {
+    carrierCapacity: 2,
+    carrierState: includeSaveContinuity ? 'OCCUPIED' : 'AVAILABLE',
+  });
   const secondPerson = createVisiblePerson({ x: 4.25, y: 2.25 });
   const thirdPerson = createVisiblePerson({ x: 6.25, y: 4.25 });
 
@@ -170,6 +180,89 @@ export function createBaselineMiniworldScenario() {
   const goldSettlement = goldSettlementResult.settlement;
   const goldSettlementIds = goldSettlementResult.settledIds;
 
+  const resourceState = new ResourceState({ world, resourceStore: domains.resources });
+  const resourceClaims = new ResourceClaims({ resourceState });
+  const resourceDemands = new ResourceDemands({ resourceState, claims: resourceClaims });
+  const housingCapabilities = Object.freeze([hqHousing, storehouseHousing]);
+  let workforceProfiles = Object.freeze([]);
+  let workforceRequirements = Object.freeze([]);
+  let workforceAssignments = Object.freeze([]);
+  let workforceBindings = Object.freeze([]);
+  let carrierBindings = Object.freeze([]);
+  let transportExecutions = Object.freeze([]);
+  if (includeSaveContinuity) {
+  const wood = resourceState.createDefinition(
+    { technicalName: 'wood', label: 'Wood' },
+    { id: 'resource-type:00000001' },
+  );
+  const resource = resourceState.createResource({
+    definitionId: wood.id,
+    amount: 2,
+    location: { kind: 'cell', refId: map.cellIdAt(1, 1) },
+  }, { id: 'resource:00000001' });
+  const demand = resourceDemands.create({
+    consumerId: woodcutter.id,
+    definitionId: wood.id,
+    amount: 1,
+    metadata: { purpose: 'im20e-browser-continuity' },
+  }, { id: 'demand:00000001' });
+  const claim = resourceDemands.reserve({
+    demandId: demand.id,
+    resourceId: resource.id,
+    amount: 1,
+    metadata: { source: 'im20e-baseline' },
+  });
+  const jobId = domains.jobs.allocateId();
+  domains.jobs.create({
+    claimId: claim.id,
+    demandId: demand.id,
+    resourceId: resource.id,
+    definitionId: wood.id,
+    sourceLocation: resource.location,
+    targetId: woodcutter.id,
+    amount: 1,
+    status: 'PENDING',
+  }, { id: jobId });
+
+  workforceProfiles = Object.freeze([
+    PersonWorkforceProfileContract.define({
+      personId: carrierPerson.id,
+      specialization: 'LUMBERJACK',
+      capabilities: ['CAN_MOVE', 'CAN_SIMPLE_TRANSPORT', 'CAN_LUMBERJACK'],
+    }),
+  ]);
+  workforceRequirements = Object.freeze([Object.freeze({
+    kind: 'operational-building-workforce-requirement-definition',
+    buildingId: woodcutter.id,
+    count: 1,
+    requiredSpecialization: 'LUMBERJACK',
+    requiredCapabilities: Object.freeze(['CAN_LUMBERJACK', 'CAN_MOVE']),
+  })]);
+  workforceAssignments = Object.freeze([
+    WorkforceAssignmentStateContract.define({
+      personId: carrierPerson.id,
+      availability: 'ASSIGNED',
+      assignmentId: 'assignment:00000001',
+    }),
+  ]);
+  workforceBindings = Object.freeze([Object.freeze({
+    kind: 'workforce-building-binding',
+    assignmentId: 'assignment:00000001',
+    buildingId: woodcutter.id,
+  })]);
+  carrierBindings = Object.freeze([Object.freeze({
+    kind: 'carrier-job-binding',
+    jobId,
+    unitId: carrierPerson.id,
+  })]);
+  transportExecutions = Object.freeze([
+    TransportExecutionContract.define({ jobId, unitId: carrierPerson.id, state: 'TO_PICKUP' }),
+  ]);
+  }
+  const constructionProgress = Object.freeze([hq, woodcutter, storehouse].map(building =>
+    BuildingConstructionProgressTransitionContract.define({ buildingId: building.id, progress: 1 })));
+  const pathUsageWear = Object.freeze({ entries: () => Object.freeze([]) });
+
   const pathClassification = new WorldBackedPathClassificationSource({ map, world });
   const pathClassificationEntries = pathClassification.entries();
   const traversability = new WorldBackedTraversabilitySource({ map, domains });
@@ -235,6 +328,23 @@ export function createBaselineMiniworldScenario() {
       blockedStaticCells,
       runtimeValidationPass,
       classificationPass,
+      resourceState,
+      resourceClaims,
+      resourceDemands,
+      pathUsageWear,
+      housingCapabilities,
+      workforceProfiles,
+      workforceRequirements,
+      productionRecipes: Object.freeze([]),
+      constructionProgress,
+      buildingStocks: Object.freeze([]),
+      buildingStockTransportReservations: Object.freeze([]),
+      workforceAssignments,
+      workforceBindings,
+      carrierBindings,
+      transportExecutions,
+      homeAssignments: residentHousingAssignment.assignments,
+      productionSettlementIds: Object.freeze([]),
     },
   });
 }

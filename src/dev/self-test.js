@@ -31,8 +31,18 @@ export function runFoundationSelfTest(config) {
     scheduler.register({ id:'b', phase:'events', tick:() => order.push('events') });
     let duplicateRejected = false;
     try { scheduler.register({ id:'a', phase:'world', tick:() => {} }); } catch { duplicateRejected = true; }
-    scheduler.step();
-    return duplicateRejected && order.join(',') === 'input,events' && scheduler.systemCount() === 2;
+    const completed = scheduler.step();
+    return duplicateRejected && order.join(',') === 'input,events' && scheduler.systemCount() === 2
+      && completed.stepIndex === 1 && scheduler.completedStepIndex === 1;
+  });
+
+  check('scheduler-completed-step-fail-closed', () => {
+    const scheduler = new Scheduler({ phases: ['work'], stepMs: 100 });
+    let notifications = 0;
+    scheduler.onCompletedStep(() => { notifications += 1; });
+    scheduler.register({ id: 'fail', phase: 'work', tick: () => { throw new Error('tick failed'); } });
+    try { scheduler.step(); } catch {}
+    return scheduler.completedStepIndex === 0 && notifications === 0;
   });
 
   const pass = results.every(r => r.pass);

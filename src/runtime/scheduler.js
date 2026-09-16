@@ -4,6 +4,8 @@ export class Scheduler {
   #running = false;
   #timer = null;
   #stepMs;
+  #completedStepIndex = 0;
+  #completedStepListeners = new Set();
 
   constructor({ phases, stepMs }) {
     this.#phases = [...phases];
@@ -35,6 +37,20 @@ export class Scheduler {
     for (const phase of this.#phases) {
       for (const tick of this.#systems.get(phase).values()) tick(dtMs);
     }
+    this.#completedStepIndex += 1;
+    const boundary = Object.freeze({
+      kind: 'completed-simulation-step-boundary',
+      status: 'COMPLETED',
+      stepIndex: this.#completedStepIndex,
+    });
+    for (const listener of [...this.#completedStepListeners]) listener(boundary);
+    return boundary;
+  }
+
+  onCompletedStep(listener) {
+    if (typeof listener !== 'function') throw new TypeError('completed-step listener required');
+    this.#completedStepListeners.add(listener);
+    return () => this.#completedStepListeners.delete(listener);
   }
 
   start() {
@@ -56,4 +72,5 @@ export class Scheduler {
   get running() { return this.#running; }
   get stepMs() { return this.#stepMs; }
   get phases() { return Object.freeze([...this.#phases]); }
+  get completedStepIndex() { return this.#completedStepIndex; }
 }

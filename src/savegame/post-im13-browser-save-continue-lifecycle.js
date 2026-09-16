@@ -1,0 +1,122 @@
+import { PostIM13AuthoritativeSnapshotIntegration } from './post-im13-authoritative-snapshot-integration.js';
+import { PostIM13SaveGameRestoreIntegration } from './post-im13-savegame-restore-integration.js';
+import { PostIM13DerivedStateRebindingIntegration } from './post-im13-derived-state-rebinding-integration.js';
+import { PostIM13ActiveRuntimeCaptureAdapter } from './post-im13-active-runtime-capture-adapter.js';
+import { PostContinueTransportExecutionAdapter } from '../transport/post-continue-transport-execution-adapter.js';
+
+function compositionFrom(rebound) {
+  const state = rebound.runtimeState;
+  const derived = rebound.derivedState;
+  return Object.freeze({
+    kind: 'active-runtime-composition',
+    scenarioId: 'IM20E_RESTORED_CONTINUE',
+    authoritative: Object.freeze({
+      ...state,
+      residentHousingAssignment: derived.housing.assignmentIntegration,
+      populationProjection: derived.population,
+      goldFlowAdmission: null,
+      goldSettlement: null,
+      goldSettlementIds: state.goldSettlementIds,
+      pathClassification: derived.navigation.pathClassification,
+      pathClassificationEntries: derived.navigation.pathClassificationEntries,
+      traversability: derived.navigation.traversability,
+      reachabilityEvidence: null,
+      personNavigationValidation: null,
+      carrierMovementEvidence: null,
+      carrierNavigationValidation: null,
+      runtimeNavigationValidations: Object.freeze([]),
+      blockedStaticCells: derived.navigation.traversability.entries(),
+      runtimeValidationPass: true,
+      classificationPass: true,
+      playerPopulationHousingGoldProjection: derived.presentation.playerPopulationHousingGold,
+      reboundDerivedState: derived,
+    }),
+  });
+}
+
+export class PostIM13BrowserSaveContinueLifecycle {
+  #storage;
+  #runtime;
+  #getComposition;
+  #publish;
+  #resetCamera;
+  #clearSelection;
+
+  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection } = {}) {
+    if (!storage || !runtime?.scheduler || typeof getComposition !== 'function' || typeof publishComposition !== 'function') {
+      throw new TypeError('IM-20E lifecycle dependencies required');
+    }
+    this.#storage = storage;
+    this.#runtime = runtime;
+    this.#getComposition = getComposition;
+    this.#publish = publishComposition;
+    this.#resetCamera = typeof resetCamera === 'function' ? resetCamera : () => {};
+    this.#clearSelection = typeof clearSelection === 'function' ? clearSelection : () => {};
+  }
+
+  save() {
+    if (this.#runtime.state === 'RUNNING') {
+      return new Promise((resolve, reject) => {
+        const off = this.#runtime.scheduler.onCompletedStep((boundary) => {
+          off();
+          try { resolve(this.#captureAndStore(boundary.stepIndex)); } catch (error) { reject(error); }
+        });
+      });
+    }
+    return Promise.resolve(this.#captureAndStore(this.#runtime.scheduler.completedStepIndex));
+  }
+
+  #captureAndStore(stepIndex) {
+    const snapshot = PostIM13ActiveRuntimeCaptureAdapter.capture(this.#getComposition(), stepIndex);
+    const serialized = PostIM13AuthoritativeSnapshotIntegration.serialize(snapshot);
+    const write = this.#storage.write(serialized);
+    return Object.freeze({ kind: 'im20e-save-result', status: 'SAVED', stepIndex, write });
+  }
+
+  continueFromStorage() {
+    const serialized = this.#storage.read();
+    if (serialized == null) return Object.freeze({ kind: 'im20e-continue-result', status: 'NO_SAVE' });
+    let snapshot;
+    try { snapshot = JSON.parse(serialized); }
+    catch (error) { return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'INVALID_JSON', error: String(error.message) }); }
+
+    const restored = PostIM13SaveGameRestoreIntegration.restore(snapshot);
+    if (restored.status !== 'RESTORED') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RESTORE_REJECTED', restored });
+    const rebound = PostIM13DerivedStateRebindingIntegration.rebind(restored);
+    if (rebound.status !== 'REBOUND') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'REBIND_REJECTED', rebound });
+
+    const previous = this.#getComposition();
+    const candidate = compositionFrom(rebound);
+    const transport = new PostContinueTransportExecutionAdapter({ executions: rebound.runtimeState.transportExecutions });
+    const unregister = [];
+    try {
+      this.#publish(candidate);
+      this.#resetCamera();
+      this.#clearSelection();
+      for (const descriptor of rebound.derivedState.scheduler.registrations) {
+        unregister.push(this.#runtime.scheduler.register({
+          id: descriptor.id,
+          phase: descriptor.phase,
+          tick: transport.tickFor(descriptor),
+        }));
+      }
+      if (this.#runtime.state !== 'RUNNING') this.#runtime.start();
+      return Object.freeze({
+        kind: 'im20e-continue-result', status: 'CONTINUED', captureStepIndex: rebound.captureStepIndex,
+        schedulerRegistrationCount: unregister.length, restored, rebound, transport,
+      });
+    } catch (error) {
+      for (const off of unregister.reverse()) off();
+      this.#publish(previous);
+      return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'ACTIVATION_FAILED', error: String(error.message) });
+    }
+  }
+
+  static capabilities() {
+    return Object.freeze({
+      browserStorage: true, completedStepCapture: true, v2Restore: true, derivedStateRebinding: true,
+      atomicRuntimeActivation: true, schedulerInstallation: true, continueLifecycle: true,
+      exactlyOnceRecoveryReconciliation: false,
+    });
+  }
+}
