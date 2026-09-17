@@ -1,42 +1,72 @@
-import { TransportExecutionContract } from './transport-execution-contract.js';
+import { CarrierMovementContract } from './carrier-movement-contract.js';
+import { DeliveryExecutionService } from './delivery-execution-service.js';
+import { DeliverySettlementContract } from './delivery-settlement-contract.js';
+import { DeliverySettlementService } from './delivery-settlement-service.js';
+import { MovementTransportExecutionIntegration } from './movement-transport-execution-integration.js';
+import { PickupExecutionService } from './pickup-execution-service.js';
+import { TransportCompletionService } from './transport-completion-service.js';
 
-const NEXT_STATE = Object.freeze({
-  CONTINUE_TO_PICKUP: 'PICKED_UP',
-  BEGIN_DROPOFF_TRANSITION: 'TO_DROPOFF',
-  CONTINUE_TO_DROPOFF: 'DELIVERED',
-});
+const cargoFor = b => Object.freeze({ kind: 'carrier-cargo', jobId: b.job.id, unitId: b.unitId, resourceId: b.job.resourceId, amount: Number(b.job.amount) });
+function positionFor(state, location) {
+  const entity = state.world.get(location.refId) ?? state.domains.buildings.get(location.refId) ?? state.domains.units.get(location.refId);
+  const value = entity?.world ?? entity?.position;
+  if (!value || !Number.isFinite(Number(value.x)) || !Number.isFinite(Number(value.y))) throw new Error(`transport recovery location has no position: ${location.refId}`);
+  return Object.freeze({ x: Number(value.x), y: Number(value.y) });
+}
 
 export class PostContinueTransportExecutionAdapter {
-  #executions = new Map();
-
-  constructor({ executions = [] } = {}) {
-    for (const input of executions) {
-      const execution = TransportExecutionContract.define(input);
-      this.#executions.set(execution.jobId, execution);
+  #state; #bindings = new Map(); #executions = new Map(); #movement = new Map(); #cargo = new Map();
+  #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion;
+  constructor({ state, transport } = {}) {
+    if (!state?.domains || !transport?.carrierAssignments) throw new TypeError('restored transport owners required');
+    this.#state = state;
+    this.#settlement = new DeliverySettlementService({ resources: state.resourceState, claims: state.resourceClaims, demands: state.resourceDemands });
+    this.#completion = new TransportCompletionService({ jobStore: state.domains.jobs, carrierAssignments: transport.carrierAssignments });
+    for (const binding of transport.active) {
+      this.#bindings.set(binding.jobId, binding); this.#executions.set(binding.jobId, binding.execution);
+      if (['PICKED_UP', 'TO_DROPOFF'].includes(binding.execution.state)) this.#cargo.set(binding.jobId, cargoFor(binding));
+      const currentPosition = state.domains.units.get(binding.unitId)?.position;
+      if (!currentPosition) throw new Error(`restored carrier position missing: ${binding.unitId}`);
+      this.#movement.set(binding.jobId, CarrierMovementContract.define({ unitId: binding.unitId, currentPosition, state: 'IDLE', targetPosition: null }));
     }
   }
-
   tickFor(descriptor) {
-    const action = String(descriptor?.recoveryAction || '');
-    if (action === 'AWAIT_IM20F_COMPLETION_RECONCILIATION') {
-      throw new Error('DELIVERED recovery belongs to IM-20F');
-    }
-    const nextState = NEXT_STATE[action];
-    if (!nextState) throw new Error(`unsupported IM-20D recovery action: ${action}`);
-    const execution = this.#executions.get(descriptor.jobId);
-    if (!execution || execution.unitId !== descriptor.unitId) {
-      throw new Error(`missing restored transport execution: ${descriptor?.jobId}`);
-    }
-    let consumed = false;
-    return () => {
-      if (consumed) return this.#executions.get(descriptor.jobId);
-      const current = this.#executions.get(descriptor.jobId);
-      const next = TransportExecutionContract.transition(current, nextState);
-      this.#executions.set(descriptor.jobId, next);
-      consumed = true;
-      return next;
-    };
+    if (descriptor?.recoveryAction === 'AWAIT_IM20F_COMPLETION_RECONCILIATION') throw new Error('DELIVERED recovery belongs to IM-20F');
+    const binding = this.#bindings.get(descriptor?.jobId);
+    if (!binding || binding.unitId !== descriptor.unitId) throw new Error(`missing restored transport binding: ${descriptor?.jobId}`);
+    return (dtMs = 100) => this.#tick(binding, Math.max(0.01, Number(dtMs) / 100));
   }
-
+  #tick(binding, maxDistance) {
+    const id = binding.jobId; let execution = this.#executions.get(id);
+    const pickupPosition = positionFor(this.#state, binding.job.sourceLocation);
+    const dropoffPosition = positionFor(this.#state, { refId: binding.job.targetId });
+    if (execution.state === 'TO_PICKUP') {
+      const movement = MovementTransportExecutionIntegration.advance({ execution, movement: this.#movement.get(id), pickupPosition, dropoffPosition, maxDistance });
+      this.#movement.set(id, movement);
+      if (movement.state === 'IDLE') {
+        const result = MovementTransportExecutionIntegration.pickupAfterArrival({ pickupService: this.#pickup, job: binding.job, assignment: binding.assignment, execution, resource: this.#state.resourceState.get(binding.job.resourceId), movement, pickupPosition, dropoffPosition });
+        execution = result.execution; this.#cargo.set(id, result.cargo); this.#executions.set(id, execution);
+      }
+      return execution;
+    }
+    if (execution.state === 'PICKED_UP') {
+      const result = this.#delivery.beginDropoff({ job: binding.job, assignment: binding.assignment, execution, cargo: this.#cargo.get(id) });
+      execution = result.execution; this.#executions.set(id, execution); return execution;
+    }
+    if (execution.state === 'TO_DROPOFF') {
+      const movement = MovementTransportExecutionIntegration.advance({ execution, movement: this.#movement.get(id), pickupPosition, dropoffPosition, maxDistance });
+      this.#movement.set(id, movement);
+      if (movement.state === 'IDLE') {
+        const delivered = MovementTransportExecutionIntegration.deliverAfterArrival({ deliveryService: this.#delivery, job: binding.job, assignment: binding.assignment, execution, cargo: this.#cargo.get(id), movement, pickupPosition, dropoffPosition });
+        execution = delivered.execution;
+        const claim = this.#state.resourceClaims.get(binding.job.claimId), demand = this.#state.resourceDemands.get(binding.job.demandId), resource = this.#state.resourceState.get(binding.job.resourceId);
+        const settlement = DeliverySettlementContract.fromDelivered({ job: binding.job, execution, delivery: delivered.delivery, claim, demand, resource });
+        const commit = this.#settlement.commit({ settlement, job: binding.job, execution, delivery: delivered.delivery });
+        this.#completion.complete({ settlementCommit: commit, execution }); this.#executions.set(id, execution);
+      }
+      return execution;
+    }
+    return execution;
+  }
   executionForJob(jobId) { return this.#executions.get(jobId) ?? null; }
 }

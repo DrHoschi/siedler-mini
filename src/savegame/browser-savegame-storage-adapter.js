@@ -24,8 +24,11 @@ export class BrowserSaveGameStorageAdapter {
     try {
       this.#storage.setItem(this.#key, payload);
     } catch (error) {
-      if (previous == null) this.#storage.removeItem?.(this.#key);
-      else this.#storage.setItem(this.#key, previous);
+      const current = this.read();
+      if (current !== previous) {
+        if (previous == null) this.#storage.removeItem?.(this.#key);
+        else this.#storage.setItem(this.#key, previous);
+      }
       throw error;
     }
     return Object.freeze({ kind: 'im20e-browser-save-write', key: this.#key, bytes: payload.length });

@@ -195,6 +195,10 @@ export function createWorldSelectionContextController({
       selection = null;
       return refreshContext();
     },
+    restore(previousSelection) {
+      selection = previousSelection ?? null;
+      return refreshContext();
+    },
     destroy() {
       unsubscribe();
       input.destroy();

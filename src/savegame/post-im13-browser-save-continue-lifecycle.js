@@ -16,7 +16,8 @@ function compositionFrom(rebound) {
       populationProjection: derived.population,
       goldFlowAdmission: null,
       goldSettlement: null,
-      goldSettlementIds: state.goldSettlementIds,
+      productionSettlementIds: Object.freeze([...state.productionSettlementIds]),
+      goldSettlementIds: Object.freeze([...state.goldSettlementIds]),
       pathClassification: derived.navigation.pathClassification,
       pathClassificationEntries: derived.navigation.pathClassificationEntries,
       traversability: derived.navigation.traversability,
@@ -41,8 +42,10 @@ export class PostIM13BrowserSaveContinueLifecycle {
   #publish;
   #resetCamera;
   #clearSelection;
+  #capturePresentation;
+  #restorePresentation;
 
-  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection } = {}) {
+  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation } = {}) {
     if (!storage || !runtime?.scheduler || typeof getComposition !== 'function' || typeof publishComposition !== 'function') {
       throw new TypeError('IM-20E lifecycle dependencies required');
     }
@@ -52,6 +55,8 @@ export class PostIM13BrowserSaveContinueLifecycle {
     this.#publish = publishComposition;
     this.#resetCamera = typeof resetCamera === 'function' ? resetCamera : () => {};
     this.#clearSelection = typeof clearSelection === 'function' ? clearSelection : () => {};
+    this.#capturePresentation = typeof capturePresentation === 'function' ? capturePresentation : () => null;
+    this.#restorePresentation = typeof restorePresentation === 'function' ? restorePresentation : () => {};
   }
 
   save() {
@@ -74,6 +79,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
   }
 
   continueFromStorage() {
+    if (this.#runtime.state === 'RUNNING') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RUNTIME_RUNNING' });
     const serialized = this.#storage.read();
     if (serialized == null) return Object.freeze({ kind: 'im20e-continue-result', status: 'NO_SAVE' });
     let snapshot;
@@ -86,13 +92,11 @@ export class PostIM13BrowserSaveContinueLifecycle {
     if (rebound.status !== 'REBOUND') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'REBIND_REJECTED', rebound });
 
     const previous = this.#getComposition();
+    const previousPresentation = this.#capturePresentation();
     const candidate = compositionFrom(rebound);
-    const transport = new PostContinueTransportExecutionAdapter({ executions: rebound.runtimeState.transportExecutions });
+    const transport = new PostContinueTransportExecutionAdapter({ state: rebound.runtimeState, transport: rebound.derivedState.transport });
     const unregister = [];
     try {
-      this.#publish(candidate);
-      this.#resetCamera();
-      this.#clearSelection();
       for (const descriptor of rebound.derivedState.scheduler.registrations) {
         unregister.push(this.#runtime.scheduler.register({
           id: descriptor.id,
@@ -100,15 +104,20 @@ export class PostIM13BrowserSaveContinueLifecycle {
           tick: transport.tickFor(descriptor),
         }));
       }
-      if (this.#runtime.state !== 'RUNNING') this.#runtime.start();
+      this.#publish(candidate);
+      this.#resetCamera();
+      this.#clearSelection();
+      this.#runtime.start();
       return Object.freeze({
         kind: 'im20e-continue-result', status: 'CONTINUED', captureStepIndex: rebound.captureStepIndex,
         schedulerRegistrationCount: unregister.length, restored, rebound, transport,
       });
     } catch (error) {
       for (const off of unregister.reverse()) off();
-      this.#publish(previous);
-      return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'ACTIVATION_FAILED', error: String(error.message) });
+      const rollbackErrors = [];
+      try { this.#publish(previous); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
+      try { this.#restorePresentation(previousPresentation); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
+      return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'ACTIVATION_FAILED', error: String(error.message), rollbackErrors: Object.freeze(rollbackErrors) });
     }
   }
 

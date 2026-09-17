@@ -29,7 +29,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20C – Deterministic Validation & Restore Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20D – Derived-State Rebinding after Continue: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20E: IMPLEMENTED / TESTBUILD 1 / NOT FROZEN**
+- **IM-20E: IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected**
 - **IM-20F–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
@@ -772,7 +772,7 @@ Hard boundary: no active-runtime publication, Scheduler installation, browser pe
 
 ### IM-20E – Browser Save / Reload / Continue Lifecycle Integration
 
-**Status:** IMPLEMENTED / TESTBUILD 1 / NOT FROZEN
+**Status:** IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected
 
 **Definition baseline:** frozen IM-20D @ `7758bff83164c90793dacc75d437b2d9f3d64c66` with marker `frozen/im-20d-derived-state-rebinding-after-continue`.
 
@@ -822,7 +822,7 @@ Explicit non-scope remains: multi-slot Save UI, cloud save, multiplayer synchron
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — IMPLEMENTED / TESTBUILD 1 / NOT FROZEN**
+- **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — IMPLEMENTED / TESTBUILD 2 / NOT FROZEN**
 - **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
 - **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
 
@@ -870,7 +870,7 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20E = IMPLEMENTED / TESTBUILD 1 / NOT FROZEN.**
+**IM-20E = IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected.**
 
 The next permissible action is exclusively the IM-20E Implementation Verification / Regression Gate. No freeze and no IM-20F+ capability is authorized.
 
@@ -880,4 +880,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-16 — IM-20E Browser Save / Reload / Continue Lifecycle Integration implemented as TESTBUILD 1 on its dedicated branch. The next permissible action is only its separate Implementation Verification / Regression Gate; IM-20F+ remains unauthorized.
+**Updated:** 2026-09-17 — The four IM-20E verification blockers were corrected as TESTBUILD 2: branch-bound Pages deployment, normal transport execution through movement/pickup/delivery/settlement/completion, atomic composition/presentation rollback, and the missing lifecycle acceptance tests. IM-20E remains NOT FROZEN; the next permissible action is only its separate Implementation Verification / Regression Gate. IM-20F+ remains unauthorized.
