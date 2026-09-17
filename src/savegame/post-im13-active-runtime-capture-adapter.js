@@ -6,6 +6,7 @@ const REQUIRED = Object.freeze([
   'housingCapabilities', 'workforceProfiles', 'workforceRequirements', 'productionRecipes', 'constructionProgress',
   'buildingStocks', 'buildingStockTransportReservations', 'workforceAssignments', 'workforceBindings',
   'carrierBindings', 'transportExecutions', 'homeAssignments', 'productionSettlementIds', 'goldSettlementIds',
+  'productionEffectReceipts', 'goldEffectReceipts',
 ]);
 
 export class PostIM13ActiveRuntimeCaptureAdapter {
@@ -15,7 +16,7 @@ export class PostIM13ActiveRuntimeCaptureAdapter {
       throw new TypeError('active runtime composition required');
     }
     for (const name of REQUIRED) {
-      if (owners[name] == null) throw new Error(`IM-20E capture owner missing: ${name}`);
+      if (owners[name] == null) throw new Error(`IM-20F capture owner missing: ${name}`);
     }
     return PostIM13AuthoritativeSnapshotIntegration.capture({
       boundary: SaveGameSnapshotContract.completedStepBoundary(stepIndex),
@@ -41,6 +42,8 @@ export class PostIM13ActiveRuntimeCaptureAdapter {
       homeAssignments: owners.homeAssignments,
       productionSettlementIds: owners.productionSettlementIds,
       goldSettlementIds: owners.goldSettlementIds,
+      productionEffectReceipts: owners.productionEffectReceipts,
+      goldEffectReceipts: owners.goldEffectReceipts,
     });
   }
 }
