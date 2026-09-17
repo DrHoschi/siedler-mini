@@ -774,6 +774,8 @@ Hard boundary: no active-runtime publication, Scheduler installation, browser pe
 
 **Status:** IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected
 
+**Verification-blocker correction implementation:** remote commit `75f0c779f98806785d9f26913ddff376a1b13ec6` (Pages source, normal transport continuation, atomic rollback and missing lifecycle acceptance coverage).
+
 **Definition baseline:** frozen IM-20D @ `7758bff83164c90793dacc75d437b2d9f3d64c66` with marker `frozen/im-20d-derived-state-rebinding-after-continue`.
 
 IM-20E connects the already frozen IM-20A–D contracts to one real browser lifecycle without creating a second SaveGame, Runtime or Scheduler authority:
