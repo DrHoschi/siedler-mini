@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–D COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20E IMPLEMENTED / TESTBUILD 2 / NOT FROZEN; IM-20F–G DEFINED / NOT IMPLEMENTED
+**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–E COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20F–G DEFINED / NOT IMPLEMENTED
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-20C baseline head:** `ce84bacef4d2802f045ce522e7f7140b7b173fd8`
 **Frozen IM-20C marker:** `frozen/im-20c-deterministic-validation-restore-integration`
@@ -8,7 +8,7 @@
 
 ## 1. Frozen line
 
-CR-25 through CR-32, IM-13 through IM-19 and IM-20A–D remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
+CR-25 through CR-32, IM-13 through IM-19 and IM-20A–E remain **COMPLETE / FROZEN / PASS / 0 BLOCKER**.
 
 Frozen IM-17 Whole-Block:
 - `frozen/im-17-economic-construction-integration` @ `53de400c2ffe57addf832b599b906b3d5b473385`
@@ -25,6 +25,9 @@ Frozen IM-18 substeps:
 
 Frozen IM-20D:
 - `frozen/im-20d-derived-state-rebinding-after-continue` @ final freeze-gate head
+
+Frozen IM-20E:
+- `frozen/im-20e-browser-save-reload-continue-lifecycle-integration` @ final freeze-gate head
 
 Frozen IM-18 Whole-Block:
 - `frozen/im-18-operational-building-workforce-production-integration` @ `2d068aa357ec5d1fe8f53eb867037021d04caddf`
@@ -576,7 +579,9 @@ No Runtime activation/publication, Scheduler installation, browser storage, Save
 
 ### IM-20E – Browser Save / Reload / Continue Lifecycle Integration
 
-**Status:** IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen marker:** `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`
 
 **Definition baseline:** frozen IM-20D @ `7758bff83164c90793dacc75d437b2d9f3d64c66`.
 
@@ -599,13 +604,15 @@ IM-20E may execute only the normal continuation actions already resolved by IM-2
 
 Non-scope: multi-slot Save UI, cloud save, multiplayer synchronization, autosave, legacy-main migration, final Save-menu/wireframe or responsive UI redesign, Economy expansion, Inspector system graph, IM-20F Exactly-once & Recovery Reconciliation and IM-20G Player/Device Verification.
 
+Completion evidence: verified head `991cc28e3c5146e7dada0093569ecc7801b01572` passed the complete local IM-20E and frozen-predecessor regression. Manually started exact-head CI run `35200717289` and rerun job `105157412546` completed SUCCESS, including `Run IM-20E + frozen predecessor regression`. Exact-head Pages run `35200717307` completed SUCCESS, and the live source exposed TESTBUILD 2. The diff against frozen IM-20D is ahead-only / 0 behind and restricted to the authorized IM-20E scope. The prior Pages-source, normal transport continuation, atomic rollback and acceptance-test blockers are corrected. No IM-20F+ capability is included.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 2. **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 3. **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 4. **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — IMPLEMENTED / TESTBUILD 2 / NOT FROZEN**
+5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
 7. **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
 
@@ -651,10 +658,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20E = IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected.**
+**IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively the IM-20E Implementation Verification / Regression Gate. No freeze and no IM-20F+ capability is authorized.
+No IM-20F+ implementation is authorized. Any next step requires a separate explicit authorization.
 
 ---
 
-**Updated:** 2026-09-17 — The four IM-20E verification blockers were corrected as TESTBUILD 2. IM-20E remains NOT FROZEN; the next permissible action is only its separate Implementation Verification / Regression Gate. IM-20F+ remains unauthorized.
+**Updated:** 2026-09-17 — IM-20E Completion / Evidence / Freeze Gate completed with exact-head local regression PASS, manually started CI PASS, Pages PASS and 0 blockers. IM-20E is frozen at marker `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`. IM-20F+ remains unauthorized and requires a separate explicit authorization.

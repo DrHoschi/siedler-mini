@@ -29,7 +29,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20C – Deterministic Validation & Restore Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20D – Derived-State Rebinding after Continue: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20E: IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected**
+- **IM-20E – Browser Save / Reload / Continue Lifecycle Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20F–G: DEFINED / NOT IMPLEMENTED**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
@@ -75,6 +75,9 @@ Frozen IM-19G marker:
 
 Frozen IM-20D marker:
 - `frozen/im-20d-derived-state-rebinding-after-continue` @ final freeze-gate head
+
+Frozen IM-20E marker:
+- `frozen/im-20e-browser-save-reload-continue-lifecycle-integration` @ final freeze-gate head
 
 ## 3. Binding ownership boundary after IM-18
 
@@ -772,7 +775,9 @@ Hard boundary: no active-runtime publication, Scheduler installation, browser pe
 
 ### IM-20E – Browser Save / Reload / Continue Lifecycle Integration
 
-**Status:** IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
+
+**Frozen marker:** `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`
 
 **Verification-blocker correction implementation:** remote commit `75f0c779f98806785d9f26913ddff376a1b13ec6` (Pages source, normal transport continuation, atomic rollback and missing lifecycle acceptance coverage).
 
@@ -819,12 +824,20 @@ Hard IM-20E / IM-20F boundary: IM-20E may execute only the unambiguous normal co
 
 Explicit non-scope remains: multi-slot Save UI, cloud save, multiplayer synchronization, autosave, legacy-main save migration, final Save-menu/wireframe or responsive Game-UI redesign, new Economy capability, Inspector system graph, IM-20F Exactly-once & Recovery Reconciliation and IM-20G Player/Device Verification.
 
+Completion / evidence / freeze gate:
+- verified implementation/evidence head `991cc28e3c5146e7dada0093569ecc7801b01572` passed the full local IM-20E and frozen-predecessor regression with 0 blockers;
+- manually started exact-head CI run `35200717289` completed SUCCESS; rerun job `105157412546` completed every relevant setup, checkout and `Run IM-20E + frozen predecessor regression` step successfully;
+- exact-head Pages run `35200717307` completed SUCCESS and the live Pages source exposed `IM-20E-BROWSER-SAVE-RELOAD-CONTINUE-LIFECYCLE-INTEGRATION-TESTBUILD-2`;
+- branch comparison against frozen IM-20D `7758bff83164c90793dacc75d437b2d9f3d64c66` is ahead-only / 0 behind and limited to the authorized IM-20E lifecycle, storage, activation/rollback, scheduler, transport-continuation, verification, build-identity, CI/Pages and steering-document scope;
+- the four prior verification blockers are corrected: branch-bound Pages deployment, normal transport continuation through completion, atomic composition/presentation rollback, and lifecycle acceptance coverage;
+- no IM-20F exactly-once/recovery reconciliation, ambiguous-state repair, replay reconciliation or other IM-20F+ capability is present.
+
 ### Remaining defined substeps
 
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — IMPLEMENTED / TESTBUILD 2 / NOT FROZEN**
+- **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
 - **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
 
@@ -872,9 +885,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20D = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20E = IMPLEMENTED / TESTBUILD 2 / NOT FROZEN — verification blockers corrected.**
+**IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively the IM-20E Implementation Verification / Regression Gate. No freeze and no IM-20F+ capability is authorized.
+No IM-20F+ implementation is authorized. Any next step requires a separate explicit authorization.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -882,4 +895,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-17 — The four IM-20E verification blockers were corrected as TESTBUILD 2: branch-bound Pages deployment, normal transport execution through movement/pickup/delivery/settlement/completion, atomic composition/presentation rollback, and the missing lifecycle acceptance tests. IM-20E remains NOT FROZEN; the next permissible action is only its separate Implementation Verification / Regression Gate. IM-20F+ remains unauthorized.
+**Updated:** 2026-09-17 — IM-20E Completion / Evidence / Freeze Gate completed with exact-head local regression PASS, manually started CI PASS, Pages PASS and 0 blockers. IM-20E is frozen at marker `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`. IM-20F+ remains unauthorized and requires a separate explicit authorization.
