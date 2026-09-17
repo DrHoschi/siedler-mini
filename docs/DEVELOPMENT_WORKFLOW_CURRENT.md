@@ -833,6 +833,46 @@ Completion / evidence / freeze gate:
 - the four prior verification blockers are corrected: branch-bound Pages deployment, normal transport continuation through completion, atomic composition/presentation rollback, and lifecycle acceptance coverage;
 - no IM-20F exactly-once/recovery reconciliation, ambiguous-state repair, replay reconciliation or other IM-20F+ capability is present.
 
+### IM-20F – Exactly-once & Recovery Reconciliation
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Definition baseline:** frozen IM-20E @ `84945407ef40cfc31fe4dc56f11823e591e9fac2` with marker `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`.
+
+IM-20F owns only deterministic reconciliation of persisted crash-window states that IM-20E deliberately leaves unresolved. The existing normal continuation actions remain frozen. In particular, an execution restored as `DELIVERED` remains blocked behind `AWAIT_IM20F_COMPLETION_RECONCILIATION` until IM-20F classifies the complete authoritative state without replay or guessing.
+
+Transport recovery decision boundary:
+- `DELIVERED + Claim ACTIVE + Job PENDING + matching active Carrier binding` means delivery settlement has not yet become effective; IM-20F may apply it once and then complete the Job and release the Carrier;
+- `DELIVERED + Claim CONSUMED + Job PENDING + matching active Carrier binding` means settlement is already effective; IM-20F must not settle again and may only finish Job completion and Carrier release;
+- a canonically completed terminal Job with already consumed Claim is acknowledged as complete with no repeated effect;
+- contradictory identity, Claim/Demand/Resource, Job, execution, Carrier state or binding combinations reject fail-closed and are never silently repaired.
+
+Terminal continuity must define one canonical persisted outcome for `carrierBinding`, `transportExecution`, Scheduler registration and Carrier `OCCUPIED → AVAILABLE` release. The current V2 validation rule requiring every persisted TransportExecution to have a matching Carrier binding may not be weakened ambiguously; terminal cleanup versus terminal evidence retention must be made explicit and deterministic.
+
+Production and Gold exactly-once boundary:
+- BuildingStock input/output mutation and its `productionSettlementId` fence form one logical effect; stock/fence mismatch must not replay production and must reject unless a deterministic authorized reconciliation exists;
+- Gold balance mutation and its `goldSettlementId` fence form one logical effect; balance/fence mismatch must not apply income twice and must reject unless a deterministic authorized reconciliation exists;
+- restored construction completion remains evidence-only and must never replay completion side effects.
+
+Authority boundary:
+- ResourceState, ResourceClaims and ResourceDemands retain resource settlement authority;
+- TransportJob and CarrierAssignment owners retain Job/Carrier lifecycle authority;
+- BuildingStock remains production inventory authority and GoldEconomyOwner remains Gold authority;
+- persisted settlement fences remain exactly-once evidence;
+- IM-20F may classify and execute only a uniquely determined missing transition. It creates no second gameplay authority, invents no identity and performs no heuristic repair.
+
+Required future acceptance coverage:
+- crash before delivery settlement;
+- crash after settlement but before Job completion;
+- crash after Job completion but before terminal Carrier/binding cleanup;
+- already complete terminal state is a no-op;
+- duplicate transport, production or Gold settlement identity produces no second effect;
+- production stock/fence mismatch, Gold balance/fence mismatch and contradictory transport states reject fail-closed;
+- canonical `Capture → Restore → Reconcile → Continue → Capture` continuity;
+- full IM-20A–E and frozen predecessor regression remains green.
+
+Hard boundary: IM-20F is definition-only. No implementation, implementation branch, schema mutation, recovery execution, IM-20G device verification or other IM-20G+ capability is authorized.
+
 ### Remaining defined substeps
 
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -888,7 +928,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-No IM-20F+ implementation is authorized. Any next step requires a separate explicit authorization.
+**IM-20F = DEFINED / NOT IMPLEMENTED.**
+
+The next permissible action is exclusively an IM-20F Definition Documentation Verification / Scope Gate against frozen IM-20E. No implementation, implementation branch or IM-20G+ capability is authorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -896,4 +938,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-17 — IM-20E Completion / Evidence / Freeze Gate completed with exact-head local regression PASS, manually started CI PASS, Pages PASS and 0 blockers. IM-20E is frozen at marker `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`. IM-20F+ remains unauthorized and requires a separate explicit authorization.
+**Updated:** 2026-09-17 — IM-20F Exactly-once & Recovery Reconciliation is now documented as DEFINED / NOT IMPLEMENTED against frozen IM-20E. The next permissible action is only its separate Definition Documentation Verification / Scope Gate. No implementation, implementation branch or IM-20G+ capability is authorized.

@@ -606,6 +606,28 @@ Non-scope: multi-slot Save UI, cloud save, multiplayer synchronization, autosave
 
 Completion evidence: verified head `991cc28e3c5146e7dada0093569ecc7801b01572` passed the complete local IM-20E and frozen-predecessor regression. Manually started exact-head CI run `35200717289` and rerun job `105157412546` completed SUCCESS, including `Run IM-20E + frozen predecessor regression`. Exact-head Pages run `35200717307` completed SUCCESS, and the live source exposed TESTBUILD 2. Freeze-documentation head `1d0523da21329b0293bef879d22e1c9ab4a4fb11` then passed CI `35211582967` and Pages `35211582955`, both SUCCESS. The diff against frozen IM-20D is ahead-only / 0 behind and restricted to the authorized IM-20E scope. The prior Pages-source, normal transport continuation, atomic rollback and acceptance-test blockers are corrected. No IM-20F+ capability is included.
 
+### IM-20F – Exactly-once & Recovery Reconciliation
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Definition baseline:** frozen IM-20E @ `84945407ef40cfc31fe4dc56f11823e591e9fac2`.
+
+IM-20F reconciles only persisted crash-window states that cannot be continued unambiguously by frozen IM-20E. Restored `DELIVERED` execution remains behind `AWAIT_IM20F_COMPLETION_RECONCILIATION` until the authoritative Claim/Demand/Resource, Job, execution, Carrier and binding state yields exactly one valid decision.
+
+Defined deterministic outcomes:
+- active Claim plus pending Job and matching active Carrier binding: apply delivery settlement once, then complete Job and release Carrier;
+- consumed Claim plus pending Job and matching active Carrier binding: do not settle again; finish only completion and Carrier release;
+- canonically completed terminal state: acknowledge with no replay;
+- any contradictory identity, lifecycle, amount, owner or binding state: reject fail-closed.
+
+IM-20F must define canonical terminal persistence/cleanup for Carrier binding, TransportExecution, Scheduler registration and Carrier availability. Production stock mutation plus production fence and Gold balance mutation plus Gold fence each remain one logical exactly-once effect. Mismatches cannot be guessed or silently repaired. Construction completion remains non-replayed evidence.
+
+Existing Resource, TransportJob, CarrierAssignment, BuildingStock and GoldEconomy owners remain authoritative. Settlement fences remain persisted exactly-once evidence. IM-20F introduces no second authority and may execute only a uniquely determined missing transition.
+
+Future acceptance requires the three transport crash windows, terminal no-op, duplicate settlement protection, fail-closed production/Gold/transport contradictions, canonical `Capture → Restore → Reconcile → Continue → Capture`, and full IM-20A–E plus frozen predecessor regression.
+
+No implementation, implementation branch, schema mutation, recovery execution, IM-20G verification or other IM-20G+ capability is authorized by this definition.
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -660,8 +682,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-No IM-20F+ implementation is authorized. Any next step requires a separate explicit authorization.
+**IM-20F = DEFINED / NOT IMPLEMENTED.**
+
+The next permissible action is exclusively an IM-20F Definition Documentation Verification / Scope Gate against frozen IM-20E. No implementation, implementation branch or IM-20G+ capability is authorized.
 
 ---
 
-**Updated:** 2026-09-17 — IM-20E Completion / Evidence / Freeze Gate completed with exact-head local regression PASS, manually started CI PASS, Pages PASS and 0 blockers. IM-20E is frozen at marker `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`. IM-20F+ remains unauthorized and requires a separate explicit authorization.
+**Updated:** 2026-09-17 — IM-20F Exactly-once & Recovery Reconciliation is now documented as DEFINED / NOT IMPLEMENTED against frozen IM-20E. The next permissible action is only its separate Definition Documentation Verification / Scope Gate. No implementation, implementation branch or IM-20G+ capability is authorized.
