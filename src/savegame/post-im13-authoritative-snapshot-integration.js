@@ -9,6 +9,7 @@ import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignme
 import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
 import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
 import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
+import { SettlementEffectReceiptContract } from './settlement-effect-receipt-contract.js';
 
 const SAVEGAME_KIND = 'savegame-snapshot';
 const CAPTURE_KIND = 'post-im13-authoritative-snapshot-capture';
@@ -331,7 +332,9 @@ function capturePostIM13({
   transportExecutions = [],
   homeAssignments = [],
   productionSettlementIds = [],
-  goldSettlementIds = []
+  goldSettlementIds = [],
+  productionEffectReceipts = [],
+  goldEffectReceipts = []
 } = {}) {
   return deepFreeze({
     definitions: deepFreeze({
@@ -414,6 +417,10 @@ function capturePostIM13({
     settlementFences: deepFreeze({
       production: normalizeSettlementIds(productionSettlementIds, 'production settlement ids'),
       gold: normalizeSettlementIds(goldSettlementIds, 'gold settlement ids')
+    }),
+    settlementEffectReceipts: deepFreeze({
+      production: SettlementEffectReceiptContract.productionList(productionEffectReceipts),
+      gold: SettlementEffectReceiptContract.goldList(goldEffectReceipts)
     })
   });
 }
@@ -432,7 +439,9 @@ function assertSchemaBoundary(authoritative) {
     'authoritative.transportExecutions',
     'authoritative.homeAssignments',
     'authoritative.settlementFences.production',
-    'authoritative.settlementFences.gold'
+    'authoritative.settlementFences.gold',
+    'authoritative.settlementEffectReceipts.production',
+    'authoritative.settlementEffectReceipts.gold'
   ];
   const missing = expected.filter((section) => !schema.persistedSections.includes(section));
   if (missing.length > 0) throw new Error(`IM-20A persistence inventory missing sections: ${missing.join(', ')}`);
@@ -476,7 +485,9 @@ export class PostIM13AuthoritativeSnapshotIntegration {
     transportExecutions = [],
     homeAssignments = [],
     productionSettlementIds = [],
-    goldSettlementIds = []
+    goldSettlementIds = [],
+    productionEffectReceipts = [],
+    goldEffectReceipts = []
   } = {}) {
     const base = SaveGameSnapshotContract.capture({ boundary, world, map, domains, gold, wear });
     const authoritative = capturePostIM13({
@@ -496,7 +507,9 @@ export class PostIM13AuthoritativeSnapshotIntegration {
       transportExecutions,
       homeAssignments,
       productionSettlementIds,
-      goldSettlementIds
+      goldSettlementIds,
+      productionEffectReceipts,
+      goldEffectReceipts
     });
     const schema = assertSchemaBoundary(authoritative);
 
