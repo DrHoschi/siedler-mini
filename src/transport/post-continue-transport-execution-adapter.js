@@ -16,10 +16,11 @@ function positionFor(state, location) {
 
 export class PostContinueTransportExecutionAdapter {
   #state; #bindings = new Map(); #executions = new Map(); #movement = new Map(); #cargo = new Map();
-  #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion;
+  #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion; __carrierAssignments;
   constructor({ state, transport } = {}) {
     if (!state?.domains || !transport?.carrierAssignments) throw new TypeError('restored transport owners required');
     this.#state = state;
+    this.__carrierAssignments = transport.carrierAssignments;
     this.#settlement = new DeliverySettlementService({ resources: state.resourceState, claims: state.resourceClaims, demands: state.resourceDemands });
     this.#completion = new TransportCompletionService({ jobStore: state.domains.jobs, carrierAssignments: transport.carrierAssignments });
     for (const binding of transport.active) {
@@ -68,5 +69,48 @@ export class PostContinueTransportExecutionAdapter {
     }
     return execution;
   }
+
+  recoverDelivered({ decision, jobId } = {}) {
+    const binding = this.#bindings.get(String(jobId));
+    if (!binding) throw new Error(`missing restored transport binding: ${jobId}`);
+    const execution = this.#executions.get(binding.jobId);
+    if (!execution || execution.state !== 'DELIVERED') throw new Error(`DELIVERED execution required for recovery: ${binding.jobId}`);
+    const job = this.#state.domains.jobs.get(binding.jobId);
+    const claim = this.#state.resourceClaims.get(job.claimId);
+    const demand = this.#state.resourceDemands.get(job.demandId);
+    const resource = this.#state.resourceState.get(job.resourceId);
+    const delivery = Object.freeze({ kind: 'delivered-cargo', jobId: job.id, unitId: binding.unitId, resourceId: job.resourceId, targetId: job.targetId, amount: Number(job.amount) });
+    let commit;
+    if (decision === 'SETTLE_AND_COMPLETE') {
+      const settlement = DeliverySettlementContract.fromDelivered({ job, execution, delivery, claim, demand, resource });
+      commit = this.#settlement.commit({ settlement, job, execution, delivery });
+    } else if (decision === 'COMPLETE_ONLY') {
+      if (claim?.state !== 'CONSUMED') throw new Error(`COMPLETE_ONLY requires consumed claim: ${job.claimId}`);
+      commit = Object.freeze({
+        kind: 'delivery-settlement-commit',
+        settlement: DeliverySettlementContract.define({ jobId: job.id, executionJobId: execution.jobId, unitId: execution.unitId, resourceId: job.resourceId, claimId: job.claimId, demandId: job.demandId, targetId: job.targetId, amount: job.amount }),
+        claim,
+        resource,
+        demand,
+        recoveredWithoutSettlementReplay: true,
+      });
+    } else throw new Error(`unsupported delivered recovery decision: ${decision}`);
+    const completion = this.#completion.complete({ settlementCommit: commit, execution });
+    this.#bindings.delete(binding.jobId);
+    this.#executions.delete(binding.jobId);
+    this.#movement.delete(binding.jobId);
+    this.#cargo.delete(binding.jobId);
+    return Object.freeze({ kind: 'im20f-delivered-recovery-result', decision, job: completion.job, carrierRelease: completion.carrierRelease, claim: this.#state.resourceClaims.get(job.claimId) });
+  }
+  authoritativeTransportState() {
+    const snapshot = this.#completionAssignmentsSnapshot();
+    return Object.freeze({
+      carrierBindings: Object.freeze(snapshot.assignments.map(value => Object.freeze({ kind: 'carrier-job-binding', jobId: value.jobId, unitId: value.unitId }))),
+      transportExecutions: Object.freeze([...this.#executions.values()]),
+      carriers: snapshot.carriers,
+    });
+  }
+  #completionAssignmentsSnapshot() { return this.#transportAssignments().snapshot(); }
+  #transportAssignments() { return this.__carrierAssignments; }
   executionForJob(jobId) { return this.#executions.get(jobId) ?? null; }
 }
