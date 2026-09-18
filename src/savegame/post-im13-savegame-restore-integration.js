@@ -13,6 +13,7 @@ import { ResidentHomeAssignmentContract } from '../domain/resident-home-assignme
 import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
 import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
 import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
+import { SettlementEffectReceiptContract } from './settlement-effect-receipt-contract.js';
 
 const RESULT_KIND = 'post-im13-savegame-restore-result';
 
@@ -140,7 +141,9 @@ function restoreAuthoritative(snapshot, baseState) {
     transportExecutions,
     homeAssignments,
     productionSettlementIds: new Set(auth.settlementFences.production),
-    goldSettlementIds: new Set(auth.settlementFences.gold)
+    goldSettlementIds: new Set(auth.settlementFences.gold),
+    productionEffectReceipts: SettlementEffectReceiptContract.productionList(auth.settlementEffectReceipts.production),
+    goldEffectReceipts: SettlementEffectReceiptContract.goldList(auth.settlementEffectReceipts.gold)
   });
 }
 
@@ -217,7 +220,9 @@ export class PostIM13SaveGameRestoreIntegration {
       transportExecutions: auth.transportExecutions,
       homeAssignments: auth.homeAssignments,
       productionSettlementIds: auth.productionSettlementIds,
-      goldSettlementIds: auth.goldSettlementIds
+      goldSettlementIds: auth.goldSettlementIds,
+      productionEffectReceipts: auth.productionEffectReceipts,
+      goldEffectReceipts: auth.goldEffectReceipts
     });
   }
 
