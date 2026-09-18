@@ -42,5 +42,21 @@ export function runIM20FSelfTest() {
   assert(Recovery.plan({ ...effects(), productionSettlementIds: [], transport: null }).status === 'REJECTED', 'receipt without fence must fail closed');
   assert(Recovery.plan({ ...effects(), goldSettlementIds: ['gold-missing'], transport: null }).status === 'REJECTED', 'gold fence without receipt must fail closed');
   assert(Recovery.plan({ ...effects(), goldSettlementIds: [], transport: null }).status === 'REJECTED', 'gold receipt without fence must fail closed');
+  const missingBinding = baseTransport('ACTIVE'); missingBinding.carrierBinding = null;
+  assert(Recovery.plan({ ...effects(), transport: missingBinding }).status === 'REJECTED', 'missing carrier binding must fail closed');
+  const wrongExecution = baseTransport('ACTIVE'); wrongExecution.execution.jobId = 'transport-job-2';
+  assert(Recovery.plan({ ...effects(), transport: wrongExecution }).status === 'REJECTED', 'wrong execution job id must fail closed');
+  const scheduled = baseTransport('ACTIVE'); scheduled.schedulerRegistered = true;
+  assert(Recovery.plan({ ...effects(), transport: scheduled }).status === 'REJECTED', 'DELIVERED recovery must not already be scheduled');
+  let settleCalls = 0, completeCalls = 0;
+  plan = Recovery.plan({ ...effects(), transport: baseTransport('ACTIVE') });
+  Recovery.execute(plan, { settleAndComplete: () => { settleCalls += 1; return 'done'; } });
+  assert(settleCalls === 1, 'SETTLE_AND_COMPLETE must execute exactly once');
+  plan = Recovery.plan({ ...effects(), transport: baseTransport('CONSUMED') });
+  Recovery.execute(plan, { completeOnly: () => { completeCalls += 1; return 'done'; } });
+  assert(completeCalls === 1 && settleCalls === 1, 'COMPLETE_ONLY must not replay settlement');
+  plan = Recovery.plan({ ...effects(), transport: terminal });
+  const noop = Recovery.execute(plan, {});
+  assert(noop.decision === 'ALREADY_COMPLETE_NOOP', 'terminal recovery execution must remain no-op');
   return Object.freeze({ kind: 'im20f-self-test-result', status: 'PASS' });
 }
