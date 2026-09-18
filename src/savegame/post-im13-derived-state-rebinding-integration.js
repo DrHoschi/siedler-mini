@@ -58,7 +58,9 @@ function requireRuntimeState(value) {
     'workforceBindings',
     'carrierBindings',
     'transportExecutions',
-    'homeAssignments'
+    'homeAssignments',
+    'productionEffectReceipts',
+    'goldEffectReceipts'
   ];
   for (const name of arrayNames) {
     if (!Array.isArray(value[name])) fail('RESTORED_SECTION_REQUIRED', `restored ${name} array required`);
