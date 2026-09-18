@@ -608,7 +608,7 @@ Completion evidence: verified head `991cc28e3c5146e7dada0093569ecc7801b01572` pa
 
 ### IM-20F – Exactly-once & Recovery Reconciliation
 
-**Status:** DEFINED / NOT IMPLEMENTED
+**Status:** IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN
 
 **Definition baseline:** frozen IM-20E @ `84945407ef40cfc31fe4dc56f11823e591e9fac2`.
 
@@ -626,7 +626,7 @@ Existing Resource, TransportJob, CarrierAssignment, BuildingStock and GoldEconom
 
 Future acceptance requires the three transport crash windows, terminal no-op, duplicate settlement protection, fail-closed production/Gold/transport contradictions, canonical `Capture → Restore → Reconcile → Continue → Capture`, and full IM-20A–E plus frozen predecessor regression.
 
-No implementation, implementation branch, schema mutation, recovery execution, IM-20G verification or other IM-20G+ capability is authorized by this definition.
+The authorized IM-20F implementation is now present on the IM-20 Whole-Block integration line at verification head `2727abab96d851d2f0ed9b51a2ddf1070762e9c6`. IM-20F remains NOT FROZEN pending verification/regression and device evidence; no IM-20G+ capability is authorized.
 
 ### Remaining sequence
 
@@ -682,10 +682,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20F = DEFINED / NOT IMPLEMENTED.**
+**IM-20F = IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN.**
 
-The next permissible action is exclusively an IM-20F Definition Documentation Verification / Scope Gate against frozen IM-20E. No implementation, implementation branch or IM-20G+ capability is authorized.
+The next permissible action is exclusively IM-20F Implementation Verification / Regression Preparation on the IM-20 Whole-Block integration line, including exact-head CI/Pages and real iPhone/iPad verification as required. No Completion/Freeze Gate and no IM-20G+ capability is authorized yet.
 
 ---
 
-**Updated:** 2026-09-17 — IM-20F Exactly-once & Recovery Reconciliation is now documented as DEFINED / NOT IMPLEMENTED against frozen IM-20E. The next permissible action is only its separate Definition Documentation Verification / Scope Gate. No implementation, implementation branch or IM-20G+ capability is authorized.
+**Updated:** 2026-09-18 — Frozen IM-20E and current IM-20F TESTBUILD 1 verification state are integrated into `feature/im-20-authoritative-savegame-continue-integration`. IM-20F is IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN.
