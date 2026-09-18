@@ -9,6 +9,7 @@ import { PersonWorkforceProfileContract } from '../domain/person-workforce-profi
 import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
 import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 import { TransportJobContract } from '../transport/transport-job-contract.js';
+import { SettlementEffectReceiptContract } from './settlement-effect-receipt-contract.js';
 
 const RESULT_KIND = 'post-im13-savegame-validation-result';
 const SCHEMA_VERSION = 2;
@@ -535,6 +536,22 @@ function validateSettlementFences(value, collector) {
   }
 }
 
+function validateSettlementEffectReceipts(value, fences, collector) {
+  const path = 'authoritative.settlementEffectReceipts';
+  if (!isObject(value)) { collector.add('INVALID_SETTLEMENT_EFFECT_RECEIPTS', path); return; }
+  for (const name of ['production', 'gold']) {
+    const values = value[name], sectionPath = `${path}.${name}`;
+    if (!Array.isArray(values)) { collector.add('INVALID_SETTLEMENT_EFFECT_RECEIPT_LIST', sectionPath); continue; }
+    let normalized;
+    try { normalized = name === 'production' ? SettlementEffectReceiptContract.productionList(values) : SettlementEffectReceiptContract.goldList(values); }
+    catch { collector.add('INVALID_SETTLEMENT_EFFECT_RECEIPT', sectionPath); continue; }
+    const fenceIds = new Set(Array.isArray(fences?.[name]) ? fences[name] : []);
+    const receiptIds = new Set(normalized.map(entry => entry.settlementId));
+    for (const id of fenceIds) if (!receiptIds.has(id)) collector.add('SETTLEMENT_FENCE_WITHOUT_EFFECT_RECEIPT', sectionPath);
+    for (const id of receiptIds) if (!fenceIds.has(id)) collector.add('SETTLEMENT_EFFECT_RECEIPT_WITHOUT_FENCE', sectionPath);
+  }
+}
+
 export class PostIM13SaveGameValidationContract {
   static get resultKind() { return RESULT_KIND; }
   static get schemaVersion() { return SCHEMA_VERSION; }
@@ -630,6 +647,7 @@ export class PostIM13SaveGameValidationContract {
       );
       validateRebindingContinuity(snapshot, workforceAssignments, refs, collector);
       validateSettlementFences(auth?.settlementFences, collector);
+      validateSettlementEffectReceipts(auth?.settlementEffectReceipts, auth?.settlementFences, collector);
     }
 
     const errors = collector.result();
