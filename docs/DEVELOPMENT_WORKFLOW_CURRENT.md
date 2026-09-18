@@ -835,7 +835,7 @@ Completion / evidence / freeze gate:
 
 ### IM-20F – Exactly-once & Recovery Reconciliation
 
-**Status:** DEFINED / NOT IMPLEMENTED
+**Status:** IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN
 
 **Definition baseline:** frozen IM-20E @ `84945407ef40cfc31fe4dc56f11823e591e9fac2` with marker `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`.
 
@@ -871,7 +871,7 @@ Required future acceptance coverage:
 - canonical `Capture → Restore → Reconcile → Continue → Capture` continuity;
 - full IM-20A–E and frozen predecessor regression remains green.
 
-Hard boundary: IM-20F is definition-only. No implementation, implementation branch, schema mutation, recovery execution, IM-20G device verification or other IM-20G+ capability is authorized.
+Implementation status: the authorized IM-20F implementation is integrated into the IM-20 Whole-Block test line through verification head `2727abab96d851d2f0ed9b51a2ddf1070762e9c6`. V2 effect receipts, fail-closed recovery planning, unpublished recovery-candidate execution/discard, rebind/Continue integration and IM-20F TESTBUILD 1 identity are present. IM-20F remains NOT FROZEN pending implementation verification/regression and real device evidence. No IM-20G+ capability is authorized.
 
 ### Remaining defined substeps
 
@@ -928,9 +928,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20F = DEFINED / NOT IMPLEMENTED.**
+**IM-20F = IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN.**
 
-The next permissible action is exclusively an IM-20F Definition Documentation Verification / Scope Gate against frozen IM-20E. No implementation, implementation branch or IM-20G+ capability is authorized.
+The next permissible action is exclusively IM-20F Implementation Verification / Regression Preparation on the IM-20 Whole-Block integration line, including exact-head CI/Pages and real iPhone/iPad verification as required. No Completion/Freeze Gate and no IM-20G+ capability is authorized yet.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -938,4 +938,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-17 — IM-20F Exactly-once & Recovery Reconciliation is now documented as DEFINED / NOT IMPLEMENTED against frozen IM-20E. The next permissible action is only its separate Definition Documentation Verification / Scope Gate. No implementation, implementation branch or IM-20G+ capability is authorized.
+**Updated:** 2026-09-18 — Frozen IM-20E and current IM-20F TESTBUILD 1 verification state are integrated into `feature/im-20-authoritative-savegame-continue-integration`. IM-20F is IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN.
