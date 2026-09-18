@@ -1,7 +1,7 @@
-name: Deploy IM-20E Testbuild to Pages
+name: Deploy IM-20 Whole-Block Testbuild to Pages
 on:
   push:
-    branches: [feature/im-20e-browser-save-reload-continue-lifecycle-integration]
+    branches: [feature/im-20-authoritative-savegame-continue-integration]
   workflow_dispatch: {}
 permissions:
   contents: read
