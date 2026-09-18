@@ -107,11 +107,25 @@ export class PostIM13BrowserSaveContinueLifecycle {
       transport: execution ? { job, execution, claim: state.resourceClaims.get(job?.claimId), carrierBinding: binding, carrier: unit?.carrier ?? null, schedulerRegistered: false } : null,
     });
     if (recoveryPlan.status !== 'PLANNED') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_REJECTED', recoveryPlan });
-    if (recoveryPlan.transport?.decision && recoveryPlan.transport.decision !== PostIM13ExactlyOnceRecoveryReconciliation.decisions.ALREADY_COMPLETE_NOOP) {
-      return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_EXECUTION_NOT_YET_COMMITTED', recoveryPlan });
+
+    let recovered = restored;
+    let recoveryExecution = null;
+    if (execution && recoveryPlan.transport?.decision !== PostIM13ExactlyOnceRecoveryReconciliation.decisions.ALREADY_COMPLETE_NOOP) {
+      try {
+        const provisionalRebound = PostIM13DerivedStateRebindingIntegration.rebind(restored);
+        if (provisionalRebound.status !== 'REBOUND') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_CANDIDATE_REBIND_REJECTED', provisionalRebound });
+        const candidateTransport = new PostContinueTransportExecutionAdapter({ state, transport: provisionalRebound.derivedState.transport });
+        recoveryExecution = candidateTransport.recoverDelivered({ decision: recoveryPlan.transport.decision, jobId: execution.jobId });
+        const evolved = candidateTransport.authoritativeTransportState();
+        for (const carrier of evolved.carriers) state.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
+        state.carrierBindings = evolved.carrierBindings;
+        state.transportExecutions = evolved.transportExecutions;
+      } catch (error) {
+        return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_EXECUTION_FAILED', error: String(error.message), recoveryPlan });
+      }
     }
 
-    const rebound = PostIM13DerivedStateRebindingIntegration.rebind(restored);
+    const rebound = PostIM13DerivedStateRebindingIntegration.rebind(recovered);
     if (rebound.status !== 'REBOUND') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'REBIND_REJECTED', rebound });
 
     const previous = this.#getComposition();
@@ -133,7 +147,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
       this.#runtime.start();
       return Object.freeze({
         kind: 'im20e-continue-result', status: 'CONTINUED', captureStepIndex: rebound.captureStepIndex,
-        schedulerRegistrationCount: unregister.length, restored, rebound, transport,
+        schedulerRegistrationCount: unregister.length, restored, rebound, transport, recoveryPlan, recoveryExecution,
       });
     } catch (error) {
       for (const off of unregister.reverse()) off();
