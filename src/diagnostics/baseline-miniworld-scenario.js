@@ -345,6 +345,14 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false 
       transportExecutions,
       homeAssignments: residentHousingAssignment.assignments,
       productionSettlementIds: Object.freeze([]),
+      productionEffectReceipts: Object.freeze([]),
+      goldEffectReceipts: Object.freeze([Object.freeze({
+        kind: 'gold-effect-receipt',
+        settlementId: 'gold-settlement:baseline:00000001',
+        balanceBefore: 0,
+        amount: goldSettlement.amount,
+        balanceAfter: goldEconomy.snapshot().balance,
+      })]),
     },
   });
 }
