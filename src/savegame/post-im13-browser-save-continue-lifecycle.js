@@ -89,7 +89,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
     try { snapshot = JSON.parse(serialized); }
     catch (error) { return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'INVALID_JSON', error: String(error.message) }); }
 
-    const restored = PostIM13SaveGameRestoreIntegration.restore(snapshot);
+    let restored = PostIM13SaveGameRestoreIntegration.restore(snapshot);
     if (restored.status !== 'RESTORED') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RESTORE_REJECTED', restored });
 
     const state = restored.runtimeState;
@@ -112,16 +112,23 @@ export class PostIM13BrowserSaveContinueLifecycle {
     let recoveryExecution = null;
     if (execution && recoveryPlan.transport?.decision !== PostIM13ExactlyOnceRecoveryReconciliation.decisions.ALREADY_COMPLETE_NOOP) {
       try {
-        const provisionalRebound = PostIM13DerivedStateRebindingIntegration.rebind(restored);
-        if (provisionalRebound.status !== 'REBOUND') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_CANDIDATE_REBIND_REJECTED', provisionalRebound });
-        const candidateTransport = new PostContinueTransportExecutionAdapter({ state, transport: provisionalRebound.derivedState.transport });
+        // Recovery runs on a second, unpublished restore candidate. A partial failure can therefore
+        // be discarded without mutating either the active runtime or the first validated restore.
+        const recoveryCandidate = PostIM13SaveGameRestoreIntegration.restore(snapshot);
+        if (recoveryCandidate.status !== 'RESTORED') throw new Error('fresh IM-20F recovery candidate restore failed');
+        const candidateState = recoveryCandidate.runtimeState;
+        const provisionalRebound = PostIM13DerivedStateRebindingIntegration.rebind(recoveryCandidate);
+        if (provisionalRebound.status !== 'REBOUND') throw new Error('IM-20F recovery candidate rebind failed');
+        const candidateTransport = new PostContinueTransportExecutionAdapter({ state: candidateState, transport: provisionalRebound.derivedState.transport });
         recoveryExecution = candidateTransport.recoverDelivered({ decision: recoveryPlan.transport.decision, jobId: execution.jobId });
         const evolved = candidateTransport.authoritativeTransportState();
-        for (const carrier of evolved.carriers) state.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
-        state.carrierBindings = evolved.carrierBindings;
-        state.transportExecutions = evolved.transportExecutions;
+        for (const carrier of evolved.carriers) candidateState.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
+        candidateState.carrierBindings = evolved.carrierBindings;
+        candidateState.transportExecutions = evolved.transportExecutions;
+        recovered = Object.freeze({ ...recoveryCandidate, runtimeState: candidateState });
+        restored = recovered;
       } catch (error) {
-        return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_EXECUTION_FAILED', error: String(error.message), recoveryPlan });
+        return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_EXECUTION_FAILED', error: String(error.message), recoveryPlan, candidateDiscarded: true });
       }
     }
 
@@ -164,6 +171,8 @@ export class PostIM13BrowserSaveContinueLifecycle {
       atomicRuntimeActivation: true, schedulerInstallation: true, continueLifecycle: true,
       exactlyOnceRecoveryReconciliation: true,
       unpublishedCandidateRecoveryPlanning: true,
+      failedRecoveryCandidateDiscard: true,
+      evolvedCandidateCaptureContinuity: true,
     });
   }
 }
