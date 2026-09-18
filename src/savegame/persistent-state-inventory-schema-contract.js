@@ -207,6 +207,24 @@ const INVENTORY = deepFreeze([
     rationale: 'Exactly-once Gold settlement IDs prevent already-booked population income from being applied again.',
     continuity: 'all effective Gold settlement IDs'
   }),
+  entry({
+    id: 'production-settlement-effect-receipts',
+    policy: POLICY.PERSIST,
+    authority: 'IM-20F production settlement effect evidence',
+    section: 'authoritative.settlementEffectReceipts.production',
+    source: 'IM-20F',
+    rationale: 'Production effect receipts prove the deterministic BuildingStock before/after effect associated with each production settlement fence.',
+    continuity: 'receipt settlementId and deterministic stock delta round-trip with the existing production fence'
+  }),
+  entry({
+    id: 'gold-settlement-effect-receipts',
+    policy: POLICY.PERSIST,
+    authority: 'IM-20F Gold settlement effect evidence',
+    section: 'authoritative.settlementEffectReceipts.gold',
+    source: 'IM-20F',
+    rationale: 'Gold effect receipts prove the deterministic balance effect associated with each Gold settlement fence.',
+    continuity: 'receipt settlementId and balance before/amount/after round-trip with the existing Gold fence'
+  }),
 
   // Derived/transient state: never persisted as a second gameplay truth in the IM-20 schema.
   entry({
