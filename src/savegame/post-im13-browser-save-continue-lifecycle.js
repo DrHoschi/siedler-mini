@@ -5,7 +5,7 @@ import { PostIM13ActiveRuntimeCaptureAdapter } from './post-im13-active-runtime-
 import { PostContinueTransportExecutionAdapter } from '../transport/post-continue-transport-execution-adapter.js';
 import { PostIM13ExactlyOnceRecoveryReconciliation } from './post-im13-exactly-once-recovery-reconciliation.js';
 
-function compositionFrom(rebound) {
+function compositionFrom(rebound, transport) {
   const state = rebound.runtimeState;
   const derived = rebound.derivedState;
   return Object.freeze({
@@ -13,6 +13,8 @@ function compositionFrom(rebound) {
     scenarioId: 'IM20E_RESTORED_CONTINUE',
     authoritative: Object.freeze({
       ...state,
+      get carrierBindings() { return transport.authoritativeTransportState().carrierBindings; },
+      get transportExecutions() { return transport.authoritativeTransportState().transportExecutions; },
       residentHousingAssignment: derived.housing.assignmentIntegration,
       populationProjection: derived.population,
       goldFlowAdmission: null,
@@ -47,8 +49,9 @@ export class PostIM13BrowserSaveContinueLifecycle {
   #clearSelection;
   #capturePresentation;
   #restorePresentation;
+  #createTransport;
 
-  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation } = {}) {
+  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation, createTransportAdapter } = {}) {
     if (!storage || !runtime?.scheduler || typeof getComposition !== 'function' || typeof publishComposition !== 'function') {
       throw new TypeError('IM-20E lifecycle dependencies required');
     }
@@ -60,6 +63,9 @@ export class PostIM13BrowserSaveContinueLifecycle {
     this.#clearSelection = typeof clearSelection === 'function' ? clearSelection : () => {};
     this.#capturePresentation = typeof capturePresentation === 'function' ? capturePresentation : () => null;
     this.#restorePresentation = typeof restorePresentation === 'function' ? restorePresentation : () => {};
+    this.#createTransport = typeof createTransportAdapter === 'function'
+      ? createTransportAdapter
+      : options => new PostContinueTransportExecutionAdapter(options);
   }
 
   save() {
@@ -119,13 +125,16 @@ export class PostIM13BrowserSaveContinueLifecycle {
         const candidateState = recoveryCandidate.runtimeState;
         const provisionalRebound = PostIM13DerivedStateRebindingIntegration.rebind(recoveryCandidate);
         if (provisionalRebound.status !== 'REBOUND') throw new Error('IM-20F recovery candidate rebind failed');
-        const candidateTransport = new PostContinueTransportExecutionAdapter({ state: candidateState, transport: provisionalRebound.derivedState.transport });
+        const candidateTransport = this.#createTransport({ state: candidateState, transport: provisionalRebound.derivedState.transport });
         recoveryExecution = candidateTransport.recoverDelivered({ decision: recoveryPlan.transport.decision, jobId: execution.jobId });
         const evolved = candidateTransport.authoritativeTransportState();
         for (const carrier of evolved.carriers) candidateState.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
-        candidateState.carrierBindings = evolved.carrierBindings;
-        candidateState.transportExecutions = evolved.transportExecutions;
-        recovered = Object.freeze({ ...recoveryCandidate, runtimeState: candidateState });
+        const evolvedState = Object.freeze({
+          ...candidateState,
+          carrierBindings: evolved.carrierBindings,
+          transportExecutions: evolved.transportExecutions,
+        });
+        recovered = Object.freeze({ ...recoveryCandidate, runtimeState: evolvedState });
         restored = recovered;
       } catch (error) {
         return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_EXECUTION_FAILED', error: String(error.message), recoveryPlan, candidateDiscarded: true });
@@ -137,16 +146,23 @@ export class PostIM13BrowserSaveContinueLifecycle {
 
     const previous = this.#getComposition();
     const previousPresentation = this.#capturePresentation();
-    const candidate = compositionFrom(rebound);
-    const transport = new PostContinueTransportExecutionAdapter({ state: rebound.runtimeState, transport: rebound.derivedState.transport });
+    const transport = this.#createTransport({ state: rebound.runtimeState, transport: rebound.derivedState.transport });
+    const candidate = compositionFrom(rebound, transport);
     const unregister = [];
     try {
       for (const descriptor of rebound.derivedState.scheduler.registrations) {
-        unregister.push(this.#runtime.scheduler.register({
+        const transportTick = transport.tickFor(descriptor);
+        let off = () => {};
+        off = this.#runtime.scheduler.register({
           id: descriptor.id,
           phase: descriptor.phase,
-          tick: transport.tickFor(descriptor),
-        }));
+          tick: (dtMs) => {
+            const result = transportTick(dtMs);
+            if (!transport.hasActiveExecution(descriptor.jobId)) off();
+            return result;
+          },
+        });
+        unregister.push(off);
       }
       this.#publish(candidate);
       this.#resetCamera();

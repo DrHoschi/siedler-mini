@@ -15,14 +15,15 @@ function positionFor(state, location) {
 }
 
 export class PostContinueTransportExecutionAdapter {
-  #state; #bindings = new Map(); #executions = new Map(); #movement = new Map(); #cargo = new Map();
+  #state; #bindings = new Map(); #executions = new Map(); #terminalEvidence = new Map(); #movement = new Map(); #cargo = new Map();
   #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion; __carrierAssignments;
-  constructor({ state, transport } = {}) {
+  constructor({ state, transport, completionService = null } = {}) {
     if (!state?.domains || !transport?.carrierAssignments) throw new TypeError('restored transport owners required');
     this.#state = state;
     this.__carrierAssignments = transport.carrierAssignments;
     this.#settlement = new DeliverySettlementService({ resources: state.resourceState, claims: state.resourceClaims, demands: state.resourceDemands });
-    this.#completion = new TransportCompletionService({ jobStore: state.domains.jobs, carrierAssignments: transport.carrierAssignments });
+    this.#completion = completionService ?? new TransportCompletionService({ jobStore: state.domains.jobs, carrierAssignments: transport.carrierAssignments });
+    if (typeof this.#completion?.complete !== 'function') throw new TypeError('transport completion service required');
     for (const binding of transport.active) {
       this.#bindings.set(binding.jobId, binding); this.#executions.set(binding.jobId, binding.execution);
       if (['PICKED_UP', 'TO_DROPOFF'].includes(binding.execution.state)) this.#cargo.set(binding.jobId, cargoFor(binding));
@@ -63,7 +64,8 @@ export class PostContinueTransportExecutionAdapter {
         const claim = this.#state.resourceClaims.get(binding.job.claimId), demand = this.#state.resourceDemands.get(binding.job.demandId), resource = this.#state.resourceState.get(binding.job.resourceId);
         const settlement = DeliverySettlementContract.fromDelivered({ job: binding.job, execution, delivery: delivered.delivery, claim, demand, resource });
         const commit = this.#settlement.commit({ settlement, job: binding.job, execution, delivery: delivered.delivery });
-        this.#completion.complete({ settlementCommit: commit, execution }); this.#executions.set(id, execution);
+        this.#completion.complete({ settlementCommit: commit, execution });
+        this.#finalizeTerminal(binding.jobId);
       }
       return execution;
     }
@@ -96,11 +98,20 @@ export class PostContinueTransportExecutionAdapter {
       });
     } else throw new Error(`unsupported delivered recovery decision: ${decision}`);
     const completion = this.#completion.complete({ settlementCommit: commit, execution });
-    this.#bindings.delete(binding.jobId);
-    this.#executions.delete(binding.jobId);
-    this.#movement.delete(binding.jobId);
-    this.#cargo.delete(binding.jobId);
+    this.#finalizeTerminal(binding.jobId);
     return Object.freeze({ kind: 'im20f-delivered-recovery-result', decision, job: completion.job, carrierRelease: completion.carrierRelease, claim: this.#state.resourceClaims.get(job.claimId) });
+  }
+  #finalizeTerminal(jobId) {
+    const terminalExecution = this.#executions.get(jobId);
+    if (terminalExecution) this.#terminalEvidence.set(jobId, terminalExecution);
+    this.#bindings.delete(jobId);
+    this.#executions.delete(jobId);
+    this.#movement.delete(jobId);
+    this.#cargo.delete(jobId);
+    const snapshot = this.#completionAssignmentsSnapshot();
+    for (const carrier of snapshot.carriers) {
+      this.#state.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
+    }
   }
   authoritativeTransportState() {
     const snapshot = this.#completionAssignmentsSnapshot();
@@ -112,5 +123,6 @@ export class PostContinueTransportExecutionAdapter {
   }
   #completionAssignmentsSnapshot() { return this.#transportAssignments().snapshot(); }
   #transportAssignments() { return this.__carrierAssignments; }
-  executionForJob(jobId) { return this.#executions.get(jobId) ?? null; }
+  hasActiveExecution(jobId) { return this.#executions.has(jobId); }
+  executionForJob(jobId) { return this.#executions.get(jobId) ?? this.#terminalEvidence.get(jobId) ?? null; }
 }
