@@ -61,6 +61,7 @@ export class PostContinueTransportExecutionAdapter {
       if (movement.state === 'IDLE') {
         const delivered = MovementTransportExecutionIntegration.deliverAfterArrival({ deliveryService: this.#delivery, job: binding.job, assignment: binding.assignment, execution, cargo: this.#cargo.get(id), movement, pickupPosition, dropoffPosition });
         execution = delivered.execution;
+        this.#executions.set(id, execution);
         const claim = this.#state.resourceClaims.get(binding.job.claimId), demand = this.#state.resourceDemands.get(binding.job.demandId), resource = this.#state.resourceState.get(binding.job.resourceId);
         const settlement = DeliverySettlementContract.fromDelivered({ job: binding.job, execution, delivery: delivered.delivery, claim, demand, resource });
         const commit = this.#settlement.commit({ settlement, job: binding.job, execution, delivery: delivered.delivery });
