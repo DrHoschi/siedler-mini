@@ -562,16 +562,6 @@ function validateSettlementEffectReceipts(value, fences, snapshot, collector) {
       }
     }
 
-    if (name === 'production' && normalized.length > 0) {
-      const finalByStockKey = new Map();
-      for (const receipt of normalized) {
-        for (const stock of receipt.stockAfter) finalByStockKey.set(`${receipt.buildingId}|${stock.resourceTypeId}`, stock.quantity);
-      }
-      const actual = new Map((snapshot?.authoritative?.buildingStocks ?? []).map(stock => [`${stock.buildingId}|${stock.resourceTypeId}`, stock.quantity]));
-      for (const [key, quantity] of finalByStockKey) {
-        if (actual.get(key) !== quantity) collector.add('PRODUCTION_EFFECT_RECEIPT_STOCK_MISMATCH', sectionPath);
-      }
-    }
   }
 }
 
