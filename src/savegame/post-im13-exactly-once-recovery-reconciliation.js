@@ -35,7 +35,7 @@ function validateReceiptFenceConsistency({ productionReceipts = [], goldReceipts
 function transportPlan({ job, execution, claim, carrierBinding, carrier, schedulerRegistered = false } = {}) {
   if (!job || !execution || !claim || !carrier) return reject('TRANSPORT_OWNER_MISSING');
   if (execution.kind !== 'transport-execution' || execution.jobId !== job.id) return reject('TRANSPORT_EXECUTION_JOB_MISMATCH');
-  if (execution.unitId !== carrier.id) return reject('TRANSPORT_EXECUTION_CARRIER_MISMATCH');
+  if (execution.unitId !== carrier.unitId) return reject('TRANSPORT_EXECUTION_CARRIER_MISMATCH');
   const jobState = status(job.status);
   const executionState = status(execution.state);
   const claimState = status(claim.state);
