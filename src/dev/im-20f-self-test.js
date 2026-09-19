@@ -28,7 +28,7 @@ function baseTransport(claimState = 'ACTIVE') {
     execution: { kind: 'transport-execution', jobId: 'transport-job-1', unitId: 'unit-1', state: 'DELIVERED' },
     claim: { id: 'claim-1', state: claimState },
     carrierBinding: { kind: 'carrier-job-binding', jobId: 'transport-job-1', unitId: 'unit-1' },
-    carrier: { id: 'unit-1', state: 'OCCUPIED' },
+    carrier: { unitId: 'unit-1', state: 'OCCUPIED' },
     schedulerRegistered: false
   };
 }
