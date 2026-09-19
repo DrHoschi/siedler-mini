@@ -125,8 +125,15 @@ export async function runIM20FSelfTest() {
   const production = productionReceiptSnapshot(snapshot);
   assert.equal(PostIM13SaveGameValidationContract.validate(production).status, 'VALID');
   assert.equal(PostIM13SaveGameRestoreIntegration.restore(production).status, 'RESTORED');
-  const productionMismatch = clone(production); productionMismatch.authoritative.buildingStocks[0].quantity = 2;
-  assert.equal(hasError(PostIM13SaveGameValidationContract.validate(productionMismatch), 'PRODUCTION_EFFECT_RECEIPT_STOCK_MISMATCH'), true);
+  const laterProductionStockChange = clone(production);
+  const producedStock = laterProductionStockChange.authoritative.buildingStocks
+    .find(stock => stock.buildingId === production.authoritative.settlementEffectReceipts.production[0].buildingId
+      && stock.resourceTypeId === production.authoritative.settlementEffectReceipts.production[0].outputs[0].resourceTypeId);
+  producedStock.quantity = 2;
+  assert.equal(PostIM13SaveGameValidationContract.validate(laterProductionStockChange).status, 'VALID');
+  const invalidProductionReceipt = clone(production);
+  invalidProductionReceipt.authoritative.settlementEffectReceipts.production[0].stockAfter[0].quantity = 2;
+  assert.equal(hasError(PostIM13SaveGameValidationContract.validate(invalidProductionReceipt), 'INVALID_SETTLEMENT_EFFECT_RECEIPT'), true);
   const productionFenceWithoutReceipt = clone(production); productionFenceWithoutReceipt.authoritative.settlementEffectReceipts.production = [];
   assert.equal(hasError(PostIM13SaveGameValidationContract.validate(productionFenceWithoutReceipt), 'SETTLEMENT_FENCE_WITHOUT_EFFECT_RECEIPT'), true);
   const productionEffectWithoutFence = clone(production); productionEffectWithoutFence.authoritative.settlementFences.production = [];
