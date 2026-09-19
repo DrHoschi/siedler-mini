@@ -217,7 +217,27 @@ function fixture() {
       })
     ]),
     productionSettlementIds: Object.freeze(['production-settlement:00000001']),
-    goldSettlementIds: Object.freeze(['gold-settlement:00000001'])
+    productionEffectReceipts: Object.freeze([
+      Object.freeze({
+        kind: 'production-effect-receipt',
+        settlementId: 'production-settlement:00000001',
+        buildingId: workshop.id,
+        inputs: Object.freeze([]),
+        outputs: Object.freeze([{ resourceTypeId: planks.id, amount: 0 }]),
+        stockBefore: Object.freeze([{ resourceTypeId: planks.id, quantity: 0 }]),
+        stockAfter: Object.freeze([{ resourceTypeId: planks.id, quantity: 0 }])
+      })
+    ]),
+    goldSettlementIds: Object.freeze(['gold-settlement:00000001']),
+    goldEffectReceipts: Object.freeze([
+      Object.freeze({
+        kind: 'gold-effect-receipt',
+        settlementId: 'gold-settlement:00000001',
+        balanceBefore: 0,
+        amount: 9,
+        balanceAfter: 9
+      })
+    ])
   });
 }
 
@@ -245,7 +265,9 @@ function capture(f, stepIndex = 41) {
     transportExecutions: f.transportExecutions,
     homeAssignments: f.homeAssignments,
     productionSettlementIds: f.productionSettlementIds,
-    goldSettlementIds: f.goldSettlementIds
+    productionEffectReceipts: f.productionEffectReceipts,
+    goldSettlementIds: f.goldSettlementIds,
+    goldEffectReceipts: f.goldEffectReceipts
   });
 }
 
@@ -273,7 +295,9 @@ function recapture(state) {
     transportExecutions: state.transportExecutions,
     homeAssignments: state.homeAssignments,
     productionSettlementIds: [...state.productionSettlementIds],
-    goldSettlementIds: [...state.goldSettlementIds]
+    productionEffectReceipts: state.productionEffectReceipts,
+    goldSettlementIds: [...state.goldSettlementIds],
+    goldEffectReceipts: state.goldEffectReceipts
   });
 }
 
