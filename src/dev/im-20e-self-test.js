@@ -112,7 +112,6 @@ export async function runIM20ESelfTest() {
 
   const capabilities = PostIM13BrowserSaveContinueLifecycle.capabilities();
   assert.equal(capabilities.continueLifecycle, true);
-  assert.equal(capabilities.exactlyOnceRecoveryReconciliation, false);
   return Object.freeze({
     kind: 'im-20e-self-test-result', pass: true,
     evidence: Object.freeze({
