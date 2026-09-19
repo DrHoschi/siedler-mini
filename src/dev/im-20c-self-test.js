@@ -180,7 +180,36 @@ function fixture() {
       })
     ]),
     productionSettlementIds: Object.freeze(['production-settlement:00000002', 'production-settlement:00000001']),
-    goldSettlementIds: Object.freeze(['gold-settlement:00000001'])
+    productionEffectReceipts: Object.freeze([
+      Object.freeze({
+        kind: 'production-effect-receipt',
+        settlementId: 'production-settlement:00000001',
+        buildingId: targetBuildingId,
+        inputs: Object.freeze([]),
+        outputs: Object.freeze([{ resourceTypeId: wood.id, amount: 1 }]),
+        stockBefore: Object.freeze([{ resourceTypeId: wood.id, quantity: 0 }]),
+        stockAfter: Object.freeze([{ resourceTypeId: wood.id, quantity: 1 }])
+      }),
+      Object.freeze({
+        kind: 'production-effect-receipt',
+        settlementId: 'production-settlement:00000002',
+        buildingId: sourceBuildingId,
+        inputs: Object.freeze([]),
+        outputs: Object.freeze([{ resourceTypeId: wood.id, amount: 4 }]),
+        stockBefore: Object.freeze([{ resourceTypeId: wood.id, quantity: 0 }]),
+        stockAfter: Object.freeze([{ resourceTypeId: wood.id, quantity: 4 }])
+      })
+    ]),
+    goldSettlementIds: Object.freeze(['gold-settlement:00000001']),
+    goldEffectReceipts: Object.freeze([
+      Object.freeze({
+        kind: 'gold-effect-receipt',
+        settlementId: 'gold-settlement:00000001',
+        balanceBefore: 0,
+        amount: 9,
+        balanceAfter: 9
+      })
+    ])
   };
 }
 
@@ -208,7 +237,9 @@ function capture(f, stepIndex = 31) {
     transportExecutions: f.transportExecutions,
     homeAssignments: f.homeAssignments,
     productionSettlementIds: [...f.productionSettlementIds],
-    goldSettlementIds: [...f.goldSettlementIds]
+    productionEffectReceipts: f.productionEffectReceipts,
+    goldSettlementIds: [...f.goldSettlementIds],
+    goldEffectReceipts: f.goldEffectReceipts
   });
 }
 
@@ -236,7 +267,9 @@ function recapture(state) {
     transportExecutions: state.transportExecutions,
     homeAssignments: state.homeAssignments,
     productionSettlementIds: [...state.productionSettlementIds],
-    goldSettlementIds: [...state.goldSettlementIds]
+    productionEffectReceipts: state.productionEffectReceipts,
+    goldSettlementIds: [...state.goldSettlementIds],
+    goldEffectReceipts: state.goldEffectReceipts
   });
 }
 
