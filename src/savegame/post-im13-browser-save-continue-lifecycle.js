@@ -49,8 +49,9 @@ export class PostIM13BrowserSaveContinueLifecycle {
   #clearSelection;
   #capturePresentation;
   #restorePresentation;
+  #createTransport;
 
-  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation } = {}) {
+  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation, createTransportAdapter } = {}) {
     if (!storage || !runtime?.scheduler || typeof getComposition !== 'function' || typeof publishComposition !== 'function') {
       throw new TypeError('IM-20E lifecycle dependencies required');
     }
@@ -62,6 +63,9 @@ export class PostIM13BrowserSaveContinueLifecycle {
     this.#clearSelection = typeof clearSelection === 'function' ? clearSelection : () => {};
     this.#capturePresentation = typeof capturePresentation === 'function' ? capturePresentation : () => null;
     this.#restorePresentation = typeof restorePresentation === 'function' ? restorePresentation : () => {};
+    this.#createTransport = typeof createTransportAdapter === 'function'
+      ? createTransportAdapter
+      : options => new PostContinueTransportExecutionAdapter(options);
   }
 
   save() {
@@ -121,7 +125,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
         const candidateState = recoveryCandidate.runtimeState;
         const provisionalRebound = PostIM13DerivedStateRebindingIntegration.rebind(recoveryCandidate);
         if (provisionalRebound.status !== 'REBOUND') throw new Error('IM-20F recovery candidate rebind failed');
-        const candidateTransport = new PostContinueTransportExecutionAdapter({ state: candidateState, transport: provisionalRebound.derivedState.transport });
+        const candidateTransport = this.#createTransport({ state: candidateState, transport: provisionalRebound.derivedState.transport });
         recoveryExecution = candidateTransport.recoverDelivered({ decision: recoveryPlan.transport.decision, jobId: execution.jobId });
         const evolved = candidateTransport.authoritativeTransportState();
         for (const carrier of evolved.carriers) candidateState.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
@@ -142,7 +146,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
 
     const previous = this.#getComposition();
     const previousPresentation = this.#capturePresentation();
-    const transport = new PostContinueTransportExecutionAdapter({ state: rebound.runtimeState, transport: rebound.derivedState.transport });
+    const transport = this.#createTransport({ state: rebound.runtimeState, transport: rebound.derivedState.transport });
     const candidate = compositionFrom(rebound, transport);
     const unregister = [];
     try {
