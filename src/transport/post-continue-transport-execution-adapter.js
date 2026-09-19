@@ -15,7 +15,7 @@ function positionFor(state, location) {
 }
 
 export class PostContinueTransportExecutionAdapter {
-  #state; #bindings = new Map(); #executions = new Map(); #movement = new Map(); #cargo = new Map();
+  #state; #bindings = new Map(); #executions = new Map(); #terminalEvidence = new Map(); #movement = new Map(); #cargo = new Map();
   #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion; __carrierAssignments;
   constructor({ state, transport } = {}) {
     if (!state?.domains || !transport?.carrierAssignments) throw new TypeError('restored transport owners required');
@@ -101,6 +101,8 @@ export class PostContinueTransportExecutionAdapter {
     return Object.freeze({ kind: 'im20f-delivered-recovery-result', decision, job: completion.job, carrierRelease: completion.carrierRelease, claim: this.#state.resourceClaims.get(job.claimId) });
   }
   #finalizeTerminal(jobId) {
+    const terminalExecution = this.#executions.get(jobId);
+    if (terminalExecution) this.#terminalEvidence.set(jobId, terminalExecution);
     this.#bindings.delete(jobId);
     this.#executions.delete(jobId);
     this.#movement.delete(jobId);
@@ -120,5 +122,6 @@ export class PostContinueTransportExecutionAdapter {
   }
   #completionAssignmentsSnapshot() { return this.#transportAssignments().snapshot(); }
   #transportAssignments() { return this.__carrierAssignments; }
-  executionForJob(jobId) { return this.#executions.get(jobId) ?? null; }
+  hasActiveExecution(jobId) { return this.#executions.has(jobId); }
+  executionForJob(jobId) { return this.#executions.get(jobId) ?? this.#terminalEvidence.get(jobId) ?? null; }
 }
