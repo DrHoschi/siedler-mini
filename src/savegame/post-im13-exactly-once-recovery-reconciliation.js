@@ -45,7 +45,7 @@ function transportPlan({ job, execution, claim, carrierBinding, carrier, schedul
     return frozen({ decision: DECISION.ALREADY_COMPLETE_NOOP, reason: null });
   }
   if (executionState !== 'DELIVERED' || jobState !== 'PENDING') return reject('TRANSPORT_NOT_RECOVERABLE_DELIVERED_PENDING');
-  if (!carrierBinding || carrierBinding.jobId !== job.id || carrierBinding.unitId !== carrier.id) return reject('TRANSPORT_BINDING_MISMATCH');
+  if (!carrierBinding || carrierBinding.jobId !== job.id || carrierBinding.unitId !== carrier.unitId) return reject('TRANSPORT_BINDING_MISMATCH');
   if (carrierState !== 'OCCUPIED') return reject('TRANSPORT_CARRIER_NOT_OCCUPIED');
   if (schedulerRegistered) return reject('TRANSPORT_ALREADY_SCHEDULED_DURING_RECONCILIATION');
   if (claimState === 'ACTIVE') return frozen({ decision: DECISION.SETTLE_AND_COMPLETE, reason: null });
