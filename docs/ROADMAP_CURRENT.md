@@ -1,6 +1,6 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–E COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20F–G DEFINED / NOT IMPLEMENTED
+**Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–E COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20G DEFINED / NOT IMPLEMENTED
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-20C baseline head:** `ce84bacef4d2802f045ce522e7f7140b7b173fd8`
 **Frozen IM-20C marker:** `frozen/im-20c-deterministic-validation-restore-integration`
@@ -608,7 +608,7 @@ Completion evidence: verified head `991cc28e3c5146e7dada0093569ecc7801b01572` pa
 
 ### IM-20F – Exactly-once & Recovery Reconciliation
 
-**Status:** COMPLETION / EVIDENCE GATE PASS / 0 BLOCKER / FINAL FREEZE MARKER PENDING
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER
 
 **Definition baseline:** frozen IM-20E @ `84945407ef40cfc31fe4dc56f11823e591e9fac2`.
 
@@ -626,7 +626,7 @@ Existing Resource, TransportJob, CarrierAssignment, BuildingStock and GoldEconom
 
 Future acceptance requires the three transport crash windows, terminal no-op, duplicate settlement protection, fail-closed production/Gold/transport contradictions, canonical `Capture → Restore → Reconcile → Continue → Capture`, and full IM-20A–E plus frozen predecessor regression.
 
-The authorized IM-20F implementation is now present on the IM-20 Whole-Block integration line at verification head `2727abab96d851d2f0ed9b51a2ddf1070762e9c6`. IM-20F remains NOT FROZEN pending verification/regression and device evidence; no IM-20G+ capability is authorized.
+IM-20F is COMPLETE / FROZEN / PASS / 0 BLOCKER. Final verified code head: `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`. Completion/freeze evidence: CI #5657 passed the full IM-20F + frozen-predecessor regression; documentation parent `3ab6edfc46728b6860f87acf8f1afd0020b1c360` passed CI #5658; the following head `1d68d47676c6f0c9616de942f86cb134b8ad4b36` changed only `docs/ROADMAP_CURRENT.md`, outside the CI push path filter, and passed exact-head Whole-Block Pages #18 plus dynamic Pages #7497. Real iPad/Safari evidence confirms TESTBUILD 1 and Save → Reload → Continue. No remaining Post-Recovery-Rebind blocker was found. No IM-20G+ capability is authorized.
 
 ### Remaining sequence
 
@@ -635,7 +635,7 @@ The authorized IM-20F implementation is now present on the IM-20 Whole-Block int
 3. **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 4. **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-6. **IM-20F – Exactly-once & Recovery Reconciliation — COMPLETION / EVIDENCE GATE PASS / FINAL FREEZE MARKER PENDING**
+6. **IM-20F – Exactly-once & Recovery Reconciliation — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 7. **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
 
 ### Non-scope
@@ -682,10 +682,10 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20F = COMPLETION / EVIDENCE GATE PASS / 0 BLOCKER / FINAL FREEZE MARKER PENDING.**
+**IM-20F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The next permissible action is exclusively IM-20F Final Freeze Preparation Verification on this documentation head: exact-head CI/Pages only. If and only if those checks pass, the frozen marker may be created in a separate authorized step. IM-20G+ remains unauthorized.
+The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G remains untouched and requires a separate Reconciliation / Definition authorization before any implementation.
 
 ---
 
-**Updated:** 2026-09-19 — IM-20F Completion / Evidence Gate is PASS / 0 BLOCKER on verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`; final freeze marker remains pending exact-head CI/Pages of this documentation head. IM-20G remains untouched.
+**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G remains untouched / not authorized.
