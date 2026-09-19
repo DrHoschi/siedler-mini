@@ -146,7 +146,7 @@ export async function runIM20FSelfTest() {
   memory.setItem(storage.key, serializedDelivered);
   const runtime = new Runtime(RuntimeConfig); runtime.boot();
   let active = originalActive;
-  const constructionBefore = JSON.stringify(delivered.authoritative.constructionProgress);
+  const constructionBefore = clone(delivered.authoritative.constructionProgress);
   const lifecycle = new PostIM13BrowserSaveContinueLifecycle({
     storage, runtime, getComposition: () => active, publishComposition: value => { active = value; },
   });
@@ -167,7 +167,7 @@ export async function runIM20FSelfTest() {
   assert.equal(recaptured.authoritative.transportExecutions.length, 0);
   assert.equal(recaptured.domains.jobs.state.items[jobId].status, 'RELEASED');
   assert.equal(recaptured.domains.units.state.items[unitId].carrier.state, 'AVAILABLE');
-  assert.equal(JSON.stringify(recaptured.authoritative.constructionProgress), constructionBefore);
+  assert.deepEqual(recaptured.authoritative.constructionProgress, constructionBefore);
 
   const failureMemory = new MemoryStorage();
   const failureStorage = new BrowserSaveGameStorageAdapter({ storage: failureMemory });
