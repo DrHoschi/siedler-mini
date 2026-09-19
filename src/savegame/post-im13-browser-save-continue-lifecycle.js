@@ -147,11 +147,18 @@ export class PostIM13BrowserSaveContinueLifecycle {
     const unregister = [];
     try {
       for (const descriptor of rebound.derivedState.scheduler.registrations) {
-        unregister.push(this.#runtime.scheduler.register({
+        const transportTick = transport.tickFor(descriptor);
+        let off = () => {};
+        off = this.#runtime.scheduler.register({
           id: descriptor.id,
           phase: descriptor.phase,
-          tick: transport.tickFor(descriptor),
-        }));
+          tick: (dtMs) => {
+            const result = transportTick(dtMs);
+            if (!transport.hasActiveExecution(descriptor.jobId)) off();
+            return result;
+          },
+        });
+        unregister.push(off);
       }
       this.#publish(candidate);
       this.#resetCamera();
