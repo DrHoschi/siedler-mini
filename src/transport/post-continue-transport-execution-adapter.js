@@ -17,12 +17,13 @@ function positionFor(state, location) {
 export class PostContinueTransportExecutionAdapter {
   #state; #bindings = new Map(); #executions = new Map(); #terminalEvidence = new Map(); #movement = new Map(); #cargo = new Map();
   #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion; __carrierAssignments;
-  constructor({ state, transport } = {}) {
+  constructor({ state, transport, completionService = null } = {}) {
     if (!state?.domains || !transport?.carrierAssignments) throw new TypeError('restored transport owners required');
     this.#state = state;
     this.__carrierAssignments = transport.carrierAssignments;
     this.#settlement = new DeliverySettlementService({ resources: state.resourceState, claims: state.resourceClaims, demands: state.resourceDemands });
-    this.#completion = new TransportCompletionService({ jobStore: state.domains.jobs, carrierAssignments: transport.carrierAssignments });
+    this.#completion = completionService ?? new TransportCompletionService({ jobStore: state.domains.jobs, carrierAssignments: transport.carrierAssignments });
+    if (typeof this.#completion?.complete !== 'function') throw new TypeError('transport completion service required');
     for (const binding of transport.active) {
       this.#bindings.set(binding.jobId, binding); this.#executions.set(binding.jobId, binding.execution);
       if (['PICKED_UP', 'TO_DROPOFF'].includes(binding.execution.state)) this.#cargo.set(binding.jobId, cargoFor(binding));
