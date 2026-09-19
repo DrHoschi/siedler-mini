@@ -222,10 +222,16 @@ function fixture() {
         kind: 'production-effect-receipt',
         settlementId: 'production-settlement:00000001',
         buildingId: workshop.id,
-        inputs: Object.freeze([]),
-        outputs: Object.freeze([{ resourceTypeId: planks.id, amount: 0 }]),
-        stockBefore: Object.freeze([{ resourceTypeId: planks.id, quantity: 0 }]),
-        stockAfter: Object.freeze([{ resourceTypeId: planks.id, quantity: 0 }])
+        inputs: Object.freeze([{ resourceTypeId: wood.id, amount: 1 }]),
+        outputs: Object.freeze([{ resourceTypeId: planks.id, amount: 1 }]),
+        stockBefore: Object.freeze([
+          { resourceTypeId: wood.id, quantity: 3 },
+          { resourceTypeId: planks.id, quantity: 0 }
+        ]),
+        stockAfter: Object.freeze([
+          { resourceTypeId: wood.id, quantity: 2 },
+          { resourceTypeId: planks.id, quantity: 1 }
+        ])
       })
     ]),
     goldSettlementIds: Object.freeze(['gold-settlement:00000001']),
