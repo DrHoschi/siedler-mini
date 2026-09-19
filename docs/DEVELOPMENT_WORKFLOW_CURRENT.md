@@ -835,7 +835,7 @@ Completion / evidence / freeze gate:
 
 ### IM-20F – Exactly-once & Recovery Reconciliation
 
-**Status:** IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN
+**Status:** COMPLETION / EVIDENCE GATE PASS / 0 BLOCKER / FINAL FREEZE MARKER PENDING
 
 **Definition baseline:** frozen IM-20E @ `84945407ef40cfc31fe4dc56f11823e591e9fac2` with marker `frozen/im-20e-browser-save-reload-continue-lifecycle-integration`.
 
@@ -879,7 +879,7 @@ Implementation status: the authorized IM-20F implementation is integrated into t
 - **IM-20C – Deterministic Validation & Restore Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20F – Exactly-once & Recovery Reconciliation — DEFINED / NOT IMPLEMENTED**
+- **IM-20F – Exactly-once & Recovery Reconciliation — COMPLETION / EVIDENCE GATE PASS / FINAL FREEZE MARKER PENDING**
 - **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
 
 ### IM-20 explicit non-scope
@@ -928,9 +928,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20E = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20F = IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN.**
+**IM-20F = COMPLETION / EVIDENCE GATE PASS / 0 BLOCKER / FINAL FREEZE MARKER PENDING.**
 
-The next permissible action is exclusively IM-20F Implementation Verification / Regression Preparation on the IM-20 Whole-Block integration line, including exact-head CI/Pages and real iPhone/iPad verification as required. No Completion/Freeze Gate and no IM-20G+ capability is authorized yet.
+The next permissible action is exclusively IM-20F Final Freeze Preparation Verification on this documentation head: exact-head CI/Pages only. If and only if those checks pass, the frozen marker may be created in a separate authorized step. IM-20G+ remains unauthorized.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -938,4 +938,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-18 — Frozen IM-20E and current IM-20F TESTBUILD 1 verification state are integrated into `feature/im-20-authoritative-savegame-continue-integration`. IM-20F is IMPLEMENTED / VERIFICATION IN PROGRESS / NOT FROZEN.
+**Updated:** 2026-09-19 — IM-20F Completion / Evidence Gate is PASS / 0 BLOCKER on verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`; final freeze marker remains pending exact-head CI/Pages of this documentation head. IM-20G remains untouched.
