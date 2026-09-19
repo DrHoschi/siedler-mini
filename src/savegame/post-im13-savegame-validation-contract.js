@@ -536,7 +536,7 @@ function validateSettlementFences(value, collector) {
   }
 }
 
-function validateSettlementEffectReceipts(value, fences, collector) {
+function validateSettlementEffectReceipts(value, fences, snapshot, collector) {
   const path = 'authoritative.settlementEffectReceipts';
   if (!isObject(value)) { collector.add('INVALID_SETTLEMENT_EFFECT_RECEIPTS', path); return; }
   for (const name of ['production', 'gold']) {
@@ -549,6 +549,29 @@ function validateSettlementEffectReceipts(value, fences, collector) {
     const receiptIds = new Set(normalized.map(entry => entry.settlementId));
     for (const id of fenceIds) if (!receiptIds.has(id)) collector.add('SETTLEMENT_FENCE_WITHOUT_EFFECT_RECEIPT', sectionPath);
     for (const id of receiptIds) if (!fenceIds.has(id)) collector.add('SETTLEMENT_EFFECT_RECEIPT_WITHOUT_FENCE', sectionPath);
+
+    if (name === 'gold' && normalized.length > 0) {
+      for (let index = 1; index < normalized.length; index += 1) {
+        if (normalized[index - 1].balanceAfter !== normalized[index].balanceBefore) {
+          collector.add('GOLD_EFFECT_RECEIPT_CHAIN_MISMATCH', `${sectionPath}.${index}`);
+        }
+      }
+      const finalReceipt = normalized[normalized.length - 1];
+      if (snapshot?.economy?.gold?.balance !== finalReceipt.balanceAfter) {
+        collector.add('GOLD_EFFECT_RECEIPT_BALANCE_MISMATCH', sectionPath);
+      }
+    }
+
+    if (name === 'production' && normalized.length > 0) {
+      const finalByStockKey = new Map();
+      for (const receipt of normalized) {
+        for (const stock of receipt.stockAfter) finalByStockKey.set(`${receipt.buildingId}|${stock.resourceTypeId}`, stock.quantity);
+      }
+      const actual = new Map((snapshot?.authoritative?.buildingStocks ?? []).map(stock => [`${stock.buildingId}|${stock.resourceTypeId}`, stock.quantity]));
+      for (const [key, quantity] of finalByStockKey) {
+        if (actual.get(key) !== quantity) collector.add('PRODUCTION_EFFECT_RECEIPT_STOCK_MISMATCH', sectionPath);
+      }
+    }
   }
 }
 
@@ -647,7 +670,7 @@ export class PostIM13SaveGameValidationContract {
       );
       validateRebindingContinuity(snapshot, workforceAssignments, refs, collector);
       validateSettlementFences(auth?.settlementFences, collector);
-      validateSettlementEffectReceipts(auth?.settlementEffectReceipts, auth?.settlementFences, collector);
+      validateSettlementEffectReceipts(auth?.settlementEffectReceipts, auth?.settlementFences, snapshot, collector);
     }
 
     const errors = collector.result();
