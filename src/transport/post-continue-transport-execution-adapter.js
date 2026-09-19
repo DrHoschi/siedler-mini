@@ -63,7 +63,8 @@ export class PostContinueTransportExecutionAdapter {
         const claim = this.#state.resourceClaims.get(binding.job.claimId), demand = this.#state.resourceDemands.get(binding.job.demandId), resource = this.#state.resourceState.get(binding.job.resourceId);
         const settlement = DeliverySettlementContract.fromDelivered({ job: binding.job, execution, delivery: delivered.delivery, claim, demand, resource });
         const commit = this.#settlement.commit({ settlement, job: binding.job, execution, delivery: delivered.delivery });
-        this.#completion.complete({ settlementCommit: commit, execution }); this.#executions.set(id, execution);
+        this.#completion.complete({ settlementCommit: commit, execution });
+        this.#finalizeTerminal(binding.jobId);
       }
       return execution;
     }
@@ -96,11 +97,18 @@ export class PostContinueTransportExecutionAdapter {
       });
     } else throw new Error(`unsupported delivered recovery decision: ${decision}`);
     const completion = this.#completion.complete({ settlementCommit: commit, execution });
-    this.#bindings.delete(binding.jobId);
-    this.#executions.delete(binding.jobId);
-    this.#movement.delete(binding.jobId);
-    this.#cargo.delete(binding.jobId);
+    this.#finalizeTerminal(binding.jobId);
     return Object.freeze({ kind: 'im20f-delivered-recovery-result', decision, job: completion.job, carrierRelease: completion.carrierRelease, claim: this.#state.resourceClaims.get(job.claimId) });
+  }
+  #finalizeTerminal(jobId) {
+    this.#bindings.delete(jobId);
+    this.#executions.delete(jobId);
+    this.#movement.delete(jobId);
+    this.#cargo.delete(jobId);
+    const snapshot = this.#completionAssignmentsSnapshot();
+    for (const carrier of snapshot.carriers) {
+      this.#state.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
+    }
   }
   authoritativeTransportState() {
     const snapshot = this.#completionAssignmentsSnapshot();
