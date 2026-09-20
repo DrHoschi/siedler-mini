@@ -651,7 +651,7 @@ Any discovered product defect requires separate reconciliation/authorization bef
 4. **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-7. **IM-20G – Save/Continue Player & Device Verification — DEFINED / NOT IMPLEMENTED**
+7. **IM-20G – Save/Continue Player & Device Verification — COMPLETE / PASS / 0 BLOCKER — FINAL MARKER PENDING**
 
 ### Non-scope
 
@@ -703,13 +703,18 @@ The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-2
 
 ---
 
-**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is DEFINED / NOT IMPLEMENTED; no implementation is authorized.
+**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is COMPLETE / PASS / 0 BLOCKER; final marker is pending the separate documentation verification / freeze step.
 
 ## Repository Workflow Authority / CI-Pages Unification
 
-**Status:** IMPLEMENTED / VERIFICATION PENDING
+**Status:** IMPLEMENTED / VERIFIED
 
 The new-development line now uses one durable workflow contract: CI applies to `feature/**` and includes both steering documents in its trigger surface; automatic Pages deployment is reserved for CR/IM Whole-Block-style branches (`feature/cr-[0-9][0-9]-*`, `feature/im-[0-9][0-9]-*`), with `workflow_dispatch` retained for controlled exact-head verification deployments. Legacy `main` remains outside this authority and unchanged.
 
-IM-20G remains paused from pre-unification head `422568b03b38704acc4e4fe3e8f154729476219f`. The unification implementation changes workflow/steering authority only; it authorizes no product semantics, device evidence or IM-20G freeze. A separate scope/exact-head verification gate is required next.
+Workflow-authority cutover verification is complete. IM-20G subsequently completed its verification-only scope on implementation/verification head `e66de4c920cc448c0cc213bd583fb0f01574ddbd`: CI Baseline #5671 SUCCESS, controlled Pages deployment #26 SUCCESS from the IM-20G verification branch, exact visible build `IM-20G-SAVE-CONTINUE-PLAYER-DEVICE-VERIFICATION-TESTBUILD-1`, and real iPhone/iOS Safari video evidence for Start → Pause → Save V2 → real reload → Continue. Existing iPad/iPadOS Safari IM-20E/F evidence is reused for the frozen underlying lifecycle. iPhone Safari page-zoom adjustment is NON-BLOCKING / OUT OF SCOPE for Save/Continue and belongs to later responsive Player-UI work. IM-20G is COMPLETE / PASS / 0 BLOCKER; only documentation verification and final marker creation remain.
 
+
+
+---
+
+**Updated:** 2026-09-20 — IM-20G COMPLETE / PASS / 0 BLOCKER — FINAL MARKER PENDING. Evidence: verification head `e66de4c920cc448c0cc213bd583fb0f01574ddbd`; CI Baseline #5671 SUCCESS; controlled IM-20G Pages deployment #26 SUCCESS; exact TESTBUILD 1 identity; real iPhone/iOS Safari Start → Pause → Save V2 → reload → Continue evidence; existing iPad/iPadOS Safari predecessor evidence reused. Responsive/page-zoom work remains NON-BLOCKING / OUT OF SCOPE. No IM-20H is authorized.
