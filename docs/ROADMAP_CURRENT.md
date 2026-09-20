@@ -704,3 +704,12 @@ The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-2
 ---
 
 **Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is DEFINED / NOT IMPLEMENTED; no implementation is authorized.
+
+## Repository Workflow Authority / CI-Pages Unification
+
+**Status:** IMPLEMENTED / VERIFICATION PENDING
+
+The new-development line now uses one durable workflow contract: CI applies to `feature/**` and includes both steering documents in its trigger surface; automatic Pages deployment is reserved for CR/IM Whole-Block-style branches (`feature/cr-[0-9][0-9]-*`, `feature/im-[0-9][0-9]-*`), with `workflow_dispatch` retained for controlled exact-head verification deployments. Legacy `main` remains outside this authority and unchanged.
+
+IM-20G remains paused from pre-unification head `422568b03b38704acc4e4fe3e8f154729476219f`. The unification implementation changes workflow/steering authority only; it authorizes no product semantics, device evidence or IM-20G freeze. A separate scope/exact-head verification gate is required next.
+
