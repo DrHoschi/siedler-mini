@@ -1,80 +1,35 @@
-name: CI & Diagnose
+name: CI Baseline
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
+    branches: ["feature/**"]
+    paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", ".github/workflows/pages.yml", "docs/DEVELOPMENT_WORKFLOW_CURRENT.md", "docs/ROADMAP_CURRENT.md"]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build-test:
+  baseline:
+    name: Clean Runtime + CR/IM Regression
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-
-      # Node einrichten
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
-        continue-on-error: true
-
-      # Lints (optional – falls ESLint/Stylelint konfiguriert)
-      - run: npm run lint --if-present
-      - run: npm run stylelint --if-present
-
-      # kleine „Smoke“-Tests für Inspector & CBLog
-      - name: Run unit/e2e tests
-        run: npm test --if-present
-
-      # Statische Checks auf deine Schlüsseldateien
-      - name: Inspect critical files
+      - name: Run IM-20G verification + frozen predecessor regression
+        shell: bash
         run: |
-          echo "## Inspector file summary" > diag.md
-          for f in \
-            assets/inspector/inspector.core.js \
-            assets/inspector/inspector.logs.js \
-            assets/inspector/inspector.build.js \
-            assets/inspector/inspector.paths.js \
-            assets/inspector/inspector.tests.js \
-            assets/inspector/inspector.css \
-            assets/core/cblog.polyfill.js \
-            assets/ui/ui-bridge.js \
-            index.html
-          do
-            echo -e "\n### $f" >> diag.md
-            test -f "$f" && (echo "\`\`\`js" >> diag.md; sed -n '1,120p' "$f" >> diag.md; echo "\n\`\`\`" >> diag.md) || echo "_missing_" >> diag.md
-          done
-          echo -e "\n---\nBuild done: $(date -u +%FT%TZ)" >> diag.md
-
-      # Artefakte anhängen (damit ich sie öffnen kann)
-      - uses: actions/upload-artifact@v4
+          set -o pipefail
+          (npm run ci && node src/dev/cr-31-freeze-gate.node.js && node src/dev/cr-32a-self-test.node.js && node src/dev/cr-32b-self-test.node.js && node src/dev/cr-32c-self-test.node.js && node src/dev/im-13-freeze-gate.node.js && node src/dev/im-16a-self-test.node.js && node src/dev/im-16b-self-test.node.js && node src/dev/im-16c-self-test.node.js && node src/dev/im-16d-self-test.node.js && node src/dev/im-16e-self-test.node.js && node src/dev/im-16f-self-test.node.js && node src/dev/im-16g-self-test.node.js && node src/dev/im-17a-self-test.node.js && node src/dev/im-17b-self-test.node.js && node src/dev/im-17c-self-test.node.js && node src/dev/im-17d-self-test.node.js && node src/dev/im-17e-self-test.node.js && node src/dev/im-17f-self-test.node.js && node src/dev/im-17g-self-test.node.js && node src/dev/im-18a-self-test.node.js && node src/dev/im-18b-self-test.node.js && node src/dev/im-18c-self-test.node.js && node src/dev/im-18d-self-test.node.js && node src/dev/im-18e-self-test.node.js && node src/dev/im-18f-self-test.node.js && node src/dev/im-18g-self-test.node.js && node src/dev/im-19a-self-test.node.js && node src/dev/im-19b-self-test.node.js && node src/dev/im-19c-self-test.node.js && node src/dev/im-19d-self-test.node.js && node src/dev/im-19e-self-test.node.js && node src/dev/im-19f-self-test.node.js && node src/dev/im-19g-self-test.node.js && node src/dev/im-20a-self-test.node.js && node src/dev/im-20b-self-test.node.js && node src/dev/im-20c-self-test.node.js && node src/dev/im-20d-self-test.node.js && node src/dev/im-20e-self-test.node.js && node src/dev/im-20f-self-test.node.js && node src/dev/im-20g-self-test.node.js) 2>&1 | tee ci-baseline.log
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          name: inspector-diagnostics
-          path: |
-            diag.md
-            assets/inspector/**
-            assets/core/cblog.polyfill.js
-            assets/ui/ui-bridge.js
-            index.html
-
-  pr-comment:
-    needs: build-test
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: inspector-diagnostics
-          path: diag
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const body = fs.readFileSync('diag/diag.md','utf8');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
+          name: ci-baseline-${{ github.sha }}
+          path: ci-baseline.log
+          retention-days: 7
