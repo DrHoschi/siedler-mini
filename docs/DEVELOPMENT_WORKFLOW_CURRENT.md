@@ -30,7 +30,7 @@ Repository state outranks chat memory. Before every write read this file, `docs/
 - **IM-20C – Deterministic Validation & Restore Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER — continuity correction incorporated**
 - **IM-20D – Derived-State Rebinding after Continue: COMPLETE / FROZEN / PASS / 0 BLOCKER**
 - **IM-20E – Browser Save / Reload / Continue Lifecycle Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**
-- **IM-20F: COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20G: DEFINED / NOT IMPLEMENTED**
+- **IM-20F: COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20G: COMPLETE / PASS / 0 BLOCKER — FINAL MARKER PENDING**
 
 IM-19 development has completed and frozen its defined A–G chain and the Whole-Block. IM-19A is frozen at `b528081409407ad531a450e5deb832ee7a0031e7`, IM-19B at `3ba5a17761ac7f8bce3f01a49cbaef515728c355`, IM-19C at `0874cbb7102e738e3a4b32cbf2d40c4c0ebcb408`, IM-19D at `0847d27b60f13a99cb76d220b56b58107e832950`, IM-19E at `8284c48b3e6b8c75709a58951acacbc59dd81184`, IM-19F at `90d1b093fe1b99b048ea68529b9b0af731b11456`, and IM-19G at `9d47c2dc52eeddfb36177f3d07554ea4917ec84b`. The Whole-Block is frozen at `f9c9202014deded496d96adfb96a430a230f06f2` with marker `frozen/im-19-population-housing-gold-economy-integration`.
 
@@ -876,7 +876,7 @@ Implementation status: IM-20F is COMPLETE / FROZEN / PASS / 0 BLOCKER. The final
 
 ### IM-20G – Save/Continue Player & Device Verification
 
-**Status:** DEFINED / NOT IMPLEMENTED
+**Status:** COMPLETE / PASS / 0 BLOCKER — FINAL MARKER PENDING
 
 **Definition baseline:** frozen IM-20F @ `eebf74a422b3277a10632b162cc2c7c471d65e50` with marker `frozen/im-20f-exactly-once-recovery-reconciliation`.
 
@@ -888,7 +888,9 @@ If device verification exposes a real defect, that defect must first be reconcil
 
 Explicit non-scope: multi-slot Save UI, cloud save, autosave, legacy `main` save migration, responsive Game-UI redesign, new Economy/Transport/Recovery capability, Inspector system graph, or any IM-20H+ capability.
 
-**IM-20G Reconciliation / Definition: PASS / SCOPE DETERMINED / NOT IMPLEMENTED.**
+**Completion evidence:** implementation/verification head `e66de4c920cc448c0cc213bd583fb0f01574ddbd` is ahead-only against frozen IM-20F and remains within the authorized verification-first product scope. Exact-head CI `CI Baseline #5671` completed SUCCESS. Controlled Pages deployment `Deploy Authoritative Development Testbuild to Pages #26` completed SUCCESS from `feature/im-20g-save-continue-player-device-verification`, and the live device surface exposed exact build identity `IM-20G-SAVE-CONTINUE-PLAYER-DEVICE-VERIFICATION-TESTBUILD-1`. Real iPhone/iOS Safari video evidence confirms Start → Pause → Save V2 → real page reload → Continue on that exact build; the Save evidence visibly records V2 at step 53. Existing valid iPad/iPadOS Safari evidence from IM-20E/F is reused for the frozen underlying Save/Reload/Continue contract, so no duplicate iPad execution is required for this verification-only block. The reduced Safari page zoom required to make the current technical surface usable on iPhone is NON-BLOCKING / OUT OF SCOPE and belongs to later responsive Player-UI work. No new SaveGame semantics were introduced.
+
+**IM-20G Completion / Evidence Gate: PASS / 0 BLOCKER / FINAL MARKER PENDING.**
 
 ### Remaining defined substeps
 
@@ -947,7 +949,9 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G is DEFINED / NOT IMPLEMENTED. Its definition is documentation-only; implementation, implementation branch creation and any correction remain unauthorized pending a separate scope/implementation authorization.
+**IM-20G = COMPLETE / PASS / 0 BLOCKER — FINAL MARKER PENDING.**
+
+The IM-20F freeze is final. IM-20G implementation and real-device verification are complete; no further IM-20G product change is authorized. Only the separate documentation verification / final freeze step may create the IM-20G frozen marker.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -959,7 +963,7 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ## Repository Workflow Authority / CI-Pages Unification
 
-**Status:** IMPLEMENTED / VERIFICATION PENDING
+**Status:** IMPLEMENTED / VERIFIED
 
 The new-development workflow authority is independent from legacy `main`. Legacy `main` remains historical old-game reference and its legacy workflow is not migrated, replaced or deleted by this contract.
 
