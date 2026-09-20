@@ -725,3 +725,69 @@ Workflow-authority cutover verification is complete. IM-20G subsequently complet
 **Status:** COMPLETE / PASS / 0 BLOCKER — WHOLE-BLOCK FREEZE PENDING
 
 IM-20A through IM-20G are the complete defined Authoritative SaveGame / Continue Integration sequence. IM-20G is frozen at `1d1846ffd0faa7f00df94681474e72e2f390fb78` with marker `frozen/im-20g-save-continue-player-device-verification`. No IM-20H capability is defined or required. Multi-slot Save UI, cloud save, autosave, legacy-main save migration, final responsive Game-UI/wireframe redesign, further Economy capability and the Inspector system graph remain separate later scope. A separate IM-20 Whole-Block verification / freeze gate is required before creating a Whole-Block frozen marker. No successor block is authorized by this documentation finalization.
+
+
+## IM-21 – Responsive Player / Game UI Integration
+
+**Status:** DEFINED / NOT IMPLEMENTED  
+**Definition baseline:** frozen IM-20 Whole-Block @ `58e55466e3c1ccc60342c5bc82747d47e7629db0`.  
+**Definition authority:** Post-IM-20 V1 Product Capability Reconciliation + Responsive Player/Game UI Definition Reconciliation + Block Identity / Scope Reconciliation against frozen IM-20.
+
+### Whole-Block objective
+
+Integrate the already authoritative gameplay, Player-projection and Save/Continue capabilities into one complete responsive Player-facing V1 game UI so that the first economic core can be played and understood on smartphone, tablet and desktop without relying on the technical test/Inspector surface.
+
+Smartphone/iPhone is the minimum and reference platform. iPad/tablet and desktop use the same gameplay semantics and authority boundaries, but may expose more information simultaneously.
+
+IM-21 creates no second gameplay truth. The binding direction remains:
+
+`UI → Query/Read Model → display`
+
+`UI → Command → authoritative owner validates/mutates → event → UI refresh`
+
+### Defined sequence
+
+1. **IM-21A – Responsive Game Shell / HUD Integration**  
+   World remains the primary play surface. Integrate safe-area-aware responsive shell and the compact permanent HUD for Wood, Stone, Gold, Population, Build and System Menu. No new gameplay authority.
+
+2. **IM-21B – Selection / Context Panel Integration**  
+   Integrate existing Selection and Player projections into the S2D-04 `PEEK → STANDARD → EXPANDED` Context Panel model: identity, primary status, blocking reason and meaningful allowed actions.
+
+3. **IM-21C – Build Catalog / Placement Player UX Integration**  
+   Integrate Build Catalog → building choice → preview → positioning → VALID/INVALID → explicit Confirm/Cancel over the frozen IM-16/IM-17 construction and placement authority. No second placement or construction system.
+
+4. **IM-21D – Work Area Player UX Integration**  
+   Integrate production-building Work Area editing as preview → `VALID / VALID_BUT_EMPTY / INVALID` → Confirm/Cancel. Authoritative WorkArea remains outside the UI and is unchanged until explicit confirmation.
+
+5. **IM-21E – Economy / Settlement Overview Integration**  
+   Present existing authoritative/read-only resource, local/in-transit goods, Population/Housing, Production/Logistics and prioritized settlement bottleneck information. No new Economy system and no complex management dashboard.
+
+6. **IM-21F – System Menu / Save / Help / Guidance Integration**  
+   Integrate Back to Game, Save, Help, Settings, Restart Introduction and Main Menu; connect the frozen IM-20 Save/Continue lifecycle and Player-facing IM-15 Guidance without changing their authority. No multi-slot SaveGame, autosave or new SaveGame contract.
+
+7. **IM-21G – Responsive V1 Player Interaction / Device Verification**  
+   End-to-end verification of the V1 interaction contract / VAL-018 on iPhone → iPad → desktop: Pan, Zoom, Select, Build, Placement Confirm/Cancel, Context Panel, WorkArea, Economy Overview, System Menu and Save/Continue. No core action may require hover, right-click, keyboard or browser page zoom.
+
+### iPhone concurrency / interaction boundary
+
+The world, compact HUD and sparse world feedback may remain visible together. In addition, only one primary working surface is active at a time: Context Panel, Build Catalog, Placement controls, Work Area editor, Economy Overview or System Menu. Guidance may overlay this only as a lightweight explanatory/highlight layer and must not execute gameplay actions for the Player.
+
+### Inspector / Developer Diagnostics boundary
+
+**Inspector / Developer Diagnostics UI = NON-PLAYER / NON-IM-21.**
+
+IM-21 must not block a later Development-only Inspector entry, but it does not implement the Inspector or decide how that entry is exposed. Route, Development menu or a combination remain deliberately **UNDEFINED** until the later Clean-Runtime Inspector block.
+
+Production exposes no Inspector entry or Inspector UI. A minimal read-only Error / Build / Support projection is permitted for support and reproducibility, but it owns no gameplay state and grants no diagnostic mutation authority.
+
+### Explicit non-scope
+
+No new Building, Resource, Construction, Workforce, Population, Housing, Gold, Transport, Runtime, Scheduler, SaveGame or Guidance authority; no Inspector rebuild; no multi-slot saves; no autosave system; no cloud save; no multiplayer; no campaign/epoch system; no new Economy system; no legacy-`main` gameplay/UI reuse as authority.
+
+Legacy `main` remains historical reference only and is not a functional template for IM-21.
+
+### Current gate
+
+**IM-21 = DEFINED / NOT IMPLEMENTED.**
+
+No IM-21 development branch or IM-21A implementation is authorized by this definition documentation. The next step requires a separate Definition Documentation Verification / Scope Gate against frozen IM-20 before any implementation authorization or development-branch creation.
