@@ -956,3 +956,19 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 ---
 
 **Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is DEFINED / NOT IMPLEMENTED; no implementation is authorized.
+
+## Repository Workflow Authority / CI-Pages Unification
+
+**Status:** IMPLEMENTED / VERIFICATION PENDING
+
+The new-development workflow authority is independent from legacy `main`. Legacy `main` remains historical old-game reference and its legacy workflow is not migrated, replaced or deleted by this contract.
+
+- CI push authority covers `feature/**`; block-specific branch hardcoding in CI is not permitted.
+- CI-relevant paths include runtime/source/tool/package/index changes, both workflow files, and both steering files `docs/DEVELOPMENT_WORKFLOW_CURRENT.md` and `docs/ROADMAP_CURRENT.md`.
+- `workflow_dispatch` remains the controlled exact-head fallback.
+- CI evidence belongs to the exact tested commit SHA.
+- Automatic Pages deployment is restricted to Whole-Block-style CR/IM branches matching `feature/cr-[0-9][0-9]-*` or `feature/im-[0-9][0-9]-*`. Letter-suffixed sub-block / verification branches such as IM-20G do not auto-deploy and therefore cannot overwrite the shared live testbuild merely by push.
+- Pages `workflow_dispatch` remains the explicit verification-head deployment route. Pages evidence must be attributable to the exact deployed SHA.
+- The active authoritative Whole-Block/testbuild line is a steering decision; changing an IM/CR sub-block must not require rewriting workflow branch names.
+- IM-20G remains paused at pre-unification head `422568b03b38704acc4e4fe3e8f154729476219f` until this workflow-only/documentation head passes the separate scope/exact-head verification gate. No device evidence or freeze is authorized by this implementation.
+
