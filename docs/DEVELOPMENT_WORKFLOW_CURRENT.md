@@ -873,6 +873,23 @@ Required future acceptance coverage:
 
 Implementation status: IM-20F is COMPLETE / FROZEN / PASS / 0 BLOCKER. The final verified code head is `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`. Completion/freeze evidence: CI #5657 passed the complete IM-20F + frozen-predecessor regression on that code head; Completion Evidence documentation parent `3ab6edfc46728b6860f87acf8f1afd0020b1c360` passed CI #5658; the subsequent head `1d68d47676c6f0c9616de942f86cb134b8ad4b36` changed only `docs/ROADMAP_CURRENT.md`, which is excluded from the CI push path filter, so no new CI was triggered by design while exact-head Whole-Block Pages #18 and dynamic Pages #7497 both passed. Real iPad/Safari evidence confirms the IM-20F TESTBUILD 1 surface and Save → Reload → Continue lifecycle. Verification found no remaining Post-Recovery-Rebind blocker. No IM-20G+ capability is authorized.
 
+
+### IM-20G – Save/Continue Player & Device Verification
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Definition baseline:** frozen IM-20F @ `eebf74a422b3277a10632b162cc2c7c471d65e50` with marker `frozen/im-20f-exactly-once-recovery-reconciliation`.
+
+IM-20G owns verification of the complete player-facing Save/Continue lifecycle on real target devices. It introduces no new SaveGame capability. The verification flow is: establish real gameplay state → Save → real browser/page reload → detect persisted state → Continue → verify continuation of the same authoritative state → Save again. Existing IM-20A–F exactly-once/recovery guarantees remain frozen and must be exercised, not redesigned.
+
+Required device scope includes iPhone / iOS Safari and iPad / iPadOS Safari; Desktop/browser may provide supplementary regression evidence. Visible build identity and the actually tested branch/build must be unambiguous. Existing valid real-device evidence from IM-20E/F may be reused where it proves the exact required contract; evidence must not be repeated artificially. Remaining device evidence, especially iPhone coverage, must be identified before completion.
+
+If device verification exposes a real defect, that defect must first be reconciled and separately authorized; IM-20G must not silently expand into new functionality.
+
+Explicit non-scope: multi-slot Save UI, cloud save, autosave, legacy `main` save migration, responsive Game-UI redesign, new Economy/Transport/Recovery capability, Inspector system graph, or any IM-20H+ capability.
+
+**IM-20G Reconciliation / Definition: PASS / SCOPE DETERMINED / NOT IMPLEMENTED.**
+
 ### Remaining defined substeps
 
 - **IM-20B – Post-IM13 Authoritative Snapshot Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -930,7 +947,7 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G remains untouched and requires a separate Reconciliation / Definition authorization before any implementation.
+The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G is DEFINED / NOT IMPLEMENTED. Its definition is documentation-only; implementation, implementation branch creation and any correction remain unauthorized pending a separate scope/implementation authorization.
 
 ## 8. Permanent visible build identity synchronization rule
 
@@ -938,4 +955,4 @@ Every browser/device-verifiable CR/IM substep or Whole-Block gate must update al
 
 ---
 
-**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G remains untouched / not authorized.
+**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is DEFINED / NOT IMPLEMENTED; no implementation is authorized.
