@@ -628,6 +628,21 @@ Future acceptance requires the three transport crash windows, terminal no-op, du
 
 IM-20F is COMPLETE / FROZEN / PASS / 0 BLOCKER. Final verified code head: `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`. Completion/freeze evidence: CI #5657 passed the full IM-20F + frozen-predecessor regression; documentation parent `3ab6edfc46728b6860f87acf8f1afd0020b1c360` passed CI #5658; the following head `1d68d47676c6f0c9616de942f86cb134b8ad4b36` changed only `docs/ROADMAP_CURRENT.md`, outside the CI push path filter, and passed exact-head Whole-Block Pages #18 plus dynamic Pages #7497. Real iPad/Safari evidence confirms TESTBUILD 1 and Save → Reload → Continue. No remaining Post-Recovery-Rebind blocker was found. No IM-20G+ capability is authorized.
 
+
+### IM-20G – Save/Continue Player & Device Verification
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Definition baseline:** frozen IM-20F @ `eebf74a422b3277a10632b162cc2c7c471d65e50` with marker `frozen/im-20f-exactly-once-recovery-reconciliation`.
+
+IM-20G is the real-player/device verification block for the completed IM-20 Save/Continue chain. Required flow: real gameplay state → Save → real browser/page reload → persisted-state detection → Continue → continuation of the same authoritative state → Save again. It verifies the frozen IM-20A–F behavior and adds no new SaveGame semantics.
+
+Required target-device evidence includes iPhone/iOS Safari and iPad/iPadOS Safari. Desktop/browser evidence is supplementary. Build identity and tested branch/build must be unambiguous. Existing valid IM-20E/F device evidence may be reused when it proves the exact contract; remaining evidence, especially iPhone coverage, must be identified before completion.
+
+Any discovered product defect requires separate reconciliation/authorization before correction. Non-scope remains multi-slot Save UI, cloud save, autosave, legacy `main` migration, responsive Game-UI redesign, new Economy/Transport/Recovery capability, Inspector graph and IM-20H+.
+
+**IM-20G Reconciliation / Definition: PASS / SCOPE DETERMINED / NOT IMPLEMENTED.**
+
 ### Remaining sequence
 
 1. **IM-20A – Persistent State Inventory & SaveGame Schema Contract — COMPLETE / FROZEN / PASS / 0 BLOCKER**
@@ -684,8 +699,8 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G remains untouched and requires a separate Reconciliation / Definition authorization before any implementation.
+The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G is DEFINED / NOT IMPLEMENTED. Its definition is documentation-only; implementation, implementation branch creation and any correction remain unauthorized pending a separate scope/implementation authorization.
 
 ---
 
-**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G remains untouched / not authorized.
+**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is DEFINED / NOT IMPLEMENTED; no implementation is authorized.
