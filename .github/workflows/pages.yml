@@ -1,7 +1,9 @@
-name: Deploy IM-20G Verification Testbuild to Pages
+name: Deploy Authoritative Development Testbuild to Pages
 on:
   push:
-    branches: [feature/im-20g-save-continue-player-device-verification]
+    branches:
+      - "feature/cr-[0-9][0-9]-*"
+      - "feature/im-[0-9][0-9]-*"
   workflow_dispatch: {}
 permissions:
   contents: read
