@@ -269,7 +269,7 @@ IM-19 does not include taxes, marketplace/trade, wages, needs/happiness, births,
 
 ## 6. IM-20 – Authoritative SaveGame / Continue Integration
 
-**Status:** IN PROGRESS
+**Status:** COMPLETE / PASS / 0 BLOCKER — WHOLE-BLOCK FREEZE PENDING
 
 **Definition baseline:** frozen IM-19 Whole-Block @ `f9c9202014deded496d96adfb96a430a230f06f2`.  
 **Branch:** `feature/im-20-authoritative-savegame-continue-integration`.
@@ -651,7 +651,7 @@ Any discovered product defect requires separate reconciliation/authorization bef
 4. **IM-20D – Derived-State Rebinding after Continue — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 5. **IM-20E – Browser Save / Reload / Continue Lifecycle Integration — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 6. **IM-20F – Exactly-once & Recovery Reconciliation — COMPLETE / FROZEN / PASS / 0 BLOCKER**
-7. **IM-20G – Save/Continue Player & Device Verification — COMPLETE / PASS / 0 BLOCKER — FINAL MARKER PENDING**
+7. **IM-20G – Save/Continue Player & Device Verification — COMPLETE / FROZEN / PASS / 0 BLOCKER**
 
 ### Non-scope
 
@@ -685,7 +685,7 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-19G = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-**IM-20 = IN PROGRESS.**
+**IM-20 = COMPLETE / PASS / 0 BLOCKER — WHOLE-BLOCK FREEZE PENDING.**
 
 **IM-20A = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
@@ -699,11 +699,11 @@ Freeze evidence includes implementation CI `34700519373`, finalization CI `34700
 
 **IM-20F = COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
-The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G is DEFINED / NOT IMPLEMENTED. Its definition is documentation-only; implementation, implementation branch creation and any correction remain unauthorized pending a separate scope/implementation authorization.
+The IM-20F freeze is final. No further IM-20F implementation is authorized. IM-20G is COMPLETE / FROZEN / PASS / 0 BLOCKER at `1d1846ffd0faa7f00df94681474e72e2f390fb78`; no further IM-20G implementation is authorized.
 
 ---
 
-**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is COMPLETE / PASS / 0 BLOCKER; final marker is pending the separate documentation verification / freeze step.
+**Updated:** 2026-09-19 — IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER. Freeze evidence records final verified code head `cac2b1cd0fa009e06538473f8da9e2f8e682a5d4`, CI #5657, documentation-parent CI #5658, exact-head Pages #18/#7497, and real iPad/Safari evidence. IM-20G is COMPLETE / FROZEN / PASS / 0 BLOCKER at `1d1846ffd0faa7f00df94681474e72e2f390fb78`.
 
 ## Repository Workflow Authority / CI-Pages Unification
 
@@ -717,4 +717,11 @@ Workflow-authority cutover verification is complete. IM-20G subsequently complet
 
 ---
 
-**Updated:** 2026-09-20 — IM-20G COMPLETE / PASS / 0 BLOCKER — FINAL MARKER PENDING. Evidence: verification head `e66de4c920cc448c0cc213bd583fb0f01574ddbd`; CI Baseline #5671 SUCCESS; controlled IM-20G Pages deployment #26 SUCCESS; exact TESTBUILD 1 identity; real iPhone/iOS Safari Start → Pause → Save V2 → reload → Continue evidence; existing iPad/iPadOS Safari predecessor evidence reused. Responsive/page-zoom work remains NON-BLOCKING / OUT OF SCOPE. No IM-20H is authorized.
+**Updated:** 2026-09-20 — IM-20G COMPLETE / FROZEN / PASS / 0 BLOCKER. Evidence: verification head `e66de4c920cc448c0cc213bd583fb0f01574ddbd`; CI Baseline #5671 SUCCESS; controlled IM-20G Pages deployment #26 SUCCESS; exact TESTBUILD 1 identity; real iPhone/iOS Safari Start → Pause → Save V2 → reload → Continue evidence; existing iPad/iPadOS Safari predecessor evidence reused. Responsive/page-zoom work remains NON-BLOCKING / OUT OF SCOPE. No IM-20H is authorized.
+
+
+### IM-20 Whole-Block Completion
+
+**Status:** COMPLETE / PASS / 0 BLOCKER — WHOLE-BLOCK FREEZE PENDING
+
+IM-20A through IM-20G are the complete defined Authoritative SaveGame / Continue Integration sequence. IM-20G is frozen at `1d1846ffd0faa7f00df94681474e72e2f390fb78` with marker `frozen/im-20g-save-continue-player-device-verification`. No IM-20H capability is defined or required. Multi-slot Save UI, cloud save, autosave, legacy-main save migration, final responsive Game-UI/wireframe redesign, further Economy capability and the Inspector system graph remain separate later scope. A separate IM-20 Whole-Block verification / freeze gate is required before creating a Whole-Block frozen marker. No successor block is authorized by this documentation finalization.
