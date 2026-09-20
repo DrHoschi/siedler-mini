@@ -1,8 +1,8 @@
 name: CI Baseline
 on:
   push:
-    branches: [feature/im-20g-save-continue-player-device-verification]
-    paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", "docs/DEVELOPMENT_WORKFLOW_CURRENT.md"]
+    branches: ["feature/**"]
+    paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", ".github/workflows/pages.yml", "docs/DEVELOPMENT_WORKFLOW_CURRENT.md", "docs/ROADMAP_CURRENT.md"]
   pull_request:
     branches: [main]
     paths: ["src/**", "tools/**", "package.json", "index.html", ".github/workflows/ci.yml", "docs/DEVELOPMENT_WORKFLOW_CURRENT.md"]
