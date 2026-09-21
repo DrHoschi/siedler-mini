@@ -4,7 +4,7 @@
 
 - Frozen predecessor: **IM-20 – Authoritative SaveGame / Continue Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `58e55466e3c1ccc60342c5bc82747d47e7629db0`.
 - **IM-21 – Responsive Player / Game UI Integration: IN PROGRESS.**
-- **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / PASS / 0 BLOCKER; FREEZE EXECUTION AUTHORIZED.**
+- **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER @ `0962d3ad531ba093c22b1194388c005518a9493f`.**
 - Verified product/test head: `791f56254db59aeb502291738ae62d8b2ea9f0c6`.
 - Completion evidence: real iPhone/iOS Safari responsive-shell/HUD and RUNNING↔PAUSED verification; PAUSED authoritative construction mutation guard verified; CI Baseline #5696 SUCCESS; Development Testbuild #51 SUCCESS; Pages #7524 SUCCESS.
 - IM-21A owns presentation/integration only: responsive Player shell, compact Wood/Stone/Gold/Population HUD, existing camera/touch continuity, temporary Build workspace and Runtime play/pause control. Existing gameplay authorities remain unchanged.
