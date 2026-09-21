@@ -132,13 +132,31 @@ export function createWorldSelectionContextController({
 
   const input = createUnifiedPointerTouchInteraction({ root, worldSurface });
   const gestures = new Map();
+  const listeners = new Set();
   let selection = null;
   let context = deepFreeze({ kind: 'selection-context', selected: null });
+  let worldSelectionGuard = () => true;
 
-  function refreshContext(renderResult = null) {
+  function notify(reason) {
+    const event = Object.freeze({
+      kind: 'world-selection-context-change',
+      reason,
+      selection,
+      context,
+    });
+    for (const listener of listeners) listener(event);
+    return event;
+  }
+
+  function refreshContext(renderResult = null, reason = 'REFRESH') {
     const current = renderResult ?? runtime.renderCurrentWorld();
     context = projectSelectionContext(current.projection, selection);
+    if (selection != null && context.selected == null) {
+      selection = null;
+      context = projectSelectionContext(current.projection, null);
+    }
     renderSelectionContext(context, documentRef);
+    notify(reason);
     return context;
   }
 
@@ -177,10 +195,11 @@ export function createWorldSelectionContextController({
         multiTouch: gesture.multiTouch,
         tapSlop,
       })) return;
+      if (!worldSelectionGuard()) return;
 
       const rendered = runtime.renderCurrentWorld();
       selection = hitTestWorldCommands(rendered.commands, sample.local);
-      refreshContext(rendered);
+      refreshContext(rendered, 'WORLD_TAP');
     }
   });
 
@@ -191,18 +210,33 @@ export function createWorldSelectionContextController({
     input,
     getSelection: () => selection,
     getContext: () => context,
+    subscribe(listener) {
+      if (typeof listener !== 'function') throw new TypeError('selection listener required');
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setWorldSelectionGuard(guard) {
+      if (typeof guard !== 'function') throw new TypeError('world selection guard required');
+      worldSelectionGuard = guard;
+      return guard;
+    },
+    refresh(renderResult = null) {
+      return refreshContext(renderResult, 'REFRESH');
+    },
     clear() {
       selection = null;
-      return refreshContext();
+      return refreshContext(null, 'CLEAR');
     },
     restore(previousSelection) {
       selection = previousSelection ?? null;
-      return refreshContext();
+      return refreshContext(null, 'RESTORE');
     },
     destroy() {
       unsubscribe();
       input.destroy();
       gestures.clear();
+      listeners.clear();
+      worldSelectionGuard = () => true;
     },
   });
 }
