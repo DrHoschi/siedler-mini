@@ -14,6 +14,56 @@
 - No new Building, Resource, Construction, Workforce, Population, Gold, Transport or SaveGame authority is introduced by IM-21A. Inspector remains NON-PLAYER / NON-IM-21.
 - This record supersedes older top-level IM-20/IM-20G status text elsewhere in this document where that text still describes an intermediate state.
 
+## IM-21B definition record — 2026-09-21
+
+**IM-21B – Selection / Context Panel Integration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen IM-21A @ `0962d3ad531ba093c22b1194388c005518a9493f`, marker `frozen/im-21a-responsive-game-shell-hud-integration`.
+
+### Reconciliation result
+
+Frozen IM-14D already owns the Player world-selection foundation: shared unified WORLD pointer/touch input, Building/Person hit testing, tap-vs-drag separation, multi-touch guard, empty-world clear and read-only selection-context projection. Frozen IM-14E consumes the same WORLD input for camera pan/pinch-zoom. IM-21A deliberately hides the old technical context surface inside `.projection-host`.
+
+Therefore IM-21B does **not** create a second Selection engine. It integrates the existing Selection authority and existing Player/read-model projections into the responsive S2D-04 Context Panel model.
+
+### Binding IM-21B contract
+
+- Existing Selection remains authoritative. IM-21B must reuse the frozen IM-14D selection state/input boundary; no parallel selected-object state, duplicate hit-test pipeline or second gameplay truth is permitted.
+- Initial selectable object kinds remain the already supported `building` and `person`. IM-21B does not add terrain, resource-stack, animal, path or other new selectable entity classes.
+- A valid selection opens a Player Context Panel. On smartphone the panel starts at `PEEK`; `STANDARD` and `EXPANDED` are transient presentation states only and are not SaveGame state.
+- `PEEK` exposes object identity/name, primary status and the most relevant already-supported information/action. `STANDARD` exposes normal relevant details/actions. `EXPANDED` may expose additional existing details without becoming an Inspector.
+- Building context is keyed by the stable selected `buildingId` and may consume existing authoritative/read-only Building, Construction, Operational, Housing, Workforce, Stock/Transport and related Player projections only where those sources actually exist.
+- Person context is keyed by the stable selected Person/Resident identity and may expose existing assignment/carrier/movement state read-only. No manual Person, Carrier or Workforce micromanagement is introduced.
+- Primary-status precedence follows frozen S2D-04: critical/invalid Player-relevant state → deliberate Player state → blocking prerequisite → active transition → normal active operation → neutral waiting.
+- Blocking reason may be shown only when supported by existing authoritative/read-model state. IM-21B must not guess or synthesize a gameplay reason.
+- IM-21B introduces no new gameplay command authority. General Building Pause/Resume, Work Area editing and Demolition are not invented here. Work Area remains IM-21D; Build Catalog / Placement Player UX remains IM-21C.
+- IM-21B-owned immediate actions are presentation/selection actions such as `PEEK ↔ STANDARD ↔ EXPANDED`, minimize and close. Closing or tapping free world clears the selection through the existing Selection boundary.
+- A selected object may receive visible read-only selection feedback in the world, but that feedback must not mutate Building, Person or World state.
+- If the selected object no longer exists in the current world projection, the selection/context must fail closed to no selection; no stale zombie context is retained.
+- Frozen IM-20E behavior remains binding: Continue clears transient selection. Context Panel state is not persisted as authoritative SaveGame state.
+- Frozen camera semantics remain unchanged: one-finger drag pans; pinch zooms; drag and multi-touch must not create a selection. UI-panel interaction belongs to the UI input owner and must not leak into WORLD gestures.
+- Placement and Selection share the existing WORLD-input stream. While a Placement working mode is active, Placement targeting must not also open/change normal Selection/Context. IM-21B must provide Player-UI arbitration without changing frozen placement validation/commit authority.
+- Smartphone/iPhone remains the minimum/reference layout. Besides world + compact HUD + sparse world feedback, only one primary working surface may be active at a time. Context Panel must therefore not compete with Build Catalog / Placement controls or later Work Area / Economy / System surfaces.
+- Hidden/minimized Context UI must leave no invisible touch interception surface.
+- Inspector / Developer Diagnostics remain **NON-PLAYER / NON-IM-21B**.
+
+### Verification contract for later implementation
+
+A later IM-21B implementation gate must prove at minimum: Building tap and Person tap open the matching context; free-world tap closes; drag and pinch do not change selection; PEEK/STANDARD/EXPANDED preserve the same selected identity; panel interaction does not trigger WORLD gestures; removed selected objects clear fail-closed; Continue clears transient Selection/Context; Placement and Context do not compete for the same Player gesture; and all Context interaction remains free of unauthorized gameplay mutation.
+
+Real-device IM-21B verification must at least cover iPhone portrait and landscape. The complete iPhone → iPad → desktop V1 interaction matrix remains IM-21G.
+
+### Explicit non-scope
+
+No IM-21C Build Catalog / polished Placement Player UX, no IM-21D Work Area editor, no IM-21E Economy Overview, no IM-21F System Menu / Save / Help / Guidance integration, no new Building/Resource/Construction/Workforce/Population/Housing/Gold/Transport/Runtime/Scheduler/SaveGame authority, no Inspector rebuild and no legacy-main gameplay/UI reuse as authority.
+
+### Current IM-21B gate
+
+**IM-21B Reconciliation / Definition: PASS / SCOPE DETERMINED / DEFINED / NOT IMPLEMENTED.**
+
+This documentation authorizes no IM-21B implementation. The next permissible step is exclusively a separate **IM-21B Definition Documentation Verification / Scope Gate** against frozen IM-21A. IM-21C remains unauthorized.
+
+
 **Purpose:** Operative, continuously maintained development control file for `DrHoschi/siedler-mini`.
 
 Repository state outranks chat memory. Before every write read this file, `docs/ROADMAP_CURRENT.md`, the actual branch/HEAD, current gates and CI.
