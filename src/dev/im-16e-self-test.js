@@ -39,6 +39,7 @@ export function runIM16ESelfTest() {
   const paused = interaction.confirm();
   const pausedState = placement.getState();
   const countAfterPaused = runtime.domains.buildings.size;
+  const renderCountAfterPaused = runtime.getRenderCount();
   runtime.setRuntimeState('RUNNING');
   placement.setState(PlayerPlacementInteractionStateContract.inactive());
 
@@ -69,7 +70,7 @@ export function runIM16ESelfTest() {
       && pausedState.status === 'ACTIVE'
       && pausedState.targetCellId === freeCellId
       && countAfterPaused === countBefore
-      && runtime.getRenderCount() === 0,
+      && renderCountAfterPaused === 0,
     confirmRequiresActiveRealTarget:
       notReady.status === 'NOT_READY'
       && notReady.reason === 'ACTIVE_TARGET_REQUIRED'
@@ -120,6 +121,7 @@ export function runIM16ESelfTest() {
       rejectedReason: rejected.reason,
       countBefore,
       countAfterPaused,
+      renderCountAfterPaused,
       pausedReason: paused.reason,
       countAfterCommitted,
       countAfterCancel,
