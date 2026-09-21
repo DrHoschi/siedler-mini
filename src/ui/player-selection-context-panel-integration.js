@@ -133,12 +133,12 @@ function buildingProjection(selected, authoritative) {
       : construction ? `Bau ${Math.round(Number(construction.progress ?? 0) * 100)}%`
         : null,
     details,
-    sources: {
-      selection: selected,
-      construction,
-      housing,
-      workforce,
-      transport,
+    sourcePresence: {
+      selection: true,
+      construction: construction != null,
+      housing: housing != null,
+      workforce: workforce.length,
+      transport: transport.length,
     },
   });
 }
@@ -171,13 +171,13 @@ function personProjection(selected, authoritative) {
       : workforce?.availability ? `Arbeit · ${lifecycleLabel(workforce.availability)}`
         : null,
     details,
-    sources: {
-      selection: selected,
-      home,
-      workforce,
-      carrier,
-      transport,
-      movement,
+    sourcePresence: {
+      selection: true,
+      home: home != null,
+      workforce: workforce != null,
+      carrier: carrier != null,
+      transport: transport.length,
+      movement: movement != null,
     },
   });
 }
