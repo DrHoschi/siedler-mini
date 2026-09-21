@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
   <title>Neue Siedler – IM-21A Responsive Game Shell / HUD</title>
-  <link rel="stylesheet" href="src/ui/app.css?v=im21a-1">
+  <link rel="stylesheet" href="src/ui/app.css?v=im21a-2">
 </head>
 <body>
   <main id="app" class="app-shell" data-ui-shell="player">
@@ -19,8 +19,8 @@
         <span class="hud-chip" data-hud-resource="population"><b>Bev.</b><output id="hud-population">—</output></span>
       </div>
       <div class="player-shell-actions" aria-label="Spielaktionen">
-        <button type="button" class="shell-action" data-player-entry="build" aria-label="Bauen">Bauen</button>
-        <button type="button" class="shell-action" data-player-entry="system" aria-label="Systemmenü">Menü</button>
+        <button type="button" class="shell-action" data-player-entry="runtime" aria-label="Spiel pausieren" aria-pressed="false">Pause</button>
+        <button type="button" class="shell-action" data-player-entry="build" aria-label="Bauen" aria-expanded="false">Bauen</button>
       </div>
       <span id="runtime-status" class="runtime-status">BOOTING</span>
     </header>
@@ -37,6 +37,7 @@
         <span id="context-detail" class="context-detail" data-selection-id="">Weltobjekt antippen</span>
       </div>
       <span class="surface-note">IM-21A · Responsive Game Shell / HUD</span>
+      <section class="build-workspace" data-player-workspace="build" hidden aria-label="Bauen">
       <div class="player-building-selection" data-im16f-controls="true" aria-label="Gebäude für Platzierung auswählen">
         <button type="button" data-im16f-definition-id="HQ">Hauptquartier</button>
         <button type="button" data-im16f-definition-id="WOODCUTTER">Holzfäller</button>
@@ -49,11 +50,12 @@
         <output id="im16e-action-result">Placement inaktiv</output>
       </div>
       <output data-im16g-result="true" aria-live="polite">Noch kein autoritatives Bauergebnis</output>
+      </section>
     </footer>
   </main>
 
-  <script type="module" src="src/main.js?v=im21a-1"></script>
-  <script type="module" src="src/ui/runtime-hud-projection.js?v=im21a-1"></script>
+  <script type="module" src="src/main.js?v=im21a-2"></script>
+  <script type="module" src="src/ui/runtime-hud-projection.js?v=im21a-2"></script>
   <script type="module" src="src/ui/world-selection-context-projection.js?v=im16g-1"></script>
   <script type="module" src="src/ui/player-camera-controls-integration.js?v=im16g-1"></script>
   <script type="module" src="src/ui/player-placement-interaction-state-world-target.js?v=im16g-1"></script>
