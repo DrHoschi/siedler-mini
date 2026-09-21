@@ -11,6 +11,64 @@
 - IM-21B Selection / Context Panel Integration, IM-21C Build Catalog / Placement Player UX Integration, IM-21D Work Area Player UX Integration, IM-21E Economy / Settlement Overview Integration, IM-21F System Menu / Save / Help / Guidance Integration and IM-21G Responsive V1 Player Interaction / Device Verification are **not implemented by this freeze**.
 - Older IM-20/IM-20G status lines below that still describe intermediate states are superseded by this current-status record.
 
+## IM-21B – Selection / Context Panel Integration — Definition
+
+**Status:** DEFINED / NOT IMPLEMENTED  
+**Definition baseline:** frozen IM-21A @ `0962d3ad531ba093c22b1194388c005518a9493f`, marker `frozen/im-21a-responsive-game-shell-hud-integration`.
+
+### Objective
+
+Integrate the already frozen IM-14D World Selection and existing Player/read-model projections into the responsive S2D-04 `PEEK → STANDARD → EXPANDED` Context Panel model without creating a second Selection, gameplay-status or mutation authority.
+
+IM-21B answers for a selected world object:
+
+1. What is it?
+2. What is its primary current status?
+3. If it is blocked, what existing authoritative/read-model state explains the block?
+4. Which actions are already genuinely supported and meaningful for the Player?
+
+### Existing authority consumed
+
+- Frozen IM-14D remains Selection authority for Building/Person hit testing, tap-vs-drag separation, multi-touch guard, empty-world clear and read-only selection-context projection.
+- Frozen IM-14E remains camera-input authority for pan/pinch-zoom on the shared WORLD input.
+- Existing Building, Construction, Operational, Housing, Workforce, Stock/Transport, Person/Resident and related Player projections remain the only allowed gameplay/read-model truth.
+- Frozen IM-20E Continue continues to clear transient Selection.
+- IM-21A responsive shell/HUD remains unchanged as the base Player surface.
+
+### Context Panel contract
+
+- Supported initial selection kinds: `building` and `person`; no new selectable entity class is introduced.
+- Smartphone selection opens `PEEK`; `STANDARD` and `EXPANDED` are transient UI presentation states only.
+- Building context is keyed by stable `buildingId`; Person context by stable Person/Resident identity.
+- Main status follows frozen S2D-04 precedence: critical/invalid → deliberate Player state → blocking prerequisite → active transition → normal active operation → neutral waiting.
+- Blocking reasons are displayed only from existing authoritative/read-model sources; the UI must not guess.
+- Existing details may be progressively disclosed, but the Context Panel is not an Inspector and owns no gameplay truth.
+- Immediate IM-21B actions are Selection/Panel actions: expand/collapse/minimize/close and free-world clear. No unsupported Building Pause/Resume, Demolition, Work Area mutation or other command is invented.
+- Selected-object world feedback may be rendered read-only.
+- Missing/deleted selected objects clear fail-closed to no selection.
+- Context/Selection remains transient and is not persisted as authoritative SaveGame state.
+
+### Input / working-surface arbitration
+
+Selection and Placement currently share the frozen unified WORLD input. IM-21B must ensure active Placement targeting does not simultaneously produce normal Selection/Context changes while leaving frozen placement evaluation/commit semantics untouched.
+
+On iPhone, world + compact HUD + sparse world feedback remain the base surface and only one additional primary working surface may be active. Context Panel therefore cannot compete with Build Catalog / Placement controls, later Work Area, Economy Overview or System Menu. Hidden/minimized Context UI must leave no invisible touch interception surface.
+
+### Verification requirements for later implementation
+
+Later IM-21B implementation must prove Building/Person selection, free-world close, drag/pinch selection guards, stable identity across PEEK/STANDARD/EXPANDED, UI-vs-WORLD input isolation, fail-closed removal handling, Continue cleanup, Placement/Context arbitration and zero unauthorized gameplay mutation. Real-device verification must at least cover iPhone portrait and landscape; the full iPhone → iPad → desktop matrix remains IM-21G.
+
+### Explicit non-scope
+
+No IM-21C Build Catalog / Placement Player UX, no IM-21D Work Area editor, no IM-21E Economy Overview, no IM-21F System Menu / Save / Help / Guidance, no new gameplay owner, no Inspector rebuild and no legacy-main gameplay/UI reuse as authority.
+
+### Current gate
+
+**IM-21B Reconciliation / Definition: PASS / SCOPE DETERMINED / DEFINED / NOT IMPLEMENTED.**
+
+No IM-21B implementation is authorized by this definition documentation. The next permissible step is exclusively the separate **IM-21B Definition Documentation Verification / Scope Gate** against frozen IM-21A. IM-21C remains unauthorized.
+
+
 **Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–E COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20G DEFINED / NOT IMPLEMENTED
 **Repository:** `DrHoschi/siedler-mini`  
 **Frozen IM-20C baseline head:** `ce84bacef4d2802f045ce522e7f7140b7b173fd8`
