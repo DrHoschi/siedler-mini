@@ -1,5 +1,19 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-21A completion / freeze record — 2026-09-21
+
+- IM-20 Whole-Block predecessor: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `58e55466e3c1ccc60342c5bc82747d47e7629db0`, marker `frozen/im-20-authoritative-savegame-continue-integration`.
+- IM-21 Whole-Block: **IN PROGRESS** on `feature/im-21-responsive-player-game-ui-integration`.
+- **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / PASS / 0 BLOCKER; FREEZE EXECUTION AUTHORIZED.**
+- Verified product/test head: `791f56254db59aeb502291738ae62d8b2ea9f0c6`.
+- Scope delivered: responsive Player shell; compact authoritative read-only Wood / Stone / Gold / Population HUD; world remains primary play surface; iPhone portrait/landscape safe-area handling; existing camera/touch controls preserved; temporary Build workspace; RUNNING/PAUSED Player control.
+- PAUSED construction guard evidence: while PAUSED, placement Confirm is rejected before authoritative Building mutation with `RUNTIME_NOT_RUNNING`; Building count remains unchanged; Cancel remains mutation-free; after RUNNING resumes, valid placement Confirm retains the existing successful behavior.
+- Real iPhone/iOS Safari evidence: responsive shell/HUD visible; RUNNING `Ⅱ` and PAUSED `▶` states verified; permanent technical bottom diagnostics removed; Build workspace Confirm/Cancel reachable; PAUSED Confirm creates no persistent Building; Cancel works; after Play, placement works again.
+- Exact-head automated evidence for `791f5625…`: CI Baseline #5696 SUCCESS, including `pausedConfirmRejectedBeforeAuthoritativeMutation: true` and full CR/IM predecessor regression; Development Testbuild #51 SUCCESS; Pages #7524 SUCCESS.
+- Known transition UI: current Build workspace is functional IM-21A transition UI only. Polished Build Catalog / Placement Player UX remains IM-21C. Selection / Context remains IM-21B. System Menu / Save / Help / Guidance remains IM-21F.
+- No new Building, Resource, Construction, Workforce, Population, Gold, Transport or SaveGame authority is introduced by IM-21A. Inspector remains NON-PLAYER / NON-IM-21.
+- This record supersedes older top-level IM-20/IM-20G status text elsewhere in this document where that text still describes an intermediate state.
+
 **Purpose:** Operative, continuously maintained development control file for `DrHoschi/siedler-mini`.
 
 Repository state outranks chat memory. Before every write read this file, `docs/ROADMAP_CURRENT.md`, the actual branch/HEAD, current gates and CI.
