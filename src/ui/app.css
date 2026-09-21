@@ -65,3 +65,41 @@ button{touch-action:manipulation}
   .hud-chip{padding:4px 7px}.shell-action{min-height:36px}
   .player-action-region{padding-top:5px;padding-bottom:5px}
 }
+
+/* IM-21B Player Selection / Context Panel — presentation only */
+.player-context-panel{
+  pointer-events:auto;min-width:260px;max-width:min(460px,calc(100vw - var(--safe-left) - var(--safe-right) - 20px));
+  padding:9px;border:1px solid #46505a;border-radius:14px;background:#20252b;
+  box-shadow:0 10px 28px rgba(0,0,0,.28);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 10px;
+}
+.player-context-panel[hidden]{display:none!important;pointer-events:none!important}
+.context-panel-heading{min-width:0;display:flex;align-items:baseline;gap:7px;grid-column:1}
+.context-panel-kind{font-size:.62rem;letter-spacing:.05em;text-transform:uppercase;opacity:.62}
+.context-panel-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.86rem}
+.context-panel-subtitle{font-size:.62rem;opacity:.56;white-space:nowrap}
+.context-panel-summary{grid-column:1;display:flex;align-items:center;gap:8px;min-width:0}
+.context-panel-status{font-size:.72rem;font-weight:700}
+.context-panel-metric{font-size:.68rem;opacity:.76;white-space:nowrap}
+.context-panel-details,.context-panel-block,.context-panel-technical{grid-column:1;font-size:.66rem;line-height:1.25}
+.context-panel-details{opacity:.76}
+.context-panel-block{padding:5px 7px;border-radius:8px;background:#2a2323}
+.context-panel-technical{opacity:.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.context-panel-actions{grid-column:2;grid-row:1/5;display:flex;align-items:flex-start;gap:5px}
+.context-panel-actions button{width:38px;min-width:38px;height:38px;border:1px solid #4b5660;border-radius:9px;background:#272e35;color:#f3eee4}
+.player-context-panel[data-context-mode="PEEK"] .context-panel-details,
+.player-context-panel[data-context-mode="PEEK"] .context-panel-block,
+.player-context-panel[data-context-mode="PEEK"] .context-panel-technical{display:none}
+.player-context-panel[data-context-mode="STANDARD"] .context-panel-technical{display:none}
+@media(max-width:760px){
+  .player-context-panel{width:min(100%,460px);max-width:100%}
+}
+@media(max-width:430px) and (orientation:portrait){
+  .player-context-panel{width:100%;min-width:0;padding:8px;grid-template-columns:minmax(0,1fr) auto}
+  .context-panel-subtitle{display:none}
+  .context-panel-actions button{width:42px;min-width:42px;height:42px}
+}
+@media(max-height:520px) and (orientation:landscape){
+  .player-context-panel{max-width:min(520px,72vw);padding:6px 8px;gap:4px 8px}
+  .context-panel-actions button{width:36px;min-width:36px;height:36px}
+  .player-context-panel[data-context-mode="PEEK"]{max-width:min(430px,64vw)}
+}
