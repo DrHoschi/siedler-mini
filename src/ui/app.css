@@ -29,6 +29,8 @@ button{touch-action:manipulation}
 .context-kind{padding:5px 8px;border:1px solid #3a424a;border-radius:999px;background:#171b20;font-weight:650;white-space:nowrap}
 .context-detail{max-width:32vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.82}
 .surface-note{margin-left:auto;opacity:.55;white-space:nowrap}
+.build-workspace{display:flex;align-items:center;gap:8px;min-width:0}
+.build-workspace[hidden]{display:none!important}
 .player-building-selection,.player-placement-actions{display:flex;align-items:center;gap:5px}
 .player-building-selection button,.player-placement-actions button{min-height:38px;border:1px solid #4b5660;border-radius:8px;background:#272e35;color:#f3eee4}
 .player-building-selection output,.player-placement-actions output,[data-im16g-result]{font-size:.62rem;opacity:.7}
@@ -46,7 +48,7 @@ button{touch-action:manipulation}
   .runtime-hud{gap:4px}.hud-chip{font-size:.68rem;padding:5px 6px}
   .player-shell-actions{gap:4px}.shell-action{font-size:0;width:42px;min-width:42px;padding:0}
   .shell-action[data-player-entry="build"]::after{content:"+";font-size:1.35rem}
-  .shell-action[data-player-entry="system"]::after{content:"☰";font-size:1.1rem}
+  .shell-action[data-player-entry="runtime"]::after{content:"Ⅱ";font-size:1rem}
   .player-action-region{padding-left:8px;padding-right:8px}
   .context-detail{display:none}
 }
