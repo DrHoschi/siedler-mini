@@ -92,15 +92,24 @@ export function createPlayerPlacementInteractionController({ selectionController
 
   const placement = new AuthoritativeConstructionPlacementContract({ map: runtime.map, domains: runtime.domains });
   let state = PlayerPlacementInteractionStateContract.inactive();
+  const listeners = new Set();
   const metrics = { worldSamples: 0, targetUpdates: 0, multiTouchIgnored: 0, cancelledSamples: 0 };
+
+  function notify(reason) {
+    const event = Object.freeze({ kind: 'player-placement-state-change', reason, state });
+    for (const listener of listeners) listener(event);
+    return event;
+  }
 
   function activate(definitionId) {
     state = PlayerPlacementInteractionStateContract.active({ definitionId });
+    notify('ACTIVATE');
     return state;
   }
 
   function deactivate() {
     state = PlayerPlacementInteractionStateContract.inactive();
+    notify('DEACTIVATE');
     return state;
   }
 
@@ -143,6 +152,11 @@ export function createPlayerPlacementInteractionController({ selectionController
     updateTarget,
     getState: () => state,
     getMetrics: () => Object.freeze({ ...metrics }),
+    subscribe(listener) {
+      if (typeof listener !== 'function') throw new TypeError('placement state listener required');
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     capabilities: Object.freeze({
       temporaryInteractionStateOnly: true,
       projectedWorldTargetResolution: true,
@@ -154,6 +168,7 @@ export function createPlayerPlacementInteractionController({ selectionController
     }),
     destroy() {
       unsubscribe();
+      listeners.clear();
       state = PlayerPlacementInteractionStateContract.inactive();
     },
   });
