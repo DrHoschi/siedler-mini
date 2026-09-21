@@ -4,7 +4,7 @@
 
 - IM-20 Whole-Block predecessor: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `58e55466e3c1ccc60342c5bc82747d47e7629db0`, marker `frozen/im-20-authoritative-savegame-continue-integration`.
 - IM-21 Whole-Block: **IN PROGRESS** on `feature/im-21-responsive-player-game-ui-integration`.
-- **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / PASS / 0 BLOCKER; FREEZE EXECUTION AUTHORIZED.**
+- **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER @ `0962d3ad531ba093c22b1194388c005518a9493f`.**
 - Verified product/test head: `791f56254db59aeb502291738ae62d8b2ea9f0c6`.
 - Scope delivered: responsive Player shell; compact authoritative read-only Wood / Stone / Gold / Population HUD; world remains primary play surface; iPhone portrait/landscape safe-area handling; existing camera/touch controls preserved; temporary Build workspace; RUNNING/PAUSED Player control.
 - PAUSED construction guard evidence: while PAUSED, placement Confirm is rejected before authoritative Building mutation with `RUNTIME_NOT_RUNNING`; Building count remains unchanged; Cancel remains mutation-free; after RUNNING resumes, valid placement Confirm retains the existing successful behavior.
