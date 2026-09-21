@@ -11,12 +11,15 @@ function createPlacementHarness(initialState = PlayerPlacementInteractionStateCo
   };
 }
 
-function createRuntimeHarness(composition) {
+function createRuntimeHarness(composition, initialState = 'RUNNING') {
   const authoritative = composition.authoritative;
   let renders = 0;
+  let runtimeState = initialState;
   return {
     get map() { return authoritative.map; },
     get domains() { return authoritative.domains; },
+    get runtime() { return { state: runtimeState }; },
+    setRuntimeState(next) { runtimeState = next; return runtimeState; },
     renderCurrentWorld() { renders += 1; return Object.freeze({ commands: [] }); },
     getRenderCount: () => renders,
   };
@@ -30,6 +33,14 @@ export function runIM16ESelfTest() {
   const freeCellId = runtime.map.cellIdAt(0, 0);
   const occupiedCellId = runtime.map.cellIdAt(2, 2);
   const countBefore = runtime.domains.buildings.size;
+
+  placement.setState(PlayerPlacementInteractionStateContract.active({ definitionId: 'HQ', targetCellId: freeCellId }));
+  runtime.setRuntimeState('PAUSED');
+  const paused = interaction.confirm();
+  const pausedState = placement.getState();
+  const countAfterPaused = runtime.domains.buildings.size;
+  runtime.setRuntimeState('RUNNING');
+  placement.setState(PlayerPlacementInteractionStateContract.inactive());
 
   const notReady = interaction.confirm();
   const countAfterNotReady = runtime.domains.buildings.size;
@@ -51,6 +62,14 @@ export function runIM16ESelfTest() {
   const countAfterCancel = runtime.domains.buildings.size;
 
   const checks = Object.freeze({
+    pausedConfirmRejectedBeforeAuthoritativeMutation:
+      paused.status === 'REJECTED'
+      && paused.reason === 'RUNTIME_NOT_RUNNING'
+      && paused.commitResult === null
+      && pausedState.status === 'ACTIVE'
+      && pausedState.targetCellId === freeCellId
+      && countAfterPaused === countBefore
+      && runtime.getRenderCount() === 0,
     confirmRequiresActiveRealTarget:
       notReady.status === 'NOT_READY'
       && notReady.reason === 'ACTIVE_TARGET_REQUIRED'
@@ -75,7 +94,8 @@ export function runIM16ESelfTest() {
       && cancelledState.status === 'INACTIVE'
       && countAfterCancel === countBeforeCancel,
     immutableResults:
-      Object.isFrozen(notReady)
+      Object.isFrozen(paused)
+      && Object.isFrozen(notReady)
       && Object.isFrozen(rejected)
       && Object.isFrozen(committed)
       && Object.isFrozen(cancelled),
@@ -99,6 +119,8 @@ export function runIM16ESelfTest() {
       committedBuildingId: committed.commitResult?.buildingId ?? null,
       rejectedReason: rejected.reason,
       countBefore,
+      countAfterPaused,
+      pausedReason: paused.reason,
       countAfterCommitted,
       countAfterCancel,
     }),
