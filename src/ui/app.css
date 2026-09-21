@@ -10,7 +10,7 @@ html,body{margin:0;width:100%;height:100%;background:#171b20;overflow:hidden}
 body{min-height:100dvh}
 button,input,select,textarea{font:inherit}
 button{touch-action:manipulation}
-.app-shell{width:100vw;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding-left:var(--safe-left);padding-right:var(--safe-right);background:#171b20;overflow:hidden}
+.app-shell{width:100vw;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);padding-left:var(--safe-left);padding-right:var(--safe-right);background:#171b20;overflow:hidden}
 .player-topbar{padding:calc(8px + var(--safe-top)) 10px 8px;display:flex;align-items:center;gap:10px;min-width:0;border-bottom:1px solid #343a40;background:#20252b;z-index:30}
 .game-title{font-size:.95rem;white-space:nowrap}
 .runtime-hud{display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;flex:1}
@@ -24,12 +24,12 @@ button{touch-action:manipulation}
 .player-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #diagnostic-overlay-canvas{z-index:1;pointer-events:none;touch-action:none}
 #player-placement-preview-canvas{z-index:2;pointer-events:none;touch-action:none}
-.player-action-region{padding:7px 10px calc(7px + var(--safe-bottom));display:flex;align-items:center;gap:8px;border-top:1px solid #343a40;background:#20252b;z-index:30;font-size:.7rem;min-width:0}
-.selection-context{min-width:0;display:flex;align-items:center;gap:7px}
+.player-action-region{position:fixed;left:var(--safe-left);right:var(--safe-right);bottom:var(--safe-bottom);padding:7px 10px;display:flex;align-items:center;gap:8px;z-index:30;font-size:.7rem;min-width:0;pointer-events:none}
+.projection-host{display:none!important}.selection-context{min-width:0;display:flex;align-items:center;gap:7px}
 .context-kind{padding:5px 8px;border:1px solid #3a424a;border-radius:999px;background:#171b20;font-weight:650;white-space:nowrap}
 .context-detail{max-width:32vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.82}
 .surface-note{margin-left:auto;opacity:.55;white-space:nowrap}
-.build-workspace{display:flex;align-items:center;gap:8px;min-width:0}
+.build-workspace{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;overflow-x:auto;padding:6px;border:1px solid #343a40;border-radius:12px;background:#20252b;pointer-events:auto;-webkit-overflow-scrolling:touch}
 .build-workspace[hidden]{display:none!important}
 .player-building-selection,.player-placement-actions{display:flex;align-items:center;gap:5px}
 .player-building-selection button,.player-placement-actions button{min-height:38px;border:1px solid #4b5660;border-radius:8px;background:#272e35;color:#f3eee4}
@@ -48,12 +48,11 @@ button{touch-action:manipulation}
   .runtime-hud{gap:4px}.hud-chip{font-size:.68rem;padding:5px 6px}
   .player-shell-actions{gap:4px}.shell-action{font-size:0;width:42px;min-width:42px;padding:0}
   .shell-action[data-player-entry="build"]::after{content:"+";font-size:1.35rem}
-  .shell-action[data-player-entry="runtime"]::after{content:"Ⅱ";font-size:1rem}
-  .player-action-region{padding-left:8px;padding-right:8px}
-  .context-detail{display:none}
+  .shell-action[data-player-entry="runtime"][data-runtime-state="RUNNING"]::after{content:"Ⅱ";font-size:1rem}\n  .shell-action[data-player-entry="runtime"][data-runtime-state="PAUSED"]::after{content:"▶";font-size:1rem}
+  .player-action-region{padding-left:8px;padding-right:8px}\n  .context-detail{display:none}
 }
 @media(max-height:520px) and (orientation:landscape){
   .player-topbar{padding-top:calc(5px + var(--safe-top));padding-bottom:5px}
   .hud-chip{padding:4px 7px}.shell-action{min-height:36px}
-  .player-action-region{padding-top:5px;padding-bottom:calc(5px + var(--safe-bottom))}
+  .player-action-region{padding-top:5px;padding-bottom:5px}
 }
