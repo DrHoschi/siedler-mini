@@ -1,5 +1,22 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-21B completion / freeze record — 2026-09-22
+
+- IM-21 Whole-Block remains **IN PROGRESS** on `feature/im-21-responsive-player-game-ui-integration`.
+- Frozen predecessor: **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `0962d3ad531ba093c22b1194388c005518a9493f`, marker `frozen/im-21a-responsive-game-shell-hud-integration`.
+- **IM-21B – Selection / Context Panel Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- Verified product/test head: `5d9e77592a435118a5fc9e385a73b8c44ba34cc9`.
+- Freeze marker: `frozen/im-21b-selection-context-panel-integration`.
+- Final implementation scope from the verified IM-21B documentation baseline `ab7c4cc9609da4dc79452e7d4782eea1a066bf12`: the 9 authorized IM-21B implementation files plus exactly one separately reconciled/authorized predecessor-test correction in `src/dev/im-20g-self-test.js`. No other path is part of the product implementation delta.
+- Delivered Player behavior: existing frozen IM-14D remains the sole Building/Person Selection owner; responsive Context Panel provides transient `PEEK → STANDARD → EXPANDED`; Building/Person context consumes existing authoritative/read-only sources only; missing selected objects clear fail-closed; no guessed blocking reason or new gameplay command authority is introduced.
+- Selection/Placement arbitration: active Placement clears/hides normal Selection/Context and guards subsequent Selection taps while preserving frozen Placement target/evaluation/commit authority; after Placement becomes inactive no prior Selection is restored automatically.
+- Working-surface/input boundary: Context is a real `data-ui-region="context"` Player surface; hidden Context has no touch interception; Build workspace and Context do not compete as simultaneous primary working surfaces; existing camera drag/pinch semantics remain unchanged.
+- Exact-head automated evidence for `5d9e775…`: **CI Baseline #5713 SUCCESS**, **Development Testbuild #68 SUCCESS**, **Pages #7541 SUCCESS**. CI completed the frozen predecessor chain through IM-20G, IM-21A regression and IM-21B self-test. IM-21B evidence includes Building and Person projection, stable PEEK/STANDARD/EXPANDED identity, `noGameplayMutation: true`, `noInventedBlockingReason: true`, `placementSelectionArbitrationWired: true` and `hiddenContextHasNoTouchSurface: true`.
+- The IM-20G predecessor-test correction removes only the obsolete literal requirement that every successor use the old IM-20G testbuild ID. All frozen IM-20G lifecycle assertions remain intact: Browser Storage, V2 Restore, Derived-State Rebinding, Atomic Runtime Activation, Continue Lifecycle, Exactly-once Recovery Reconciliation and BrowserSaveGameStorageAdapter presence.
+- Real iPhone/iOS Safari evidence on the same TESTBUILD #68: portrait and landscape; Hauptquartier/Holzfäller/Lagerhaus and multiple persons select correctly; PEEK/STANDARD/EXPANDED via +/+ and reverse via − remain on the same identity; drag, pan and zoom keep the selected object instead of creating a new accidental Selection; Context remains usable/readable; Placement and Context do not compete.
+- Explicitly not introduced by IM-21B: IM-21C Build Catalog / polished Placement Player UX, IM-21D Work Area, IM-21E Economy Overview, IM-21F System Menu / Save / Help / Guidance, new gameplay/domain/SaveGame authority or Inspector capability.
+- **Completion / Evidence / Freeze Gate: PASS / 0 BLOCKER. IM-21C remains unauthorized.**
+
 ## IM-21A completion / freeze record — 2026-09-21
 
 - IM-20 Whole-Block predecessor: **COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `58e55466e3c1ccc60342c5bc82747d47e7629db0`, marker `frozen/im-20-authoritative-savegame-continue-integration`.
@@ -16,7 +33,7 @@
 
 ## IM-21B definition record — 2026-09-21
 
-**IM-21B – Selection / Context Panel Integration: DEFINED / NOT IMPLEMENTED.**
+**IM-21B – Selection / Context Panel Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
 
 **Definition baseline:** frozen IM-21A @ `0962d3ad531ba093c22b1194388c005518a9493f`, marker `frozen/im-21a-responsive-game-shell-hud-integration`.
 
@@ -59,9 +76,9 @@ No IM-21C Build Catalog / polished Placement Player UX, no IM-21D Work Area edit
 
 ### Current IM-21B gate
 
-**IM-21B Reconciliation / Definition: PASS / SCOPE DETERMINED / DEFINED / NOT IMPLEMENTED.**
+**IM-21B Completion / Evidence / Freeze Gate: PASS / 0 BLOCKER / FROZEN.**
 
-This documentation authorizes no IM-21B implementation. The next permissible step is exclusively a separate **IM-21B Definition Documentation Verification / Scope Gate** against frozen IM-21A. IM-21C remains unauthorized.
+The completed IM-21B implementation is frozen by `frozen/im-21b-selection-context-panel-integration`. No IM-21C implementation is authorized by this freeze.
 
 
 **Purpose:** Operative, continuously maintained development control file for `DrHoschi/siedler-mini`.
