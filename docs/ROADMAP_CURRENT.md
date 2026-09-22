@@ -1,19 +1,30 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
-## Current authoritative status — 2026-09-21
+## IM-21B completion / freeze — 2026-09-22
+
+- **IM-21B – Selection / Context Panel Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- Verified product/test head: `5d9e77592a435118a5fc9e385a73b8c44ba34cc9`.
+- Freeze marker: `frozen/im-21b-selection-context-panel-integration`.
+- Scope is limited to the authorized responsive Selection/Context integration plus the separately authorized one-file IM-20G predecessor testbuild-identity correction; existing gameplay, Placement, Camera, SaveGame and Inspector authorities remain unchanged.
+- Exact-head evidence: CI Baseline #5713 SUCCESS; Development Testbuild #68 SUCCESS; Pages #7541 SUCCESS; frozen predecessor regression through IM-20G and IM-21A PASS; IM-21B self-test PASS with no gameplay mutation, no invented blocking reason, Placement/Selection arbitration and hidden-context touch isolation.
+- Real iPhone/iOS Safari evidence: portrait + landscape; Building and Person selection; stable PEEK/STANDARD/EXPANDED disclosure; close/build-surface arbitration; drag/pan/zoom preserve the current selection and do not create accidental replacement selections; responsive panel remains visible and operable.
+- IM-21C, IM-21D, IM-21E, IM-21F and IM-21G remain separate successor scope; **IM-21C is not authorized by this freeze**.
+
+## Current authoritative status — 2026-09-22
 
 - Frozen predecessor: **IM-20 – Authoritative SaveGame / Continue Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `58e55466e3c1ccc60342c5bc82747d47e7629db0`.
 - **IM-21 – Responsive Player / Game UI Integration: IN PROGRESS.**
 - **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER @ `0962d3ad531ba093c22b1194388c005518a9493f`.**
+- **IM-21B – Selection / Context Panel Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER; verified product/test head `5d9e77592a435118a5fc9e385a73b8c44ba34cc9`; marker `frozen/im-21b-selection-context-panel-integration`.**
 - Verified product/test head: `791f56254db59aeb502291738ae62d8b2ea9f0c6`.
 - Completion evidence: real iPhone/iOS Safari responsive-shell/HUD and RUNNING↔PAUSED verification; PAUSED authoritative construction mutation guard verified; CI Baseline #5696 SUCCESS; Development Testbuild #51 SUCCESS; Pages #7524 SUCCESS.
 - IM-21A owns presentation/integration only: responsive Player shell, compact Wood/Stone/Gold/Population HUD, existing camera/touch continuity, temporary Build workspace and Runtime play/pause control. Existing gameplay authorities remain unchanged.
-- IM-21B Selection / Context Panel Integration, IM-21C Build Catalog / Placement Player UX Integration, IM-21D Work Area Player UX Integration, IM-21E Economy / Settlement Overview Integration, IM-21F System Menu / Save / Help / Guidance Integration and IM-21G Responsive V1 Player Interaction / Device Verification are **not implemented by this freeze**.
+- IM-21C Build Catalog / Placement Player UX Integration, IM-21D Work Area Player UX Integration, IM-21E Economy / Settlement Overview Integration, IM-21F System Menu / Save / Help / Guidance Integration and IM-21G Responsive V1 Player Interaction / Device Verification are **not implemented by the IM-21B freeze**.
 - Older IM-20/IM-20G status lines below that still describe intermediate states are superseded by this current-status record.
 
 ## IM-21B – Selection / Context Panel Integration — Definition
 
-**Status:** DEFINED / NOT IMPLEMENTED  
+**Status:** COMPLETE / FROZEN / PASS / 0 BLOCKER  
 **Definition baseline:** frozen IM-21A @ `0962d3ad531ba093c22b1194388c005518a9493f`, marker `frozen/im-21a-responsive-game-shell-hud-integration`.
 
 ### Objective
@@ -64,9 +75,9 @@ No IM-21C Build Catalog / Placement Player UX, no IM-21D Work Area editor, no IM
 
 ### Current gate
 
-**IM-21B Reconciliation / Definition: PASS / SCOPE DETERMINED / DEFINED / NOT IMPLEMENTED.**
+**IM-21B Completion / Evidence / Freeze Gate: PASS / 0 BLOCKER / FROZEN.**
 
-No IM-21B implementation is authorized by this definition documentation. The next permissible step is exclusively the separate **IM-21B Definition Documentation Verification / Scope Gate** against frozen IM-21A. IM-21C remains unauthorized.
+The frozen IM-21B scope is complete. IM-21C remains unauthorized and requires its own separate gate.
 
 
 **Status:** CURRENT – IM-14 through IM-19 COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20 IN PROGRESS; IM-20A–E COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20F COMPLETE / FROZEN / PASS / 0 BLOCKER; IM-20G DEFINED / NOT IMPLEMENTED
