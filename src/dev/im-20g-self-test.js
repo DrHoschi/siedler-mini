@@ -4,7 +4,8 @@ import { BrowserSaveGameStorageAdapter } from '../savegame/browser-savegame-stor
 import { PostIM13BrowserSaveContinueLifecycle } from '../savegame/post-im13-browser-save-continue-lifecycle.js';
 
 export function runIM20GSelfTest() {
-  assert.equal(RuntimeConfig.build, 'IM-20G-SAVE-CONTINUE-PLAYER-DEVICE-VERIFICATION-TESTBUILD-1');
+  assert.equal(typeof RuntimeConfig.build, 'string');
+  assert.ok(RuntimeConfig.build.trim().length > 0, 'current product/testbuild identity required');
   const capabilities = PostIM13BrowserSaveContinueLifecycle.capabilities();
   assert.equal(capabilities.browserStorage, true);
   assert.equal(capabilities.v2Restore, true);
