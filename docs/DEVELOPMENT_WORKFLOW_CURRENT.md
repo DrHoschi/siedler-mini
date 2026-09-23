@@ -1,5 +1,82 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-21C definition record — 2026-09-23
+
+**IM-21C – Build Catalog / Placement Player UX Integration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen IM-21B @ `9abe93a9ca521f04940b75a71987f6e95064a45b`, marker `frozen/im-21b-selection-context-panel-integration`.
+
+### Reconciliation result
+
+The complete authoritative Placement/Construction chain already exists and remains authoritative:
+
+`Player building choice → frozen IM-16F selection/activation → IM-16B transient Placement state + WORLD target resolution → IM-16A authoritative Placement evaluation → IM-16C read-only preview → IM-16E explicit Confirm/Cancel → IM-16D authoritative Building registration/commit → existing IM-17 Construction chain`.
+
+IM-21C therefore creates no new Building, Placement or Construction system. It replaces/integrates the current transitional IM-21A/IM-16 Build workspace with a responsive Player-facing Build Catalog / Placement UX over those frozen owners.
+
+### Binding IM-21C contract
+
+- `Bauen` opens a responsive primary Build Catalog working surface.
+- Catalog entries may expose only actually supported Building definitions from an existing controlled current definition/catalog source. IM-21C must not invent Building definitions and must not promote the current `IM16F_BASELINE_BUILDING_OPTIONS` test/baseline list into a permanent authoritative game catalog.
+- Existing repository legacy Building data/UI is not automatically gameplay authority and must not be reused as such merely to fill a catalog gap.
+- Player-facing name, category/identity, construction requirements/costs or availability may be shown only where an existing current authoritative/read-model source actually supplies them. Missing data is not guessed.
+- Selecting a Catalog entry activates the existing frozen IM-16F/IM-16B Placement path; the Catalog itself owns no Placement state or validity truth.
+- During active Placement the world becomes the primary interaction surface. Existing IM-16C preview continues to project the frozen IM-16A evaluation; IM-21C does not recalculate validity.
+- Placement controls expose the selected Building plus explicit **Bestätigen / Abbrechen**. World taps never implicitly commit a Building.
+- Confirm continues through frozen IM-16E/IM-16D only and remains guarded by the existing Runtime `RUNNING` requirement. Cancel remains mutation-free.
+- COMMITTED/REJECTED Player feedback is derived only from the existing authoritative commit result; UI state must not infer success.
+- Successful commit continues into the existing IM-17 Construction chain without a second Construction owner.
+
+### Working-surface / input arbitration
+
+The IM-21 smartphone rule remains binding: world + compact HUD + sparse feedback form the persistent base; only one additional primary working surface may be active.
+
+For IM-21C the relevant sequence is:
+
+`Context Panel ↔ Build Catalog ↔ Placement Controls`.
+
+- Opening Build closes/suppresses Context.
+- Starting Placement closes/hides the Catalog and exposes Placement controls.
+- Active Placement continues to suppress normal Selection/Context under the frozen IM-21B arbitration.
+- Cancel ends Placement and returns in a controlled way to the defined Build entry/catalog state.
+- Successful commit ends Placement and returns the world to the primary Player surface.
+- Hidden Catalog/Placement surfaces must not intercept touches.
+- Existing WORLD pointer/touch ownership, camera pan/pinch/zoom and Selection semantics remain unchanged.
+- iPhone is the reference/minimum layout; the full interaction must require no hover, right-click, keyboard or browser zoom.
+
+### Catalog capability boundary
+
+The current UI exposes exactly the transitional IM-16F baseline choices `HQ`, `WOODCUTTER`, `STOREHOUSE`. That list is explicitly a narrow known-definition source, not an authoritative Building registry.
+
+A later Implementation Scope Reconciliation must therefore identify the current legitimate Building-definition/catalog source before implementation. If no adequate current source exists, that is a concrete capability gap to reconcile separately; IM-21C must not silently solve it by making legacy UI/data authoritative.
+
+### Verification requirements for later implementation
+
+Later IM-21C implementation must prove at minimum:
+
+- Build Catalog open/close is presentation-only and mutation-free.
+- Only actually supported Building definitions are exposed.
+- Catalog selection enters the existing IM-16F/IM-16B Placement path.
+- Existing valid/occupied target evaluation and IM-16C preview semantics remain unchanged.
+- Confirm commits only through the existing authoritative commit boundary; Cancel remains mutation-free.
+- Runtime PAUSED continues to reject construction before authoritative Building mutation.
+- Context ↔ Catalog ↔ Placement working-surface arbitration is deterministic.
+- Catalog/buttons are UI-owned and leak no WORLD selection/placement input.
+- Pan/zoom during Placement remains functional.
+- No cost, availability, validity or success state is invented by the UI.
+- Successful commit continues into the existing Construction chain.
+- Real-device verification covers at least iPhone portrait + landscape. The complete iPhone → iPad → desktop matrix remains IM-21G.
+
+### Explicit non-scope
+
+No new Placement/Building/Construction authority; no new Building type/content; no invented construction costs/prerequisites; no rotation, demolition or Building upgrades; no IM-21D Work Area; no IM-21E Economy/Settlement Overview; no IM-21F System Menu/Save/Help/Guidance; no Inspector expansion; no SaveGame-schema change; no new Camera/Selection semantics; and no legacy-main Build system promoted to authority.
+
+### Current gate
+
+**IM-21C Reconciliation / Definition: PASS / SCOPE DETERMINED / DEFINED / NOT IMPLEMENTED.**
+
+This documentation authorizes no IM-21C implementation. The next permissible step is exclusively a separate **IM-21C Definition Documentation Verification / Scope Gate** against frozen IM-21B. IM-21D remains unauthorized.
+
 ## IM-21B completion / freeze record — 2026-09-22
 
 - IM-21 Whole-Block remains **IN PROGRESS** on `feature/im-21-responsive-player-game-ui-integration`.
