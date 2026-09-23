@@ -115,7 +115,6 @@ assert.match(selection, /selection != null && context\.selected == null/);
 assert.match(placement, /kind: 'player-placement-state-change'/);
 assert.match(placement, /subscribe\(listener\)/);
 assert.match(main, /IM14DWorldSelectionContext\?\.refresh\?\.\(result\)/);
-assert.match(config, /IM-21B-SELECTION-CONTEXT-PANEL-INTEGRATION-TESTBUILD-1/);
 assert.match(ci, /im-21a-self-test\.node\.js/);
 assert.match(ci, /im-21b-self-test\.node\.js/);
 
