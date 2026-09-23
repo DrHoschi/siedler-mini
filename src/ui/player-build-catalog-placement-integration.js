@@ -24,6 +24,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
 
   let catalogOpen = false;
   let returnToCatalogOnCancel = false;
+  let inactiveDestination = 'world';
 
   function renderCatalog() {
     list.replaceChildren(...catalog.entries.map(item => {
@@ -50,6 +51,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
     selectionController.clear();
     catalogOpen = true;
     returnToCatalogOnCancel = false;
+    inactiveDestination = 'world';
     setHidden(catalogSurface, false);
     setHidden(placementSurface, true);
     buildButton?.setAttribute('aria-expanded', 'true');
@@ -58,6 +60,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
   function showPlacement() {
     catalogOpen = false;
     returnToCatalogOnCancel = true;
+    inactiveDestination = 'world';
     setHidden(catalogSurface, true);
     setHidden(placementSurface, false);
     buildButton?.setAttribute('aria-expanded', 'false');
@@ -74,11 +77,17 @@ export function createPlayerBuildCatalogPlacementIntegration({
     if (!button || button.disabled || !button.dataset.im16fDefinitionId) return;
     event.stopPropagation();
     // IM-16F owns the actual selection -> frozen IM-16B activation.
-    button.click === undefined;
     window.IM16FPlayerBuildingSelection?.select?.(button.dataset.im16fDefinitionId);
     window.IM16EPlayerPlacementConfirmCancel?.sync?.();
     if (placementController.getState()?.status === 'ACTIVE') showPlacement();
   };
+
+  const onPlacementAction = event => {
+    const action = event.target instanceof Element ? event.target.closest('[data-im16e-action]')?.dataset?.im16eAction : null;
+    if (action === 'CANCEL') inactiveDestination = 'catalog';
+    if (action === 'CONFIRM') inactiveDestination = 'world';
+  };
+  placementSurface.addEventListener('click', onPlacementAction, true);
 
   const unsubscribePlacement = placementController.subscribe(event => {
     if (event.state?.status === 'ACTIVE') {
@@ -86,8 +95,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
       showPlacement();
       return;
     }
-    const lastAction = window.IM16EPlayerPlacementConfirmCancel?.getLastResult?.();
-    if (lastAction?.kind === 'player-placement-cancel-result' && returnToCatalogOnCancel) showCatalog();
+    if (inactiveDestination === 'catalog' && returnToCatalogOnCancel) showCatalog();
     else showWorld();
   });
 
@@ -118,6 +126,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
       unsubscribePlacement();
       buildButton?.removeEventListener('click', onBuild);
       catalogSurface.removeEventListener('click', onCatalog);
+      placementSurface.removeEventListener('click', onPlacementAction, true);
       showWorld();
     },
   });
