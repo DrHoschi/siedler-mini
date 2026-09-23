@@ -103,3 +103,35 @@ button{touch-action:manipulation}
   .context-panel-actions button{width:36px;min-width:36px;height:36px}
   .player-context-panel[data-context-mode="PEEK"]{max-width:min(430px,64vw)}
 }
+
+
+/* IM-21C Build Catalog / Placement Player UX — presentation only */
+.build-catalog-workspace,.placement-workspace{
+  pointer-events:auto;width:min(100%,680px);max-width:100%;padding:9px;border:1px solid #46505a;
+  border-radius:14px;background:#20252b;box-shadow:0 10px 28px rgba(0,0,0,.28)
+}
+.build-catalog-workspace[hidden],.placement-workspace[hidden]{display:none!important;pointer-events:none!important}
+.build-catalog-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:7px}
+.build-catalog-heading span{font-size:.66rem;opacity:.6}
+.build-catalog-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:min(44dvh,330px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.build-catalog-entry{min-height:52px;padding:7px 9px;border:1px solid #4b5660;border-radius:9px;background:#272e35;color:#f3eee4;text-align:left;display:grid;gap:2px}
+.build-catalog-entry strong{font-size:.76rem}.build-catalog-entry span{font-size:.64rem;opacity:.72}.build-catalog-entry small{font-size:.6rem;opacity:.56}
+.build-catalog-entry:disabled{opacity:.46}.build-catalog-result{display:block;margin-top:6px;font-size:.62rem;opacity:.7}
+.placement-workspace{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.placement-choice{min-width:0;display:grid;gap:2px}.placement-choice strong{font-size:.76rem}.placement-choice span{font-size:.62rem;opacity:.65}
+.placement-workspace .player-placement-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:min(330px,60vw)}
+.placement-workspace .player-placement-actions button{min-height:44px}
+.placement-workspace .player-placement-actions output{grid-column:1/-1;text-align:center}
+@media(max-width:430px) and (orientation:portrait){
+  .build-catalog-workspace,.placement-workspace{width:100%;padding:8px}
+  .build-catalog-list{grid-template-columns:1fr 1fr;max-height:min(42dvh,300px)}
+  .build-catalog-entry{min-height:58px}
+  .placement-workspace{display:grid}
+  .placement-workspace .player-placement-actions{width:100%;min-width:0}
+}
+@media(max-height:520px) and (orientation:landscape){
+  .build-catalog-workspace{width:min(760px,86vw);padding:6px 8px}
+  .build-catalog-heading{margin-bottom:4px}.build-catalog-list{grid-template-columns:repeat(4,minmax(0,1fr));max-height:150px}
+  .build-catalog-entry{min-height:48px;padding:5px 7px}
+  .placement-workspace{width:min(620px,78vw);padding:6px 8px}
+}
