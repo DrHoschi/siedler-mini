@@ -29,7 +29,7 @@ export const IM16F_BASELINE_BUILDING_OPTIONS = deepFreeze([
 
 export function createPlayerBuildingSelectionPlacementActivation({
   placementController,
-  options = IM21C_SUPPORTED_PLACEMENT_OPTIONS,
+  options = IM16F_BASELINE_BUILDING_OPTIONS,
 } = {}) {
   const placement = requirePlacementController(placementController);
   const normalizedOptions = deepFreeze(Array.from(options, normalizeOption));
@@ -88,7 +88,7 @@ function installBrowserControls() {
   const surface = document.querySelector('[data-im16f-controls]');
   if (!placementController || !surface) return null;
 
-  const interaction = createPlayerBuildingSelectionPlacementActivation({ placementController });
+  const interaction = createPlayerBuildingSelectionPlacementActivation({ placementController, options: IM21C_SUPPORTED_PLACEMENT_OPTIONS });
   const resultEl = surface.querySelector('#im16f-selection-result');
   const buttons = Array.from(surface.querySelectorAll('[data-im16f-definition-id]'));
 
