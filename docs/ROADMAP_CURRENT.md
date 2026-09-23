@@ -1,5 +1,19 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-21C completion / freeze — 2026-09-23
+
+- **IM-21C – Build Catalog / Placement Player UX Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- Verified product/test head: `1982640fbf0ef94d84f92d09deaa4894a5977d08`.
+- Freeze marker: `frozen/im-21c-build-catalog-placement-player-ux-integration`.
+- Scope remains the 9 authorized IM-21C implementation files plus only the separately reconciled/authorized predecessor-regression corrections in `src/dev/im-21a-self-test.node.js` and `src/dev/im-21b-self-test.node.js`; no new gameplay, SaveGame, Camera/Selection or legacy authority was introduced.
+- Player result: seven frozen S2D-05 V1 catalog entries are projected; `HQ`/Rathaus and `WOODCUTTER`/Holzfällerhütte are placement-enabled through the existing IM-16F→IM-16B path; the other V1 entries remain visible but fail closed; `STOREHOUSE` is not promoted into the V1 catalog.
+- Existing Placement/Construction authority remains frozen: IM-16A validity, IM-16C preview, IM-16E explicit Confirm/Cancel, IM-16D authoritative commit and IM-17 Construction continuation.
+- Exact-head evidence for `1982640f…`: **CI Baseline #5733 SUCCESS; Development Testbuild #88 SUCCESS; Pages #7561 SUCCESS**; IM-21A regression PASS, IM-21B regression PASS and IM-21C self-test PASS.
+- Real-device evidence on TESTBUILD #88: **iPhone portrait PASS, iPhone landscape PASS** for Build Catalog → Placement → Confirm/Cancel plus Context↔Catalog↔Placement arbitration and pan/zoom/touch; additional **iPad landscape PASS** evidence with complete seven-entry catalog and successful real placement.
+- **IM-21D remains unauthorized.**
+
+This completion record supersedes the earlier IM-21C `DEFINED / NOT IMPLEMENTED` status text below.
+
 ## IM-21C definition record — 2026-09-23
 
 **IM-21C – Build Catalog / Placement Player UX Integration: DEFINED / NOT IMPLEMENTED.**
@@ -91,14 +105,12 @@ This documentation authorizes no IM-21C implementation. The next permissible ste
 
 - Frozen predecessor: **IM-20 – Authoritative SaveGame / Continue Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `58e55466e3c1ccc60342c5bc82747d47e7629db0`.
 - **IM-21 – Responsive Player / Game UI Integration: IN PROGRESS.**
-- **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER @ `0962d3ad531ba093c22b1194388c005518a9493f`.**
-- **IM-21B – Selection / Context Panel Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER; verified product/test head `5d9e77592a435118a5fc9e385a73b8c44ba34cc9`; marker `frozen/im-21b-selection-context-panel-integration`.**
-- **IM-21C – Build Catalog / Placement Player UX Integration: DEFINED / NOT IMPLEMENTED** against frozen IM-21B @ `9abe93a9ca521f04940b75a71987f6e95064a45b`.
-- Verified product/test head: `791f56254db59aeb502291738ae62d8b2ea9f0c6`.
-- Completion evidence: real iPhone/iOS Safari responsive-shell/HUD and RUNNING↔PAUSED verification; PAUSED authoritative construction mutation guard verified; CI Baseline #5696 SUCCESS; Development Testbuild #51 SUCCESS; Pages #7524 SUCCESS.
-- IM-21A owns presentation/integration only: responsive Player shell, compact Wood/Stone/Gold/Population HUD, existing camera/touch continuity, temporary Build workspace and Runtime play/pause control. Existing gameplay authorities remain unchanged.
-- IM-21C is **DEFINED / NOT IMPLEMENTED**. IM-21D Work Area Player UX Integration, IM-21E Economy / Settlement Overview Integration, IM-21F System Menu / Save / Help / Guidance Integration and IM-21G Responsive V1 Player Interaction / Device Verification remain **not implemented**.
-- Older IM-20/IM-20G status lines below that still describe intermediate states are superseded by this current-status record.
+- **IM-21A – Responsive Game Shell / HUD Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `0962d3ad531ba093c22b1194388c005518a9493f`.
+- **IM-21B – Selection / Context Panel Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**; verified product/test head `5d9e77592a435118a5fc9e385a73b8c44ba34cc9`; marker `frozen/im-21b-selection-context-panel-integration`.
+- **IM-21C – Build Catalog / Placement Player UX Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER**; verified product/test head `1982640fbf0ef94d84f92d09deaa4894a5977d08`; marker `frozen/im-21c-build-catalog-placement-player-ux-integration`.
+- IM-21C exact-head evidence: CI Baseline #5733 SUCCESS; Development Testbuild #88 SUCCESS; Pages #7561 SUCCESS; required iPhone portrait + landscape Player UX evidence PASS; additional iPad landscape evidence PASS.
+- IM-21D Work Area Player UX Integration, IM-21E Economy / Settlement Overview Integration, IM-21F System Menu / Save / Help / Guidance Integration and IM-21G Responsive V1 Player Interaction / Device Verification remain **not implemented / unauthorized unless separately gated**.
+- Older IM-21C definition-status lines below remain historical definition records and are superseded by this current-status record.
 
 ## IM-21B – Selection / Context Panel Integration — Definition
 
