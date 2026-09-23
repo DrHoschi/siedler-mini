@@ -1,5 +1,24 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-21C completion / freeze record — 2026-09-23
+
+- IM-21 Whole-Block remains **IN PROGRESS** on `feature/im-21-responsive-player-game-ui-integration`.
+- Frozen predecessor: **IM-21B – Selection / Context Panel Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER** @ `9abe93a9ca521f04940b75a71987f6e95064a45b`, marker `frozen/im-21b-selection-context-panel-integration`.
+- **IM-21C – Build Catalog / Placement Player UX Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- Verified product/test head: `1982640fbf0ef94d84f92d09deaa4894a5977d08`.
+- Freeze marker: `frozen/im-21c-build-catalog-placement-player-ux-integration`.
+- Final implementation scope from the verified IM-21C documentation baseline `4f901ba0b9980419d2cbc686bfcec77e9299e65e`: the 9 authorized IM-21C implementation files plus only the separately reconciled/authorized predecessor-regression corrections in `src/dev/im-21a-self-test.node.js` and `src/dev/im-21b-self-test.node.js`. No other product path was added to scope.
+- Delivered Player behavior: `Bauen` opens the responsive V1 Build Catalog; the catalog projects exactly the seven frozen S2D-05 V1 Building identities; only the currently supported `HQ` and `WOODCUTTER` definitions are placement-enabled, while unsupported V1 entries remain visible but fail closed. `STOREHOUSE` remains an IM-16F baseline definition and is not promoted into the V1 catalog.
+- Existing frozen authority remains unchanged: Catalog selection enters the existing IM-16F/IM-16B Placement path; target validity remains IM-16A, preview remains IM-16C, explicit Confirm/Cancel remains IM-16E, authoritative registration/commit remains IM-16D, and successful construction continues into the existing IM-17 chain.
+- Working-surface/input behavior is deterministic: Context ↔ Build Catalog ↔ Placement Controls do not compete as simultaneous primary Player work surfaces; active Placement suppresses normal Selection/Context; hidden Catalog/Placement surfaces do not intercept touches; existing WORLD pan/pinch/zoom semantics remain available.
+- Exact-head automated evidence for `1982640f…`: **CI Baseline #5733 SUCCESS**, **Development Testbuild #88 SUCCESS**, **Pages #7561 SUCCESS**. The clean CR/IM regression includes IM-21A PASS, IM-21B PASS and IM-21C self-test PASS with `v1CatalogEntries: 7`, `supportedPlacementDefinitions: [HQ, WOODCUTTER]`, unsupported entries fail-closed, frozen IM-16F baseline preserved, legacy Storehouse not promoted, single-primary-working-surface wiring confirmed and no new gameplay authority.
+- The separately authorized predecessor-test corrections remove only obsolete concrete successor-couplings introduced by legitimate IM-21C presentation/build-identity changes. They do not relax the surviving IM-21A or IM-21B gameplay/presentation contracts.
+- Real-device evidence on TESTBUILD #88: **iPhone portrait PASS + iPhone landscape PASS** for `Bauen → Katalog → Gebäude wählen → Placement → Bestätigen/Abbrechen`, Context↔Catalog↔Placement arbitration, pan/zoom and touch behavior. Additional **iPad landscape PASS** evidence shows the complete seven-entry V1 catalog, supported Rathaus/Holzfällerhütte placement entries, unsupported entries fail-closed and successfully placed buildings in the world.
+- Explicitly not introduced by IM-21C: IM-21D Work Area Player UX, IM-21E Economy / Settlement Overview, IM-21F System Menu / Save / Help / Guidance, new Building/Placement/Construction authority, SaveGame-schema changes, new Camera/Selection semantics or legacy-main Build authority.
+- **Completion / Evidence / Freeze Gate: PASS / 0 BLOCKER. IM-21D remains unauthorized.**
+
+This completion record supersedes the earlier IM-21C `DEFINED / NOT IMPLEMENTED` status text below; the definition record remains as the historical contract that governed implementation.
+
 ## IM-21C definition record — 2026-09-23
 
 **IM-21C – Build Catalog / Placement Player UX Integration: DEFINED / NOT IMPLEMENTED.**
