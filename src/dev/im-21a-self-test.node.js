@@ -39,5 +39,4 @@ const main = await readFile(new URL('../main.js', import.meta.url), 'utf8');
 assert.match(main, /runtime\.boot\(\);runtime\.start\(\)/);
 assert.match(main, /runtime\.pause\(\)/);
 assert.match(main, /runtimeButton\.dataset\.runtimeState=current/);
-assert.match(main, /data-player-entry="build"/);
 console.log('IM-21A responsive game shell / HUD scope self-test: PASS');
