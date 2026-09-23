@@ -1,3 +1,5 @@
+import { IM21C_SUPPORTED_PLACEMENT_OPTIONS } from './player-building-catalog-projection.js';
+
 function deepFreeze(value) {
   if (value == null || typeof value !== 'object' || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
@@ -27,7 +29,7 @@ export const IM16F_BASELINE_BUILDING_OPTIONS = deepFreeze([
 
 export function createPlayerBuildingSelectionPlacementActivation({
   placementController,
-  options = IM16F_BASELINE_BUILDING_OPTIONS,
+  options = IM21C_SUPPORTED_PLACEMENT_OPTIONS,
 } = {}) {
   const placement = requirePlacementController(placementController);
   const normalizedOptions = deepFreeze(Array.from(options, normalizeOption));
@@ -67,7 +69,8 @@ export function createPlayerBuildingSelectionPlacementActivation({
     capabilities: Object.freeze({
       explicitPlayerSelectionOnly: true,
       frozenIM16BActivationConsumed: true,
-      narrowKnownDefinitionSource: true,
+      narrowKnownDefinitionSource: false,
+      im21cSupportedCatalogProjectionConsumed: true,
       authoritativeBuildingDefinitionRegistry: false,
       placementStateAuthority: false,
       placementValidityAuthority: false,
