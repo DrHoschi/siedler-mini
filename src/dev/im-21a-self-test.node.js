@@ -16,7 +16,7 @@ assert.match(html, /data-runtime-state="RUNNING"/);
 assert.match(html, /class="projection-host" hidden aria-hidden="true"/);
 assert.match(html, /data-im19g-population-housing-gold-state="true"/);
 assert.match(html, /data-im17g-construction-state="true"/);
-assert.match(html, /data-player-workspace="build"[^>]*\\shidden(?:\\s|>)/);
+assert.match(html, /data-player-workspace="build"[^>]*\shidden(?:\s|>)/);
 assert.doesNotMatch(html, /data-player-entry="system"/);
 assert.doesNotMatch(html, /data-ui-shell="inspector"/);
 assert.doesNotMatch(html, /inspector-read-only-runtime-observation/);
