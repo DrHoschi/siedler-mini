@@ -25,6 +25,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
   let catalogOpen = false;
   let returnToCatalogOnCancel = false;
   let inactiveDestination = 'world';
+  let externalSurfaceLock = null;
 
   function renderCatalog() {
     list.replaceChildren(...catalog.entries.map(item => {
@@ -48,6 +49,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
   }
 
   function showCatalog() {
+    if (externalSurfaceLock) return false;
     selectionController.clear();
     catalogOpen = true;
     returnToCatalogOnCancel = false;
@@ -55,6 +57,7 @@ export function createPlayerBuildCatalogPlacementIntegration({
     setHidden(catalogSurface, false);
     setHidden(placementSurface, true);
     buildButton?.setAttribute('aria-expanded', 'true');
+    return true;
   }
 
   function showPlacement() {
@@ -66,8 +69,15 @@ export function createPlayerBuildCatalogPlacementIntegration({
     buildButton?.setAttribute('aria-expanded', 'false');
   }
 
+  function setExternalSurfaceLock(owner) {
+    externalSurfaceLock = owner ? String(owner) : null;
+    if (externalSurfaceLock) showWorld();
+    return externalSurfaceLock;
+  }
+
   const onBuild = event => {
     event.stopPropagation();
+    if (externalSurfaceLock) return;
     if (placementController.getState()?.status === 'ACTIVE') return;
     if (catalogOpen) showWorld(); else showCatalog();
   };
@@ -109,10 +119,12 @@ export function createPlayerBuildCatalogPlacementIntegration({
     catalog,
     showCatalog,
     showWorld,
+    setExternalSurfaceLock,
     getState: () => Object.freeze({
       catalogOpen,
       placementActive: placementController.getState()?.status === 'ACTIVE',
       returnToCatalogOnCancel,
+      externalSurfaceLock,
     }),
     capabilities: Object.freeze({
       presentationOnly: true,
