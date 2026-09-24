@@ -232,9 +232,7 @@ export function installIM21DPlayerWorkArea() {
 }
 
 if (typeof window !== 'undefined') {
-  let attempts = 0;
   const installer = window.setInterval(() => {
-    attempts += 1;
-    if (installIM21DPlayerWorkArea() || attempts >= 120) window.clearInterval(installer);
+    if (installIM21DPlayerWorkArea()) window.clearInterval(installer);
   }, 25);
 }
