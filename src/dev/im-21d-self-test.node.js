@@ -3,6 +3,7 @@ import { CoreDomainStores } from '../domain/core-domain-stores.js';
 import { BuildingIdentityOwnershipContract } from '../domain/building-identity-ownership-contract.js';
 import { BuildingLifecycleStateContract } from '../domain/building-lifecycle-state-contract.js';
 import { BuildingWorkAreaAuthority, BuildingWorkAreaCapabilityContract } from '../domain/building-work-area-authority.js';
+import fs from 'node:fs';
 
 function building(domains, definitionId, position) {
   const buildingId = domains.buildings.allocateId();
@@ -47,6 +48,15 @@ const restoredAuthority = new BuildingWorkAreaAuthority({ domains: restored, map
 assert.deepEqual(restoredAuthority.project(woodcutterId).area, authority.project(woodcutterId).area, 'Work Area must survive domain Save/Restore state');
 assert.equal(restoredAuthority.project(woodcutterId).source, 'AUTHORITATIVE');
 
+const workAreaUiSource = fs.readFileSync(new URL('../ui/player-work-area-integration.js', import.meta.url), 'utf8');
+const catalogUiSource = fs.readFileSync(new URL('../ui/player-build-catalog-placement-integration.js', import.meta.url), 'utf8');
+assert.match(workAreaUiSource, /renderResult \?\? runtime\.renderCurrentWorld\(\)/, 'overlay must reuse supplied world render result');
+assert.match(workAreaUiSource, /renderOverlay\(rendered\)/, 'drag overlay must reuse the render already produced for that pointer move');
+assert.match(workAreaUiSource, /setExternalSurfaceLock\?\.\('IM21D_WORK_AREA'\)/, 'Work Area entry must claim the existing IM-21C working-surface boundary');
+assert.match(workAreaUiSource, /setExternalSurfaceLock\?\.\(null\)/, 'Work Area leave must release the IM-21C working-surface boundary');
+assert.match(catalogUiSource, /if \(externalSurfaceLock\) return;/, 'Build entry must fail closed while an external primary surface owns the workspace');
+assert.match(catalogUiSource, /if \(externalSurfaceLock\) return false;/, 'Catalog presentation must fail closed while Work Area owns the workspace');
+
 const caps = BuildingWorkAreaAuthority.capabilities();
 assert.equal(caps.legacyAuthority, false);
 assert.equal(caps.domainStorePersistence, true);
@@ -59,5 +69,7 @@ console.log(JSON.stringify({
   rejectMutationFree: true,
   domainStorePersistence: true,
   transientEditorStateExcluded: true,
+  nonRecursiveOverlayRendering: true,
+  exclusiveWorkingSurfaceArbitration: true,
   legacyAuthority: false,
 }, null, 2));
