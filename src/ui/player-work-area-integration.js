@@ -49,7 +49,7 @@ export function createPlayerWorkAreaIntegration({
     return createAuthority(runtime).project(id);
   }
 
-  function renderOverlay() {
+  function renderOverlay(renderResult = null) {
     const rect = overlay.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, runtime.config?.render?.maxDevicePixelRatio ?? 2);
     const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
