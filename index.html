@@ -28,7 +28,9 @@
     <section class="player-stage" data-ui-region="world" aria-label="Spielwelt">
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
       <canvas id="diagnostic-overlay-canvas" aria-label="Read-only World Diagnostic Overlay"></canvas>
-      <canvas id="player-placement-preview-canvas" aria-label="Player Placement Preview"></canvas>\n      <canvas id="player-workarea-overlay-canvas" aria-label="Arbeitsbereich"></canvas>\n      <button type="button" class="player-workarea-handle" data-player-workarea-handle data-ui-region="workarea" hidden aria-hidden="true" aria-label="Arbeitsbereich verschieben"></button>
+      <canvas id="player-placement-preview-canvas" aria-label="Player Placement Preview"></canvas>
+      <canvas id="player-workarea-overlay-canvas" aria-label="Arbeitsbereich"></canvas>
+      <button type="button" class="player-workarea-handle" data-player-workarea-handle data-ui-region="workarea" hidden aria-hidden="true" aria-label="Arbeitsbereich verschieben"></button>
     </section>
 
     <footer class="player-action-region" data-ui-region="actions" aria-label="Spieleraktionsbereich">
@@ -57,10 +59,18 @@
         <div class="context-panel-actions" aria-label="Auswahlansicht">
           <button type="button" data-context-action="COLLAPSE" aria-label="Weniger Details">−</button>
           <button type="button" data-context-action="EXPAND" aria-label="Mehr Details">+</button>
-          <button type="button" data-context-action="WORKAREA" aria-label="Arbeitsbereich bearbeiten" hidden>◎</button>\n          <button type="button" data-context-action="CLOSE" aria-label="Auswahl schließen">×</button>
+          <button type="button" data-context-action="WORKAREA" aria-label="Arbeitsbereich bearbeiten" hidden>◎</button>
+          <button type="button" data-context-action="CLOSE" aria-label="Auswahl schließen">×</button>
         </div>
       </section>
-      <section class="workarea-workspace" data-player-workarea-controls data-ui-region="workarea-controls" hidden aria-hidden="true" aria-label="Arbeitsbereich bearbeiten">\n        <div class="workarea-choice"><strong>Arbeitsbereich</strong><span data-workarea-status>Arbeitsbereich gültig</span></div>\n        <div class="workarea-actions">\n          <button type="button" data-workarea-action="CONFIRM">Bestätigen</button>\n          <button type="button" data-workarea-action="CANCEL">Abbrechen</button>\n        </div>\n      </section>\n      <section class="build-catalog-workspace" data-player-workspace="build" data-player-build-catalog data-im16f-controls="true" data-ui-region="build-catalog" hidden aria-hidden="true" aria-label="Baukatalog">
+      <section class="workarea-workspace" data-player-workarea-controls data-ui-region="workarea-controls" hidden aria-hidden="true" aria-label="Arbeitsbereich bearbeiten">
+        <div class="workarea-choice"><strong>Arbeitsbereich</strong><span data-workarea-status>Arbeitsbereich gültig</span></div>
+        <div class="workarea-actions">
+          <button type="button" data-workarea-action="CONFIRM">Bestätigen</button>
+          <button type="button" data-workarea-action="CANCEL">Abbrechen</button>
+        </div>
+      </section>
+      <section class="build-catalog-workspace" data-player-workspace="build" data-player-build-catalog data-im16f-controls="true" data-ui-region="build-catalog" hidden aria-hidden="true" aria-label="Baukatalog">
         <header class="build-catalog-heading"><strong>Bauen</strong><span>V1-Gebäude</span></header>
         <div class="build-catalog-list" data-player-build-catalog-list aria-label="Gebäude auswählen"></div>
         <output id="im16f-selection-result" class="build-catalog-result">Gebäude wählen</output>
@@ -88,5 +98,6 @@
   <script type="module" src="src/ui/authoritative-construction-result-player-ui-projection.js?v=im16g-1"></script>
   <script type="module" src="src/im16g-runtime-evidence.js?v=im20c-verification-ownership-3"></script>
   <script type="module" src="src/ui/player-build-catalog-placement-integration.js?v=im21c-1"></script>
-  <script type="module" src="src/ui/player-work-area-integration.js?v=im21d-1"></script>\n</body>
+  <script type="module" src="src/ui/player-work-area-integration.js?v=im21d-1"></script>
+</body>
 </html>
