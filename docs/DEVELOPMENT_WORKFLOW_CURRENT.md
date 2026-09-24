@@ -1,5 +1,72 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-21D definition record — 2026-09-24
+
+**IM-21D – Work Area Player UX Integration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen IM-21C @ `00212904f5019d966cac76623d9e487e1f0dc0d0`.
+
+### Reconciliation result
+
+The frozen modular line through IM-21C provides responsive Player shell/HUD, Selection/Context and Build/Placement integration, but no current authoritative modular Work Area gameplay contract was identified that IM-21D could merely expose through Player UX.
+
+The repository contains historical legacy-main Work Area implementation and data. Those legacy mechanisms are reference material only. IM-21D must not promote legacy `GameWorkArea`, `core/game.workarea.js`, `cb:workarea:set`, legacy Building UI/data or related production modules into authority for the modular runtime.
+
+Therefore IM-21D is not defined as a UI-only port. A controlled modular Work Area contract is a prerequisite capability boundary.
+
+### Binding IM-21D contract
+
+- Work Area is Building-bound and addressed through stable `buildingId`.
+- A Building may expose Work Area editing only when a legitimate current modular Building/capability source declares that capability. Work Area support must not be inferred from legacy data.
+- From the existing IM-21B Building Context, an eligible selected Building may enter an exclusive Player-facing Work Area working mode.
+- The world remains the primary editing surface. The current authoritative Work Area is projected visibly and may be edited through touch/pointer controls appropriate to the defined modular contract.
+- Player UX owns no second persistent Work Area truth. Editor/drag/handle state is transient presentation state only.
+- Entry, edit, explicit confirmation and cancellation are controlled. Cancel is mutation-free. A changed Work Area becomes authoritative only through the modular Work Area mutation boundary.
+- Persisted Work Area state must survive Save → Reload → Continue with the same semantic state. Transient editor state is not persisted.
+- Work Area editing is an exclusive primary working surface under the IM-21 smartphone rule and must arbitrate deterministically against Context, Build Catalog and Placement.
+- While Work Area editing owns the relevant gesture, normal Selection/Placement must not also consume it. Camera pan/zoom remains available where the gesture is not owned by a Work Area control.
+- Hidden Work Area UI must not intercept touches.
+- iPhone remains the minimum/reference layout; no hover, right-click, keyboard or browser zoom may be required.
+
+### Identified modular Work Area contract gap
+
+Before IM-21D UX implementation can be authorized, the modular line requires a controlled Work Area contract covering at minimum:
+
+1. **Eligibility / capability** — whether a current Building supports a Work Area.
+2. **Current-area projection** — stable read-only projection keyed by `buildingId`.
+3. **Validity / bounds** — authoritative rules for allowed Work Area geometry/location; UI must not invent validity.
+4. **Controlled mutation** — one authoritative commit boundary for accepted Work Area changes, with explicit mutation-free cancel/reject behavior.
+5. **SaveGame / restore** — authoritative Work Area state participates in Save → Reload → Continue without persisting transient editor state.
+
+A later Implementation Scope Reconciliation must locate existing reusable modular owners, if any, and determine the smallest missing contract implementation. The gap must not be silently filled by importing legacy-main authority.
+
+### Verification requirements for later implementation
+
+Later IM-21D implementation must prove at minimum:
+
+- unsupported Buildings fail closed and expose no invented Work Area capability;
+- eligible Building identity remains stable through `buildingId`;
+- entering/leaving the Work Area surface is presentation-only until explicit authoritative commit;
+- cancel/reject is mutation-free;
+- accepted changes pass only through the modular Work Area authority;
+- Context ↔ Build Catalog ↔ Placement ↔ Work Area arbitration is deterministic;
+- UI controls do not leak WORLD Selection/Placement input;
+- camera pan/zoom remains usable outside Work Area-owned gestures;
+- Save → Reload → Continue restores the authoritative Work Area but not transient editing state;
+- no legacy-main Work Area/production system becomes modular gameplay authority;
+- real-device verification covers at least iPhone portrait + landscape; the complete device matrix remains IM-21G.
+
+### Explicit non-scope
+
+No production-system rewrite; no Worker/Workforce assignment change; no resource-distribution or production-output redesign; no new Building type/content; no demolition/upgrades; no new Selection or Camera authority; no IM-21E Economy / Settlement Overview; no IM-21F System Menu / Save / Help / Guidance; no IM-21G device-matrix completion; no Inspector expansion; and no legacy-main Work Area system promoted to authority.
+
+### Current gate
+
+**IM-21D Reconciliation / Definition: PASS / CAPABILITY GAP IDENTIFIED / DEFINED / NOT IMPLEMENTED.**
+
+This documentation authorizes no Work Area implementation, no legacy migration and no new gameplay mutation. The next permissible step is exclusively a separate **IM-21D Definition Documentation Verification / Scope Gate** against frozen IM-21C @ `00212904f5019d966cac76623d9e487e1f0dc0d0`.
+
+
 ## IM-21C completion / freeze record — 2026-09-23
 
 - IM-21 Whole-Block remains **IN PROGRESS** on `feature/im-21-responsive-player-game-ui-integration`.
