@@ -50,12 +50,16 @@ assert.equal(restoredAuthority.project(woodcutterId).source, 'AUTHORITATIVE');
 
 const workAreaUiSource = fs.readFileSync(new URL('../ui/player-work-area-integration.js', import.meta.url), 'utf8');
 const catalogUiSource = fs.readFileSync(new URL('../ui/player-build-catalog-placement-integration.js', import.meta.url), 'utf8');
+const indexSource = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 assert.match(workAreaUiSource, /renderResult \?\? runtime\.renderCurrentWorld\(\)/, 'overlay must reuse supplied world render result');
 assert.match(workAreaUiSource, /renderOverlay\(rendered\)/, 'drag overlay must reuse the render already produced for that pointer move');
 assert.match(workAreaUiSource, /setExternalSurfaceLock\?\.\('IM21D_WORK_AREA'\)/, 'Work Area entry must claim the existing IM-21C working-surface boundary');
 assert.match(workAreaUiSource, /setExternalSurfaceLock\?\.\(null\)/, 'Work Area leave must release the IM-21C working-surface boundary');
 assert.match(catalogUiSource, /if \(externalSurfaceLock\) return;/, 'Build entry must fail closed while an external primary surface owns the workspace');
 assert.match(catalogUiSource, /if \(externalSurfaceLock\) return false;/, 'Catalog presentation must fail closed while Work Area owns the workspace');
+assert.doesNotMatch(workAreaUiSource, /attempts\s*>=\s*120/, 'Work Area installer must not permanently give up before delayed browser dependencies exist');
+assert.match(workAreaUiSource, /if \(installIM21DPlayerWorkArea\(\)\) window\.clearInterval\(installer\)/, 'Work Area installer may stop only after successful installation');
+assert.doesNotMatch(indexSource, /\\\\n/, 'player HTML must not contain literal newline text artifacts');
 
 const caps = BuildingWorkAreaAuthority.capabilities();
 assert.equal(caps.legacyAuthority, false);
@@ -71,5 +75,7 @@ console.log(JSON.stringify({
   transientEditorStateExcluded: true,
   nonRecursiveOverlayRendering: true,
   exclusiveWorkingSurfaceArbitration: true,
+  delayedDependencyInstallation: true,
+  literalNewlineArtifactsExcluded: true,
   legacyAuthority: false,
 }, null, 2));
