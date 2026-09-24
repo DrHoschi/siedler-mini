@@ -62,7 +62,7 @@ assert.match(integrationSource, /placementController\.subscribe/);
 assert.match(integrationSource, /inactiveDestination === 'catalog'/);
 assert.match(main, /IM-21(?:C|D) · TESTBUILD 1/, 'IM-21C contract may run under the authorized IM-21D successor build identity');
 assert.doesNotMatch(main, /buildWorkspace\.hidden/);
-assert.match(config, /IM-21C-BUILD-CATALOG-PLACEMENT-PLAYER-UX-INTEGRATION-TESTBUILD-1/);
+assert.match(config, /IM-21(?:C-BUILD-CATALOG-PLACEMENT-PLAYER-UX|D-WORK-AREA-PLAYER-UX)-INTEGRATION-TESTBUILD-1/, 'IM-21C contract may run under the authorized IM-21D successor runtime build identity');
 assert.match(ci, /im-21b-self-test\.node\.js/);
 assert.match(ci, /im-21c-self-test\.node\.js/);
 
