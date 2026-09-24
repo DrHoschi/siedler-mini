@@ -59,7 +59,7 @@ export function createPlayerWorkAreaIntegration({
     ctx.clearRect(0, 0, width, height);
     if (!editing || !draft) { setHidden(handle, true); return; }
 
-    const rendered = runtime.renderCurrentWorld();
+    const rendered = renderResult ?? runtime.renderCurrentWorld();
     const scale = rendered.view.cellPixels * rendered.cameraState.zoom;
     const x = draft.cx * scale + rendered.cameraState.offsetX;
     const y = draft.cy * scale + rendered.cameraState.offsetY;
@@ -101,6 +101,7 @@ export function createPlayerWorkAreaIntegration({
     editing = false; buildingId = null; original = null; draft = null; drag = null;
     setHidden(workspace, true); setHidden(handle, true);
     ctx.clearRect(0, 0, overlay.width, overlay.height);
+    window.IM21CPlayerBuildCatalogPlacement?.setExternalSurfaceLock?.(null);
     if (buildButton) buildButton.disabled = false;
     if (restoreContext && selectedBuildingId()) setHidden(contextPanel, false);
     syncEntry();
@@ -113,6 +114,7 @@ export function createPlayerWorkAreaIntegration({
     buildingId = id;
     original = cloneArea(projection.area);
     draft = cloneArea(projection.area);
+    window.IM21CPlayerBuildCatalogPlacement?.setExternalSurfaceLock?.('IM21D_WORK_AREA');
     editing = true;
     setHidden(contextPanel, true);
     setHidden(workspace, false);
@@ -167,7 +169,7 @@ export function createPlayerWorkAreaIntegration({
     const scale = rendered.view.cellPixels * rendered.cameraState.zoom;
     draft.cx = drag.start.cx + (event.clientX - drag.x) / scale;
     draft.cy = drag.start.cy + (event.clientY - drag.y) / scale;
-    renderOverlay();
+    renderOverlay(rendered);
   };
   const onPointerEnd = event => {
     if (drag?.pointerId === event.pointerId) drag = null;
