@@ -214,6 +214,17 @@ export function createPlayerWorkAreaIntegration({
   });
 }
 
+function publishInstallerDiagnostic(status, dependencies = {}, error = null) {
+  const evidence = Object.freeze({
+    kind: 'im-21d-work-area-installer-diagnostic',
+    status,
+    dependencies: Object.freeze({ ...dependencies }),
+    error: error ? Object.freeze({ name: error.name ?? 'Error', message: error.message ?? String(error) }) : null,
+  });
+  window.IM21DWorkAreaDiagnostic = evidence;
+  return evidence;
+}
+
 export function installIM21DPlayerWorkArea() {
   if (window.IM21DPlayerWorkArea) return window.IM21DPlayerWorkArea;
   const runtime = window.CleanRuntime;
@@ -224,11 +235,27 @@ export function installIM21DPlayerWorkArea() {
   const overlay = document.querySelector('#player-workarea-overlay-canvas');
   const handle = document.querySelector('[data-player-workarea-handle]');
   const buildButton = document.querySelector('[data-player-entry="build"]');
+  const dependencies = {
+    cleanRuntime: Boolean(runtime),
+    selectionController: Boolean(selectionController),
+    contextPanel: Boolean(contextPanel),
+    workAreaButton: Boolean(workAreaButton),
+    workspace: Boolean(workspace),
+    overlay: Boolean(overlay),
+    handle: Boolean(handle),
+  };
+  publishInstallerDiagnostic('INSTALLING', dependencies);
   if (!runtime || !selectionController || !contextPanel || !workspace || !overlay || !handle) return null;
-  window.IM21DPlayerWorkArea = createPlayerWorkAreaIntegration({
-    runtime, selectionController, contextPanel, workAreaButton, workspace, overlay, handle, buildButton, documentRef: document,
-  });
-  return window.IM21DPlayerWorkArea;
+  try {
+    window.IM21DPlayerWorkArea = createPlayerWorkAreaIntegration({
+      runtime, selectionController, contextPanel, workAreaButton, workspace, overlay, handle, buildButton, documentRef: document,
+    });
+    publishInstallerDiagnostic('INSTALLED', dependencies);
+    return window.IM21DPlayerWorkArea;
+  } catch (error) {
+    publishInstallerDiagnostic('INSTALL_FAILED', dependencies, error);
+    throw error;
+  }
 }
 
 if (typeof window !== 'undefined') {
