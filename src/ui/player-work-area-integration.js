@@ -12,7 +12,8 @@ function cloneArea(area) {
 
 function createAuthority(runtime) {
   const active = runtime.getActiveRuntimeComposition()?.authoritative;
-  return new BuildingWorkAreaAuthority({ domains: active?.domains, map: active?.map });
+  const mapBounds = active?.map?.dimensions?.();
+  return new BuildingWorkAreaAuthority({ domains: active?.domains, map: mapBounds });
 }
 
 export function createPlayerWorkAreaIntegration({
