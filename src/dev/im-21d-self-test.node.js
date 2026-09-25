@@ -60,6 +60,12 @@ assert.match(catalogUiSource, /if \(externalSurfaceLock\) return false;/, 'Catal
 assert.doesNotMatch(workAreaUiSource, /attempts\s*>=\s*120/, 'Work Area installer must not permanently give up before delayed browser dependencies exist');
 assert.match(workAreaUiSource, /if \(installIM21DPlayerWorkArea\(\)\) window\.clearInterval\(installer\)/, 'Work Area installer may stop only after successful installation');
 assert.doesNotMatch(indexSource, /\\\\n/, 'player HTML must not contain literal newline text artifacts');
+assert.match(workAreaUiSource, /publishInstallerDiagnostic\('INSTALLING', dependencies\)/, 'installer diagnostics must expose INSTALLING with dependency evidence');
+assert.match(workAreaUiSource, /publishInstallerDiagnostic\('INSTALLED', dependencies\)/, 'installer diagnostics must expose INSTALLED');
+assert.match(workAreaUiSource, /publishInstallerDiagnostic\('INSTALL_FAILED', dependencies, error\)/, 'installer diagnostics must expose INSTALL_FAILED with exception evidence');
+assert.match(workAreaUiSource, /window\.IM21DWorkAreaDiagnostic = evidence/, 'installer diagnostics must be published without becoming gameplay authority');
+assert.match(workAreaUiSource, /name: error\.name/, 'installer failure evidence must include the exception name');
+assert.match(workAreaUiSource, /message: error\.message/, 'installer failure evidence must include the exception message');
 
 const caps = BuildingWorkAreaAuthority.capabilities();
 assert.equal(caps.legacyAuthority, false);
@@ -77,5 +83,6 @@ console.log(JSON.stringify({
   exclusiveWorkingSurfaceArbitration: true,
   delayedDependencyInstallation: true,
   literalNewlineArtifactsExcluded: true,
+  installerDiagnosticEvidence: true,
   legacyAuthority: false,
 }, null, 2));
