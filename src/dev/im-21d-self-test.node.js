@@ -66,6 +66,8 @@ assert.match(workAreaUiSource, /publishInstallerDiagnostic\('INSTALL_FAILED', de
 assert.match(workAreaUiSource, /window\.IM21DWorkAreaDiagnostic = evidence/, 'installer diagnostics must be published without becoming gameplay authority');
 assert.match(workAreaUiSource, /name: error\.name/, 'installer failure evidence must include the exception name');
 assert.match(workAreaUiSource, /message: error\.message/, 'installer failure evidence must include the exception message');
+assert.match(workAreaUiSource, /const mapBounds = active\?\.map\?\.dimensions\?\.\(\)/, 'Work Area runtime adapter must project MapStructure dimensions into authority bounds');
+assert.match(workAreaUiSource, /new BuildingWorkAreaAuthority\(\{ domains: active\?\.domains, map: mapBounds \}\)/, 'Work Area authority must receive projected map bounds rather than MapStructure');
 
 const caps = BuildingWorkAreaAuthority.capabilities();
 assert.equal(caps.legacyAuthority, false);
@@ -84,5 +86,6 @@ console.log(JSON.stringify({
   delayedDependencyInstallation: true,
   literalNewlineArtifactsExcluded: true,
   installerDiagnosticEvidence: true,
+  runtimeMapBoundsAdapter: true,
   legacyAuthority: false,
 }, null, 2));
