@@ -87,6 +87,23 @@ export class PostIM13BrowserSaveContinueLifecycle {
     return Object.freeze({ kind: 'im20e-save-result', status: 'SAVED', stepIndex, write });
   }
 
+  availability() {
+    const serialized = this.#storage.read();
+    if (serialized == null) return Object.freeze({ kind: 'im21f-save-availability', status: 'NO_SAVE' });
+    let snapshot;
+    try { snapshot = JSON.parse(serialized); }
+    catch (error) { return Object.freeze({ kind: 'im21f-save-availability', status: 'INVALID', reason: 'INVALID_JSON' }); }
+    try {
+      const prepared = PostIM13SaveGameRestoreIntegration.prepare(snapshot);
+      if (prepared.status !== 'PREPARED') {
+        return Object.freeze({ kind: 'im21f-save-availability', status: 'INVALID', reason: 'RESTORE_REJECTED' });
+      }
+      return Object.freeze({ kind: 'im21f-save-availability', status: 'AVAILABLE', captureStepIndex: prepared.captureStepIndex });
+    } catch (error) {
+      return Object.freeze({ kind: 'im21f-save-availability', status: 'INVALID', reason: 'VALIDATION_ERROR' });
+    }
+  }
+
   continueFromStorage() {
     if (this.#runtime.state === 'RUNNING') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RUNTIME_RUNNING' });
     const serialized = this.#storage.read();
@@ -183,7 +200,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
 
   static capabilities() {
     return Object.freeze({
-      browserStorage: true, completedStepCapture: true, v2Restore: true, derivedStateRebinding: true,
+      browserStorage: true, persistedSaveAvailability: true, completedStepCapture: true, v2Restore: true, derivedStateRebinding: true,
       atomicRuntimeActivation: true, schedulerInstallation: true, continueLifecycle: true,
       exactlyOnceRecoveryReconciliation: true,
       unpublishedCandidateRecoveryPlanning: true,
