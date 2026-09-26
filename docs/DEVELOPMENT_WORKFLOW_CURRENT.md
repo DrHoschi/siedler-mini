@@ -1,5 +1,22 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-21D completion / evidence / freeze record — 2026-09-26
+
+- **IM-21D – Work Area Player UX Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- Frozen predecessor baseline: IM-21C @ `00212904f5019d966cac76623d9e487e1f0dc0d0`.
+- Verified product/test head: `f2c33f3e59c8551b003a57c818109ad91ba3999c`.
+- The complete IM-21D line is ahead-only / 0 behind against frozen IM-21C. The implementation adds the modular Building-bound Work Area authority, Player projection/editing surface, deterministic Context/Build/Placement arbitration, required regression coverage, and only the separately reconciled corrections/verification access needed to prove the contract.
+- Work Area authority is keyed by stable `buildingId`; unsupported Buildings fail closed; transient drag/editor state remains presentation-only; Confirm commits through the modular authority and Cancel/reject remains mutation-free. No legacy-main Work Area or production system was promoted to authority.
+- The real runtime `MapStructure`/bounds mismatch discovered during device verification was corrected at the existing IM-21D UI boundary by projecting `active.map.dimensions()` into `BuildingWorkAreaAuthority`; no MapStructure, runtime-composition or Work Area authority contract was weakened.
+- Exact-head implementation verification for `f2c33f3e…`: **CI Baseline #5761 SUCCESS; Deploy Authoritative Development Testbuild to Pages #116 SUCCESS; pages build and deployment #7589 SUCCESS**. Scope verification for the final verification-access increment is exactly `index.html` plus `src/main.js`, reusing the frozen IM-20 Save/Continue lifecycle without new SaveGame semantics.
+- Real iPhone/iOS Safari evidence confirms eligible WOODCUTTER Work Area action visibility, entry, visible valid-area projection, touch dragging, Confirm, same-session reselection persistence, and the required **Work Area → Save → real page reload → Continue → reselect → same authoritative Work Area position** lifecycle. The restored save also retained the user's additionally placed building, providing supplementary Save/Continue regression evidence.
+- The temporary `Test-Speichern` / `Test-Weiter` controls are explicitly **VERIFICATION ONLY** technical access to the existing IM-20 lifecycle. They are not the final Player Save/System Menu and do not authorize IM-21F.
+- Known responsive presentation refinement: on narrow iPhone layouts the separate Work Area confirmation panel can visually compete with the existing context panel. This is non-blocking for the verified IM-21D functional contract and may be reconsidered in later responsive/System-Menu UX work.
+- Explicitly not introduced: IM-21E Economy / Settlement Overview, IM-21F System Menu / Save / Help / Guidance, IM-21G device-matrix completion, production/workforce/resource redesign, new Selection/Camera authority, multi-slot Save UI, or legacy-main authority.
+- **IM-21D Completion / Evidence / Freeze Gate: PASS / 0 BLOCKER / FROZEN.** No further IM-21D product change is authorized by this freeze.
+
+This completion record supersedes the earlier IM-21D `DEFINED / NOT IMPLEMENTED` status text below; the definition record remains as the historical binding contract.
+
 ## IM-21D definition record — 2026-09-24
 
 **IM-21D – Work Area Player UX Integration: DEFINED / NOT IMPLEMENTED.**
