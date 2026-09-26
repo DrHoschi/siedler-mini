@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b20">
   <meta name="robots" content="noindex,nofollow">
-  <title>Neue Siedler – IM-21E Economy / Settlement Overview</title>
+  <title>Neue Siedler – IM-21F System Menu / Save / Help / Guidance</title>
   <link rel="stylesheet" href="src/ui/app.css?v=im21e-1">
 </head>
 <body>
@@ -19,17 +19,51 @@
         <span class="hud-chip" data-hud-resource="population"><b>Bev.</b><output id="hud-population">—</output></span>
       </div>
       <div class="player-shell-actions" aria-label="Spielaktionen">
-        <button type="button" class="shell-action" data-player-entry="runtime" data-runtime-state="RUNNING" aria-label="Spiel pausieren" aria-pressed="false">Pause</button>
+        <button type="button" class="shell-action" data-player-entry="runtime" data-runtime-state="READY" aria-label="Systemmenü öffnen" aria-expanded="false">Menü</button>
         <button type="button" class="shell-action" data-player-entry="build" aria-label="Bauen" aria-expanded="false">Bauen</button>
         <button type="button" class="shell-action" data-player-entry="settlement" aria-label="Siedlungsübersicht" aria-expanded="false">Siedlung</button>
       </div>
       <span id="runtime-status" class="runtime-status">BOOTING</span>
-      <div data-im21d-save-continue-verification aria-label="IM-21D Save/Continue Verifikation">
+      <div data-im21d-save-continue-verification hidden aria-hidden="true">
         <button type="button" data-im21d-verification-action="SAVE">Test-Speichern</button>
         <button type="button" data-im21d-verification-action="CONTINUE">Test-Weiter</button>
         <output data-im21d-verification-status aria-live="polite">VERIFICATION ONLY</output>
       </div>
     </header>
+
+    <section class="player-system-surface player-start-surface" data-player-system-menu="start" aria-label="Spiel starten">
+      <div class="player-system-card">
+        <span class="player-system-kicker">Neue Siedler</span>
+        <h1>Siedlung beginnen</h1>
+        <p>Starte eine neue Siedlung oder setze einen vorhandenen Spielstand fort.</p>
+        <div class="player-system-actions">
+          <button type="button" data-system-action="NEW_GAME">Neues Spiel</button>
+          <button type="button" data-system-action="CONTINUE">Weiterspielen</button>
+          <button type="button" data-system-action="HELP">Hilfe</button>
+          <button type="button" data-system-action="FULLSCREEN">Vollbild</button>
+        </div>
+        <output data-player-system-status aria-live="polite"></output>
+      </div>
+    </section>
+    <section class="player-system-surface player-pause-surface" data-player-system-menu="pause" hidden aria-hidden="true" aria-label="Systemmenü">
+      <div class="player-system-card">
+        <span class="player-system-kicker">Pause</span>
+        <h2>Systemmenü</h2>
+        <div class="player-system-actions">
+          <button type="button" data-system-action="RESUME">Weiterspielen</button>
+          <button type="button" data-system-action="SAVE">Speichern</button>
+          <button type="button" data-system-action="HELP">Hilfe</button>
+          <button type="button" data-system-action="FULLSCREEN">Vollbild</button>
+        </div>
+      </div>
+    </section>
+    <aside class="player-system-help" data-player-system-help hidden aria-hidden="true" aria-label="Hilfe">
+      <div class="player-system-card">
+        <h2>Kurzhilfe</h2>
+        <p>Tippe Gebäude oder Bewohner an, um Details zu sehen. Unter „Bauen“ wählst du ein Gebäude und anschließend den Zielort in der Welt. Die Siedlungsübersicht zeigt Bevölkerung, Wohnraum und Gold.</p>
+        <button type="button" data-system-action="HELP">Schließen</button>
+      </div>
+    </aside>
 
     <section class="player-stage" data-ui-region="world" aria-label="Spielwelt">
       <canvas id="game-canvas" aria-label="Neue Siedler Spielwelt"></canvas>
@@ -115,5 +149,6 @@
   <script type="module" src="src/ui/player-build-catalog-placement-integration.js?v=im21c-1"></script>
   <script type="module" src="src/ui/player-work-area-integration.js?v=im21d-1"></script>
   <script type="module" src="src/ui/player-economy-settlement-overview-integration.js?v=im21e-1"></script>
+  <script type="module" src="src/ui/player-system-menu-integration.js?v=im21f-1"></script>
 </body>
 </html>
