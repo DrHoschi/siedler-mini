@@ -1,5 +1,74 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-21F definition record — 2026-09-26
+
+**IM-21F – System Menu / Save / Help / Guidance Integration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen IM-21E. Verified IM-21E product/test head: `e1d7455de4bd1f3f291e36080fbd4a7efd146e49`; IM-21E completion/evidence/freeze documentation head: `2dc58f7015b39b8be0589c4baa1d0259ed9b474f`.
+
+### Reconciliation result
+
+The modular runtime already owns the system authorities IM-21F needs to expose. Runtime pause/resume is authoritative through the existing Runtime state machine. Browser Save → Reload → Continue is authoritative through the frozen IM-20 lifecycle, including completed-step capture, V2 validation/restore, derived-state rebinding, atomic runtime activation/scheduler installation and exactly-once recovery reconciliation. The temporary `Test-Speichern` / `Test-Weiter` controls remain verification-only access and are not Player UX.
+
+The repository also contains the historical legacy `ui/ui-start.js`, `ui/ui-state.js` and `ui/css/ui-start.css` menu family with Start, Continue, Reset, Fullscreen and pause-panel behavior. Those files are behavioral/reference material only and must not be promoted into modular authority or reused as a second runtime/save system.
+
+IM-21F therefore does **not** create new Pause, SaveGame or Continue semantics. It integrates the frozen authorities into one responsive Player-facing Start/System-Menu family and adds the missing Help/Guidance and deliberate fullscreen/standalone presentation entry.
+
+### Binding IM-21F contract
+
+- Start screen and in-game Pause/System Menu form one coherent Player menu family, while exposing only actions valid for the current runtime/save state.
+- Pause/Resume delegates exclusively to the existing modular Runtime authority. Player UI owns no second paused/running truth.
+- Save delegates exclusively to the frozen browser Save lifecycle and its completed-step capture boundary. IM-21F introduces no second SaveGame owner or schema.
+- Continue delegates exclusively to the frozen validation → restore → rebind → recovery → atomic activation lifecycle. The menu must not bypass, partially reproduce or weaken that path.
+- Technical IM-20/IM-21D verification controls are not the final Player surface and may be replaced/hidden by the regular menu access without changing their underlying authority.
+- Continue availability must be derived from legitimate persisted-save capability/state and must fail closed when no valid continuation is available. UI must not invent a successful save or continuation state.
+- New Game/start behavior must enter the current modular runtime through an existing legitimate reset/start boundary. Legacy `localStorage.clear()` behavior is not authority and must not be copied as a generic reset mechanism. If the current modular line lacks a sufficient New Game/reset boundary, that is an implementation-scope prerequisite to reconcile rather than permission to invent one in presentation code.
+- Help/Guidance is Player-facing explanatory/navigation presentation only in V1. It owns no gameplay mutation authority and does not expand into quests, tutorial progression or Inspector/system diagnostics.
+- Fullscreen/standalone entry is a presentation capability only. Failure or platform restriction, especially on iOS/Safari, must degrade safely; fullscreen must never be required for gameplay.
+- The System Menu is an exclusive Player working surface. It must arbitrate deterministically against Context, Build Catalog/Placement, Work Area and Settlement Overview; hidden menu surfaces must not intercept pointer/touch input.
+- Save/Continue feedback must reflect actual lifecycle results and failure states rather than optimistic UI state.
+- iPhone remains the minimum/reference layout; no hover, right-click, keyboard or browser zoom may be required.
+
+### Identified IM-21F capability gap
+
+The missing capability is primarily Player UX/integration, not a new system authority:
+
+1. one responsive Start + Pause/System-Menu family;
+2. regular Player access to the existing Pause/Resume and Save/Continue authorities;
+3. state-derived action availability and lifecycle feedback;
+4. compact Help/Guidance presentation;
+5. deliberate fullscreen/standalone entry with safe fallback;
+6. deterministic arbitration with the already frozen IM-21 working surfaces.
+
+A later Implementation Scope Reconciliation must determine whether the current modular runtime exposes a sufficient controlled New Game/reset and persisted-save-availability boundary. Any missing boundary must be added minimally at its proper owner; legacy-main behavior must not be promoted to authority.
+
+### Verification requirements for later implementation
+
+Later IM-21F implementation must prove at minimum:
+
+- Start and Pause/System states use the same coherent menu family without creating a second runtime state;
+- Pause and Resume pass only through the existing Runtime authority;
+- Save passes only through the frozen completed-step browser lifecycle;
+- real page reload → Continue passes through the complete frozen restore/rebind/recovery/activation chain;
+- no-save/invalid-save and lifecycle failure states fail closed and are represented truthfully;
+- New Game/reset does not use legacy broad storage clearing or bypass modular ownership;
+- Help/Guidance is presentation-only and mutation-free;
+- fullscreen/standalone entry degrades safely where unsupported;
+- menu arbitration against Context, Build/Placement, Work Area and Settlement Overview is deterministic;
+- hidden menu UI does not intercept world input;
+- no legacy-main menu, SaveGame or Pause system becomes modular authority;
+- real-device verification covers at least iPhone portrait + landscape; the complete device matrix remains IM-21G.
+
+### Explicit non-scope
+
+No new SaveGame schema or restore semantics; no multi-slot Save UI; no autosave/cloud save; no new scheduler/pause authority; no gameplay-settings system; no tutorial/quest progression; no Inspector/system-graph expansion; no legacy-main menu authority; no IM-21G device-matrix completion.
+
+### Current gate
+
+**IM-21F Reconciliation / Definition: PASS / EXISTING SYSTEM AUTHORITIES IDENTIFIED / PLAYER-UX GAP IDENTIFIED / DEFINED / NOT IMPLEMENTED.**
+
+This documentation authorizes no IM-21F implementation and no IM-21G work. The next permissible step is exclusively a separate **IM-21F Definition Documentation Verification / Scope Gate** against frozen IM-21E.
+
 ## IM-21E completion / evidence / freeze record — 2026-09-26
 
 - **IM-21E – Economy / Settlement Overview: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
