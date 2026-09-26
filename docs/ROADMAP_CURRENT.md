@@ -1,5 +1,61 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-21E definition record — 2026-09-26
+
+**IM-21E – Economy / Settlement Overview: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen IM-21D. Verified IM-21D product/test head: `f2c33f3e59c8551b003a57c818109ad91ba3999c`; IM-21D completion/evidence/freeze documentation head: `3a749f040cac29de7b594de7a01042df6c970bf6`.
+
+### Reconciliation result
+
+The modular runtime already provides a controlled Player read-model foundation for the core settlement overview. In particular, `player-population-housing-gold-projection.js` projects existing authoritative Population, Housing and Gold state without owning mutation authority, and `main.js` already derives and renders that projection from the active runtime composition and rebuilds it after Continue.
+
+IM-21E therefore does **not** create a new economy simulation or a second settlement truth. It integrates the existing read model into a responsive Player-facing Economy / Settlement Overview.
+
+### Binding IM-21E contract
+
+- **Population** is read-only and comes from the existing authoritative population projection.
+- **Housing** is read-only and exposes the existing aggregate occupancy/capacity, available slots and existing `AVAILABLE` / `FULL` / `NO_HOUSING` status semantics.
+- **Gold** is read-only and reflects the current non-physical Gold state owned by the existing `GoldEconomyOwner`.
+- The Player overview owns no Population, Housing, Gold or Economy mutation authority and must not invent missing values.
+- Existing invariants remain binding, including Population/Housing occupancy consistency and aggregate Housing capacity consistency.
+- The existing technical `Siedlung · Bevölkerung … · Wohnen …/… · Gold …` projection is a reusable read-model/output foundation, not the final responsive Player UX.
+- IM-21E may replace/integrate that technical presentation with a compact Player-facing settlement overview while the world remains the primary gameplay surface.
+- Any expanded overview is a Player working surface and must arbitrate deterministically against Context, Build Catalog / Placement and Work Area. Hidden overview UI must not intercept pointer/touch input.
+- After Save → Reload → Continue, the overview must be rebuilt from the restored authoritative runtime state rather than persisting a second UI truth.
+- iPhone remains the minimum/reference layout; the overview must require no hover, right-click, keyboard or browser zoom.
+
+### Existing broader economy data boundary
+
+The runtime also contains Resources, Workforce requirements/assignments, Building Stocks, Transport state, Production state and related economy evidence. Reconciliation did **not** identify an equivalent consolidated Player Overview contract for those areas.
+
+IM-21E must therefore not silently expand into a new Economy/Inspector system merely because those lower-level data structures exist. Population/Housing/Gold is the defined V1 overview boundary. Any broader Player economy aggregation requires a later separately reconciled contract.
+
+### Verification requirements for later implementation
+
+Later IM-21E implementation must prove at minimum:
+
+- displayed Population derives from the existing authoritative Population projection;
+- displayed Housing occupancy/capacity/available slots and status derive from existing Housing state;
+- Population and Housing occupancy remain consistent under the existing invariant;
+- displayed Gold equals the current authoritative `GoldEconomyOwner` state and remains non-physical;
+- opening/closing the overview is presentation-only and mutation-free;
+- overview working-surface arbitration against Context, Build/Placement and Work Area is deterministic;
+- hidden overview UI does not intercept world input;
+- Save → Reload → Continue rebuilds the overview from restored authoritative state;
+- no Player UI path gains Population, Housing, Gold or Economy mutation authority;
+- real-device verification covers at least iPhone portrait + landscape; the complete device matrix remains IM-21G.
+
+### Explicit non-scope
+
+No new Production, Resource, Workforce, Transport or Gold mechanics; no new Economy mutation; no Building Stock redesign; no new Building content; no Inspector/system graph expansion; no new SaveGame semantics; no IM-21F System Menu / Save / Help / Guidance; no IM-21G device-matrix completion; and no legacy-main Economy/UI promoted to authority.
+
+### Current gate
+
+**IM-21E Reconciliation / Definition: PASS / EXISTING PLAYER READ MODEL IDENTIFIED / DEFINED / NOT IMPLEMENTED.**
+
+This documentation authorizes no IM-21E implementation and no IM-21F work. The next permissible step is exclusively a separate **IM-21E Definition Documentation Verification / Scope Gate** against frozen IM-21D.
+
 ## IM-21D completion / evidence / freeze record — 2026-09-26
 
 - **IM-21D – Work Area Player UX Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
