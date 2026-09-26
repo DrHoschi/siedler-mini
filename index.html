@@ -23,6 +23,11 @@
         <button type="button" class="shell-action" data-player-entry="build" aria-label="Bauen" aria-expanded="false">Bauen</button>
       </div>
       <span id="runtime-status" class="runtime-status">BOOTING</span>
+      <div data-im21d-save-continue-verification aria-label="IM-21D Save/Continue Verifikation">
+        <button type="button" data-im21d-verification-action="SAVE">Test-Speichern</button>
+        <button type="button" data-im21d-verification-action="CONTINUE">Test-Weiter</button>
+        <output data-im21d-verification-status aria-live="polite">VERIFICATION ONLY</output>
+      </div>
     </header>
 
     <section class="player-stage" data-ui-region="world" aria-label="Spielwelt">
