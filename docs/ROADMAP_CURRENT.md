@@ -1,5 +1,23 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-21E completion / evidence / freeze record — 2026-09-26
+
+- **IM-21E – Economy / Settlement Overview: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- Frozen predecessor: IM-21D. Verified IM-21D product/test head: `f2c33f3e59c8551b003a57c818109ad91ba3999c`; IM-21D completion/evidence/freeze documentation head: `3a749f040cac29de7b594de7a01042df6c970bf6`.
+- Verified IM-21E product/test head: `e1d7455de4bd1f3f291e36080fbd4a7efd146e49`.
+- The verified implementation is exactly 5 commits ahead / 0 behind the authorized IM-21E documentation baseline `82fc323a540a6ce3c8b740867723906717dc063a`, with that exact merge base. Scope is limited to `index.html`, new `src/ui/player-economy-settlement-overview-integration.js`, `src/ui/app.css`, new `src/dev/im-21e-self-test.node.js`, and `.github/workflows/ci.yml`.
+- The responsive Player settlement overview reuses the existing authoritative Population/Housing/Gold read model. Population, Housing occupancy/capacity/available slots/status and non-physical Gold remain read-only; no Population, Housing, Gold or Economy mutation authority was introduced and no second settlement truth is persisted.
+- Working-surface arbitration reuses the frozen IM-21C external-surface boundary. Active Placement and active Work Area fail closed against opening the overview; Selection/Context is cleared through the existing presentation boundary; hidden overview UI is touch/pointer isolated. Closing the overview restores normal world interaction.
+- Exact-head evidence for `e1d7455d…`: **CI Baseline #5770 SUCCESS**, including `Run IM-21E verification + frozen predecessor regression` SUCCESS; **Deploy Authoritative Development Testbuild to Pages #125 SUCCESS**; **pages build and deployment #7598 SUCCESS**.
+- Real iPhone/iOS Safari evidence verifies the settlement overview in **portrait and landscape**. Both orientations show the same authoritative state: Population 3, Housing 3/3 / FULL (`Belegt`), available slots 0 and Gold 3. Portrait uses the compact 2×2 presentation; landscape uses the four-column presentation.
+- Real-device interaction verification additionally confirms opening/closing the overview, restored world operability after closing, and deterministic arbitration against Build/Placement and Work Area.
+- Save/Continue semantics remain the frozen existing lifecycle: the overview reads the current runtime projection when opened and owns no persisted presentation truth. No SaveGame contract was changed.
+- Known future UX follow-up: iOS Safari browser chrome consumes substantial landscape space; a later Start/System-Menu UX may provide a deliberate fullscreen/standalone entry path. This is outside IM-21E and is non-blocking for this freeze.
+- Explicitly not introduced: Production, Resource, Workforce or Transport redesign; new Gold mechanics; Building Stock redesign; Inspector/system graph expansion; new SaveGame semantics; IM-21F System Menu / Save / Help / Guidance; IM-21G device-matrix completion; or legacy-main Economy/UI authority.
+- **IM-21E Completion / Evidence / Freeze Gate: PASS / 0 BLOCKER / FROZEN.** No further IM-21E product change is authorized by this freeze.
+
+This completion record supersedes the earlier IM-21E `DEFINED / NOT IMPLEMENTED` status text below; the definition record remains as the historical binding contract.
+
 ## IM-21E definition record — 2026-09-26
 
 **IM-21E – Economy / Settlement Overview: DEFINED / NOT IMPLEMENTED.**
