@@ -29,7 +29,7 @@ export function createPlayerSystemMenuIntegration({
   let busy = false;
 
   function feedback(value) {
-    if (statusOutput) statusOutput.textContent = String(value ?? '');
+    for (const output of documentRef.querySelectorAll('[data-player-system-status]')) output.textContent = String(value ?? '');
   }
 
   function availability() {
