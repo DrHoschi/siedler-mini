@@ -1,5 +1,53 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-24 definition record — 2026-09-27
+
+**IM-24 – Active Runtime Production Supply Orchestration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen Post-IM-23 state `7c2e166f05ca9b862ec26413f93af678e907f8ce`.
+
+### Reconciliation result
+
+IM-18 already owns operational production recipe/readiness and authoritative production settlement, IM-22 owns the explicitly admitted one-shot Runtime/Scheduler production execution seam, and IM-23 owns the controlled bridge from `BLOCKED_INPUT + missingInputs` into existing Resource/BuildingStock/Transport logistics. The next proven system gap is not another Production, Logistics or SaveGame authority: these frozen capabilities are not yet orchestrated as one active-runtime production-supply continuity path. IM-23 currently remains a Domain integration, while active runtime composition and Continue recovery do not yet connect a real operational Production Building through `BLOCKED_INPUT` → supply logistics → delivered target BuildingStock → renewed IM-18E readiness evaluation.
+
+### Binding IM-24 contract
+
+- IM-24 orchestrates only existing frozen authorities. It must not introduce a second Production, Resource, BuildingStock, Logistics, Transport, Workforce, Scheduler or SaveGame authority.
+- The starting point is a real operational Production Building in the active Runtime Composition with its existing IM-18 Workforce assignment, Production Recipe and authoritative BuildingStocks.
+- IM-18E remains the sole production-readiness authority. Only a real `BLOCKED_INPUT + missingInputs` result may activate the existing IM-23 production-input path.
+- IM-23 remains the Production Input Demand / Existing Logistics integration authority. IM-24 must not duplicate its demand identity, duplicate-suppression, bound-supply or matching semantics.
+- Existing ResourceDemand/Claim/Matching/Assignment, BuildingStock transport reservation, Workforce, Transport, Delivery and settlement authorities remain unchanged and authoritative for their existing boundaries.
+- Successful delivery must be reflected back into the same authoritative Runtime Composition through the existing target BuildingStock and associated existing Demand/Claim/Reservation/Transport state.
+- After authoritative input delivery, IM-18E may be evaluated again from the updated Runtime state. The resulting state may be `READY` or remain `BLOCKED_INPUT`.
+- `READY` is a readiness state only. IM-24 must not execute `InputConsumptionOutputSettlement`, admit a production settlement, or automatically create/install a replacement IM-22 production cycle.
+- IM-22 remains the only Runtime execution seam for a separately identified and explicitly admitted production cycle.
+- Runtime/Scheduler participation must be state/event-bound and idempotent. A Scheduler tick is neither new demand quantity nor production-cycle authorization.
+- Repeated Runtime evaluation must reuse already-open/reserved IM-23 supply and must not duplicate demand, claims, BuildingStock reservations, Transport jobs or delivered effects.
+- Existing IM-20 Save/Continue state already persists Production Recipes, BuildingStocks, ResourceDemands/Claims, BuildingStock transport reservations, Workforce/Transport state and production settlement fences. IM-24 must not introduce a new SaveGame schema or parallel continuity ledger.
+- After Continue, existing open/reserved/in-flight production supply must be reused under the frozen recovery authorities. Restored state must not be interpreted as a new supply need and must not duplicate already-authoritative logistics or production effects.
+- Existing IM-20 Transport recovery remains the recovery authority for persisted Transport execution. IM-24 may consume the restored/rebound state but must not replace that recovery contract.
+
+### Required verification
+
+A later implementation must prove at minimum:
+
+- a real operational Production Building in active Runtime Composition can evaluate through IM-18E to `BLOCKED_INPUT`;
+- that exact blocked state activates/reuses the existing IM-23 Production Input Demand path without parallel demand quantity;
+- available supply proceeds through the existing Resource/Claim, BuildingStock reservation, Workforce/Transport and Delivery authorities;
+- no available supply leaves the existing Production Input Demand waiting without fabricated stock or effects;
+- successful authoritative delivery is published back into the same active Runtime Composition with updated target BuildingStock and existing logistics state;
+- renewed IM-18E evaluation after sufficient delivery can produce `READY` from the updated authoritative state;
+- reaching `READY` does not execute production, create a production settlement or automatically install/create an IM-22 cycle;
+- repeated Runtime/Scheduler evaluation does not duplicate Demand/Claim/Reservation/Transport state;
+- Save → Continue with an already-open, reserved or in-flight Production Input supply preserves/reuses that state without duplicate supply admission or production settlement;
+- existing IM-20 exactly-once/recovery, IM-22 one-shot production and IM-23 demand/logistics boundaries remain unchanged.
+
+### Explicit NON-SCOPE
+
+IM-24 does **not** introduce automatic or recurring production cycles, production duration, cooldown, automatic IM-22 cycle creation, output distribution between Buildings, multi-Building production chains, warehouse/minimum-stock strategy, global logistics optimization, automatic Workforce reassignment, new Transport/routing/movement authority, new Resources/Buildings/Recipes, Gold/Housing/Population changes, new Player UI, Inspector expansion, SaveGame rearchitecture or legacy-main gameplay authority.
+
+IM-24 is definition-only at this point. No implementation, implementation authorization or development branch is authorized by this record.
+
 ## IM-23 completion / evidence / freeze — 2026-09-27
 
 **IM-23 – Production Input Demand / Existing Logistics Integration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
