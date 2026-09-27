@@ -1,5 +1,51 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-23 definition record — 2026-09-27
+
+**IM-23 – Production Input Demand / Existing Logistics Integration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen Post-IM-22 state `c94400265be2c40f0576ecd2c616649e5e30cf85`.
+
+### Reconciliation result
+
+IM-22 closes the controlled Runtime/Scheduler execution seam for one already admissible IM-18 production cycle. The next proven system gap occurs when existing IM-18 production readiness returns `BLOCKED_INPUT`: the repository already contains general ResourceDemand/Matching/Assignment authorities plus BuildingStock transport reservation, Workforce-aware transport dispatch and delivered BuildingStock settlement, but there is no authoritative production-input bridge from the concrete missing recipe inputs into those existing logistics authorities. The existing construction-demand integration remains construction-specific and must not be reinterpreted as production authority.
+
+### Binding IM-23 contract
+
+- IM-23 closes only: existing IM-18 Production Recipe/readiness → `BLOCKED_INPUT + missingInputs` → controlled Production Input Demand → existing Resource/BuildingStock/Transport logistics → authoritative delivery into the target BuildingStock.
+- Existing IM-18 production recipe and `OperationalProductionExecution.evaluate()` remain the sole authorities for required recipe inputs and `missingInputs`. IM-23 must not create a second recipe/readiness calculation.
+- A Production Input Demand may be admitted only from a valid `BLOCKED_INPUT` result for an already operational production Building with its existing assigned Workforce and integrated recipe prerequisites.
+- Production-input demand identity must be stable and deterministic for the concrete Building/resource/open-supply need. It must not derive from wall-clock time, render frames, device speed or nondeterministic randomness.
+- Repeated Scheduler/runtime evaluation must not create parallel duplicate demands for the same still-open supply need. An existing `OPEN`, `PARTIAL` or `RESERVED` demand/claim/reservation state must be accounted for before admitting additional unmet quantity.
+- The remaining production-input requirement is derived from the authoritative recipe/readiness result and existing target BuildingStock while accounting for supply already authoritatively bound to that open need. A later implementation-scope reconciliation must identify the exact existing Demand/Claim/Reservation source used for that bound quantity; IM-23 must not introduce a parallel quantity ledger.
+- Existing `ResourceDemands` remains demand authority. Existing `ResourceMatching` and `ResourceAssignment` remain matching/claim authorities.
+- Existing BuildingStock transport reservation/service remains stock-reservation authority. Existing Workforce/Transport contracts remain dispatch/movement authorities. Existing delivered-transport BuildingStock settlement remains the authoritative delivery seam.
+- Construction-specific demand/logistics contracts remain frozen as construction authority. IM-23 may reuse their underlying general logistics authorities but must not relabel or bypass construction-specific semantics.
+- If no matching available resource exists, the production-input need remains legitimately waiting/open. IM-23 must not manufacture resources, fabricate source BuildingStock, bypass reservations or make production READY without delivered input.
+- Successful logistics settlement must place the delivered input in the target BuildingStock and close/release the corresponding existing Demand/Claim/Reservation/Transport state according to their frozen authorities.
+- Successful input delivery does **not** authorize or execute another production settlement. A later production attempt remains a separately admitted IM-22-compliant production cycle.
+- No second Production, ResourceDemand, BuildingStock, Logistics, Transport, Workforce or Scheduler authority is introduced.
+
+### Required verification
+
+A later implementation must prove at minimum:
+
+- a valid IM-18 `BLOCKED_INPUT` state can project its concrete missing recipe resource/quantity into exactly one controlled Production Input Demand;
+- repeated evaluation of the same still-open need does not create duplicate demand quantity;
+- existing bound/reserved supply is accounted for before any additional demand quantity is admitted;
+- available matching supply uses the existing Resource matching/claim, BuildingStock reservation and Transport authorities rather than a new logistics path;
+- no available supply leaves the demand waiting without fabricating resources or mutating production stock;
+- authoritative delivered-transport settlement adds the delivered resource to the target BuildingStock and preserves existing reservation/release invariants;
+- after delivery IM-23 does not execute production or create a replacement IM-22 cycle;
+- existing IM-20 Save/Continue and exactly-once/recovery boundaries are not weakened;
+- construction-specific demand/logistics semantics remain unchanged.
+
+### Explicit NON-SCOPE
+
+IM-23 does **not** introduce automatic or recurring production cycles, production duration, cooldown, automatic retry after delivery, output distribution between Buildings, multi-Building production chains, automatic Workforce reassignment, new Transport/routing/movement authority, new Resources/Buildings/Recipes, production priorities, global logistics optimization, warehouse minimum-stock strategy, trade/market behavior, Gold/Housing/Population changes, new Player UI, SaveGame rearchitecture, Inspector expansion or legacy-main gameplay authority.
+
+IM-23 is definition-only at this point. No implementation, implementation authorization or development branch is authorized by this record.
+
 ## IM-22 completion / evidence / freeze record — 2026-09-27
 
 - **IM-22 – Runtime Economy Execution Integration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
