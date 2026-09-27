@@ -1,5 +1,67 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-26 definition record — 2026-09-27
+
+**IM-26 – Active Runtime Production Cycle Execution Orchestration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** `e7e44f931069961d6359130784ff0a02e3f09132` (frozen post-IM-25 state).
+
+### Binding question
+
+How is a concrete production cycle deterministically admitted by frozen IM-25 handed off exactly once inside the active Runtime to the existing frozen IM-22 one-shot execution boundary, without treating Scheduler ticks as production admission, without parallel duplicate registration of the same cycle, and without introducing a second Production / Settlement / SaveGame authority?
+
+### Binding contract
+
+- IM-26 owns only the active-Runtime orchestration between frozen IM-25 admission and frozen IM-22 one-shot execution.
+- The starting point is an existing authoritative active Runtime Composition with an operational production building, valid frozen workforce/recipe binding, current BuildingStocks, and existing production settlement fences/effect receipts.
+- Frozen IM-18E remains the sole production-readiness authority.
+- Only `IM-25 status: ADMITTED` may be handed to IM-22. `NOT_ADMITTED` / `BLOCKED_INPUT` installs no IM-22 production-cycle registration.
+- IM-26 must use exactly the `buildingId` and `cycleId` admitted by IM-25. It must not create, alter or replace cycle identity.
+- For the same `buildingId + cycleId`, at most one active IM-22 registration may exist in one active Runtime. Repeated orchestration evaluation of unchanged authoritative state must not create a parallel duplicate registration.
+- IM-26 must not replace IM-22. Scheduler identity, one-shot unregister semantics, execution-time readiness evaluation, settlement invocation and effect-receipt publication remain owned by frozen IM-22 and its existing authorities.
+- A Scheduler tick is never production admission. It may only execute an already admitted and registered concrete cycle.
+- After successful IM-22 settlement, the old cycle is completed by its existing settlement fence + effect receipt. Only a fresh IM-25 evaluation of the resulting authoritative state may admit a successor cycle.
+- If an admitted IM-22 one-shot evaluates to `BLOCKED_INPUT` when it actually executes, that registration remains consumed according to frozen IM-22 semantics and must not self-reactivate after later material supply.
+- IM-26 performs no input/output settlement and no direct BuildingStock mutation.
+
+### Duplicate-registration / exactly-once boundary
+
+- **IM-25:** determines which concrete production cycle may exist next.
+- **IM-26:** controls whether that exact admitted `buildingId + cycleId` has already been handed to / is actively registered with IM-22 in the current Runtime.
+- **IM-22:** executes that concrete one-shot registration.
+- **IM-18F:** settles its input/output effect.
+- **IM-20F:** keeps settlement fence + effect receipt as authoritative evidence of an already-applied effect.
+- Any IM-26 runtime registration marker is transient runtime coordination only. It is not production evidence and must not replace a settlement fence or effect receipt.
+
+### Continue behavior
+
+- Existing SaveGame production history remains authoritative through restored production settlement fences/effect receipts. IM-26 introduces no persisted Scheduler-registration or active-production-cycle authority.
+- After Continue, orchestration is reconstructed from restored authoritative state rather than replaying an old runtime registration.
+- An already-settled cycle is not registered again; IM-25 derives the next admissible identity from restored production history.
+- A restored `READY` state whose deterministic IM-25 cycle is not settled may hand that same cycle identity to IM-22 exactly once in the reconstructed active Runtime.
+- A restored `BLOCKED_INPUT` state installs no production-cycle registration.
+- Inconsistent production fence/receipt history remains fail-closed under the existing frozen exactly-once boundaries.
+- No SaveGame schema change or second recovery authority is introduced.
+
+### Required later evidence
+
+A later implementation must prove at minimum:
+
+1. A real active-Runtime `READY` production building is admitted by IM-25 and handed to exactly one IM-22 registration.
+2. Repeated handoff evaluation before execution creates no duplicate registration for the same `buildingId + cycleId`.
+3. `BLOCKED_INPUT` creates no IM-22 registration.
+4. Successful IM-22 settlement creates the existing fence/receipt evidence and the settled cycle is not registered again.
+5. Fresh IM-25 evaluation after settlement admits a distinct successor cycle.
+6. Continue from the same not-yet-settled restored `READY` state yields the same deterministic cycle identity and exactly one reconstructed runtime registration.
+7. Continue with an already-settled cycle does not replay that cycle's production effect.
+8. IM-26 itself does not mutate BuildingStocks or settlement evidence and does not create a second Scheduler/Production/SaveGame authority.
+
+### Explicit NON-SCOPE
+
+No production duration, cooldown, takt time, periodic production, automatic endless production loop, Scheduler tick as cycle admission, output distribution, multi-building production chain, minimum-stock strategy, production priorities, global logistics optimization, new workforce-assignment authority, new transport mechanics, new recipes/resources/buildings, Player UI, Inspector expansion or SaveGame rearchitecture.
+
+No implementation branch or implementation is authorized by this definition record.
+
 ## IM-25 completion / evidence / freeze — 2026-09-27
 
 **IM-25 – Deterministic Production Cycle Admission: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
