@@ -197,10 +197,11 @@ export function installIM21FPlayerSystemMenu() {
     selectionController: window.IM14DWorldSelectionContext,
     placementInteraction: window.IM16EPlayerPlacementConfirmCancel,
   };
+  // IM-21F start/continue must become available as soon as its actual lifecycle
+  // authorities and menu surfaces exist. Later Player UI integrations are optional
+  // arbitration hooks and must never prevent persisted-save availability after reload.
   if (!dependencies.runtimeBoundary || !dependencies.menuButton || !dependencies.startSurface || !dependencies.pauseSurface ||
-      !dependencies.newGameLifecycle || !dependencies.saveLifecycle || !dependencies.buildIntegration ||
-      !dependencies.workAreaIntegration || !dependencies.settlementIntegration || !dependencies.selectionController ||
-      !dependencies.placementInteraction) return null;
+      !dependencies.newGameLifecycle || !dependencies.saveLifecycle) return null;
   window.IM21FPlayerSystemMenu = createPlayerSystemMenuIntegration(dependencies);
   return window.IM21FPlayerSystemMenu;
 }
