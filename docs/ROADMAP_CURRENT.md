@@ -1,5 +1,62 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-21G definition record — 2026-09-27
+
+**IM-21G – Device-Matrix Completion: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen IM-21F. Verified IM-21F product/test head: `d635eeab42b62238c9b77184dfa5b599cbe6029e`; IM-21F completion/evidence/freeze documentation head: `350cac77ee150fe69bed7179e2d57f0ef71a6f9f`.
+
+### Reconciliation result
+
+IM-21A–F already establish iPhone/smartphone as the binding minimum/reference platform and provide substantial real-device evidence in portrait and landscape. IM-21B, IM-21C and IM-21E explicitly carry iPhone portrait + landscape evidence; IM-21F adds real Start/System-Menu, Save → real reload → Continue and first-tap New Game evidence. IM-21C additionally contains real iPad landscape PASS evidence.
+
+The remaining capability gap is therefore not a new Player feature or new gameplay authority. It is completion of one coherent device/view matrix for the now-frozen IM-21A–F Player stack, especially the still-open iPad/tablet portrait coverage and Desktop/Wide coverage.
+
+### Binding IM-21G contract
+
+- IM-21G is a **device-matrix / responsive regression completion block**, not a new UI feature block.
+- The frozen IM-21A–F Player behavior and all underlying Runtime, Selection, Placement/Construction, Work Area, Economy and SaveGame authorities remain unchanged.
+- The matrix verifies the existing Player flow as one integrated stack: Shell/HUD → Selection/Context → Build Catalog/Placement → Work Area → Settlement Overview → System Menu → Save/Reload/Continue.
+- Verification covers visibility, reachability/operability, responsive presentation, primary-working-surface arbitration and hidden-surface pointer/touch isolation.
+- iPhone/smartphone remains the minimum/reference layout. Existing portrait and landscape evidence is reusable but the final matrix must perform a coherent whole-stack regression against the frozen IM-21F line.
+- iPad/tablet requires coherent matrix completion. Existing IM-21C iPad-landscape evidence is reusable; tablet portrait remains an explicit open evidence case.
+- Desktop/Wide requires a coherent wide-layout regression. A separate artificial Desktop “portrait” class is not required.
+- Device-specific browser capabilities that are already explicitly optional by frozen contract, especially fullscreen restrictions on iOS/Safari, remain non-blocking unless they make the ordinary Player flow unusable.
+- If matrix execution reveals a genuine device/responsive blocker, any correction requires a separate minimal IM-21G presentation/responsive fix scope and subsequent exact-head regression. The matrix does not authorize broad CSS cleanup or opportunistic redesign.
+- No previously frozen gameplay/domain contract may be weakened merely to satisfy a viewport.
+
+### Minimum completion matrix
+
+| Target class | Portrait | Landscape / Wide |
+| --- | --- | --- |
+| iPhone / smartphone | whole-stack regression; substantial prior evidence exists | whole-stack regression; substantial prior evidence exists |
+| iPad / tablet | **open matrix evidence** | whole-stack regression; IM-21C partial evidence exists |
+| Desktop / Wide | not a separate required portrait class | **open matrix evidence** |
+
+### Verification requirements
+
+IM-21G completion must prove at minimum:
+
+- the frozen IM-21A–F Player stack remains reachable and operable across the required matrix;
+- HUD and primary controls remain visible/reachable without requiring browser zoom;
+- Context, Build Catalog/Placement, Work Area, Settlement Overview and System Menu remain mutually deterministic as primary working surfaces;
+- hidden Player surfaces do not intercept pointer/touch input;
+- world pan/zoom and existing touch/pointer ownership remain intact where not owned by an active Player control;
+- Save → real reload → Continue remains operable in the matrix cases where browser persistence is exercised;
+- no matrix correction introduces a second gameplay, Runtime, Selection, Placement, Work Area, Economy or SaveGame authority;
+- any device-specific limitation is recorded explicitly as PASS, BLOCKER or known non-blocking platform limitation rather than silently normalized.
+
+### Explicit non-scope
+
+No new gameplay capability; no new Building/content; no SaveGame schema/restore change; no new Runtime/Selection/Camera/Placement/Construction/Work-Area/Economy authority; no general visual redesign; no broad CSS cleanup; no historical background-image/wood-frame integration; no cosmetic polishing merely because a larger viewport permits it; and no successor block beyond IM-21G.
+
+### Current gate
+
+**IM-21G Reconciliation / Definition: PASS / EXISTING DEVICE EVIDENCE RECONCILED / MATRIX GAP IDENTIFIED / DEFINED / NOT IMPLEMENTED.**
+
+This documentation authorizes no matrix execution, no CSS/product change and no successor beyond IM-21G. The next permissible step is exclusively a separate **IM-21G Definition Documentation Verification / Scope Gate** against frozen IM-21F.
+
+
 ## IM-21F completion / evidence / freeze record — 2026-09-27
 
 - **IM-21F – System Menu / Save / Help / Guidance Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
