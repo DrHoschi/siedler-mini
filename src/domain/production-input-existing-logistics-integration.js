@@ -26,7 +26,6 @@ export class ProductionInputExistingLogisticsIntegration{
     if(!matching||typeof matching.matchDemand!=='function')throw new TypeError('ResourceMatching-compatible instance required');
     if(!assignment||typeof assignment.assignMatch!=='function')throw new TypeError('ResourceAssignment-compatible instance required');
     if(!transportJobs||typeof transportJobs.createFromAssignment!=='function')throw new TypeError('TransportJobService-compatible instance required');
-    Object.assign(this,{#resourceState:resourceState});
     this.#resourceState=resourceState;this.#claims=claims;this.#demands=demands;this.#matching=matching;this.#assignment=assignment;this.#transportJobs=transportJobs;
   }
   admitBlockedInputs({execution,demandIds=[]}={}){
