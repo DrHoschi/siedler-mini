@@ -12,7 +12,7 @@ for (const id of ['hud-wood', 'hud-stone', 'hud-gold', 'hud-population']) {
 }
 assert.match(html, /data-player-entry="build"/);
 assert.match(html, /data-player-entry="runtime"/);
-assert.match(html, /data-runtime-state="RUNNING"/);
+assert.match(html, /data-runtime-state="READY"/, 'IM-21F Start screen must keep the Player runtime entry READY until New Game or Continue');
 assert.match(html, /class="projection-host" hidden aria-hidden="true"/);
 assert.match(html, /data-im19g-population-housing-gold-state="true"/);
 assert.match(html, /data-im17g-construction-state="true"/);
@@ -36,7 +36,8 @@ assert.match(hud, /goldEconomy/);
 assert.match(hud, /gameplayMutation: false/);
 
 const main = await readFile(new URL('../main.js', import.meta.url), 'utf8');
-assert.match(main, /runtime\.boot\(\);runtime\.start\(\)/);
+assert.match(main, /runtime\.boot\(\);renderRuntimeControlState\(\)/, 'IM-21F must boot without auto-starting before Player entry');
+assert.doesNotMatch(main, /runtime\.boot\(\);runtime\.start\(\)/, 'IM-21F must not bypass the Start screen with automatic runtime start');
 assert.match(main, /runtime\.pause\(\)/);
 assert.match(main, /runtimeButton\.dataset\.runtimeState=current/);
 console.log('IM-21A responsive game shell / HUD scope self-test: PASS');
