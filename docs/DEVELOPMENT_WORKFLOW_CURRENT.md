@@ -1,5 +1,25 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-22 completion / evidence / freeze record — 2026-09-27
+
+- **IM-22 – Runtime Economy Execution Integration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+- Frozen functional/product head: `d7a4bd5453532c73347f1d772952511bc0f8e4a6`.
+- Authorized definition/documentation baseline: `32ffa9ade9211575e71018d1aa3971ebf2ad92c7`.
+- The implementation remains linear from that baseline: 5 commits ahead / 0 behind, merge base exactly `32ffa9ade9211575e71018d1aa3971ebf2ad92c7`.
+- Exact implementation scope is limited to `src/runtime/runtime-economy-execution-integration.js`, the minimal `src/main.js` composition seam, `src/dev/im-22-self-test.js`, `src/dev/im-22-self-test.node.js`, and the CI invocation in `.github/workflows/ci.yml`.
+- The existing Runtime/Scheduler remains authoritative. IM-22 registers exactly one explicit production cycle in the existing `economy` phase; a scheduler fixed step is not a production-duration or recurring-production authority.
+- Each admitted cycle uses a stable deterministic settlement identity `production-settlement:im22:<buildingId>:<cycleId>`; no wall-clock, render-frame, device-speed or random identity is introduced.
+- The one-shot registration unregisters on its first execution. `BLOCKED_INPUT` performs no mutation and cannot self-activate on later scheduler ticks. An already fenced settlement returns `ALREADY_SETTLED` without a second mutation.
+- Existing IM-18 readiness and settlement authorities remain intact: `OperationalProductionExecution.evaluate()` owns READY/BLOCKED_INPUT and `InputConsumptionOutputSettlement.settleOnce()` owns authoritative input/output settlement.
+- Successful settlement returns updated `buildingStocks`, `productionSettlementIds` and the matching `productionEffectReceipts` together through the existing active-runtime-composition publication seam. No parallel economy store or UI-owned production truth exists.
+- The IM-22 self-test proves READY settlement exactly once, repeated scheduler-step no-op after completion, BLOCKED_INPUT no mutation/no later self-activation, duplicate settlement-fence rejection, and receipt/fence identity for the same logical production effect.
+- **Exact-head CI evidence:** CI Baseline run **#5809 / run 36336355889** for exact head `d7a4bd5453532c73347f1d772952511bc0f8e4a6` completed **SUCCESS**; job `Clean Runtime + CR/IM Regression` completed successfully including the IM-22 self-test.
+- **Separate deployment evidence:** Pages run **#139 / run 36336355955** for the same exact head completed **FAILURE**. This is recorded as a **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-22 FREEZE**. It is not represented as successful deployment evidence and does not override the successful Exact-Head CI/regression result.
+- User-supplied GitHub Actions screenshot evidence on 2026-09-27 independently shows CI Baseline #5809 green and the Pages #139 run red, consistent with the repository evidence above.
+- No automatic Workforce assignment, ResourceDemand/Claim generation, input procurement, transport dispatch, production timing/cooldown, recurring production cycles, multi-building production chain, new Player UI, SaveGame rearchitecture or second Runtime/Scheduler/Economy authority was introduced.
+- **IM-22 Completion / Evidence / Freeze Gate: PASS / 0 FUNCTIONAL BLOCKER / FROZEN.**
+- This freeze authorizes no successor capability and no further product change.
+
 ## IM-22 definition record — 2026-09-27
 
 **IM-22 – Runtime Economy Execution Integration: DEFINED / NOT IMPLEMENTED.**
