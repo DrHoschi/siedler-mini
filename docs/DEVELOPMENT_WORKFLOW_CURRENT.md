@@ -1,5 +1,47 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-23 completion / evidence / freeze — 2026-09-27
+
+**IM-23 – Production Input Demand / Existing Logistics Integration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+
+**Frozen functional/product head:** `7df081dfbe03bdf55cd6ad9ae63a8504d21bb473`.
+
+**Definition/documentation baseline:** `e09e1fe668ddc6ae535ef10a21cf21cb151f2116`.
+
+### Frozen scope and authority result
+
+- IM-23 implements only the defined bridge from an authoritative IM-18E `BLOCKED_INPUT + missingInputs` result into a controlled Production Input Demand and the already-existing Resource/BuildingStock/Transport logistics authorities.
+- The implementation introduces `src/domain/production-input-existing-logistics-integration.js`; it does not modify the frozen IM-18/IM-20/IM-22, ResourceDemand/Claim/Matching/Assignment, BuildingStock, Workforce or Transport authorities.
+- Missing production-input quantity is derived from the IM-18E result. IM-23 introduces no second recipe/readiness calculation and no parallel quantity ledger.
+- An existing `OPEN`, `PARTIAL` or `RESERVED` IM-23 Production Input Demand for the same Building/resource need is reused. Existing ResourceDemand progress/Claims remain authoritative for reserved, fulfilled and remaining quantities.
+- Existing ResourceMatching/ResourceAssignment, BuildingStock transport reservation and TransportJob authorities are reused. Construction-specific demand/logistics semantics remain unchanged and are not reinterpreted as production authority.
+- No available matching resource leaves the Production Input Demand waiting without fabricating resources, stock, claims, reservations or transport jobs.
+- IM-23 does not own production settlement, scheduler execution or runtime production admission. Successful supply/delivery does not authorize or create a replacement IM-22 production cycle.
+- No runtime/main integration, automatic production loop, production duration/cooldown, recurring cycle, new logistics authority, SaveGame rearchitecture, Player UI or Inspector expansion is part of the frozen IM-23 scope.
+
+### Verification evidence
+
+Exact-head verification was performed against `7df081dfbe03bdf55cd6ad9ae63a8504d21bb473`.
+
+- Git comparison against authorized implementation baseline `e09e1fe668ddc6ae535ef10a21cf21cb151f2116`: 5 commits ahead, 0 behind, merge-base exactly the authorized baseline.
+- Effective implementation diff: only `.github/workflows/ci.yml`, `src/domain/production-input-existing-logistics-integration.js`, `src/dev/im-23-self-test.js`, and `src/dev/im-23-self-test.node.js`.
+- IM-23 self-test verifies controlled demand admission, reuse without duplicate demand quantity, ACTIVE Claims as authoritative bound supply, CONSUMED Claims as fulfilled supply, waiting without available resource, reuse of BuildingStock reservation/TransportJob authorities, and absence of IM-23-owned production/runtime/settlement behavior.
+- Exact-head **CI Baseline #5818**, GitHub Actions run `36340006995`, completed **SUCCESS** for exactly `7df081dfbe03bdf55cd6ad9ae63a8504d21bb473`.
+- Job **Clean Runtime + CR/IM Regression** completed **SUCCESS**, including the IM-23 self-test and frozen predecessor regression.
+- **0 functional blocker** remains for the authorized IM-23 scope.
+
+### Separate deployment limitation
+
+Exact-head **Deploy Authoritative Development Testbuild to Pages #149**, GitHub Actions run `36340006977`, completed **FAILURE** for exactly `7df081dfbe03bdf55cd6ad9ae63a8504d21bb473`.
+
+This is recorded as **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-23 FREEZE**. IM-23 adds no Player-facing runtime/main integration requiring browser/device evidence, and the exact-head functional CI/regression is successful. This Pages result is not reclassified as functional PASS and is not hidden by the freeze.
+
+### Freeze decision
+
+IM-23 is therefore frozen at functional/product head `7df081dfbe03bdf55cd6ad9ae63a8504d21bb473` with **PASS / 0 FUNCTIONAL BLOCKER**. The frozen boundary remains: **IM-23 supplies production input through existing logistics; IM-22 remains the separately admitted production execution authority.**
+
+No successor block, successor ID or additional capability is authorized by this freeze record.
+
 ## IM-23 definition record — 2026-09-27
 
 **IM-23 – Production Input Demand / Existing Logistics Integration: DEFINED / NOT IMPLEMENTED.**
