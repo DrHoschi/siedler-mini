@@ -1,5 +1,26 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-21G completion / evidence / freeze record — 2026-09-27
+
+- **IM-21G – Device-Matrix Completion: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+- Frozen product/runtime baseline remains IM-21F product/test head `d635eeab42b62238c9b77184dfa5b599cbe6029e`. IM-21G introduced no product, CSS, Runtime, gameplay, SaveGame or authority change.
+- Authorized IM-21G definition/documentation head: `2f6f2275a33c0532c83047b50148b316525b6b8b`.
+- The Definition Documentation Verification / Scope Gate passed: the IM-21G definition is identical in `docs/DEVELOPMENT_WORKFLOW_CURRENT.md` and `docs/ROADMAP_CURRENT.md`; the definition delta from frozen IM-21F documentation head `350cac77ee150fe69bed7179e2d57f0ef71a6f9f` is exactly two documentation-only commits, 2 ahead / 0 behind, with merge base exactly `350cac77ee150fe69bed7179e2d57f0ef71a6f9f`, and only those two documents changed.
+- Matrix execution used the devices currently available as the binding development reference matrix. The whole frozen IM-21A–F Player flow was exercised coherently: Start/New Game → HUD/world → Selection/Context → Build Catalog/Placement → Work Area → Settlement Overview → System Menu/Help/Save → real browser reload → Continue, together with ordinary world interaction and reachability of the primary Player controls.
+- **iPhone portrait: PASS / 0 functional blocker.**
+- **iPhone landscape: PASS / 0 functional blocker.**
+- **iPad portrait: PASS / 0 functional blocker.**
+- **iPad landscape: PASS / 0 functional blocker.**
+- Real-device evidence confirms New Game, HUD/world operation, Selection/Context, Build/Placement, Work Area, Settlement Overview, System Menu/Help, Save and real reload → Continue remain operable on the available iPhone/iPad reference matrix.
+- The observed iPhone issues are presentation/visual-polish follow-ups only; no reported issue hid or blocked the tested Player flow. They are non-blocking for IM-21G and are not corrected inside this freeze.
+- Fullscreen remains the already-defined optional presentation capability. Its current unavailability/restriction on the tested iPhone/iPad Safari environment is a **KNOWN PLATFORM/PRESENTATION LIMITATION / NON-BLOCKING** and does not weaken ordinary Player operability.
+- Desktop/MacBook real-device testing was not available during this gate and is **NOT CLAIMED AS TESTED**. Android devices, other tablets, desktop operating systems, browsers and wider hardware combinations are likewise not claimed as tested.
+- For the present development stage, those unavailable platform combinations are explicitly **DEFERRED CROSS-DEVICE / CROSS-BROWSER REGRESSION**, not a discovered product blocker. The available iPhone/iPad reference matrix is sufficient to close IM-21G so development can return to the game; broader platform testing is to be revisited when the game is functionally and visually mature enough for wider/external testing.
+- This completion decision does not assert that iPad is technically identical to Desktop/Wide and does not manufacture Desktop PASS evidence. It records the deliberate scope decision that physical coverage of every platform is not a prerequisite for the current development freeze.
+- No matrix correction was required; therefore no IM-21G CSS/product fix scope was opened and no frozen IM-21A–F authority was changed.
+- Historical background-image/wood-frame work and other visual polishing remain outside IM-21G.
+- **IM-21G Completion / Evidence / Freeze Gate: PASS / 0 FUNCTIONAL BLOCKER / FROZEN.** No successor block or further product change is authorized by this freeze.
+
 ## IM-21G definition record — 2026-09-27
 
 **IM-21G – Device-Matrix Completion: DEFINED / NOT IMPLEMENTED.**
