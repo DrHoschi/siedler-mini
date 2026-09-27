@@ -201,8 +201,11 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false,
   );
   const resource = resourceState.createResource({
     definitionId: wood.id,
-    amount: 2,
-    location: { kind: 'cell', refId: map.cellIdAt(1, 1) },
+    amount: includeProductionSupply ? 4 : 2,
+    location: includeProductionSupply
+      ? { kind: 'owner', refId: storehouse.id }
+      : { kind: 'cell', refId: map.cellIdAt(1, 1) },
+    ...(includeProductionSupply ? { ownerId: storehouse.id } : {}),
   }, { id: 'resource:00000001' });
   const demand = resourceDemands.create({
     consumerId: woodcutter.id,
@@ -275,6 +278,7 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false,
       }),
     ]);
     buildingStocks = Object.freeze([
+      BuildingStockContract.define({ buildingId: storehouse.id, resourceTypeId: wood.id, quantity: 4 }),
       BuildingStockContract.define({ buildingId: woodcutter.id, resourceTypeId: wood.id, quantity: 0 }),
       BuildingStockContract.define({ buildingId: woodcutter.id, resourceTypeId: boards.id, quantity: 0 }),
     ]);
