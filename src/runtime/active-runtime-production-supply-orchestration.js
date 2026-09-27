@@ -42,10 +42,7 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     const connections=admission.requirements.map(requirement=>{
       const demand=owners.resourceDemands.get(requirement.demandId);
       if(['RESERVED','FULFILLED'].includes(demand?.status))return Object.freeze({kind:'im24-existing-supply-continuity',status:'EXISTING_BOUND_SUPPLY',demandId:demand.id,requirement});
-      const needed=owners.resourceState.ids().filter(id=>{
-        const resource=owners.resourceState.get(id);
-        return resource?.definitionId===requirement.resourceTypeId&&resource?.ownerId;
-      }).length;
+      const needed=matching.matchDemand(requirement.demandId).selections.length;
       const ids=reservationIds.slice(offset,offset+needed);offset+=needed;
       const result=supply.connect({requirement,sourceStocks:stocks,existingTransportReservations:nextReservations,reservationIds:ids});
       nextReservations.push(...result.reservations);
