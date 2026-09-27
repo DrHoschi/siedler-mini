@@ -1,5 +1,54 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-22 definition record — 2026-09-27
+
+**IM-22 – Runtime Economy Execution Integration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** frozen Post-IM-21 product/runtime state. The frozen product/runtime baseline remains IM-21F product/test head `d635eeab42b62238c9b77184dfa5b599cbe6029e`; IM-21G introduced no product, CSS, Runtime, gameplay, SaveGame or authority change.
+
+### Reconciliation result
+
+The frozen IM-18 chain already owns operational Building admission, Workforce eligibility/assignment, existing production-recipe integration, production readiness and authoritative input-consumption/output settlement. The existing Runtime Scheduler already owns an `economy` phase, but the active runtime composition does not install a general economy-production system. The first missing gameplay connection is therefore the controlled Runtime/Scheduler execution seam between an already admissible IM-18 production state and one real authoritative production settlement.
+
+### Binding IM-22 contract
+
+- IM-22 introduces the minimal Runtime/Scheduler integration for exactly one already admissible IM-18 production cycle.
+- The existing Runtime and Scheduler remain sole runtime/scheduling authorities. IM-22 registers/uses only the existing `economy` phase and creates no second scheduler or economy clock.
+- The Scheduler tick is an execution boundary, **not** a production-duration definition and **not** permission to produce once per fixed step.
+- IM-22 consumes existing authoritative prerequisites only: an operational Building, an existing `ASSIGNED` Workforce relationship, an existing production BuildingStock recipe and current authoritative BuildingStocks.
+- Existing `OperationalProductionExecution.evaluate()` remains the readiness authority. `BLOCKED_INPUT` causes **NO MUTATION**. `READY` may admit exactly one identified production cycle.
+- Existing `InputConsumptionOutputSettlement.settleOnce()` remains the authoritative input-consumption/output-settlement seam. IM-22 must not duplicate or bypass it.
+- Every admitted production cycle requires a stable deterministic `settlementId`. The ID must identify the concrete production cycle and must not derive from wall-clock time, render frames, device speed or nondeterministic randomness.
+- Repeated Scheduler steps must not reapply the same cycle. An already recorded production settlement ID means no second BuildingStock mutation for that cycle.
+- BuildingStock mutation and its production-settlement fence remain one logical effect. IM-22 must preserve the frozen IM-20F exactly-once/recovery boundary and must not create a replay path that can duplicate production.
+- After successful settlement, the resulting BuildingStocks and production settlement/effect evidence are returned to the existing authoritative runtime composition. No parallel Runtime-Economy store or UI-owned production truth is introduced.
+- Missing operational admission, Workforce assignment, recipe or required input stock fails closed. IM-22 does not manufacture, repair or auto-create those prerequisites.
+- IM-22 closes only the first proven runtime-economy gap: existing IM-18 Production authority → running Runtime Scheduler → one authoritative exactly-once production effect.
+
+### Required verification
+
+A later implementation must prove at minimum:
+
+- an eligible `READY` production state can be executed through the existing Scheduler `economy` phase;
+- exactly one admitted cycle consumes the frozen recipe inputs and adds its outputs through IM-18F;
+- the same cycle/settlement ID cannot mutate BuildingStocks twice across repeated Scheduler steps;
+- `BLOCKED_INPUT` produces no BuildingStock or settlement-fence mutation;
+- missing/invalid prerequisites fail closed rather than creating replacement authority;
+- authoritative runtime composition receives the settled BuildingStocks and production settlement/effect evidence;
+- existing Save/Continue and IM-20F exactly-once/recovery semantics are not weakened;
+- no transport, automatic demand, automatic Workforce assignment or production-timing capability is introduced.
+
+### Explicit non-scope
+
+No automatic Workforce assignment; no ResourceDemand/Claim generation; no automatic input procurement; no BuildingStock transport reservation; no Carrier/Transport dispatch; no output distribution between Buildings; no production duration, cooldown or recurring production-cycle generation; no multi-Building production chain; no new Resource, Building or Recipe content; no Gold/Housing/Population mechanic change; no new Player UI; no SaveGame rearchitecture; no Inspector expansion; no second Runtime/Scheduler/Economy authority; and no legacy-main gameplay authority.
+
+### Current gate
+
+**IM-22 – Runtime Economy Execution Integration: DEFINED / NOT IMPLEMENTED.**
+
+This definition authorizes no development branch and no implementation. The next permissible step is exclusively a separate **IM-22 Definition Documentation Verification / Scope Gate** against the frozen Post-IM-21 baseline.
+
+
 ## IM-21G completion / evidence / freeze record — 2026-09-27
 
 - **IM-21G – Device-Matrix Completion: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
