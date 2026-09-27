@@ -17,8 +17,8 @@ export class PlayerNewGameLifecycle {
   }
 
   startFresh() {
-    if (this.#runtime.state !== 'READY') {
-      return Object.freeze({ kind: 'im21f-new-game-result', status: 'REJECTED', reason: 'RUNTIME_NOT_READY' });
+    if (!['READY', 'PAUSED'].includes(this.#runtime.state)) {
+      return Object.freeze({ kind: 'im21f-new-game-result', status: 'REJECTED', reason: 'RUNTIME_NOT_STARTABLE' });
     }
     const composition = this.#createComposition();
     this.#publish(composition);
@@ -30,7 +30,7 @@ export class PlayerNewGameLifecycle {
 
   static capabilities() {
     return Object.freeze({
-      readyStateOnly: true,
+      startableRuntimeStates: Object.freeze(['READY', 'PAUSED']),
       freshComposition: true,
       runtimeAuthority: false,
       saveGameAuthority: false,
