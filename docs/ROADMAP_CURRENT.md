@@ -1,5 +1,55 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-25 definition record — 2026-09-27
+
+**IM-25 – Deterministic Production Cycle Admission: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** `a550b9902546b8d3c6f5c86a9e82df9d4aefa7d0` (frozen post-IM-24 state).
+
+### Binding question
+
+How is exactly the next concrete production cycle deterministically admitted and identified for a still-operational production building after no prior cycle or an already completed cycle, without treating Scheduler ticks as production cycles and without bypassing the frozen IM-22 / IM-20F exactly-once boundaries?
+
+### Binding contract
+
+- IM-25 owns only admission and identity of a concrete next production cycle. It does not produce or settle anything itself.
+- Admission starts from existing authoritative state: operational building, valid frozen IM-18 workforce/recipe binding, current BuildingStocks, and existing production settlement fences/effect receipts.
+- Frozen IM-18E remains the sole authority for `READY` versus `BLOCKED_INPUT`.
+- Only `READY` may admit a new production cycle. `BLOCKED_INPUT` admits no cycle; missing-input supply remains owned by frozen IM-23 / IM-24.
+- Every admitted cycle receives a stable deterministic `cycleId` bound to the concrete building and its authoritative production history. Cycle identity must not derive from wall-clock time, render frames, device speed or randomness.
+- Repeated evaluation of the same authoritative starting state must not create multiple parallel cycle identities.
+- Existing IM-22 production settlement fences and production effect receipts remain authoritative evidence of already-applied production effects. IM-25 must not alter, remove or reinterpret those fences or receipts.
+- An admitted cycle is only authorization to invoke the existing frozen IM-22 `installOneShotProductionCycle(...)` boundary with that exact identity. IM-22 remains execution/settlement orchestration authority.
+- After successful IM-22 settlement, a new cycle may only be derived from the resulting new authoritative state and must be distinct from the settled predecessor cycle.
+- A `BLOCKED_INPUT` IM-22 attempt must not later self-activate through the same one-shot Scheduler registration. After supply and renewed `READY` evaluation, controlled admission is required again.
+- Save -> Continue must not derive an additional or different cycle identity from the same restored production state. The restored authoritative production history must lead to the same admission decision.
+- IM-25 introduces no second Production, Scheduler, Settlement, BuildingStock or SaveGame authority.
+
+### Exactly-once boundary
+
+- **IM-25:** determines which concrete production cycle may exist next.
+- **IM-22:** executes that specifically admitted cycle once.
+- **IM-18F:** settles that cycle's input/output effect.
+- **IM-20F:** protects and reconciles already-applied effects through settlement fence + effect receipt.
+- A `cycleId` by itself is neither production evidence nor a settlement fence.
+
+### Required later evidence
+
+A later implementation must prove at minimum:
+
+1. First `READY` authoritative state admits exactly one stable next cycle.
+2. Repeated admission against the same unchanged authoritative state does not create a second cycle identity.
+3. `BLOCKED_INPUT` admits no cycle.
+4. After successful frozen IM-22 settlement, exactly one new cycle distinct from its predecessor can be admitted from the resulting state.
+5. Save -> Continue preserves the same next-cycle admission decision for the same restored production history.
+6. Admission does not mutate BuildingStocks, production settlement fences or production effect receipts.
+
+### Explicit NON-SCOPE
+
+No production duration, cooldown, takt time, periodic Scheduler production, automatic endless production loop, output distribution, multi-building production chain, minimum-stock strategy, production priorities, global logistics optimization, new workforce-assignment authority, new transport mechanics, new recipes/resources/buildings, Player UI, Inspector expansion or SaveGame rearchitecture.
+
+No implementation branch or implementation is authorized by this definition record.
+
 ## IM-24 completion / evidence / freeze — 2026-09-27
 
 **IM-24 – Active Runtime Production Supply Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
