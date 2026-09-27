@@ -1,5 +1,30 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-21F completion / evidence / freeze record — 2026-09-27
+
+- **IM-21F – System Menu / Save / Help / Guidance Integration: COMPLETE / FROZEN / PASS / 0 BLOCKER.**
+- Frozen predecessor: IM-21E. Verified IM-21E product/test head: `e1d7455de4bd1f3f291e36080fbd4a7efd146e49`; IM-21E completion/evidence/freeze documentation head: `2dc58f7015b39b8be0589c4baa1d0259ed9b474f`.
+- Authorized IM-21F definition/documentation baseline: `6d41d903fec8b80ce05c4cb0a0819cd627c5be69`.
+- Verified IM-21F product/test head: `d635eeab42b62238c9b77184dfa5b599cbe6029e`.
+- The verified implementation is exactly **17 commits ahead / 0 behind** the authorized IM-21F definition baseline, with merge base exactly `6d41d903fec8b80ce05c4cb0a0819cd627c5be69`. The complete implementation scope is limited to `.github/workflows/ci.yml`, `index.html`, `src/dev/im-21a-self-test.node.js`, new `src/dev/im-21f-self-test.js`, new `src/dev/im-21f-self-test.node.js`, `src/main.js`, new `src/runtime/player-new-game-lifecycle.js`, `src/savegame/post-im13-browser-save-continue-lifecycle.js`, `src/ui/app.css`, and new `src/ui/player-system-menu-integration.js`.
+- IM-21F provides one responsive Player-facing Start/System-Menu family. Pause/Resume delegates only to the existing Runtime authority; Save and Continue delegate only to the existing frozen browser Save/Continue lifecycle. No second Runtime, Pause, SaveGame, restore or gameplay authority was introduced.
+- Persisted-save availability is fail-closed through the existing browser storage adapter and existing restore preparation/validation path. The storage key remains `neue-siedler.savegame.im20e.v2`; IM-21F introduces no new SaveGame schema, slot system or storage-clearing behavior.
+- New Game is owned by the minimal `PlayerNewGameLifecycle`. It creates/publishes a fresh authoritative baseline composition and uses the existing Runtime to start it. Its final verified admission contract permits the legitimate startable states `READY` and `PAUSED`, rejects non-startable states, and does **not** delete or mutate an existing persisted save.
+- Help/Guidance remains presentation-only and mutation-free. Fullscreen remains an optional presentation capability with safe fallback; platform restriction or unavailability, including iOS/Safari behavior, is explicitly non-blocking.
+- System-Menu presentation owns no gameplay truth. Context, Build/Placement, Work Area and Settlement Overview are handled through their existing optional arbitration boundaries; hidden menu surfaces are touch/pointer isolated.
+- During real-device verification, the first blocker was **persisted Continue remaining unavailable after a real reload**. Diagnosis identified that IM-21F installation incorrectly required later Player-surface integrations before creating the Start/System Menu, so `availability()` could fail to run after reload. The minimal fix at `cb9487d9d6bd70e5e618d7abbdea7bb461de4ce4` reduced installation prerequisites to the actual Runtime/New-Game/Save lifecycle and menu-surface dependencies; later Player integrations remain optional arbitration hooks. No Storage, SaveGame or Runtime authority changed.
+- Real iPhone verification after that fix confirms **Save → real browser reload → Continue becomes available → Continue restores the saved world state: PASS**.
+- A second real-device blocker was **New Game requiring a second tap from an existing/paused session**. Diagnosis identified the New-Game lifecycle's former `READY`-only admission as incompatible with the legitimate `PAUSED` state used by the System Menu. The final fix at `d635eeab42b62238c9b77184dfa5b599cbe6029e` permits `READY` or `PAUSED`, while preserving the existing Runtime as sole state authority and preserving the existing save. The IM-21F self-test now covers `PAUSED → New Game → RUNNING`, camera/selection reset and unchanged persisted storage.
+- Real iPhone verification against the final TESTBUILD confirms **New Game starts on the first tap: PASS**. Earlier real-device checks also confirmed Start screen visibility/operability, Pause/System Menu opening, Resume, Save and Help behavior. Fullscreen unavailability/restriction on iPhone/Safari is non-blocking by contract.
+- Exact-head CI evidence for final head `d635eeab42b62238c9b77184dfa5b599cbe6029e`: the user-confirmed Exact-Head CI run completed fully green before the final TESTBUILD/device verification. The connected GitHub combined-status endpoint exposes no status-context records for this manually/push-triggered Actions run, so no run number is invented here.
+- The IM-21A regression-test compatibility adjustments are test-only reconciliation for the intentionally changed IM-21F initial READY state and Player-facing pause delegation location; they do not alter frozen IM-21A product authority.
+- Visual reuse of the historical background image / wooden frame is **not** part of this functional freeze and remains a possible later presentation follow-up. No legacy-main menu authority is promoted.
+- Explicitly not introduced: new SaveGame schema/restore semantics, multi-slot or cloud save, autosave, new scheduler/pause authority, gameplay settings, tutorial/quest progression, Inspector/system-graph expansion, legacy-main menu authority, or IM-21G device-matrix completion.
+- **IM-21F Completion / Evidence / Freeze Gate: PASS / 0 BLOCKER / FROZEN.** No further IM-21F product change is authorized by this freeze.
+
+This completion record supersedes the earlier IM-21F `DEFINED / NOT IMPLEMENTED` status text below; the definition record remains as the historical binding contract.
+
+
 ## IM-21F definition record — 2026-09-26
 
 **IM-21F – System Menu / Save / Help / Guidance Integration: DEFINED / NOT IMPLEMENTED.**
