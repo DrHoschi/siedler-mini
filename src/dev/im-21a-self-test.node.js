@@ -35,9 +35,12 @@ assert.match(hud, /populationProjection/);
 assert.match(hud, /goldEconomy/);
 assert.match(hud, /gameplayMutation: false/);
 
-const main = await readFile(new URL('../main.js', import.meta.url), 'utf8');
+const [main, systemMenu] = await Promise.all([
+  readFile(new URL('../main.js', import.meta.url), 'utf8'),
+  readFile(new URL('../ui/player-system-menu-integration.js', import.meta.url), 'utf8'),
+]);
 assert.match(main, /runtime\.boot\(\);renderRuntimeControlState\(\)/, 'IM-21F must boot without auto-starting before Player entry');
 assert.doesNotMatch(main, /runtime\.boot\(\);runtime\.start\(\)/, 'IM-21F must not bypass the Start screen with automatic runtime start');
-assert.match(main, /runtime\.pause\(\)/);
+assert.match(systemMenu, /if \(runtime\.state === 'RUNNING'\) runtime\.pause\(\)/, 'IM-21F System Menu must delegate Player-facing pause to the existing Runtime authority');
 assert.match(main, /runtimeButton\.dataset\.runtimeState=current/);
 console.log('IM-21A responsive game shell / HUD scope self-test: PASS');
