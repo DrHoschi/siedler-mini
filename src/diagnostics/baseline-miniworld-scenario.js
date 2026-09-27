@@ -28,6 +28,8 @@ import { ResourceDemands } from '../resources/resource-demands.js';
 import { PersonWorkforceProfileContract } from '../domain/person-workforce-profile-contract.js';
 import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment-state-contract.js';
 import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
+import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
+import { BuildingStockContract } from '../domain/building-stock-contract.js';
 
 export const BASELINE_MINIWORLD_SCENARIO_ID = 'BASELINE_MINIWORLD';
 
@@ -37,7 +39,7 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-export function createBaselineMiniworldScenario({ includeSaveContinuity = false } = {}) {
+export function createBaselineMiniworldScenario({ includeSaveContinuity = false, includeProductionSupply = false } = {}) {
   const world = new WorldStore();
   const map = new MapStructure(world, {
     name: 'CR-32A World-backed Path Classification Contract Miniworld',
@@ -190,6 +192,8 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false 
   let workforceBindings = Object.freeze([]);
   let carrierBindings = Object.freeze([]);
   let transportExecutions = Object.freeze([]);
+  let productionRecipes = Object.freeze([]);
+  let buildingStocks = Object.freeze([]);
   if (includeSaveContinuity) {
   const wood = resourceState.createDefinition(
     { technicalName: 'wood', label: 'Wood' },
@@ -258,6 +262,23 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false 
   transportExecutions = Object.freeze([
     TransportExecutionContract.define({ jobId, unitId: carrierPerson.id, state: 'TO_PICKUP' }),
   ]);
+  if (includeProductionSupply) {
+    const boards = resourceState.createDefinition(
+      { technicalName: 'boards', label: 'Boards' },
+      { id: 'resource-type:00000002' },
+    );
+    productionRecipes = Object.freeze([
+      ProductionBuildingStockContract.define({
+        buildingId: woodcutter.id,
+        inputs: [{ resourceTypeId: wood.id, quantity: 3 }],
+        outputs: [{ resourceTypeId: boards.id, quantity: 1 }],
+      }),
+    ]);
+    buildingStocks = Object.freeze([
+      BuildingStockContract.define({ buildingId: woodcutter.id, resourceTypeId: wood.id, quantity: 0 }),
+      BuildingStockContract.define({ buildingId: woodcutter.id, resourceTypeId: boards.id, quantity: 0 }),
+    ]);
+  }
   }
   const constructionProgress = Object.freeze([hq, woodcutter, storehouse].map(building =>
     BuildingConstructionProgressTransitionContract.define({ buildingId: building.id, progress: 1 })));
@@ -335,9 +356,9 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false 
       housingCapabilities,
       workforceProfiles,
       workforceRequirements,
-      productionRecipes: Object.freeze([]),
+      productionRecipes,
       constructionProgress,
-      buildingStocks: Object.freeze([]),
+      buildingStocks,
       buildingStockTransportReservations: Object.freeze([]),
       workforceAssignments,
       workforceBindings,
