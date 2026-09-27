@@ -1,5 +1,45 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-24 completion / evidence / freeze — 2026-09-27
+
+**IM-24 – Active Runtime Production Supply Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+
+**Frozen functional/product head:** `88250a2ed54b99d836858ef77f90a107df93fc83`.
+
+**Definition/documentation baseline:** `e70e738a6a6480d1414cdd098b40b1b97b1e91e1`.
+
+### Frozen scope and authority result
+
+- IM-24 connects the already-frozen IM-18 production-readiness, IM-23 production-input supply and existing Resource/BuildingStock/Transport/Delivery authorities through the active Runtime Composition.
+- `OperationalProductionExecution.evaluate()` remains the sole production-readiness authority. A real `BLOCKED_INPUT + missingInputs` state may activate/reuse the existing IM-23 supply path; IM-24 does not introduce a second readiness or recipe calculation.
+- Existing IM-23 demand identity, duplicate suppression, ResourceDemand/Claim/Matching/Assignment and BuildingStock transport-reservation semantics remain authoritative and are reused rather than reimplemented.
+- Existing delivered-transport and BuildingStock settlement authorities remain authoritative. Successful delivery is published back into the same active Runtime Composition with the resulting target BuildingStock and released existing reservation/workforce state.
+- After authoritative input delivery, IM-18E is reevaluated from the updated Runtime state. Reaching `READY` remains readiness only and does not execute production.
+- IM-22 remains the separately admitted one-shot production execution authority. IM-24 does not automatically create/install an IM-22 cycle and owns no production scheduler or production settlement authority.
+- Existing IM-20 Save/Continue schema and recovery authorities remain unchanged. IM-24 introduces no parallel continuity ledger or SaveGame rearchitecture.
+- The authorized implementation diff remains limited to `.github/workflows/ci.yml`, `src/dev/im-24-self-test.js`, `src/dev/im-24-self-test.node.js`, `src/diagnostics/baseline-miniworld-scenario.js`, `src/main.js`, and `src/runtime/active-runtime-production-supply-orchestration.js`.
+
+### Correction and verification evidence
+
+Exact-head verification was performed against `88250a2ed54b99d836858ef77f90a107df93fc83`.
+
+- Git comparison against authorized implementation baseline `e70e738a6a6480d1414cdd098b40b1b97b1e91e1`: 12 commits ahead, 0 behind, merge-base exactly the authorized baseline.
+- The first verification head `21832bdf3789caf0ceebc3b619d4c557b203060b` exposed the IM-24 fixture blocker `unknown resource reference id: building:00000003`. The correction registered the existing Storehouse as the stable World reference anchor required by the frozen ResourceState reference contract; no frozen Resource authority was changed.
+- The next verification head `b59545be5b5c58e531846b9f8a18c0798c8e4849` exposed the fixture blocker `construction transition cannot skip PENDING -> COMPLETED`. The correction changed only the IM-24 fixture to the frozen legal sequence `PENDING (0) -> IN_PROGRESS (0.5) -> COMPLETED (1)`; no frozen Construction authority was changed.
+- Final IM-24 self-test result at the frozen head is **PASS / blockerCount 0**: blocked Runtime production connects once to IM-23, existing delivery settlement publishes stock and renewed readiness without production, composition rebinding reuses existing open supply, and IM-24 owns neither a production cycle nor scheduler.
+- Exact-head **CI Baseline #5834**, GitHub Actions run `36344134767`, completed **SUCCESS** for exactly `88250a2ed54b99d836858ef77f90a107df93fc83`.
+- Job **Clean Runtime + CR/IM Regression** completed **SUCCESS**, including the IM-24 self-test and frozen predecessor regression.
+- Exact-head **Deploy Authoritative Development Testbuild to Pages #167**, GitHub Actions run `36344134766`, completed **SUCCESS** for the same frozen functional/product head.
+- **0 functional blocker** remains for the authorized IM-24 scope.
+
+### Freeze decision
+
+IM-24 is therefore frozen at functional/product head `88250a2ed54b99d836858ef77f90a107df93fc83` with **PASS / 0 FUNCTIONAL BLOCKER**.
+
+The frozen boundary remains: **IM-18 evaluates production readiness; IM-23 supplies missing input through existing logistics; IM-24 connects that supply path to the active Runtime Composition and preserves its continuity; IM-22 still produces only after separate admission of a concrete production cycle.**
+
+No successor block, successor ID or additional capability is authorized by this freeze record.
+
 ## IM-24 definition record — 2026-09-27
 
 **IM-24 – Active Runtime Production Supply Orchestration: DEFINED / NOT IMPLEMENTED.**
