@@ -10,6 +10,7 @@ import { WorkforceAssignmentStateContract } from '../domain/workforce-assignment
 import { WorkforceAwareTransportDispatchIntegration } from '../domain/workforce-aware-transport-dispatch-integration.js';
 import { DeliverySettlementContract } from '../transport/delivery-settlement-contract.js';
 import { DeliverySettlementService } from '../transport/delivery-settlement-service.js';
+import { TransportExecutionContract } from '../transport/transport-execution-contract.js';
 
 function fixture(){
  let composition=createBaselineMiniworldScenario({includeSaveContinuity:true,includeProductionSupply:true});
@@ -41,9 +42,10 @@ export function runIM24SelfTest(){
   const link=connected.connections[0],job=link.transportJobs.jobs[0],claim=f.owners().resourceClaims.get(job.claimId),reservation=link.reservations[0];
   const transportCandidate=Object.freeze({profile:PersonWorkforceProfileContract.define({personId:'unit:00000002',specialization:'CARRIER',capabilities:['CAN_MOVE','CAN_SIMPLE_TRANSPORT']}),state:WorkforceAssignmentStateContract.define({personId:'unit:00000002',availability:'FREE'})});
   const dispatch=WorkforceAwareTransportDispatchIntegration.dispatch({reservation,candidates:[transportCandidate],projectionRefs:{jobId:job.id,claimId:job.claimId,demandId:job.demandId,resourceId:job.resourceId,assignmentId:'assignment:00000041'},eligibility:{preconditionsPassed:true}});
+  const deliveredExecution=TransportExecutionContract.define({jobId:job.id,unitId:dispatch.workforce.personId,state:'DELIVERED'});
   const delivery=Object.freeze({kind:'delivered-cargo',jobId:job.id,unitId:dispatch.workforce.personId,resourceId:job.resourceId,targetId:job.targetId,amount:job.amount});
-  const settlement=DeliverySettlementContract.fromDelivered({job,execution:dispatch.execution,delivery,claim,demand:f.owners().resourceDemands.get(job.demandId),resource:f.owners().resourceState.get(job.resourceId)});
-  new DeliverySettlementService({resources:f.owners().resourceState,claims:f.owners().resourceClaims,demands:f.owners().resourceDemands}).commit({settlement,job,execution:dispatch.execution,delivery});
+  const settlement=DeliverySettlementContract.fromDelivered({job,execution:deliveredExecution,delivery,claim,demand:f.owners().resourceDemands.get(job.demandId),resource:f.owners().resourceState.get(job.resourceId)});
+  new DeliverySettlementService({resources:f.owners().resourceState,claims:f.owners().resourceClaims,demands:f.owners().resourceDemands}).commit({settlement,job,execution:deliveredExecution,delivery});
   const source=f.owners().buildingStocks.find(x=>x.buildingId===reservation.sourceBuildingId&&x.resourceTypeId===reservation.resourceTypeId);
   const target=f.owners().buildingStocks.find(x=>x.buildingId===reservation.targetBuildingId&&x.resourceTypeId===reservation.resourceTypeId);
   const fences=JSON.stringify(f.owners().productionSettlementIds),receipts=JSON.stringify(f.owners().productionEffectReceipts);
