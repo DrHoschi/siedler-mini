@@ -16,8 +16,9 @@ function fixture(){
  let composition=createBaselineMiniworldScenario({includeSaveContinuity:true,includeProductionSupply:true});
  const owners=composition.authoritative,recipe=owners.productionRecipes[0],building=owners.domains.buildings.get(recipe.buildingId);
  const pending=BuildingConstructionProgressTransitionContract.define({buildingId:building.id,progress:0});
- const completed=BuildingConstructionProgressTransitionContract.advance(pending,1);
- const completion=ConstructionCompletionIntegration.complete({previousProgress:pending,transitions:[completed],progress:completed});
+ const inProgress=BuildingConstructionProgressTransitionContract.advance(pending,0.5);
+ const completed=BuildingConstructionProgressTransitionContract.advance(inProgress,1);
+ const completion=ConstructionCompletionIntegration.complete({previousProgress:pending,transitions:[inProgress,completed],progress:completed});
  const admission=OperationalBuildingAdmissionContract.evaluate({constructionCompletion:completion,lifecycle:building.lifecycle});
  const profile=PersonWorkforceProfileContract.define({personId:'unit:00000003',specialization:'LUMBERJACK',capabilities:['CAN_MOVE','CAN_LUMBERJACK']});
  const candidate=Object.freeze({profile,state:WorkforceAssignmentStateContract.define({personId:profile.personId,availability:'FREE'})});
