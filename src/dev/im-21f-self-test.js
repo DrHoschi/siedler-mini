@@ -51,7 +51,14 @@ export async function runIM21FSelfTest() {
   assert.equal(cameraReset, 1);
   assert.equal(selectionClear, 1);
   assert.equal(storage.read(), beforeStorage);
-  assert.equal(newGame.startFresh().reason, 'RUNTIME_NOT_READY');
+  assert.equal(newGame.startFresh().reason, 'RUNTIME_NOT_STARTABLE');
+  runtime.pause();
+  const restarted = newGame.startFresh();
+  assert.equal(restarted.status, 'STARTED');
+  assert.equal(runtime.state, 'RUNNING');
+  assert.equal(cameraReset, 2);
+  assert.equal(selectionClear, 2);
+  assert.equal(storage.read(), beforeStorage);
   runtime.pause();
 
   const capabilities = Object.freeze({
@@ -69,7 +76,7 @@ export async function runIM21FSelfTest() {
       noSaveFailClosed: true,
       invalidSaveFailClosed: true,
       validSaveAvailable: true,
-      readyOnlyNewGame: true,
+      readyOrPausedNewGame: true,
       existingSavePreserved: true,
     }),
     capabilities,
