@@ -1,5 +1,55 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-25 completion / evidence / freeze — 2026-09-27
+
+**IM-25 – Deterministic Production Cycle Admission: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+
+**Frozen functional/product head:** `e9fe375e854924ddb3f41ebc74d5fbd3fd155879`.
+
+**Definition/documentation baseline:** `f6244c6185f2d7d6f96a3415df0404cbea0f7170`.
+
+### Frozen scope and authority result
+
+- IM-25 owns only deterministic admission and identity of the next concrete production cycle. It does not execute or settle production.
+- Frozen IM-18E remains the sole `READY` / `BLOCKED_INPUT` authority. `BLOCKED_INPUT` admits no cycle.
+- A `READY` state derives a stable deterministic `cycleId` from the concrete building and its already authoritative completed production history; wall-clock time, render frames, device speed and randomness are not identity inputs.
+- Repeated evaluation of unchanged authoritative state returns the same next cycle identity and creates no parallel cycle.
+- Existing IM-22 settlement IDs, IM-20F production settlement fences and production effect receipts remain the exactly-once evidence. IM-25 reads that history but does not mutate or reinterpret it.
+- Successful prior settlement advances the deterministic next-cycle identity. Inconsistent fence/receipt history rejects fail-closed.
+- Admission mutates neither BuildingStocks nor production settlement fences nor production effect receipts and owns no Scheduler registration.
+- IM-22 remains the separately invoked one-shot production execution authority; IM-18F remains input/output settlement authority; IM-20F remains exactly-once/recovery authority.
+- No SaveGame schema or restore/rebinding authority was added or changed.
+
+### Authorized and verified implementation scope
+
+The complete functional diff against `f6244c6185f2d7d6f96a3415df0404cbea0f7170` is limited to exactly four files:
+
+1. new `src/domain/deterministic-production-cycle-admission.js`;
+2. new `src/dev/im-25-self-test.js`;
+3. new `src/dev/im-25-self-test.node.js`;
+4. modified `.github/workflows/ci.yml` only to add the IM-25 self-test to the frozen regression chain.
+
+No frozen IM-18 / IM-20 / IM-22 / IM-23 / IM-24 implementation file, `src/main.js`, SaveGame schema, Runtime production execution or Scheduler authority was changed.
+
+### Exact-head verification evidence
+
+Verification was performed against exact functional head `e9fe375e854924ddb3f41ebc74d5fbd3fd155879`.
+
+- Git comparison against definition/documentation baseline `f6244c6185f2d7d6f96a3415df0404cbea0f7170`: 4 commits ahead, 0 behind, merge-base exactly the authorized baseline, with only the four authorized files changed.
+- **CI Baseline #5842**, run `36345465340`, completed **SUCCESS** on exact SHA `e9fe375e854924ddb3f41ebc74d5fbd3fd155879`.
+- Job **Clean Runtime + CR/IM Regression** completed **SUCCESS**.
+- IM-25 self-test completed **PASS / blockerCount 0** and covers stable first-cycle admission without mutation, no admission for `BLOCKED_INPUT`, deterministic advancement after settled production, fail-closed inconsistent fence/receipt history, and isolation of foreign-building production history.
+- Restored-equivalent authoritative production state yields the same next-cycle decision; IM-25 introduces no separately persisted next-cycle counter or SaveGame authority.
+- **Deploy Authoritative Development Testbuild to Pages #176**, run `36345465339`, completed **FAILURE** on the same exact SHA. This is recorded as **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-25 FREEZE**. Functional Exact-Head CI remains green and IM-25 introduces no player-facing UI/runtime activation requiring Pages evidence for its contract.
+
+### Frozen boundary
+
+**IM-25 determines which concrete production cycle may exist next. IM-22 executes that separately admitted cycle once. IM-18F settles its input/output effect. IM-20F protects and reconciles the applied effect through settlement fence + effect receipt.**
+
+Explicit NON-SCOPE remains unchanged: production duration/cooldown/takt time, periodic Scheduler production, automatic endless production loops, output distribution, multi-building production chains, minimum-stock strategy, production priorities, global logistics optimization, new workforce/transport authority, new recipes/resources/buildings, Player UI, Inspector expansion and SaveGame rearchitecture.
+
+This freeze authorizes no successor ID, no successor capability and no IM-26 definition or implementation.
+
 ## IM-25 definition record — 2026-09-27
 
 **IM-25 – Deterministic Production Cycle Admission: DEFINED / NOT IMPLEMENTED.**
