@@ -1,5 +1,55 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-28 completion / evidence / freeze — 2026-09-28
+
+**IM-28 – Active Runtime Production Output Availability Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+
+**Frozen functional/product head:** `3e068eb0868f5ab50893b57acb99fa0f2ccc238e`.
+
+### Frozen capability
+
+IM-28 closes only the defined Active Runtime Production Settlement → frozen IM-27 Resource Availability Materialization orchestration boundary. After frozen IM-22 has authoritatively published a successful production settlement, the same active Runtime Composition hands the existing settlement evidence to frozen IM-27 so the post-settlement output becomes available through the existing ResourceState and therefore discoverable by existing ResourceMatching.
+
+IM-20F settlement fence + production effect receipt remain the authoritative production-effect evidence. Frozen IM-27 remains the materialization exactly-once boundary. IM-28 introduces no persistent processed-settlement ledger, second ResourceState, stock ledger, Production authority, demand/claim/assignment/transport authority or SaveGame authority.
+
+### Frozen implementation scope
+
+Exactly five files differ from the IM-28 definition/documentation head `cc9aba21637b21e0d7d61f292fee4de089f6d59b`:
+
+1. NEW `src/runtime/active-runtime-production-output-availability-orchestration.js`
+2. NEW `src/dev/im-28-self-test.js`
+3. NEW `src/dev/im-28-self-test.node.js`
+4. MODIFIED `src/main.js`
+5. MODIFIED `.github/workflows/ci.yml`
+
+No frozen IM-22, IM-26, IM-27, ResourceState, ResourceClaims, ResourceMatching, ResourceDemands, BuildingStock/settlement contract, Transport or SaveGame implementation file was changed.
+
+### Verification / evidence
+
+Exact-head verification was performed against `3e068eb0868f5ab50893b57acb99fa0f2ccc238e`.
+
+- Definition/documentation head: `cc9aba21637b21e0d7d61f292fee4de089f6d59b`.
+- Branch comparison: 7 commits ahead / 0 behind; merge base exactly the definition/documentation head; only the five authorized files changed.
+- CI Baseline **#5872**, run **36400085837**, exact head `3e068eb0868f5ab50893b57acb99fa0f2ccc238e`: **SUCCESS**.
+- Job **Clean Runtime + CR/IM Regression**: **SUCCESS**.
+- Clean Runtime syntax gate: **PASS / 0 Blocker**.
+- Frozen predecessor regression through IM-27: **PASS**.
+- IM-28 self-test: **PASS / blockerCount 0**.
+- Verified IM-28 cases: the active publish seam materializes a real IM-22 settlement through frozen IM-27; direct real IM-22 settlement materializes output into the active ResourceState; existing ResourceMatching discovers the materialized output; repeated same-settlement reconciliation does not duplicate output; BLOCKED_INPUT materializes nothing; ALREADY_SETTLED creates no new quantity; settlement/BuildingStock/receipt authorities remain unchanged by IM-28; reconstructed/restored-equivalent already represented output is not rematerialized; IM-28 owns no production, demand, transport or SaveGame authority.
+- The reconstructed/restored-equivalent self-test is Runtime reconstruction evidence only; it is not claimed as a separate real-browser Save → Reload → Continue product test.
+
+### Separate Pages evidence
+
+Deploy Authoritative Development Testbuild to Pages **#209**, run **36400085818**, exact head `3e068eb0868f5ab50893b57acb99fa0f2ccc238e`: **FAILURE**.
+
+This is recorded as **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-28 FREEZE**. The successful exact-head CI and regression evidence above is the functional freeze evidence. No successful Pages deployment or browser/device test is claimed for IM-28 by this record.
+
+### Freeze result
+
+**PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
+
+IM-28 is therefore **COMPLETE / FROZEN** at functional/product head `3e068eb0868f5ab50893b57acb99fa0f2ccc238e`. This freeze authorizes no successor capability, no successor identifier and no implementation beyond the frozen IM-28 scope.
+
 ## IM-28 definition record — 2026-09-28
 
 **IM-28 – Active Runtime Production Output Availability Orchestration: DEFINED / NOT IMPLEMENTED.**
