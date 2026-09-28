@@ -1,3 +1,66 @@
+## IM-30 definition record — 2026-09-28
+
+**IM-30 – Produced Resource Logistics Consumption Consistency: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** `f84ffb7188d1b828bcac0f05bd182206343a8db9`.
+
+### Binding question
+
+How is a production resource materialized by frozen IM-27, and then physically transported out of the producing BuildingStock through the existing ResourceDemand / Matching / Claim / Transport boundaries, reflected exactly once as logistically consumed so BuildingStock, ResourceState, Claims, Reservation and Delivery remain consistent after successful delivery and the same physical quantity cannot be dispatched again?
+
+### Authority contract
+
+- **BuildingStock remains the physical quantity truth.** IM-30 must not create a second stock ledger or quantity authority.
+- Existing **BuildingStockTransportReservation** remains the reservation boundary and continues to prevent over-reservation of physical source stock.
+- Frozen **DeliveredTransportBuildingStockSettlement** remains the Delivery / transfer authority. Only valid delivered-cargo evidence may reduce source BuildingStock, increase target BuildingStock, release the reservation and release the workforce state.
+- **ResourceState remains the logistics-addressable representation**, not a second physical stock truth.
+- Existing ResourceDemand / ResourceMatching / ResourceAssignment / ResourceClaims and TransportJob boundaries remain authoritative for demand, matching, claiming, assignment and transport-job creation.
+- IM-30 must not create a parallel reservation, claim, transport job, delivery settlement or stock mutation authority.
+
+### Consumption-consistency contract
+
+- A ResourceState representation created from frozen IM-27 production output may be matched and transported through the existing logistics chain.
+- After successful authoritative delivery, the quantity physically depleted from the producer BuildingStock must no longer remain freely matchable from the corresponding produced ResourceState representation.
+- The consumed/logistically transferred quantity must correspond to the actual successfully delivered quantity.
+- Partial transfer must preserve only the genuinely remaining available quantity.
+- Other production resources and unrelated quantities must remain unchanged.
+- A ResourceState representation must never make already transported physical quantity available for a second dispatch.
+
+### Exactly-once boundary
+
+A successful physical source depletion may be reflected **exactly once** in the corresponding existing Resource / Claim lifecycle boundary.
+
+Repeated evaluation or reconciliation of the same delivery must neither remove BuildingStock again nor consume additional ResourceState quantity. Conversely, after successful transport ResourceState must not continue to expose quantity as freely available when that quantity has already been removed from authoritative source BuildingStock.
+
+IM-30 must not introduce a persistent processed-delivery ledger or any second exactly-once authority.
+
+### Continue / reconstruction boundary
+
+- Existing persisted TransportExecution, Resource/Claim, Reservation, BuildingStock and frozen IM-20F recovery state remain authoritative.
+- IM-30 introduces no SaveGame schema change and no independent persisted consumption history.
+- After restore/reconstruction, a delivery already completed authoritatively must neither deplete source BuildingStock again nor make the already transported produced quantity available again.
+- If the frozen SaveGame contract is later proven insufficient to establish this consistency, that is a separate persistence blocker and must not be silently solved by extending IM-30.
+
+### Required later evidence
+
+A later implementation/verification must prove at minimum:
+
+1. frozen IM-27 produced output is discoverable through existing ResourceMatching;
+2. existing Claim / Reservation / Transport boundaries are used for that produced resource;
+3. successful real delivery reduces exactly the matching producer BuildingStock and increases the consumer BuildingStock;
+4. the delivered quantity is no longer freely matchable from the producer ResourceState representation;
+5. partial delivery leaves only the genuinely remaining quantity available;
+6. repeated delivery/reconciliation does not double-deplete BuildingStock or double-consume ResourceState quantity;
+7. unrelated produced resources remain unchanged;
+8. reconstructed/restored-equivalent state neither repeats source depletion nor re-exposes already transported quantity;
+9. IM-30 owns no second stock, reservation, claim, transport, settlement or SaveGame authority.
+
+### Explicit NON-SCOPE
+
+No new output-distribution strategy, automatic target selection, minimum-stock policy, production priority, global logistics optimization, new routing or transport mechanism, production duration/cooldown/takt, new resource/recipe/building, trade/market system, Player UI, Inspector expansion or SaveGame rearchitecture.
+
+This definition record authorizes **no Implementation Scope Reconciliation, no development branch and no implementation**.
+
 ## IM-29 completion / evidence / freeze — 2026-09-28
 
 **IM-29 – Active Runtime Production Re-evaluation Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
