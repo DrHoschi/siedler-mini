@@ -1,5 +1,54 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-28 definition record — 2026-09-28
+
+**IM-28 – Active Runtime Production Output Availability Orchestration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** `cffa22ec738f78aa6e21547d58ac512a87016f3d` (frozen post-IM-27 state).
+
+### Binding question
+
+How is output successfully settled by the frozen IM-22 / IM-18F production chain handed to the frozen IM-27 materialization boundary inside the same Active Runtime Composition so that the output becomes available exactly once to existing ResourceMatching, without introducing a second Production, Stock, Resource, Logistics or SaveGame authority?
+
+### Binding contract
+
+- IM-28 owns only active orchestration between a successful authoritative Production Settlement and frozen IM-27.
+- An IM-28 handoff may start only from an already successful, authoritatively published Production Settlement. Authoritative evidence remains the resulting BuildingStock together with `productionSettlementIds` and `productionEffectReceipts`.
+- IM-28 must not produce, settle, create or alter a production settlement fence or effect receipt.
+- For a successfully settled effect, IM-28 hands the existing Production Effect Receipt to frozen IM-27. Frozen IM-27 remains solely responsible for validation and ResourceState materialization.
+- Materialization must evaluate the post-settlement BuildingStock. A pre-settlement stock state must not be used.
+- The existing ResourceState instance in the Active Runtime Composition remains the Resource authority. IM-28 must not create a second ResourceState or parallel quantity ledger.
+- After successful materialization, the same active Runtime state must expose that output to the existing ResourceMatching / demand / logistics boundaries.
+- IM-28 itself creates no ResourceDemand, match, claim, assignment or transport job.
+
+### Exactly-once / Continue boundary
+
+- Existing IM-20F settlement fence + effect receipt remain authoritative production-effect evidence.
+- Frozen IM-27 remains the materialization exactly-once boundary. IM-28 introduces no persistent processed-settlement ledger.
+- Re-offering the same settled effect inside one Runtime must not create additional available ResourceState quantity; frozen IM-27 must recognize an already represented effect.
+- Save→Continue or Runtime reconstruction must not make an already represented production effect appear again as additional ResourceState quantity.
+- If restored authoritative state contains a valid production settlement fence + receipt but lacks the corresponding IM-27 representation, active orchestration may offer that same authoritative effect to frozen IM-27 again; IM-27 decides materialization or fail-closed from restored authoritative state.
+- IM-28 defines no SaveGame schema change. If later scope reconciliation proves that existing persistence cannot preserve the required state, that is a separate evidenced boundary and must not be silently absorbed into IM-28.
+
+### Required later evidence
+
+A later implementation must prove at minimum:
+
+1. A real frozen IM-22 `SETTLED` result inside Active Runtime leads to frozen IM-27 materialization using the resulting post-settlement authoritative state.
+2. Existing ResourceMatching can discover the materialized output afterwards without a new logistics authority.
+3. Repeated handling of the same settled effect creates no duplicate available ResourceState quantity.
+4. `BLOCKED_INPUT` and `ALREADY_SETTLED` do not create unauthorized new output quantity.
+5. BuildingStock, production settlement fences and production effect receipts remain authoritative and are not rewritten by IM-28.
+6. Multiple settled production effects remain distinct and correctly bound to their producer/resource outputs.
+7. Reconstructed/restored authoritative state does not duplicate an already represented production effect.
+8. IM-28 creates no production cycle, demand, claim, assignment, transport dispatch, second stock/resource authority or SaveGame authority.
+
+### Explicit NON-SCOPE
+
+No automatic successor production, production duration, cooldown, takt time, periodic or endless production, new demand strategy, output target selection/distribution, minimum-stock policy, production priority, global logistics optimization, new transport/routing mechanics, trade/market, new resources/recipes/buildings, Player UI, Inspector expansion or SaveGame rearchitecture.
+
+No implementation scope reconciliation, implementation branch or implementation is authorized by this definition record.
+
 ## IM-27 completion / evidence / freeze — 2026-09-28
 
 **IM-27 – Production Output Resource Availability Integration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
