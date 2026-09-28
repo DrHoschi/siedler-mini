@@ -1,5 +1,53 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-27 completion / evidence / freeze — 2026-09-28
+
+**IM-27 – Production Output Resource Availability Integration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+
+**Frozen functional/product head:** `83d90501c8a22113b72b0eb20d3b47e5a9d223ea`.
+
+### Frozen capability
+
+IM-27 closes only the defined Production Output → existing ResourceState availability boundary. Successfully settled production output, already evidenced by the existing production settlement fence plus production effect receipt, can be represented exactly once through the existing ResourceState so the frozen ResourceDemand / ResourceMatching / ResourceAssignment / BuildingStock-reservation / Transport chain can discover that real producer-owned stock.
+
+BuildingStock remains the authoritative building-local quantity truth. ResourceState remains the existing logistics-addressable representation and is not promoted into a second stock authority. IM-27 creates no consumer demand, production cycle, transport dispatch, consumption, SaveGame authority or production history.
+
+### Frozen implementation scope
+
+Exactly four files differ from the IM-27 definition baseline `05b59ed32eee15bc33cbe1ed6168ee9369f1a354`:
+
+1. NEW `src/domain/production-output-resource-availability-integration.js`
+2. NEW `src/dev/im-27-self-test.js`
+3. NEW `src/dev/im-27-self-test.node.js`
+4. MODIFIED `.github/workflows/ci.yml`
+
+No `src/main.js`, SaveGame, BuildingStock, ResourceState, ResourceMatching, ResourceClaims, ResourceDemands, ResourceAssignment, Transport, IM-22, IM-23, IM-24, IM-25 or IM-26 implementation file was changed.
+
+### Verification / evidence
+
+Exact-head verification was performed against `83d90501c8a22113b72b0eb20d3b47e5a9d223ea`.
+
+- Definition baseline: `05b59ed32eee15bc33cbe1ed6168ee9369f1a354`.
+- Branch comparison: 5 commits ahead / 0 behind; merge base exactly the definition baseline; only the four authorized files changed.
+- CI Baseline **#5861**, run **36382954070**, exact head `83d90501c8a22113b72b0eb20d3b47e5a9d223ea`: **SUCCESS**.
+- Job **Clean Runtime + CR/IM Regression**: **SUCCESS**.
+- Clean Runtime syntax gate: **PASS / 0 Blocker**.
+- Frozen predecessor regression through IM-26: **PASS**.
+- IM-27 self-test: **PASS / blockerCount 0**.
+- Verified IM-27 cases: settled output materializes once; missing settlement fence materializes nothing; ResourceState representation cannot exceed authoritative BuildingStock; multiple output resource types remain separated; an existing demand discovers produced stock through unchanged ResourceMatching; restored-equivalent already represented production output is not rematerialized; IM-27 owns no demand, transport, production or SaveGame authority.
+
+### Separate Pages evidence
+
+Deploy Authoritative Development Testbuild to Pages **#197**, run **36382954013**, exact head `83d90501c8a22113b72b0eb20d3b47e5a9d223ea`: **FAILURE**.
+
+This is recorded as **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-27 FREEZE**. The successful exact-head product CI and IM-27 regression provide the functional freeze evidence. No browser/Pages success is claimed by this freeze record.
+
+### Freeze boundary
+
+IM-27 is frozen at `83d90501c8a22113b72b0eb20d3b47e5a9d223ea`. The existing definition NON-SCOPE remains binding: no automatic successor production, duration/cooldown/takt/periodic loop, new demand strategy, output distribution strategy, minimum-stock policy, production priority, global logistics optimization, new transport/routing authority, trade/market, new resources/recipes/buildings, Player UI, Inspector expansion or SaveGame rearchitecture.
+
+No successor capability, successor ID, implementation branch or implementation is authorized by this freeze.
+
 ## IM-27 definition record — 2026-09-28
 
 **IM-27 – Production Output Resource Availability Integration: DEFINED / NOT IMPLEMENTED.**
