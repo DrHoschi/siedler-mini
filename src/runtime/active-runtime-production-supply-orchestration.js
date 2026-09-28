@@ -5,6 +5,7 @@ import { ResourceMatching } from '../resources/resource-matching.js';
 import { ResourceAssignment } from '../resources/resource-assignment.js';
 import { TransportJobService } from '../transport/transport-job-service.js';
 import { DeliveredTransportBuildingStockSettlement } from '../domain/delivered-transport-building-stock-settlement.js';
+import { ProducedResourceLogisticsConsumptionConsistency } from '../domain/produced-resource-logistics-consumption-consistency.js';
 
 function requireComposition(value) {
   if (value?.kind !== 'active-runtime-composition' || !value.authoritative) throw new TypeError('active runtime composition required');
@@ -55,15 +56,17 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     return Object.freeze({kind:'im24-active-runtime-production-supply-result',status:'BLOCKED_INPUT',buildingId,execution,admission,connections:Object.freeze(connections),productionTriggered:false});
   }
 
-  publishDeliveredBuildingStock({dispatch,delivery,reservation,workforceState,sourceStock,targetStock}={}){
+  publishDeliveredBuildingStock({dispatch,delivery,reservation,workforceState,sourceStock,targetStock,deliveryCommit=null}={}){
     const composition=requireComposition(this.#get()),owners=composition.authoritative;
     const settled=DeliveredTransportBuildingStockSettlement.settle({dispatch,delivery,reservation,workforceState,sourceStock,targetStock});
+    const produced=owners.resourceState.get(delivery.resourceId)?.metadata?.source==='IM-27_PRODUCTION_OUTPUT';
+    const consistency=produced?ProducedResourceLogisticsConsumptionConsistency.verify({deliveryCommit,buildingStockSettlement:settled,resourceState:owners.resourceState,claims:owners.resourceClaims}):null;
     let stocks=requireArray(owners.buildingStocks,'buildingStocks');
     stocks=replaceBy(stocks,settled.sourceStock,stockKey);stocks=replaceBy(stocks,settled.targetStock,stockKey);
     const reservations=replaceBy(requireArray(owners.buildingStockTransportReservations,'buildingStockTransportReservations'),settled.reservation,reservationKey);
     const workforce=replaceBy(requireArray(owners.workforceAssignments,'workforceAssignments'),settled.workforceState,workforceKey);
     const next=Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStocks:stocks,buildingStockTransportReservations:reservations,workforceAssignments:workforce})});
     this.#publish(next);
-    return Object.freeze({kind:'im24-delivered-supply-publication',status:'DELIVERED_TO_BUILDING_STOCK',settlement:settled,productionTriggered:false});
+    return Object.freeze({kind:'im24-delivered-supply-publication',status:'DELIVERED_TO_BUILDING_STOCK',settlement:settled,consistency,productionTriggered:false});
   }
 }
