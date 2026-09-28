@@ -1,5 +1,67 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-29 definition record — 2026-09-28
+
+**IM-29 – Active Runtime Production Re-evaluation Orchestration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** `5d538c75e8003b3a807be38f040906d55ddc1299`.
+
+### Binding question
+
+How is production deterministically re-evaluated after an authoritative production-relevant state change inside the Active Runtime Composition so frozen IM-25 can decide whether a concrete production cycle is admissible and only that admitted cycle can be handed to frozen IM-26, without making Scheduler ticks themselves Production Admission and without introducing an uncontrolled production loop?
+
+### Trigger / re-evaluation contract
+
+IM-29 owns only re-evaluation orchestration. A trigger may arise only from an already completed authoritative state change that can actually change the production decision.
+
+The frozen chain currently proves at least these trigger boundaries:
+
+- IM-24: successful material delivery changes the production building's BuildingStock. IM-24 itself remains `productionTriggered:false`.
+- IM-28: successful production settlement publishes the new BuildingStock plus settlement fence/receipt and then materializes output. Only the fully published post-settlement state may be the basis for successor re-evaluation.
+
+A Scheduler tick by itself is not an Admission trigger. Rendering, UI calls and repeated reads of unchanged state must not create a new production cycle.
+
+### Relationship to frozen IM-24 / IM-25 / IM-26 / IM-28
+
+The authority chain remains:
+
+**IM-24 changes supply/BuildingStock → IM-29 causes re-evaluation → IM-25 decides Admission and cycle identity → IM-26 prevents parallel duplicate handoff and registers exactly that admitted cycle → IM-22 executes it one-shot → IM-18F/IM-20F settle and evidence the effect → IM-28/IM-27 expose the output → IM-29 may re-evaluate only against the resulting authoritative state.**
+
+IM-29 may neither create IM-25's cycle identity nor replace IM-26 registration. It does not produce or settle anything itself.
+
+### Successor-cycle boundary
+
+After a successfully completed cycle IM-29 must not simply start a next cycle. The new authoritative state must be evaluated again through frozen IM-25.
+
+- BLOCKED_INPUT → no successor handoff.
+- READY → IM-25 alone derives the next deterministic cycle identity from existing settlement history.
+- Only ADMITTED may be handed to frozen IM-26.
+- IM-26 remains responsible for preventing parallel registration of the same buildingId + cycleId.
+
+A successor is therefore a new Admission from new authoritative state, not continuation of the old cycle.
+
+### Exactly-once / Continue boundary
+
+IM-29 introduces no persistent re-evaluation or processed-trigger ledger.
+
+Exactly-once remains layered:
+
+**IM-25 = deterministic cycle identity → IM-26 = single active handoff/registration → IM-20F = settlement fence/receipt → IM-27 = output materialization.**
+
+After Runtime reconstruction / Continue only restored authoritative state may be re-evaluated. Already settled cycles must not be admitted again under the same cycle identity because their fence/receipt history already exists; any newly admissible cycle must again be determined by IM-25.
+
+This definition does not claim a real-browser Save → Reload → Continue proof for IM-29 and defines no SaveGame schema change.
+
+### Required later evidence
+
+A later implementation must prove at minimum: delivered missing inputs → re-evaluation → IM-25 Admission → IM-26 registration; successful settlement state → re-evaluation and, only while still READY, a deterministic new successor cycle; BLOCKED_INPUT causes no handoff; unchanged state causes no parallel duplicate registration; Scheduler ticks are not Admission authority; settlement/receipt/output-materialization remain at their frozen authorities; reconstructed/restored-equivalent state neither replays an old cycle nor creates a parallel duplicate handoff.
+
+### Explicit NON-SCOPE
+
+No production duration, cooldown, takt/cycle time, time-based production rate, every-X-seconds production, Scheduler-tick-based Admission, new Recipe/Workforce/BuildingStock authority, new demand strategy, output distribution or target selection, minimum-stock or production-priority policy, global logistics optimization, new transport/routing mechanics, trade/market, new resources/recipes/buildings, Player UI, Inspector expansion or SaveGame rearchitecture.
+
+This definition record authorizes no Implementation Scope Reconciliation, no development branch and no implementation.
+
 ## IM-28 completion / evidence / freeze — 2026-09-28
 
 **IM-28 – Active Runtime Production Output Availability Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
