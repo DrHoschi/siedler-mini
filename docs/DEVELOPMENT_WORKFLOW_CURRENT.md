@@ -1,5 +1,60 @@
 # Neue Siedler – Current Development Workflow
 
+## IM-26 completion / evidence / freeze — 2026-09-28
+
+**IM-26 – Active Runtime Production Cycle Execution Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
+
+**Frozen functional/product head:** `8399ffc3f90701b5fc49ca0ed89c8f7d08e8645c`.
+
+**Definition/documentation baseline:** `d5369776d5679c5b850efd973aca329b008ea808`.
+
+### Frozen scope and authority result
+
+- IM-26 owns only transient active-Runtime orchestration from frozen IM-25 cycle admission to frozen IM-22 one-shot execution.
+- Frozen IM-18E remains the sole production-readiness authority; only an IM-25 `ADMITTED` result is handed to IM-22.
+- IM-26 uses exactly the `buildingId + cycleId` supplied by IM-25 and does not create or alter production-cycle identity.
+- The same admitted `buildingId + cycleId` is handed to at most one active IM-22 registration in one active Runtime. The duplicate-registration marker is transient coordination only and is neither persisted nor treated as production/settlement evidence.
+- Frozen IM-22 retains Scheduler registration identity, one-shot unregister semantics, execution-time readiness evaluation and production execution orchestration.
+- Frozen IM-18F remains input/output settlement authority; frozen IM-20F settlement fences + effect receipts remain authoritative exactly-once evidence.
+- `BLOCKED_INPUT` creates no IM-22 registration. Scheduler ticks do not admit production cycles.
+- After settlement, only a fresh IM-25 evaluation of resulting authoritative history can identify a distinct successor cycle.
+- IM-26 itself performs no BuildingStock settlement, creates no settlement fence/effect receipt, and introduces no second Scheduler, Production or SaveGame authority.
+- Runtime reconstruction evidence verifies that an unsettled restored-equivalent authoritative state derives the same deterministic cycle identity and creates exactly one new transient registration. This is not recorded as a separate browser Save→Continue product test and introduces no SaveGame schema change.
+
+### Authorized and verified implementation scope
+
+The complete functional diff against `d5369776d5679c5b850efd973aca329b008ea808` is limited to exactly five files:
+
+1. new `src/runtime/active-runtime-production-cycle-execution-orchestration.js`;
+2. new `src/dev/im-26-self-test.js`;
+3. new `src/dev/im-26-self-test.node.js`;
+4. modified `src/main.js` only to bind/expose the IM-26 orchestration to the existing active Runtime Composition seam;
+5. modified `.github/workflows/ci.yml` only to add the IM-26 self-test to the regression chain.
+
+No frozen IM-18 / IM-20 / IM-22 / IM-23 / IM-24 / IM-25 authority file, SaveGame schema/restore implementation or Scheduler implementation was changed.
+
+### Focused syntax correction
+
+The initial implementation head `5e72b1b6c6edbe7ff59d4b2216142ae2cef6a88e` failed CI Baseline #5851 because `src/main.js` contained a literal `\\n` between the existing IM-24 import and the new IM-26 import. The separately authorized focused correction replaced only that literal sequence with a real line break. Corrected functional head: `8399ffc3f90701b5fc49ca0ed89c8f7d08e8645c`. No scope expansion resulted.
+
+### Exact-head verification evidence
+
+Verification was performed against exact corrected functional head `8399ffc3f90701b5fc49ca0ed89c8f7d08e8645c`.
+
+- Git comparison against definition/documentation baseline `d5369776d5679c5b850efd973aca329b008ea808`: 6 commits ahead, 0 behind, merge-base exactly the authorized baseline, with only the five authorized files changed.
+- **CI Baseline #5852**, run `36376209861`, completed **SUCCESS** on exact SHA `8399ffc3f90701b5fc49ca0ed89c8f7d08e8645c`.
+- Job **Clean Runtime + CR/IM Regression** completed **SUCCESS**, including syntax validation and the IM-26 self-test in the regression command.
+- IM-26 self-test covers one IM-22 registration from READY admission, duplicate-handoff prevention, no registration for BLOCKED_INPUT, existing IM-22 settlement/fence/receipt behavior, distinct successor admission after settled history becomes READY again, reconstructed-runtime reuse of the same unsettled deterministic cycle identity, non-mutation during handoff, and absence of IM-26 settlement/SaveGame ownership.
+- **Deploy Authoritative Development Testbuild to Pages #187**, run `36376209878`, completed **FAILURE** on the same exact SHA. This remains recorded as **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-26 FREEZE**; functional Exact-Head CI/regression is successful.
+
+### Frozen boundary
+
+**IM-25 determines which concrete production cycle may exist next. IM-26 hands that exact admitted cycle to at most one active IM-22 registration in the current Runtime. IM-22 executes the one-shot cycle. IM-18F settles its input/output effect. IM-20F protects and reconciles the applied effect through settlement fence + effect receipt.**
+
+IM-26 is therefore **COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER** at functional head `8399ffc3f90701b5fc49ca0ed89c8f7d08e8645c`.
+
+No successor ID, successor capability or IM-27+ definition is authorized by this freeze record.
+
 ## IM-26 definition record — 2026-09-27
 
 **IM-26 – Active Runtime Production Cycle Execution Orchestration: DEFINED / NOT IMPLEMENTED.**
