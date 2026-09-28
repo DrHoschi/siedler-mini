@@ -27,7 +27,7 @@ function fixture(amount=3,claimAmount=2){
  const job=new TransportJobService({jobStore:a.domains.jobs,claims:a.resourceClaims,demands:a.resourceDemands,resourceState:a.resourceState}).createFromAssignment(assignment).jobs[0];
  const reservation=BuildingStockTransportReservationContract.define({id:'transport-reservation:00000930',sourceBuildingId:producer,targetBuildingId:consumer,resourceTypeId:type,amount:job.amount,state:'ACTIVE'});
  BuildingStockTransportReservationService.reserve({stock:stocks.find(x=>x.buildingId===producer&&x.resourceTypeId===type),reservations:[],reservation});
- const claim=a.resourceClaims.get(job.claimId),execution={kind:'transport-execution',jobId:job.id,unitId:'unit:00000002',state:'DELIVERED'},delivery={kind:'delivered-cargo',jobId:job.id,unitId:execution.unitId,resourceId:resource.id,targetId:consumer,amount:job.amount};
+ const claim=a.resourceClaims.get(job.claimId),execution={kind:'transport-execution',jobId:job.id,unitId:'unit:00000002',state:'DELIVERED'},delivery={kind:'delivered-cargo',jobId:job.id,unitId:execution.unitId,resourceId:job.resourceId,targetId:consumer,amount:job.amount};
  const settlement=DeliverySettlementContract.fromDelivered({job,execution,delivery,claim,demand:a.resourceDemands.get(job.demandId),resource});
  const deliveryCommit=new DeliverySettlementService({resources:a.resourceState,claims:a.resourceClaims,demands:a.resourceDemands}).commit({settlement,job,execution,delivery});
  const source=stocks.find(x=>x.buildingId===producer&&x.resourceTypeId===type),target=stocks.find(x=>x.buildingId===consumer&&x.resourceTypeId===type);
