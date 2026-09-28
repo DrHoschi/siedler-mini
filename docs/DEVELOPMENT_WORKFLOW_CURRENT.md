@@ -1,3 +1,53 @@
+## IM-29 completion / evidence / freeze — 2026-09-28
+
+**IM-29 – Active Runtime Production Re-evaluation Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
+
+**Frozen functional/product head:** `32fa844266ea96f7512597d9ed68274b7dfdd9f5`.
+
+### Frozen capability
+
+IM-29 closes only the defined Active Runtime State Change → Deterministic Production Re-evaluation / Successor-Cycle Handoff boundary. Completed authoritative production-relevant state changes from frozen IM-24 delivery and the fully published frozen IM-28 post-settlement state may request a transient re-evaluation. The request is executed at the existing Scheduler completed-step boundary only as a safe execution boundary; a Scheduler tick by itself is not Production Admission.
+
+Frozen IM-25 remains the sole readiness/admission and deterministic cycle-identity authority. Frozen IM-26 remains the sole active handoff/registration and parallel-duplicate-prevention authority. IM-29 introduces no Production, Settlement, BuildingStock, Resource, Demand, Transport or SaveGame authority and no persistent processed-trigger/re-evaluation ledger.
+
+### Frozen implementation scope
+
+Exactly five files differ from the IM-29 definition/documentation and authorization head `5b4b29aa127837cd1653dea825d19d492806c04c`:
+
+1. NEW `src/runtime/active-runtime-production-re-evaluation-orchestration.js`
+2. NEW `src/dev/im-29-self-test.js`
+3. NEW `src/dev/im-29-self-test.node.js`
+4. MODIFIED `src/main.js`
+5. MODIFIED `.github/workflows/ci.yml`
+
+The final functional head is 6 commits ahead / 0 behind that authorization head with merge base exactly `5b4b29aa127837cd1653dea825d19d492806c04c`. No frozen IM-24, IM-25, IM-26, IM-28, Runtime, Scheduler, Production Settlement, BuildingStock, Resource/Logistics or SaveGame implementation file was changed.
+
+### Verification / evidence
+
+Exact-head verification was completed against `32fa844266ea96f7512597d9ed68274b7dfdd9f5`.
+
+- Initial implementation head `2aa3f14bca220856039fd27f685d54ca65f2ffd4`: CI Baseline **#5881**, run **36426513809**, correctly failed only in two newly added IM-29 self-test assertions while the frozen predecessor regression remained clean.
+- Read-only blocker reconciliation established that both failures were test-assumption defects: the tests advanced the Scheduler far enough to execute an already registered IM-22 one-shot cycle although they intended to observe only active duplicate/reconstruction registration semantics.
+- The separately authorized correction changed only `src/dev/im-29-self-test.js`; no product/runtime or CI file changed in that correction.
+- Exact-head CI Baseline **#5882**, run **36427772692**, exact head `32fa844266ea96f7512597d9ed68274b7dfdd9f5`: **SUCCESS**.
+- Job **Clean Runtime + CR/IM Regression**: **SUCCESS**.
+- Frozen predecessor regression through IM-28: **PASS**.
+- IM-29 self-test: **PASS / blockerCount 0**.
+- Verified IM-29 cases: delivered input requests re-evaluation and registers only after the completed-step execution boundary; still-BLOCKED_INPUT state registers nothing; unchanged READY state creates no parallel duplicate registration; a successful settlement can cause a fresh deterministic successor only from the fully published resulting state and only while still READY; consumed/missing input admits no successor; Scheduler steps alone are not Admission authority; reconstructed-equivalent state reuses frozen IM-25/IM-26 identity and duplicate boundaries; IM-29 owns no Production, Settlement, Stock, Demand, Transport or SaveGame authority.
+- The reconstructed-equivalent self-test is Runtime reconstruction evidence only; no separate real-browser Save → Reload → Continue proof is claimed for IM-29.
+
+### Separate Pages evidence
+
+Deploy Authoritative Development Testbuild to Pages **#220**, run **36427772873**, exact head `32fa844266ea96f7512597d9ed68274b7dfdd9f5`: **FAILURE**.
+
+This is recorded as **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-29 FREEZE**. The successful exact-head CI and full frozen regression above are the functional freeze evidence. No successful Pages deployment or browser/device test is claimed for IM-29 by this record.
+
+### Freeze result
+
+**PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
+
+IM-29 is therefore **COMPLETE / FROZEN** at functional/product head `32fa844266ea96f7512597d9ed68274b7dfdd9f5`. This freeze authorizes no successor capability, no successor identifier and no implementation beyond the frozen IM-29 scope.
+
 # Neue Siedler – Current Development Workflow
 
 ## IM-29 definition record — 2026-09-28
