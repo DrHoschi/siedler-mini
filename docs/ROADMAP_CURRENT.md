@@ -1,5 +1,54 @@
 # Neue Siedler – Current Roadmap / IM ↔ CR Reconciliation
 
+## IM-27 definition record — 2026-09-28
+
+**IM-27 – Production Output Resource Availability Integration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** `42dd9cb46c099ee0607b7babdf5cdd95a56ade76` (frozen post-IM-26 state).
+
+### Binding question
+
+How is output successfully produced by the frozen production chain in an authoritative production-building BuildingStock integrated exactly once into the existing ResourceState availability boundary so that existing ResourceDemands / ResourceMatching / ResourceAssignment / transport logistics can use that real stock, without introducing a second stock or logistics authority?
+
+### Binding contract
+
+- BuildingStock remains the authoritative quantity truth for building-local stock.
+- ResourceState may represent produced stock only as the already-existing logistics-addressable / matchable resource boundary; it must not become an independent second stock truth.
+- Integration may start only from successfully settled production output already evidenced by the existing production settlement fence + effect receipt. IM-25 admission, an IM-26 registration, or an unexecuted IM-22 cycle must create no available resource.
+- Produced output must remain bound to the producing `buildingId` and the existing `resourceTypeId`.
+- Logistics-visible produced quantity must never exceed the corresponding authoritative produced / still-available BuildingStock quantity.
+- Repeated evaluation of the same settled production effect or active-Runtime reconstruction must not materialize the same production effect as additional ResourceState quantity.
+- Existing IM-20F settlement fence + effect receipt remain the exactly-once production-effect evidence. IM-27 must not replace or reinterpret them as a second production history.
+- Existing ResourceMatching, ResourceClaims, ResourceDemands, ResourceAssignment, BuildingStock transport reservation and Transport authorities are reused rather than replaced.
+- Later reservation/delivery remains constrained by the actual authoritative BuildingStock through the existing reservation/settlement boundaries.
+- IM-27 creates no new consumer demand. Demand admission remains owned by the respective existing consumer integration.
+- IM-27 does not start production, admit a production cycle, schedule production, dispatch transport or consume output automatically.
+
+### Continue / exactly-once boundary
+
+- Save→Continue must not cause already materialized production output to appear a second time as additional available ResourceState quantity.
+- Restored authoritative production fences/receipts, BuildingStocks and existing ResourceState must together be sufficient to recognize an already represented production effect or fail closed.
+- IM-27 must introduce no second quantity ledger beside the existing BuildingStock / ResourceState boundaries and no new production-history authority.
+
+### Required later evidence
+
+A later implementation must prove at minimum:
+
+1. Successfully settled production output becomes available to existing ResourceMatching exactly once.
+2. Repeated integration of the same settled production effect creates no duplicate available quantity.
+3. Unsettled / merely admitted / merely registered production creates no ResourceState output.
+4. Multiple output resources / resource types remain correctly separated and bound to the producing building.
+5. An existing consumer ResourceDemand can discover produced stock through the existing ResourceMatching and BuildingStock-reservation boundary without a new logistics authority.
+6. Reconstructed / restored authoritative state does not rematerialize already represented production output.
+7. Logistics-visible quantity cannot exceed the corresponding authoritative available BuildingStock.
+8. IM-27 itself creates no demand, transport dispatch, production cycle or second stock authority.
+
+### Explicit NON-SCOPE
+
+No automatic successor production, production duration, cooldown, takt time, periodic or endless production cycle, new demand strategy, output-distribution strategy or target selection, minimum-stock policy, production priority, global logistics optimization, new transport/routing mechanics, trade/market, new resources/recipes/buildings, Player UI, Inspector expansion or SaveGame rearchitecture.
+
+No implementation branch or implementation is authorized by this definition record.
+
 ## IM-26 completion / evidence / freeze — 2026-09-28
 
 **IM-26 – Active Runtime Production Cycle Execution Orchestration: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER.**
