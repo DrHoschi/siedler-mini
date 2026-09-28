@@ -37,10 +37,14 @@ export function runIM29SelfTest(){
   return f.runtime.scheduler.systemCount()===0;
  },results);
  check('unchanged-ready-state-does-not-create-parallel-duplicate-registration',()=>{
-  const f=fixture({inputQuantity:3});f.im29.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});f.im29.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});
-  f.runtime.scheduler.step();const count=f.runtime.scheduler.systemCount();
-  f.im29.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});f.runtime.scheduler.step();
-  return count===1&&f.runtime.scheduler.systemCount()===1&&f.im26.activeRegistration({buildingId:f.buildingId,cycleId:'im25-cycle-00000001'})!==null;
+  const f=fixture({inputQuantity:3});
+  f.im29.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});
+  const first=f.im29.flush();
+  const firstRegistration=f.im26.activeRegistration({buildingId:f.buildingId,cycleId:'im25-cycle-00000001'});
+  f.im29.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});
+  const duplicate=f.im29.flush();
+  const secondRegistration=f.im26.activeRegistration({buildingId:f.buildingId,cycleId:'im25-cycle-00000001'});
+  return first.results[0]?.handoff?.status==='REGISTERED'&&duplicate.results[0]?.handoff?.status==='ALREADY_REGISTERED'&&duplicate.results[0]?.handoff?.duplicatePrevented===true&&firstRegistration!==null&&secondRegistration===firstRegistration&&f.runtime.scheduler.systemCount()===1&&f.composition.authoritative.productionSettlementIds.length===0;
  },results);
  check('settlement-trigger-admits-deterministic-successor-only-after-settlement-publish',()=>{
   const f=fixture({inputQuantity:6});f.im29.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});f.runtime.scheduler.step();
@@ -57,13 +61,16 @@ export function runIM29SelfTest(){
   const f=fixture({inputQuantity:6});f.runtime.scheduler.step();f.runtime.scheduler.step();return f.runtime.scheduler.systemCount()===0&&f.composition.authoritative.productionSettlementIds.length===0;
  },results);
  check('reconstructed-equivalent-state-reuses-frozen-im25-im26-boundaries',()=>{
-  const f=fixture({inputQuantity:3});f.im29.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});f.runtime.scheduler.step();
+  const f=fixture({inputQuantity:3});
   const runtime2=new Runtime({simulation:{phases:['input','world','demand','assignment','intent','movement','work','economy','recovery','events','maintenance'],fixedStepMs:100}});runtime2.boot();
-  const im26b=new ActiveRuntimeProductionCycleExecutionOrchestration({runtime:runtime2,getComposition:()=>f.composition,publishComposition:()=>{throw new Error('handoff must not execute');}});
+  const im26b=new ActiveRuntimeProductionCycleExecutionOrchestration({runtime:runtime2,getComposition:()=>f.composition,publishComposition:()=>{throw new Error('reconstructed registration must not execute during this evidence step');}});
   const im29b=new IM29({runtime:runtime2,getComposition:()=>f.composition,cycleExecution:im26b});
-  im29b.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});runtime2.scheduler.step();
-  im29b.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});runtime2.scheduler.step();
-  return runtime2.scheduler.systemCount()===1&&im26b.activeRegistration({buildingId:f.buildingId,cycleId:'im25-cycle-00000001'})!==null;
+  im29b.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});
+  const first=im29b.flush();
+  im29b.request({trigger:'DELIVERED_BUILDING_STOCK',buildingId:f.buildingId});
+  const duplicate=im29b.flush();
+  const registration=im26b.activeRegistration({buildingId:f.buildingId,cycleId:'im25-cycle-00000001'});
+  return first.results[0]?.handoff?.status==='REGISTERED'&&first.results[0]?.handoff?.cycleId==='im25-cycle-00000001'&&duplicate.results[0]?.handoff?.status==='ALREADY_REGISTERED'&&duplicate.results[0]?.handoff?.duplicatePrevented===true&&registration!==null&&runtime2.scheduler.systemCount()===1&&f.composition.authoritative.productionSettlementIds.length===0;
  },results);
  check('im29-does-not-own-production-settlement-stock-demand-transport-or-savegame-authority',()=>typeof IM29.prototype.produce==='undefined'&&typeof IM29.prototype.settle==='undefined'&&typeof IM29.prototype.createStock==='undefined'&&typeof IM29.prototype.createDemand==='undefined'&&typeof IM29.prototype.dispatch==='undefined'&&typeof IM29.prototype.save==='undefined'&&typeof IM29.prototype.restore==='undefined',results);
  const blockerCount=results.filter(value=>!value.pass).length;
