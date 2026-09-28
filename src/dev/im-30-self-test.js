@@ -15,8 +15,8 @@ function check(name,fn,out){try{out.push({name,pass:!!fn()});}catch(e){out.push(
 function fixture(amount=3,claimAmount=2){
  const c=createBaselineMiniworldScenario({includeSaveContinuity:true,includeProductionSupply:true}),a=c.authoritative;
  const recipe=a.productionRecipes[0],type=recipe.inputs[0].resourceTypeId,producer='building:00000001',consumer=recipe.buildingId;
- let stock=a.buildingStocks.find(x=>x.buildingId===producer&&x.resourceTypeId===type);
- if(!stock){stock={kind:'building-stock',buildingId:producer,resourceTypeId:type,quantity:amount};a.buildingStocks.push?.(stock);}
+ const existingStock=a.buildingStocks.find(x=>x.buildingId===producer&&x.resourceTypeId===type);
+ const stock=existingStock??{kind:'building-stock',buildingId:producer,resourceTypeId:type,quantity:amount};
  const receipt={kind:'production-effect-receipt',settlementId:'production-settlement:im30:1',buildingId:producer,inputs:[],outputs:[{resourceTypeId:type,amount}],stockBefore:[{resourceTypeId:type,quantity:0}],stockAfter:[{resourceTypeId:type,quantity:amount}]};
  const stocks=[...a.buildingStocks.filter(x=>!(x.buildingId===producer&&x.resourceTypeId===type)),{kind:'building-stock',buildingId:producer,resourceTypeId:type,quantity:amount}];
  const mat=IM27.materialize({receipt,settledIds:[receipt.settlementId],buildingStocks:stocks,resourceState:a.resourceState,claims:a.resourceClaims});
