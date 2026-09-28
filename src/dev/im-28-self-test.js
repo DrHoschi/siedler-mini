@@ -31,12 +31,18 @@ function fixture({ inputQuantity = 3 } = {}) {
   const workforceAssignment = Object.freeze({ kind: 'operational-building-workforce-assignment', status: 'ASSIGNED', buildingId: producer.id });
   const recipe = Object.freeze({ kind: 'production-building-stock', buildingId: producer.id, inputs: Object.freeze([{ resourceTypeId: wood.id, quantity: 3 }]), outputs: Object.freeze([{ resourceTypeId: boards.id, quantity: 2 }]) });
   const install = cycleId => RuntimeEconomyExecutionIntegration.installOneShotProductionCycle({ runtime, getComposition, publishComposition, cycleId, buildingId: producer.id, workforceAssignment, recipe });
-  return { producer, consumer, wood, boards, resourceState, claims, demands, matching, runtime, orchestration, install, get composition(){ return composition; } };
+  const installConnected = cycleId => RuntimeEconomyExecutionIntegration.installOneShotProductionCycle({ runtime, getComposition, publishComposition: value => orchestration.publishSettledComposition(value), cycleId, buildingId: producer.id, workforceAssignment, recipe });
+  return { producer, consumer, wood, boards, resourceState, claims, demands, matching, runtime, orchestration, install, installConnected, get composition(){ return composition; } };
 }
 function check(name, fn, results) { try { results.push(Object.freeze({ name, pass: !!fn() })); } catch (error) { results.push(Object.freeze({ name, pass: false, error: String(error?.message || error) })); } }
 
 export function runIM28SelfTest() {
   const results = [];
+  check('active-publish-seam-materializes-real-im22-settlement', () => {
+    const f=fixture(), registration=f.installConnected('im28-connected-1'); f.runtime.scheduler.step();
+    const settled=registration.result(), ids=f.resourceState.ids();
+    return settled.status==='SETTLED'&&ids.length===1&&f.resourceState.get(ids[0]).definitionId===f.boards.id&&f.composition.authoritative.productionSettlementIds.includes(settled.settlementId);
+  }, results);
   check('real-im22-settlement-materializes-output-into-active-resource-state', () => {
     const f=fixture(), registration=f.install('im28-cycle-1'); f.runtime.scheduler.step(); const settled=registration.result();
     const result=f.orchestration.reconcileSettlement({ settlementResult:settled });
