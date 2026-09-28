@@ -14,8 +14,9 @@ import { ProducedResourceLogisticsConsumptionConsistency as IM30 } from '../doma
 function check(name,fn,out){try{out.push({name,pass:!!fn()});}catch(e){out.push({name,pass:false,error:String(e?.message||e)});}}
 function fixture(amount=3,claimAmount=2){
  const c=createBaselineMiniworldScenario({includeSaveContinuity:true,includeProductionSupply:true}),a=c.authoritative;
- const recipe=a.productionRecipes[0],type=recipe.inputs[0].resourceTypeId,producer='building:00000001',consumer=recipe.buildingId;
- const existingStock=a.buildingStocks.find(x=>x.buildingId===producer&&x.resourceTypeId===type);
+ const recipe=a.productionRecipes[0],type=recipe.inputs[0].resourceTypeId,consumer=recipe.buildingId;
+ const existingStock=a.buildingStocks.find(x=>x.resourceTypeId===type&&x.buildingId!==consumer&&x.quantity>0),producer=existingStock?.buildingId;
+ if(!producer)throw new Error('baseline production supply source required');
  const stock=existingStock??{kind:'building-stock',buildingId:producer,resourceTypeId:type,quantity:amount};
  const receipt={kind:'production-effect-receipt',settlementId:'production-settlement:im30:1',buildingId:producer,inputs:[],outputs:[{resourceTypeId:type,amount}],stockBefore:[{resourceTypeId:type,quantity:0}],stockAfter:[{resourceTypeId:type,quantity:amount}]};
  const stocks=[...a.buildingStocks.filter(x=>!(x.buildingId===producer&&x.resourceTypeId===type)),{kind:'building-stock',buildingId:producer,resourceTypeId:type,quantity:amount}];
