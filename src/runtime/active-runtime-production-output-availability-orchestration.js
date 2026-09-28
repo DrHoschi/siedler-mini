@@ -18,6 +18,29 @@ export class ActiveRuntimeProductionOutputAvailabilityOrchestration {
     this.#publish = publishComposition;
   }
 
+  publishSettledComposition(value) {
+    const composition = requireComposition(value);
+    const owners = composition.authoritative;
+    const receipts = requireArray(owners.productionEffectReceipts, 'productionEffectReceipts');
+    const settledIds = requireArray(owners.productionSettlementIds, 'productionSettlementIds');
+    this.#publish(composition);
+    const materializations = receipts.filter(receipt => settledIds.includes(receipt?.settlementId)).map(receipt =>
+      ProductionOutputResourceAvailabilityIntegration.materialize({
+        receipt,
+        settledIds,
+        buildingStocks: requireArray(owners.buildingStocks, 'buildingStocks'),
+        resourceState: owners.resourceState,
+        claims: owners.resourceClaims ?? null,
+      }));
+    if (materializations.some(result => result.mutation)) this.#publish(composition);
+    return Object.freeze({
+      kind: 'im28-active-runtime-production-output-publication',
+      status: materializations.some(result => result.mutation) ? 'MATERIALIZED' : 'PUBLISHED',
+      materializations: Object.freeze(materializations),
+      mutation: materializations.some(result => result.mutation),
+    });
+  }
+
   reconcileSettlement({ settlementResult } = {}) {
     if (!settlementResult || settlementResult.kind !== 'im22-runtime-economy-cycle-result') throw new TypeError('IM-22 runtime economy cycle result required');
     if (!['SETTLED', 'ALREADY_SETTLED'].includes(settlementResult.status)) {
