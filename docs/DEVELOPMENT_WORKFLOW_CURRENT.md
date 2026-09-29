@@ -1,3 +1,52 @@
+## IM-30 completion / evidence / freeze — 2026-09-29
+
+**IM-30 – Produced Resource Logistics Consumption Consistency: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
+
+**Frozen functional/product head:** `eaa52cffd4f040914e3799360f83c7eb036f7e51`.
+
+### Frozen capability
+
+IM-30 closes only the defined Produced Resource Availability → Existing Logistics Consumption / Source-Depletion Consistency boundary. A ResourceState representation materialized by frozen IM-27 may be consumed through the existing ResourceDemand / ResourceMatching / ResourceAssignment / ResourceClaims / TransportJob / BuildingStockTransportReservation / Delivery boundaries. After successful authoritative delivery, the physically transferred quantity is no longer freely matchable at the producing ResourceState representation; partial transfer preserves only the genuine remainder.
+
+BuildingStock remains the physical quantity truth. Existing ResourceState / ResourceClaims remain the logistics representation and claim lifecycle authorities. Existing BuildingStockTransportReservation and DeliveredTransportBuildingStockSettlement remain reservation and physical delivery/transfer authorities. IM-30 adds only a consistency verifier and the narrow existing IM-24 delivery integration needed to verify produced-resource logistics consumption; it introduces no second stock, claim, reservation, transport, settlement, exactly-once or SaveGame authority.
+
+### Frozen implementation scope
+
+Exactly five files differ from the IM-30 implementation authorization head `a114b6ec5d28e92a7d40672df8a2473aa206cd3f`:
+
+1. NEW `src/domain/produced-resource-logistics-consumption-consistency.js`
+2. NEW `src/dev/im-30-self-test.js`
+3. NEW `src/dev/im-30-self-test.node.js`
+4. MODIFIED `src/runtime/active-runtime-production-supply-orchestration.js`
+5. MODIFIED `.github/workflows/ci.yml`
+
+The final functional head is 10 commits ahead / 0 behind that authorization head with merge base exactly `a114b6ec5d28e92a7d40672df8a2473aa206cd3f`. The additional commits after the initial implementation were separately authorized self-test-only blocker corrections in `src/dev/im-30-self-test.js`; no product/runtime/domain/CI scope was expanded by those corrections.
+
+### Verification / evidence
+
+Exact-head verification was completed against `eaa52cffd4f040914e3799360f83c7eb036f7e51`.
+
+- Exact-head CI Baseline **#5896**, run **36526949184**, exact head `eaa52cffd4f040914e3799360f83c7eb036f7e51`: **SUCCESS**.
+- Job **Clean Runtime + CR/IM Regression**: **SUCCESS**.
+- Frozen predecessor regression through IM-29: **PASS**.
+- IM-29 remains **PASS / blockerCount 0**.
+- IM-30 self-test: **PASS / blockerCount 0**.
+- Verified IM-30 cases: frozen IM-27 predecessor remains passing; partial produced-resource delivery leaves only the real remainder matchable; full produced-resource delivery leaves no consumed quantity matchable; repeated consistency verification is mutation-free; mismatched physical source evidence is rejected; IM-30 owns no stock, claim, transport, settlement or SaveGame mutation authority.
+- Earlier exact-head failures were reconciled to self-test fixture defects only: frozen baseline-array mutation, invalid resource owner reference, delivery/settlement resource binding mismatch, and finally baseline ResourceMatching selecting an older same-type non-IM-27 resource before the newly materialized IM-27 output. Each correction was separately authorized and restricted to `src/dev/im-30-self-test.js`. No product defect was established by those failures.
+- The final fixture isolates the produced-resource path while leaving the existing deterministic ResourceMatching policy unchanged.
+
+### Separate Pages / browser evidence
+
+Deploy Authoritative Development Testbuild to Pages **#235**, run **36526949149**, exact head `eaa52cffd4f040914e3799360f83c7eb036f7e51`: **FAILURE**.
+
+This is recorded as separate deployment evidence. The successful functional Exact-Head CI / regression evidence above is not converted into a Pages, browser or real-device PASS claim. No successful browser/device verification is claimed for IM-30.
+
+### Freeze result
+
+**PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
+
+IM-30 is frozen at functional/product head `eaa52cffd4f040914e3799360f83c7eb036f7e51`. The separate Pages/Testbuild failure remains documented and does not establish a functional IM-30 regression. No successor capability is authorized by this freeze.
+
 ## IM-30 definition record — 2026-09-28
 
 **IM-30 – Produced Resource Logistics Consumption Consistency: DEFINED / NOT IMPLEMENTED.**
