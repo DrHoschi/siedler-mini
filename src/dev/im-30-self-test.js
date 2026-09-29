@@ -21,7 +21,9 @@ function fixture(amount=3,claimAmount=2){
  const receipt={kind:'production-effect-receipt',settlementId:'production-settlement:im30:1',buildingId:producer,inputs:[],outputs:[{resourceTypeId:type,amount}],stockBefore:[{resourceTypeId:type,quantity:0}],stockAfter:[{resourceTypeId:type,quantity:amount}]};
  const stocks=[...a.buildingStocks.filter(x=>!(x.buildingId===producer&&x.resourceTypeId===type)),{kind:'building-stock',buildingId:producer,resourceTypeId:type,quantity:amount}];
  const mat=IM27.materialize({receipt,settledIds:[receipt.settlementId],buildingStocks:stocks,resourceState:a.resourceState,claims:a.resourceClaims});
- const resource=mat.resources[0],d=a.resourceDemands.create({consumerId:consumer,definitionId:type,amount:claimAmount},{id:'demand:00000930'});
+ const resource=mat.resources[0];
+ for(const id of a.resourceState.ids()){const r=a.resourceState.get(id);if(id!==resource.id&&r?.definitionId===type&&r?.metadata?.source!=='IM-27_PRODUCTION_OUTPUT')a.resourceState.setState(id,'CONSUMED');}
+ const d=a.resourceDemands.create({consumerId:consumer,definitionId:type,amount:claimAmount},{id:'demand:00000930'});
  const matching=new ResourceMatching({resourceState:a.resourceState,claims:a.resourceClaims,demands:a.resourceDemands}),match=matching.matchDemand(d.id);
  const assignment=new ResourceAssignment({resourceState:a.resourceState,claims:a.resourceClaims,demands:a.resourceDemands}).assignMatch(match);
  const job=new TransportJobService({jobStore:a.domains.jobs,claims:a.resourceClaims,demands:a.resourceDemands,resourceState:a.resourceState}).createFromAssignment(assignment).jobs[0];
