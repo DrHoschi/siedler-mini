@@ -1,3 +1,71 @@
+## IM-31 definition record — 2026-09-30
+
+**IM-31 – Authoritative Production Cycle Time / Progression: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline:** `6bc3af349a32a0251cb941e2be5c6b53e310e585` (frozen post-IM-30 documentation state).
+
+### Reconciliation result
+
+The frozen production chain now owns readiness, deterministic cycle admission and identity, duplicate-safe active handoff, one-shot execution, settlement, output availability, successor re-evaluation and produced-resource logistics consistency. It does not yet own authoritative elapsed production time for an admitted concrete cycle. Frozen IM-22 intentionally settles its one-shot cycle at the Scheduler execution boundary, while the Scheduler step itself is explicitly not a production-duration definition. Frozen IM-29 may cause the next cycle to be evaluated after an authoritative state change, but it owns neither cycle duration nor progress.
+
+The remaining gap is therefore one deterministic simulation-time progression boundary between an IM-25-admitted / IM-26-accepted concrete cycle and its eligibility for frozen IM-22 execution. IM-31 must close only that gap without turning Scheduler ticks, wall-clock time or rendering into Production Admission or Settlement authority.
+
+### Binding question
+
+How does exactly one already admitted concrete production cycle acquire an authoritative duration and advance deterministically through simulation time before it becomes eligible for the existing IM-22 one-shot execution, while preserving pause, Save → Continue, cycle identity and all frozen Production / Scheduler / Settlement / Exactly-once boundaries?
+
+### Time and progression authority contract
+
+- The existing Runtime Scheduler remains the sole simulation-time source. IM-31 may consume only the deterministic `dtMs` supplied by the existing Scheduler; it must not create a second timer, clock, interval or animation-frame authority.
+- Scheduler `fixedStepMs` is an integration quantum, not a production-cycle duration or balance value.
+- Every timed progression is bound to one concrete frozen IM-25 identity: `buildingId + cycleId`. IM-31 may neither create nor renumber a cycle ID.
+- IM-26 remains the duplicate-safe active handoff / registration authority. An IM-26-accepted cycle must pass through IM-31 time progression before it may become eligible for IM-22 execution.
+- One authoritative positive cycle duration must be supplied by the production definition / recipe capability and captured immutably for the concrete cycle. It must not derive from wall-clock time, render frames, device speed, random values or the number of Scheduler callbacks.
+- The authoritative active-cycle state must preserve at least the concrete `buildingId`, `cycleId`, required duration and accumulated elapsed simulation time. Elapsed time starts at zero, is monotonic, never exceeds the required duration and belongs to no UI or diagnostic projection.
+- A displayed or queried progress ratio is derived only as clamped `elapsed / requiredDuration`; it is not a second mutable progress authority.
+
+### Progression and completion contract
+
+- Only an already admitted and actively handed-off cycle may advance. A Scheduler step by itself must never admit a production cycle or create successor production.
+- Progress advances only while the same authoritative operational Building, assigned Workforce and production readiness remain valid. If those prerequisites are no longer proven, progression and settlement fail closed: no elapsed-time advance, no input consumption, no output production and no new settlement evidence.
+- Equal accumulated simulation time must produce equal progression state regardless of step partitioning. For example, equivalent totals supplied as multiple smaller or fewer larger valid `dtMs` steps must reach the same elapsed value and completion boundary.
+- Runtime pause stops progression because no simulation steps execute. Resume continues from the same authoritative elapsed value. IM-31 introduces no offline or wall-clock catch-up.
+- Before the required duration is reached, frozen IM-18F input/output settlement, IM-20F settlement fence / effect receipt creation and frozen IM-27 output materialization are forbidden.
+- Reaching the required duration makes only that same concrete cycle time-complete. It does not itself consume input, produce output, create a settlement fence or bypass a final frozen IM-18E readiness evaluation.
+- A time-complete cycle may be handed to frozen IM-22 only through the existing IM-26 duplicate boundary. Frozen IM-22 remains the one-shot execution seam; frozen IM-18F / IM-20F remain the only authoritative settlement and exactly-once effect boundaries.
+- If final IM-22 execution is `BLOCKED_INPUT`, no settlement occurs and completed time must not be accumulated again. The same cycle may become executable only after authoritative readiness is restored; IM-31 must not invent a new cycle identity or a second duration for that retry.
+- After `SETTLED` or authoritative `ALREADY_SETTLED` evidence, the active progression for that cycle is terminal and must not advance, execute or settle again. Any successor remains governed exclusively by frozen IM-29 re-evaluation, IM-25 admission and a new concrete cycle identity whose elapsed time starts at zero.
+
+### Continue / reconstruction boundary
+
+- An in-progress or time-complete but not yet settled cycle is authoritative gameplay state. Save → Continue must restore its exact cycle identity, required duration and elapsed simulation time without resetting, fast-forwarding or replaying prior elapsed time.
+- Scheduler registrations remain derived Runtime state and must be reconstructed from restored authoritative cycle progression; registrations themselves must not become persisted gameplay truth.
+- No wall-clock time elapsed while the Runtime is paused, closed or reloading may be added during Continue.
+- A cycle already evidenced as settled by the frozen settlement fence + effect receipt must not be restored as an active progression. Contradictory progress / settlement evidence must fail closed.
+- This definition changes no SaveGame schema. A later implementation-scope reconciliation must identify the minimal persistence, validation, restore and rebinding mapping required by this continuity contract; no SaveGame change is authorized here.
+
+### Required later evidence
+
+A later separately authorized implementation / verification must prove at minimum:
+
+1. an IM-25-admitted / IM-26-accepted cycle begins at zero with one validated immutable duration;
+2. deterministic Scheduler `dtMs` advances only that active cycle and equal accumulated time yields equal state across different step partitions;
+3. no input/output settlement or settlement evidence exists before the duration boundary;
+4. reaching the duration makes exactly the same `buildingId + cycleId` eligible for the existing IM-22 execution path;
+5. Runtime pause adds no progress and resume continues from the exact prior elapsed value;
+6. invalid operational, Workforce or input readiness causes no unauthorized progress or settlement;
+7. repeated steps, completion checks and duplicate handoffs cannot double-settle or create parallel progress for the same cycle;
+8. `BLOCKED_INPUT` after time completion does not repeat the duration and can settle only after authoritative readiness returns;
+9. successful settlement retires that active progression, while any successor is admitted anew by IM-29 → IM-25 and starts at zero;
+10. Save → Reload → Continue preserves active progress exactly, adds no offline time and does not revive an already settled cycle; and
+11. IM-31 owns no second Scheduler, Production Admission, Workforce, BuildingStock, Settlement, Resource, Logistics or SaveGame authority.
+
+### Explicit NON-SCOPE
+
+No implementation-scope decision; no product, Runtime, Scheduler, SaveGame, CI or test change; no development branch; no implementation; no second clock; no wall-clock or offline production; no calendar, season, day/night or simulation-speed feature; no Workforce-speed, building-upgrade or other duration modifier; no early input consumption or new stock reservation; no new successor-admission policy; no queue, batch, priority, minimum-stock, output-distribution or target-selection strategy; no new Resource, Recipe or Building content; no trade/market system; no Player UI; no Inspector expansion; and no SaveGame rearchitecture.
+
+This definition record authorizes **no Implementation Scope / Persistence & Mapping Reconciliation, no development branch and no implementation**.
+
 ## IM-30 completion / evidence / freeze — 2026-09-29
 
 **IM-30 – Produced Resource Logistics Consumption Consistency: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
