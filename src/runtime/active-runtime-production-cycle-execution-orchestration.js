@@ -13,11 +13,12 @@ function requireArray(value, label) {
 function key(buildingId, cycleId) { return `${buildingId}|${cycleId}`; }
 
 export class ActiveRuntimeProductionCycleExecutionOrchestration {
-  #runtime; #get; #publish; #active = new Map();
+  #runtime; #get; #publish; #active = new Map(); #progression;
 
-  constructor({ runtime, getComposition, publishComposition } = {}) {
+  constructor({ runtime, getComposition, publishComposition, progression } = {}) {
     if (!runtime?.scheduler || typeof runtime.scheduler.register !== 'function') throw new TypeError('Runtime Scheduler required');
     if (typeof getComposition !== 'function' || typeof publishComposition !== 'function') throw new TypeError('composition read/publish seam required');
+    this.#progression = progression;
     this.#runtime = runtime;
     this.#get = getComposition;
     this.#publish = publishComposition;
@@ -26,6 +27,13 @@ export class ActiveRuntimeProductionCycleExecutionOrchestration {
   handoff({ buildingId, workforceAssignment, recipe } = {}) {
     const composition = requireComposition(this.#get());
     const owners = composition.authoritative;
+    if (this.#progression) {
+      const context = this.#progression.resolve(buildingId, composition);
+      if (!context) return Object.freeze({ kind: 'im26-active-runtime-production-cycle-handoff', status: 'NOT_REGISTERED', reason: 'PREREQUISITES_INVALID', buildingId, cycleId: null, registration: null, mutation: false });
+      workforceAssignment = context.workforceAssignment; recipe = context.recipe;
+    } else if (owners.productionCycleTimes != null || owners.productionCycleProgressions != null) {
+      throw new Error('timed composition requires IM-31 integration');
+    }
     const productionIntegration = OperationalBuildingProductionRecipeIntegration.integrate({ workforceAssignment, recipe });
     if (productionIntegration.buildingId !== buildingId) throw new Error('IM-26 production building mismatch');
 
@@ -50,7 +58,7 @@ export class ActiveRuntimeProductionCycleExecutionOrchestration {
     }
 
     const registrationKey = key(admission.buildingId, admission.cycleId);
-    const existing = this.#active.get(registrationKey);
+    const existing = this.#progression?.activeRegistration(admission) ?? this.#active.get(registrationKey);
     if (existing && existing.result() == null) {
       return Object.freeze({
         kind: 'im26-active-runtime-production-cycle-handoff',
@@ -66,7 +74,7 @@ export class ActiveRuntimeProductionCycleExecutionOrchestration {
     }
     if (existing) this.#active.delete(registrationKey);
 
-    const registration = RuntimeEconomyExecutionIntegration.installOneShotProductionCycle({
+    const registration = this.#progression ? this.#progression.install({ admission }) : RuntimeEconomyExecutionIntegration.installOneShotProductionCycle({
       runtime: this.#runtime,
       getComposition: this.#get,
       publishComposition: this.#publish,
@@ -89,8 +97,18 @@ export class ActiveRuntimeProductionCycleExecutionOrchestration {
     });
   }
 
+  prepareActivation(composition) {
+    if (!this.#progression) {
+      if (composition.authoritative.productionCycleProgressions?.length) throw new Error('IM-31 reconstruction integration required');
+      return Object.freeze({ commit() {}, rollback() {} });
+    }
+    const activation = this.#progression.prepareActivation(composition);
+    this.#active = new Map();
+    return Object.freeze({ commit: () => activation.commit(), rollback: () => { activation.rollback(); this.#active = new Map(); } });
+  }
+
   activeRegistration({ buildingId, cycleId } = {}) {
-    const registration = this.#active.get(key(buildingId, cycleId)) ?? null;
+    const registration = this.#progression?.activeRegistration({ buildingId, cycleId }) ?? this.#active.get(key(buildingId, cycleId)) ?? null;
     return registration?.result() == null ? registration : null;
   }
 }

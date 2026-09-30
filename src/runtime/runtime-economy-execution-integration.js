@@ -56,6 +56,8 @@ export class RuntimeEconomyExecutionIntegration {
     buildingId,
     workforceAssignment,
     recipe,
+    resolveProductionContext,
+    onResult = () => {},
   } = {}) {
     if (!runtime?.scheduler || typeof runtime.scheduler.register !== 'function') {
       throw new TypeError('Runtime Scheduler required');
@@ -68,6 +70,8 @@ export class RuntimeEconomyExecutionIntegration {
     const stableBuildingId = nonEmpty(buildingId, 'buildingId');
     const settlementId = `production-settlement:im22:${stableBuildingId}:${stableCycleId}`;
     const schedulerId = `im22-production-cycle:${stableBuildingId}:${stableCycleId}`;
+    const timingEnabled = () => getComposition().authoritative.productionCycleTimes != null || getComposition().authoritative.productionCycleProgressions != null;
+    if (timingEnabled() && typeof resolveProductionContext !== 'function') throw new Error('IM-31 execution boundary required for timed production');
     let unregister = () => {};
     let completed = false;
     let result = null;
@@ -77,6 +81,13 @@ export class RuntimeEconomyExecutionIntegration {
       phase: 'economy',
       tick: () => {
         if (completed) return result;
+        let currentContext = null;
+        if (timingEnabled()) {
+          const p = getComposition().authoritative.productionCycleProgressions?.find(v => v.buildingId === stableBuildingId && v.cycleId === stableCycleId);
+          if (!p || p.elapsedMs !== p.requiredDurationMs || runtime.state !== 'RUNNING') return null;
+          currentContext = resolveProductionContext();
+          if (!currentContext || currentContext.workforceAssignment?.assignmentId !== p.assignmentId) return null;
+        }
         completed = true;
         unregister();
 
@@ -95,12 +106,13 @@ export class RuntimeEconomyExecutionIntegration {
             settlementId,
             mutation: false,
           });
+          onResult(result);
           return result;
         }
 
         const productionIntegration = OperationalBuildingProductionRecipeIntegration.integrate({
-          workforceAssignment,
-          recipe,
+          workforceAssignment: currentContext?.workforceAssignment ?? workforceAssignment,
+          recipe: currentContext?.recipe ?? recipe,
         });
         if (productionIntegration.buildingId !== stableBuildingId) {
           throw new Error('IM-22 production cycle building mismatch');
@@ -122,6 +134,7 @@ export class RuntimeEconomyExecutionIntegration {
             mutation: false,
             missingInputs: execution.missingInputs,
           });
+          onResult(result);
           return result;
         }
 
@@ -152,6 +165,7 @@ export class RuntimeEconomyExecutionIntegration {
           mutation: true,
           receipt,
         });
+        onResult(result);
         return result;
       },
     });

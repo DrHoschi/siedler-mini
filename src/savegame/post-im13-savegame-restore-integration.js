@@ -1,3 +1,4 @@
+import { ProductionCycleTimeContract as Time } from '../domain/production-cycle-time-contract.js';
 import { StableIdAllocator } from '../world/stable-id.js';
 import { CoreDomainStores } from '../domain/core-domain-stores.js';
 import { SaveGameRestoreContract } from './savegame-restore-contract.js';
@@ -132,6 +133,9 @@ function restoreAuthoritative(snapshot, baseState) {
     workforceProfiles,
     workforceRequirements,
     productionRecipes,
+    ...(definitions.productionCycleTimes === undefined && auth.productionCycleProgressions === undefined ? {} : {
+      productionCycleTimes: Time.definitions(definitions.productionCycleTimes), productionCycleProgressions: Time.progressions(auth.productionCycleProgressions)
+    }),
     constructionProgress,
     buildingStocks,
     buildingStockTransportReservations,
@@ -211,6 +215,7 @@ export class PostIM13SaveGameRestoreIntegration {
       workforceProfiles: auth.workforceProfiles,
       workforceRequirements: auth.workforceRequirements,
       productionRecipes: auth.productionRecipes,
+      ...(auth.productionCycleTimes === undefined ? {} : { productionCycleTimes: auth.productionCycleTimes, productionCycleProgressions: auth.productionCycleProgressions }),
       constructionProgress: auth.constructionProgress,
       buildingStocks: auth.buildingStocks,
       buildingStockTransportReservations: auth.buildingStockTransportReservations,

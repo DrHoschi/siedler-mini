@@ -364,6 +364,11 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false,
       workforceProfiles,
       workforceRequirements,
       productionRecipes,
+      ...(includeProductionSupply ? {
+        // Explicit technical Miniworld duration; not a production balance policy.
+        productionCycleTimes: Object.freeze([Object.freeze({ kind: 'production-cycle-time-definition', buildingId: woodcutter.id, durationMs: 1000 })]),
+        productionCycleProgressions: Object.freeze([]),
+      } : {}),
       constructionProgress,
       buildingStocks,
       buildingStockTransportReservations: Object.freeze([]),

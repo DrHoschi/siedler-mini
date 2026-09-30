@@ -1,3 +1,4 @@
+import { ProductionCycleTimeContract as Time } from '../domain/production-cycle-time-contract.js';
 import { BuildingConstructionProgressTransitionContract } from '../domain/building-construction-progress-transition-contract.js';
 import { BuildingIdentityOwnershipContract } from '../domain/building-identity-ownership-contract.js';
 import { BuildingLifecycleStateContract } from '../domain/building-lifecycle-state-contract.js';
@@ -525,7 +526,7 @@ function deriveNavigation(state) {
   });
 }
 
-function schedulerPlan(transport) {
+function schedulerPlan(transport, state) {
   const registrations = transport.active
     .filter(value => value.execution.state !== 'DELIVERED')
     .map(value => Object.freeze({
@@ -537,6 +538,9 @@ function schedulerPlan(transport) {
       recoveryAction: value.recoveryAction,
       installed: false
     }));
+  for (const p of state.productionCycleProgressions ?? []) registrations.push(Object.freeze({
+    kind: 'post-continue-production-registration-descriptor', id: `im31-production-progress:${p.buildingId}|${p.cycleId}`, phase: 'economy', buildingId: p.buildingId, cycleId: p.cycleId, installed: false
+  }));
   return Object.freeze({
     kind: 'post-continue-scheduler-registration-plan',
     registrations: frozenSorted(registrations, value => value.id),
@@ -593,7 +597,7 @@ function derive(state) {
   const operational = deriveWorkforceAndProduction(state, constructionOperational.operationalByBuildingId);
   const transport = deriveTransportBindings(state);
   const navigation = deriveNavigation(state);
-  const scheduler = schedulerPlan(transport);
+  const scheduler = schedulerPlan(transport, state);
   const presentation = derivePresentation(state, housingPopulation, operational, navigation);
   const goldSettlementIds = Object.freeze([...state.goldSettlementIds].sort((a, b) => a.localeCompare(b)));
 
@@ -654,6 +658,21 @@ export class PostIM13DerivedStateRebindingIntegration {
   static get resultKind() { return RESULT_KIND; }
   static get derivedStateKind() { return DERIVED_STATE_KIND; }
 
+  static productionContext(state, buildingId) {
+    const recipe = state.productionRecipes.find(r => r.buildingId === buildingId);
+    if (!recipe || !state.domains.buildings.get(buildingId)) return null;
+    // Scope the existing derivation to this building; never reuse a stale rebound projection.
+    const scoped = { ...state, constructionProgress: state.constructionProgress.filter(p => p.buildingId === buildingId),
+      workforceRequirements: state.workforceRequirements.filter(r => r.buildingId === buildingId),
+      workforceBindings: state.workforceBindings.filter(b => b.buildingId === buildingId), productionRecipes: [recipe] };
+    const construction = deriveConstructionAndOperational(scoped);
+    const operational = deriveWorkforceAndProduction(scoped, construction.operationalByBuildingId);
+    const workforceAssignment = operational.workforce.find(w => w.buildingId === buildingId)?.workforceAssignment;
+    const production = operational.production.find(p => p.buildingId === buildingId);
+    if (!workforceAssignment || !production?.execution || workforceAssignment.assignments.some(a => !state.domains.units.get(a.personId))) return null;
+    return Object.freeze({ recipe, workforceAssignment, execution: production.execution });
+  }
+
   static rebind(restoredResult) {
     if (restoredResult?.kind !== PostIM13SaveGameRestoreIntegration.resultKind
       || restoredResult?.status !== 'RESTORED') {
@@ -662,6 +681,11 @@ export class PostIM13DerivedStateRebindingIntegration {
 
     try {
       const runtimeState = requireRuntimeState(restoredResult.runtimeState);
+      if (runtimeState.productionCycleTimes != null || runtimeState.productionCycleProgressions != null) Time.validate({
+        times: runtimeState.productionCycleTimes, progressions: runtimeState.productionCycleProgressions, recipes: runtimeState.productionRecipes,
+        buildings: new Set(runtimeState.domains.buildings.ids()), workforceBindings: runtimeState.workforceBindings,
+        productionSettlementIds: [...runtimeState.productionSettlementIds], productionEffectReceipts: runtimeState.productionEffectReceipts,
+      });
       const derivedState = derive(runtimeState);
       return Object.freeze({
         kind: RESULT_KIND,

@@ -50,11 +50,13 @@ export class PostIM13BrowserSaveContinueLifecycle {
   #capturePresentation;
   #restorePresentation;
   #createTransport;
+  #prepareProduction;
 
-  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation, createTransportAdapter } = {}) {
+  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation, createTransportAdapter, prepareProductionActivation } = {}) {
     if (!storage || !runtime?.scheduler || typeof getComposition !== 'function' || typeof publishComposition !== 'function') {
       throw new TypeError('IM-20E lifecycle dependencies required');
     }
+    this.#prepareProduction = prepareProductionActivation;
     this.#storage = storage;
     this.#runtime = runtime;
     this.#getComposition = getComposition;
@@ -166,8 +168,12 @@ export class PostIM13BrowserSaveContinueLifecycle {
     const transport = this.#createTransport({ state: rebound.runtimeState, transport: rebound.derivedState.transport });
     const candidate = compositionFrom(rebound, transport);
     const unregister = [];
+    let productionActivation = null;
     try {
+      if (candidate.authoritative.productionCycleProgressions?.length && !this.#prepareProduction) throw new Error('IM-31 activation integration required');
+      productionActivation = this.#prepareProduction?.(candidate) ?? null;
       for (const descriptor of rebound.derivedState.scheduler.registrations) {
+        if (descriptor.kind === 'post-continue-production-registration-descriptor') continue;
         const transportTick = transport.tickFor(descriptor);
         let off = () => {};
         off = this.#runtime.scheduler.register({
@@ -185,13 +191,15 @@ export class PostIM13BrowserSaveContinueLifecycle {
       this.#resetCamera();
       this.#clearSelection();
       this.#runtime.start();
+      productionActivation?.commit();
       return Object.freeze({
         kind: 'im20e-continue-result', status: 'CONTINUED', captureStepIndex: rebound.captureStepIndex,
-        schedulerRegistrationCount: unregister.length, restored, rebound, transport, recoveryPlan, recoveryExecution,
+        schedulerRegistrationCount: unregister.length + (candidate.authoritative.productionCycleProgressions?.length ?? 0), restored, rebound, transport, recoveryPlan, recoveryExecution,
       });
     } catch (error) {
       for (const off of unregister.reverse()) off();
       const rollbackErrors = [];
+      try { productionActivation?.rollback(); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
       try { this.#publish(previous); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
       try { this.#restorePresentation(previousPresentation); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
       return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'ACTIVATION_FAILED', error: String(error.message), rollbackErrors: Object.freeze(rollbackErrors) });

@@ -1,3 +1,4 @@
+import { ProductionCycleTimeContract as Time } from '../domain/production-cycle-time-contract.js';
 import { parseStableId } from '../world/stable-id.js';
 import { SaveGameSnapshotContract } from './savegame-snapshot-contract.js';
 import { PersistentStateInventorySaveGameSchemaContract } from './persistent-state-inventory-schema-contract.js';
@@ -323,6 +324,8 @@ function capturePostIM13({
   workforceProfiles = [],
   workforceRequirements = [],
   productionRecipes = [],
+  productionCycleTimes,
+  productionCycleProgressions,
   constructionProgress = [],
   buildingStocks = [],
   buildingStockTransportReservations = [],
@@ -357,6 +360,7 @@ function capturePostIM13({
         (value) => value.buildingId,
         'workforce requirements'
       ),
+      ...(productionCycleTimes === undefined && productionCycleProgressions === undefined ? {} : { productionCycleTimes: Time.definitions(productionCycleTimes) }),
       productionRecipes: normalizeUniqueArray(
         productionRecipes,
         (value) => ProductionBuildingStockContract.define(value),
@@ -364,6 +368,7 @@ function capturePostIM13({
         'production recipes'
       )
     }),
+    ...(productionCycleTimes === undefined && productionCycleProgressions === undefined ? {} : { productionCycleProgressions: Time.progressions(productionCycleProgressions) }),
     resourceDemands: captureDemands(resourceDemands),
     resourceClaims: captureClaims(resourceClaims),
     constructionProgress: normalizeUniqueArray(
@@ -443,6 +448,7 @@ function assertSchemaBoundary(authoritative) {
     'authoritative.settlementEffectReceipts.production',
     'authoritative.settlementEffectReceipts.gold'
   ];
+  if (authoritative.definitions.productionCycleTimes != null) expected.push('authoritative.definitions.productionCycleTimes', 'authoritative.productionCycleProgressions');
   const missing = expected.filter((section) => !schema.persistedSections.includes(section));
   if (missing.length > 0) throw new Error(`IM-20A persistence inventory missing sections: ${missing.join(', ')}`);
   if (!authoritative || typeof authoritative !== 'object') throw new TypeError('post-IM13 authoritative state required');
@@ -476,6 +482,8 @@ export class PostIM13AuthoritativeSnapshotIntegration {
     workforceProfiles = [],
     workforceRequirements = [],
     productionRecipes = [],
+    productionCycleTimes,
+    productionCycleProgressions,
     constructionProgress = [],
     buildingStocks = [],
     buildingStockTransportReservations = [],
@@ -498,6 +506,8 @@ export class PostIM13AuthoritativeSnapshotIntegration {
       workforceProfiles,
       workforceRequirements,
       productionRecipes,
+      productionCycleTimes,
+      productionCycleProgressions,
       constructionProgress,
       buildingStocks,
       buildingStockTransportReservations,

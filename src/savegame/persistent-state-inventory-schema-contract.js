@@ -226,6 +226,12 @@ const INVENTORY = deepFreeze([
     continuity: 'receipt settlementId and balance before/amount/after round-trip with the existing Gold fence'
   }),
 
+  entry({ id: 'production-cycle-time-definitions', policy: POLICY.PERSIST, authority: 'IM-31 production definition capability',
+    section: 'authoritative.definitions.productionCycleTimes', source: 'IM-31', rationale: 'Explicit production duration definitions; optional paired V2 extension.' }),
+  entry({ id: 'active-production-cycle-progressions', policy: POLICY.PERSIST, authority: 'IM-31 authoritative production cycle progression',
+    section: 'authoritative.productionCycleProgressions', source: 'IM-31', rationale: 'Exact cycle identity, workforce binding, immutable duration and elapsed simulation time survive Continue.',
+    continuity: 'No reset, elapsed replay or offline catch-up; scheduler registrations remain derived.' }),
+
   // Derived/transient state: never persisted as a second gameplay truth in the IM-20 schema.
   entry({
     id: 'housing-capacity-occupancy-projection',

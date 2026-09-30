@@ -32,6 +32,8 @@ export class PostIM13ActiveRuntimeCaptureAdapter {
       workforceProfiles: owners.workforceProfiles,
       workforceRequirements: owners.workforceRequirements,
       productionRecipes: owners.productionRecipes,
+      productionCycleTimes: owners.productionCycleTimes,
+      productionCycleProgressions: owners.productionCycleProgressions,
       constructionProgress: owners.constructionProgress,
       buildingStocks: owners.buildingStocks,
       buildingStockTransportReservations: owners.buildingStockTransportReservations,

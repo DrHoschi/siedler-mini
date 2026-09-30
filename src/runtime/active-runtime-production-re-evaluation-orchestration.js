@@ -9,12 +9,13 @@ function requireBuildingId(value) {
 function triggerKey(trigger, buildingId) { return `${trigger}|${buildingId}`; }
 
 export class ActiveRuntimeProductionReEvaluationOrchestration {
-  #runtime; #get; #cycleExecution; #pending = new Map(); #unsubscribe;
+  #runtime; #get; #cycleExecution; #resolve; #pending = new Map(); #unsubscribe;
 
-  constructor({ runtime, getComposition, cycleExecution } = {}) {
+  constructor({ runtime, getComposition, cycleExecution, resolveProductionContext } = {}) {
     if (!runtime?.scheduler || typeof runtime.scheduler.onCompletedStep !== 'function') throw new TypeError('Runtime Scheduler completed-step boundary required');
     if (typeof getComposition !== 'function') throw new TypeError('composition read seam required');
     if (!cycleExecution || typeof cycleExecution.handoff !== 'function') throw new TypeError('IM-26 cycle execution handoff required');
+    this.#resolve = resolveProductionContext;
     this.#runtime = runtime;
     this.#get = getComposition;
     this.#cycleExecution = cycleExecution;
@@ -61,8 +62,9 @@ export class ActiveRuntimeProductionReEvaluationOrchestration {
     const recipes = Array.isArray(owners.productionRecipes) ? owners.productionRecipes : [];
     const assignments = Array.isArray(owners.workforceAssignments) ? owners.workforceAssignments : [];
     const results = pending.map(request => {
-      const recipe = recipes.find(value => value?.buildingId === request.buildingId) ?? null;
-      const workforceAssignment = assignments.find(value => value?.buildingId === request.buildingId && value?.status === 'ASSIGNED') ?? null;
+      const context = this.#resolve?.(request.buildingId, composition);
+      const recipe = this.#resolve ? context?.recipe : recipes.find(value => value?.buildingId === request.buildingId) ?? null;
+      const workforceAssignment = this.#resolve ? context?.workforceAssignment : assignments.find(value => value?.buildingId === request.buildingId && value?.status === 'ASSIGNED') ?? null;
       if (!recipe || !workforceAssignment) {
         return Object.freeze({ kind:'im29-production-re-evaluation-result', status:'NOT_EVALUATED', reason:!recipe?'RECIPE_MISSING':'WORKFORCE_ASSIGNMENT_MISSING', ...request, handoff:null, mutation:false });
       }
@@ -72,6 +74,7 @@ export class ActiveRuntimeProductionReEvaluationOrchestration {
     return Object.freeze({ kind:'im29-production-re-evaluation-flush', status:'COMPLETED', results:Object.freeze(results), mutation:false });
   }
 
+  clearPending() { this.#pending.clear(); }
   pendingCount() { return this.#pending.size; }
   dispose() { this.#unsubscribe?.(); this.#unsubscribe = null; this.#pending.clear(); }
 }

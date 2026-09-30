@@ -1,3 +1,4 @@
+import { ProductionCycleTimeContract as Time } from '../domain/production-cycle-time-contract.js';
 import { parseStableId } from '../world/stable-id.js';
 import { SaveGameValidationContract } from './savegame-validation-contract.js';
 import { BuildingConstructionProgressTransitionContract } from '../domain/building-construction-progress-transition-contract.js';
@@ -661,6 +662,13 @@ export class PostIM13SaveGameValidationContract {
       validateRebindingContinuity(snapshot, workforceAssignments, refs, collector);
       validateSettlementFences(auth?.settlementFences, collector);
       validateSettlementEffectReceipts(auth?.settlementEffectReceipts, auth?.settlementFences, snapshot, collector);
+      const times = auth?.definitions?.productionCycleTimes, progressions = auth?.productionCycleProgressions;
+      if (times !== undefined || progressions !== undefined) {
+        try { Time.validate({ times, progressions, recipes: auth.definitions.productionRecipes,
+          buildings: new Set(Object.keys(snapshot.domains?.buildings?.state?.items ?? {})), workforceBindings: auth.workforceBindings,
+          productionSettlementIds: auth.settlementFences.production, productionEffectReceipts: auth.settlementEffectReceipts.production });
+        } catch { collector.add('INVALID_PRODUCTION_CYCLE_TIMING', 'authoritative.productionCycleProgressions'); }
+      }
     }
 
     const errors = collector.result();
