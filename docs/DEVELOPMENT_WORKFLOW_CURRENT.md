@@ -1,3 +1,55 @@
+## IM-31 completion / evidence / freeze — 2026-10-01
+
+**IM-31 – Authoritative Production Cycle Time / Progression: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
+
+**Frozen functional/product head:** `ba5cf89b52f03cfa4284774301234a38e66637c9`.
+
+### Frozen capability
+
+IM-31 closes exactly the deterministic simulation-time progression boundary between an IM-25-admitted / IM-26-accepted concrete cycle and its eligibility for frozen IM-22 execution. The production definition supplies one validated positive duration, which is captured immutably for the concrete `buildingId + cycleId`. The existing Scheduler remains the only simulation-time source; elapsed time is authoritative, monotonic and clamped, while any ratio remains derived only.
+
+Progress advances only for the same active cycle while current Building, Workforce and input readiness remain valid. No settlement or output may occur before time completion. Time completion alone does not settle: the same cycle reaches frozen IM-22 only through the existing IM-26 duplicate boundary, with frozen IM-18F / IM-20F retaining settlement and exactly-once authority. `BLOCKED_INPUT` retries do not repeat duration, and settled or already-settled evidence retires progression. IM-29 remains the only successor re-evaluation boundary.
+
+Save → Reload → Continue preserves exact `buildingId`, `cycleId`, required duration and elapsed simulation time, reconstructs derived Scheduler registration, adds no offline or wall-clock time and fails closed on contradictory progression / settlement evidence. New Game and failed activation preserve the existing lifecycle rollback and retirement boundaries. IM-31 introduces no second Scheduler, admission, settlement, stock, resource, logistics or SaveGame authority and no SaveGame schema-version change.
+
+### Frozen implementation scope
+
+The final functional head is exactly 2 commits ahead / 0 behind the authorized implementation basis `737b8d3873f013b419d346bfd2c42ef8e89076d5`, with merge base exactly that basis.
+
+- Implementation commit: `452c8a7dd1c2b1dafdbae4c3d1c4932f248fea5b`.
+- Separately authorized verification-blocker correction: `ba5cf89b52f03cfa4284774301234a38e66637c9`.
+- Full implementation delta: 20 files, 562 insertions and 28 deletions.
+- New files: `src/domain/production-cycle-time-contract.js`, `src/runtime/active-runtime-production-cycle-time-progression.js`, `src/dev/im-31-self-test.js`, `src/dev/im-31-self-test.node.js`.
+- Existing integration files are limited to CI, Runtime production execution/re-evaluation/economy wiring, New Game, baseline composition, browser lifecycle, SaveGame capture/snapshot/schema validation/restore/rebinding, `src/main.js`, ResourceState and the focused CR-02A test.
+- The correction changes exactly five files: `src/resources/resource-state.js`, `src/diagnostics/baseline-miniworld-scenario.js`, `src/savegame/post-im13-savegame-restore-integration.js`, `src/dev/cr-02a-self-test.js`, and `src/dev/im-31-self-test.js` (43 insertions / 20 deletions).
+- The correction removes the duplicate World mirror for the baseline ProductionSupply building and lets ResourceState validate owner/location identities against the authoritative domain Building store during composition and restore. Unknown references remain fail-closed; no persistence schema or gameplay authority is added.
+
+### Verification / evidence
+
+The repeated read-only Implementation Verification / Regression Gate completed against exact head `ba5cf89b52f03cfa4284774301234a38e66637c9` with a clean worktree.
+
+- Exact-head CI Baseline **#5901**, run **36852262448**: **SUCCESS**.
+- Job **Clean Runtime + CR/IM Regression**: **SUCCESS**; failure-diagnostics upload correctly skipped.
+- Independently repeated local repository-defined CI / CR / IM workflow block: **EXIT 0**.
+- IM-31 focused self-test: **PASS / 24 of 24 / blockerCount 0**.
+- CR-02A focused self-test: **PASS / 7 of 7**, including domain-Building reference acceptance without a World mirror and rejection of unknown references.
+- Syntax verification for all five correction files: **5 of 5 PASS**; `git diff --check`: **PASS**.
+- Persistence evidence proves capture → restore → rebind → capture exact-progress roundtrip, real-storage Continue with old-registration replacement, time-complete unsettled restore without offline time, completed-step-only capture, invalid persistence evidence rejection, failed activation rollback, failed New Game rollback, active-cycle retirement and legacy V2 compatibility.
+- Runtime evidence proves deterministic equal-time progression across step partitions, pause/resume continuity, immutable duration, no premature settlement/output, no direct IM-22 or Scheduler bypass, fail-closed operational/readiness handling, duplicate-safe completion, `BLOCKED_INPUT` retry without repeated duration and successor admission at zero only after settlement.
+- The previously blocking real output path now materializes the produced resource against the authoritative domain woodcutter Building identity without a duplicate World entity; SaveGame validation remains valid.
+
+### Separate Pages / browser evidence
+
+Deploy Authoritative Development Testbuild to Pages **#241**, run **36852262299**, exact head `ba5cf89b52f03cfa4284774301234a38e66637c9`: **FAILURE**, with the `deploy` job reporting no executed steps.
+
+This is recorded as **KNOWN DEPLOYMENT/PAGES FAILURE / NON-FUNCTIONAL / NON-BLOCKING FOR IM-31 FREEZE**. The successful exact-head functional CI and complete local regression are the functional freeze evidence. No successful Pages deployment, browser verification or real-device PASS is claimed for IM-31.
+
+### Freeze result
+
+**PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER / FROZEN.**
+
+IM-31 is frozen at functional/product head `ba5cf89b52f03cfa4284774301234a38e66637c9`. The documentation commit created by this gate records evidence only and must not be reclassified as the functional/product head. The separate Pages failure remains visible and does not establish a functional regression. No IM-32 capability, successor implementation, integration to `main` or further IM-31 product change is authorized by this freeze.
+
 ## IM-31 definition record — 2026-09-30
 
 **IM-31 – Authoritative Production Cycle Time / Progression: DEFINED / NOT IMPLEMENTED.**
