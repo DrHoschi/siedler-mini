@@ -95,6 +95,7 @@ function restoreAuthoritative(snapshot, baseState) {
   const resourceState = new ResourceState({
     world: baseState.world,
     resourceStore: baseState.domains.resources,
+    referenceStores: [baseState.domains.buildings],
     restoreDefinitions: clone(definitions.resourceTypes.state),
     definitionAllocator: allocatorFrom(definitions.resourceTypes.allocator)
   });

@@ -42,6 +42,23 @@ export function runCr02aSelfTest() {
     return rejected && stack.location.refId === map.cellIdAt(0, 0) && stack.ownerId === world.worldId;
   });
 
+  check('domain-building-reference-source-without-world-mirror', () => {
+    const isolatedDomains = new CoreDomainStores();
+    const building = isolatedDomains.buildings.create({ role: 'resource-owner' }, { id: 'building:00000001' });
+    const isolated = new ResourceState({
+      world,
+      resourceStore: isolatedDomains.resources,
+      referenceStores: [isolatedDomains.buildings],
+    });
+    const type = isolated.createDefinition({ technicalName: 'domain.owned' });
+    const resource = isolated.createResource({ definitionId: type.id,
+      location: { kind: 'owner', refId: building.id }, ownerId: building.id });
+    let rejected = false;
+    try { isolated.relocate(resource.id, { kind: 'owner', refId: 'building:99999999' }, 'building:99999999'); }
+    catch { rejected = true; }
+    return rejected && !world.get(building.id) && resource.ownerId === building.id;
+  });
+
   check('controlled-state-and-amount-mutations', () => {
     resources.setState(stack.id, 'RESERVED');
     resources.setAmount(stack.id, 3);

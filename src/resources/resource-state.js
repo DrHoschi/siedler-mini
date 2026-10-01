@@ -67,18 +67,23 @@ function requireDefinitionRestoreState(state) {
 
 export class ResourceState {
   #world;
+  #referenceStores;
   #resources;
   #definitions;
   #definitionIds;
 
-  constructor({ world, resourceStore, restoreDefinitions = null, definitionAllocator = null }) {
+  constructor({ world, resourceStore, referenceStores = [], restoreDefinitions = null, definitionAllocator = null }) {
     if (!world || typeof world.get !== 'function' || typeof world.snapshot !== 'function') {
       throw new TypeError('WorldStore-compatible world required');
     }
     if (!resourceStore || resourceStore.kind !== 'resource' || typeof resourceStore.create !== 'function') {
       throw new TypeError('resource DomainStore required');
     }
+    if (!Array.isArray(referenceStores) || referenceStores.some(store => !store || typeof store.get !== 'function')) {
+      throw new TypeError('resource reference stores must provide get');
+    }
     this.#world = world;
+    this.#referenceStores = Object.freeze([...referenceStores]);
     this.#resources = resourceStore;
     this.#definitions = new Store(
       'resource.definitions',
@@ -187,6 +192,7 @@ export class ResourceState {
     if (!refId) return;
     if (refId === this.#world.worldId) return;
     if (this.#world.get(refId)) return;
+    if (this.#referenceStores.some(store => store.get(refId))) return;
     throw new TypeError(`unknown resource reference id: ${refId}`);
   }
 }

@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { ProductionBuildingStockContract } from '../domain/production-building-stock-contract.js';
-import { BuildingStockContract } from '../domain/building-stock-contract.js';
 import { Runtime } from '../runtime/runtime.js';
 import { RuntimeConfig } from '../runtime/config.js';
 import { createBaselineMiniworldScenario } from '../diagnostics/baseline-miniworld-scenario.js';
@@ -8,6 +6,7 @@ import { ProductionCycleTimeContract as Time } from '../domain/production-cycle-
 import { ActiveRuntimeProductionCycleTimeProgression as Progression } from '../runtime/active-runtime-production-cycle-time-progression.js';
 import { ActiveRuntimeProductionCycleExecutionOrchestration as IM26 } from '../runtime/active-runtime-production-cycle-execution-orchestration.js';
 import { ActiveRuntimeProductionReEvaluationOrchestration as IM29 } from '../runtime/active-runtime-production-re-evaluation-orchestration.js';
+import { ActiveRuntimeProductionOutputAvailabilityOrchestration as IM28 } from '../runtime/active-runtime-production-output-availability-orchestration.js';
 import { RuntimeEconomyExecutionIntegration as IM22 } from '../runtime/runtime-economy-execution-integration.js';
 import { PostIM13ActiveRuntimeCaptureAdapter as Capture } from '../savegame/post-im13-active-runtime-capture-adapter.js';
 import { PostIM13AuthoritativeSnapshotIntegration as Snapshot } from '../savegame/post-im13-authoritative-snapshot-integration.js';
@@ -21,18 +20,9 @@ import { PlayerNewGameLifecycle as NewGame } from '../runtime/player-new-game-li
 let miniworldSnapshot = null;
 function timingMiniworld() {
   if (!miniworldSnapshot) {
-    // The existing IM-24 Miniworld has a World/Domain mirrored building ID that the
-    // frozen SaveGame validator rejects. Keep that predecessor defect out of this fixture.
-    const baseline = createBaselineMiniworldScenario({ includeSaveContinuity: true });
-    const owners = baseline.authoritative, buildingId = owners.workforceBindings[0].buildingId;
-    const boards = owners.resourceState.createDefinition({ technicalName: 'boards', label: 'Boards' });
-    const recipe = ProductionBuildingStockContract.define({ buildingId,
-      inputs: [{ resourceTypeId: 'resource-type:00000001', quantity: 3 }], outputs: [{ resourceTypeId: boards.id, quantity: 1 }] });
-    const composition = { ...baseline, authoritative: { ...owners, productionRecipes: [recipe],
-      productionCycleTimes: Time.definitions([{ buildingId, durationMs: 1000 }]), productionCycleProgressions: [],
-      buildingStocks: [BuildingStockContract.define({ buildingId, resourceTypeId: 'resource-type:00000001', quantity: 6 }),
-        BuildingStockContract.define({ buildingId, resourceTypeId: boards.id, quantity: 0 })] } };
-    miniworldSnapshot = Capture.capture(composition, 0);
+    const baseline = createBaselineMiniworldScenario({ includeSaveContinuity: true, includeProductionSupply: true });
+    miniworldSnapshot = Capture.capture(baseline, 0);
+    assert.equal(Validation.validate(miniworldSnapshot).status, 'VALID');
   }
   const restored = Restore.restore(miniworldSnapshot);
   assert.equal(restored.status, 'RESTORED');
@@ -49,8 +39,13 @@ function fixture({ durationMs = 1000, quantity = 6, successor = false } = {}) {
   const change = updates => publish(Object.freeze({ ...composition, authoritative: Object.freeze({ ...composition.authoritative, ...updates }) }));
   change({ productionCycleTimes: Time.definitions([{ buildingId, durationMs }]), buildingStocks: Object.freeze(composition.authoritative.buildingStocks.map(s => Object.freeze({ ...s, quantity: s.buildingId === buildingId && s.resourceTypeId === 'resource-type:00000001' ? quantity : s.quantity }))) });
   let reEvaluation = null;
+  const output = new IM28({ getComposition: () => composition, publishComposition: publish });
   const progression = new Progression({ runtime, getComposition: () => composition, publishComposition: publish,
-    publishSettledComposition: value => { publish(value); if (successor) reEvaluation?.requestSettledOutput({ composition: value }); } });
+    publishSettledComposition: value => {
+      const result = output.publishSettledComposition(value);
+      if (successor) reEvaluation?.requestSettledOutput({ composition });
+      return result;
+    } });
   const im26 = new IM26({ runtime, getComposition: () => composition, publishComposition: publish, progression });
   reEvaluation = new IM29({ runtime, getComposition: () => composition, cycleExecution: im26, resolveProductionContext: (id, c) => progression.resolve(id, c) });
   // Deterministic direct steps, without adding a test timer/clock. Runtime owns state transitions.
@@ -96,6 +91,9 @@ export function runIM31SelfTest() {
       assert.equal(f.composition.authoritative.productionSettlementIds.length, 0);
       f.runtime.scheduler.step(1); assert.equal(r.result().status, 'SETTLED'); assert.equal(f.active, null);
       assert.equal(r.result().cycleId, 'im25-cycle-00000001'); assert.equal(f.composition.authoritative.productionEffectReceipts.length, 1);
+      const produced = f.composition.authoritative.resourceState.ids().map(id => f.composition.authoritative.resourceState.get(id))
+        .find(value => value.metadata?.source === 'IM-27_PRODUCTION_OUTPUT');
+      assert.equal(produced.ownerId, f.buildingId); assert.equal(f.composition.authoritative.world.get(f.buildingId), null);
       f.runtime.scheduler.step(9000); assert.equal(f.composition.authoritative.productionEffectReceipts.length, 1);
     } finally { f.close(); }
   });

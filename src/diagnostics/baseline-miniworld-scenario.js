@@ -108,9 +108,6 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false,
   const hq = createVisibleBuilding('HQ', { x: 2, y: 2 });
   const woodcutter = createVisibleBuilding('WOODCUTTER', { x: 5, y: 3 });
   const storehouse = createVisibleBuilding('STOREHOUSE', { x: 3.5, y: 4.5 });
-  if (includeProductionSupply) {
-    world.create('building', { domainRefId: storehouse.id, role: 'IM-24-PRODUCTION-SUPPLY-SOURCE' }, { id: storehouse.id });
-  }
   const carrierPerson = createVisiblePerson({ x: 1.25, y: 1.5 }, {
     carrierCapacity: 2,
     carrierState: includeSaveContinuity ? 'OCCUPIED' : 'AVAILABLE',
@@ -185,7 +182,11 @@ export function createBaselineMiniworldScenario({ includeSaveContinuity = false,
   const goldSettlement = goldSettlementResult.settlement;
   const goldSettlementIds = goldSettlementResult.settledIds;
 
-  const resourceState = new ResourceState({ world, resourceStore: domains.resources });
+  const resourceState = new ResourceState({
+    world,
+    resourceStore: domains.resources,
+    referenceStores: [domains.buildings],
+  });
   const resourceClaims = new ResourceClaims({ resourceState });
   const resourceDemands = new ResourceDemands({ resourceState, claims: resourceClaims });
   const housingCapabilities = Object.freeze([hqHousing, storehouseHousing]);
