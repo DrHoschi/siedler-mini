@@ -1,3 +1,54 @@
+## IM-32 Definition Record — 2026-10-07
+
+**IM-32 – Source-Bound Output-to-HQ Delivery and Storage Intake: DEFINED / NOT IMPLEMENTED.**
+
+**Functional baseline:** IM-31 frozen product head `ba5cf89b52f03cfa4284774301234a38e66637c9`.
+**Documentation baseline:** `13bd61e37f6bcdd8085d3602c4069d92e6f54304` (IM-31 completion / evidence / freeze documentation).
+
+### Capability boundary
+
+IM-32 closes the boundary from already produced, locally held output to centrally available HQ stock:
+
+`local production output → exact source-bound transport demand → existing logistics → successful delivery to the designated HQ → exactly-once HQ storage intake`.
+
+Production and local BuildingStock remain authoritative for creating and holding the output. Merely producing output, creating a demand, matching a resource, reserving it, or creating a transport job must not make that quantity available at HQ. Central availability begins only after the existing logistics execution proves successful delivery to the valid designated HQ and the HQ intake settles that delivered quantity exactly once.
+
+### Binding contract
+
+- A transfer is bound to the concrete produced output and its authoritative source Building, ResourceType and quantity. It must not silently substitute another source, resource type, owner or amount.
+- The output remains represented at its source until the existing logistics transfer and source settlement account for the delivered quantity. IM-32 adds no direct Production-to-HQ credit path.
+- Claims, reservations, matching, assignment, TransportJobs and TransportExecutions use the existing logistics contracts. IM-32 adds only the missing source-bound output-to-HQ handoff and intake integration.
+- Only a valid designated HQ with compatible ownership and storage acceptance may receive the delivered quantity. Missing, contradictory or invalid source/HQ/delivery evidence fails closed: no HQ credit and no duplicate settlement.
+- Successful HQ intake is idempotent. Repeated orchestration, delivery callbacks, reload or retry must not credit the same delivered output twice. Idempotency must be derived from the existing authoritative output, claim/reservation, job/execution and resource-availability evidence; IM-32 introduces no parallel transfer ledger.
+- Partial, rejected, cancelled or failed transfers credit only the quantity actually accepted by the valid HQ. Untransferred quantity remains governed by existing source and logistics release/recovery contracts.
+- Logistics remains the authority for transfer execution and delivery. IM-32 creates no pathfinding, movement, scheduler, production-cycle or generic warehouse-strategy authority.
+
+### Persistence and Continue boundary
+
+No SaveGame schema-version change is authorized by this definition. Existing persisted output/source identity, claims, BuildingStock reservations, TransportJobs, TransportExecutions and HQ-intake/resource state are the expected evidence for restoring the transfer boundary. A later implementation-scope reconciliation must verify the exact mappings and identify a schema change only if an actual persistence gap is demonstrated.
+
+Save → Reload → Continue must neither lose nor duplicate an in-flight transfer or completed HQ intake. Restored derived runtime bindings must reconnect to the existing authoritative identities; they must not recreate a second transfer or re-credit settled output.
+
+### Required later implementation evidence
+
+A separately authorized implementation and verification must prove at minimum:
+
+1. produced output remains at its authoritative source until existing logistics accounts for its transfer;
+2. the created demand and every reservation/job/execution stay bound to the exact source, ResourceType and quantity;
+3. no matching, reservation, job creation or production event alone credits HQ;
+4. only successful delivery to a valid designated HQ creates central availability;
+5. repeated handoff, execution, retry and continuation cannot duplicate source debit, delivery settlement or HQ credit;
+6. wrong-source, wrong-type, wrong-owner, invalid-HQ, missing-storage and contradictory-delivery cases fail closed;
+7. partial delivery credits only the accepted quantity and leaves the remainder under existing source/logistics ownership;
+8. Save → Reload → Continue before transfer, with in-flight transport, after delivery and after HQ intake preserves exact quantities and exactly-once behavior; and
+9. IM-32 adds no parallel logistics execution, scheduler, production, SaveGame or warehouse-policy authority.
+
+### Explicit NON-SCOPE
+
+No change to production definitions, recipes, cycle admission or duration; no new resources, buildings or HQ-selection strategy; no general warehouse policy; no ResourceMatching or ResourceAssignment redesign; no new pathfinding or movement; no UI, renderer or Inspector work; no change to IM-31 cycle-time behavior; no change to the existing logistics execution semantics; no SaveGame rearchitecture; and no implementation, runtime, test-code, package or CI change in this definition-documentation step.
+
+This record authorizes only the definition of IM-32. It does not authorize implementation-scope reconciliation, implementation, verification, freeze or integration. The next separate step is IM-32 Definition Documentation Verification / Scope Gate against this documentation commit.
+
 ## IM-31 completion / evidence / freeze — 2026-10-01
 
 **IM-31 – Authoritative Production Cycle Time / Progression: COMPLETE / FROZEN / PASS / 0 FUNCTIONAL BLOCKER / 0 SCOPE BLOCKER.**
