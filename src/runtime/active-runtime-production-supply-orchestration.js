@@ -6,6 +6,7 @@ import { ResourceAssignment } from '../resources/resource-assignment.js';
 import { TransportJobService } from '../transport/transport-job-service.js';
 import { DeliveredTransportBuildingStockSettlement } from '../domain/delivered-transport-building-stock-settlement.js';
 import { ProducedResourceLogisticsConsumptionConsistency } from '../domain/produced-resource-logistics-consumption-consistency.js';
+import { SourceBoundOutputHqIntake } from '../domain/source-bound-output-hq-intake.js';
 
 function requireComposition(value) {
   if (value?.kind !== 'active-runtime-composition' || !value.authoritative) throw new TypeError('active runtime composition required');
@@ -68,5 +69,30 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     const next=Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStocks:stocks,buildingStockTransportReservations:reservations,workforceAssignments:workforce})});
     this.#publish(next);
     return Object.freeze({kind:'im24-delivered-supply-publication',status:'DELIVERED_TO_BUILDING_STOCK',settlement:settled,consistency,productionTriggered:false});
+  }
+
+  publishSourceBoundOutputToHq({dispatch,delivery,deliveryCommit,reservationId,workforceState,hqBuildingId}={}){
+    const composition=requireComposition(this.#get()),owners=composition.authoritative;
+    const result=SourceBoundOutputHqIntake.settle({
+      domains:owners.domains,
+      resourceState:owners.resourceState,
+      claims:owners.resourceClaims,
+      buildingStocks:owners.buildingStocks,
+      buildingStockTransportReservations:owners.buildingStockTransportReservations,
+      dispatch,
+      delivery,
+      deliveryCommit,
+      reservationId,
+      workforceState,
+      hqBuildingId
+    });
+    if(result.status==='ALREADY_INTAKEN')return result;
+    let stocks=requireArray(owners.buildingStocks,'buildingStocks');
+    stocks=replaceBy(stocks,result.sourceStock,stockKey);stocks=replaceBy(stocks,result.targetStock,stockKey);
+    const reservations=replaceBy(requireArray(owners.buildingStockTransportReservations,'buildingStockTransportReservations'),result.reservation,reservationKey);
+    const workforce=replaceBy(requireArray(owners.workforceAssignments,'workforceAssignments'),result.workforceState,workforceKey);
+    const next=Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStocks:stocks,buildingStockTransportReservations:reservations,workforceAssignments:workforce})});
+    this.#publish(next);
+    return result;
   }
 }
