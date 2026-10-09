@@ -7,6 +7,7 @@ import { TransportJobService } from '../transport/transport-job-service.js';
 import { DeliveredTransportBuildingStockSettlement } from '../domain/delivered-transport-building-stock-settlement.js';
 import { ProducedResourceLogisticsConsumptionConsistency } from '../domain/produced-resource-logistics-consumption-consistency.js';
 import { SourceBoundOutputHqIntake } from '../domain/source-bound-output-hq-intake.js';
+import { ProductionInputDemandReconnectionIntegration } from '../domain/production-input-demand-reconnection-integration.js';
 
 function requireComposition(value) {
   if (value?.kind !== 'active-runtime-composition' || !value.authoritative) throw new TypeError('active runtime composition required');
@@ -94,5 +95,45 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     const next=Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStocks:stocks,buildingStockTransportReservations:reservations,workforceAssignments:workforce})});
     this.#publish(next);
     return result;
+  }
+
+  reconnectHqIntakeToProductionInputs({hqBuildingId,resourceTypeId,resourceId=null,reservationIds=[]}={}){
+    const composition=requireComposition(this.#get()),owners=composition.authoritative;
+    if(!Array.isArray(reservationIds))throw new TypeError('reservationIds must be an array');
+    const materialization=ProductionInputDemandReconnectionIntegration.materializeHqStock({
+      domains:owners.domains,
+      resourceState:owners.resourceState,
+      claims:owners.resourceClaims,
+      buildingStocks:owners.buildingStocks,
+      hqBuildingId,
+      resourceTypeId,
+      resourceId
+    });
+    if(materialization.status==='NO_HQ_STOCK')return Object.freeze({kind:'im33-hq-intake-production-input-demand-reconnection',status:'NO_HQ_STOCK',materialization,connections:Object.freeze([]),mutation:false});
+    const demands=ProductionInputDemandReconnectionIntegration.openProductionInputDemands({demands:owners.resourceDemands,resourceTypeId});
+    const matching=new ResourceMatching({resourceState:owners.resourceState,claims:owners.resourceClaims,demands:owners.resourceDemands});
+    const assignment=new ResourceAssignment({resourceState:owners.resourceState,claims:owners.resourceClaims,demands:owners.resourceDemands});
+    const transportJobs=new TransportJobService({jobStore:owners.domains.jobs,claims:owners.resourceClaims,demands:owners.resourceDemands,resourceState:owners.resourceState});
+    const supply=new ProductionInputExistingLogisticsIntegration({resourceState:owners.resourceState,claims:owners.resourceClaims,demands:owners.resourceDemands,matching,assignment,transportJobs});
+    let nextReservations=[...requireArray(owners.buildingStockTransportReservations,'buildingStockTransportReservations')],offset=0;
+    const connections=demands.map(demand=>{
+      const match=matching.matchDemand(demand.id);
+      if(match.matchedAmount===0)return Object.freeze({kind:'im33-production-input-demand-reconnection',status:'WAITING_FOR_AVAILABLE_HQ_STOCK',demandId:demand.id,match,reservations:Object.freeze([])});
+      const ids=reservationIds.slice(offset,offset+match.selections.length);offset+=match.selections.length;
+      const result=supply.connect({
+        requirement:Object.freeze({kind:'production-input-requirement',buildingId:demand.consumerId,resourceTypeId:demand.definitionId,demandId:demand.id,missingAmount:demand.remainingAmount,created:false,demand}),
+        sourceStocks:owners.buildingStocks,
+        existingTransportReservations:nextReservations,
+        reservationIds:ids
+      });
+      nextReservations.push(...result.reservations);
+      return result;
+    });
+    if(offset!==reservationIds.length)throw new Error('unused IM-33 transport reservation ids');
+    const changed=nextReservations.length!==owners.buildingStockTransportReservations.length;
+    if(changed){
+      this.#publish(Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStockTransportReservations:Object.freeze(nextReservations)})}));
+    }
+    return Object.freeze({kind:'im33-hq-intake-production-input-demand-reconnection',status:'RECONNECTED',materialization,connections:Object.freeze(connections),mutation:materialization.mutation||changed});
   }
 }
