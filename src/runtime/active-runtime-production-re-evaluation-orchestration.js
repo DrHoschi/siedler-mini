@@ -41,6 +41,11 @@ export class ActiveRuntimeProductionReEvaluationOrchestration {
     return this.request({ trigger:'DELIVERED_BUILDING_STOCK', buildingId });
   }
 
+  requestProductionInputReturnDelivery({ publication } = {}) {
+    const request = this.requestDeliveredSupply({ publication });
+    return Object.freeze({ ...request, kind:'im35-production-input-return-delivery-re-evaluation-request' });
+  }
+
   requestSettledOutput({ composition } = {}) {
     const owners = requireComposition(composition).authoritative;
     const receipts = Array.isArray(owners.productionEffectReceipts) ? owners.productionEffectReceipts : [];
