@@ -72,8 +72,9 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     return Object.freeze({kind:'im24-delivered-supply-publication',status:'DELIVERED_TO_BUILDING_STOCK',settlement:settled,consistency,productionTriggered:false});
   }
 
-  publishSourceBoundOutputToHq({dispatch,delivery,deliveryCommit,reservationId,workforceState,hqBuildingId}={}){
+  publishSourceBoundOutputToHq({dispatch,delivery,deliveryCommit,reservationId,workforceState,hqBuildingId,reconnectionResourceId=null,reconnectionReservationIds=[]}={}){
     const composition=requireComposition(this.#get()),owners=composition.authoritative;
+    if(!Array.isArray(reconnectionReservationIds))throw new TypeError('reconnectionReservationIds must be an array');
     const result=SourceBoundOutputHqIntake.settle({
       domains:owners.domains,
       resourceState:owners.resourceState,
@@ -87,14 +88,20 @@ export class ActiveRuntimeProductionSupplyOrchestration {
       workforceState,
       hqBuildingId
     });
-    if(result.status==='ALREADY_INTAKEN')return result;
+    if(result.status==='ALREADY_INTAKEN')return Object.freeze({...result,reconnection:null});
     let stocks=requireArray(owners.buildingStocks,'buildingStocks');
     stocks=replaceBy(stocks,result.sourceStock,stockKey);stocks=replaceBy(stocks,result.targetStock,stockKey);
     const reservations=replaceBy(requireArray(owners.buildingStockTransportReservations,'buildingStockTransportReservations'),result.reservation,reservationKey);
     const workforce=replaceBy(requireArray(owners.workforceAssignments,'workforceAssignments'),result.workforceState,workforceKey);
     const next=Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStocks:stocks,buildingStockTransportReservations:reservations,workforceAssignments:workforce})});
     this.#publish(next);
-    return result;
+    const reconnection=this.reconnectHqIntakeToProductionInputs({
+      hqBuildingId:result.hqBuildingId,
+      resourceTypeId:result.targetStock.resourceTypeId,
+      resourceId:reconnectionResourceId,
+      reservationIds:reconnectionReservationIds
+    });
+    return Object.freeze({...result,reconnection});
   }
 
   reconnectHqIntakeToProductionInputs({hqBuildingId,resourceTypeId,resourceId=null,reservationIds=[]}={}){
