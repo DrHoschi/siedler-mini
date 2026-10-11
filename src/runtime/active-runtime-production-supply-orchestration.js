@@ -8,6 +8,7 @@ import { DeliveredTransportBuildingStockSettlement } from '../domain/delivered-t
 import { ProducedResourceLogisticsConsumptionConsistency } from '../domain/produced-resource-logistics-consumption-consistency.js';
 import { SourceBoundOutputHqIntake } from '../domain/source-bound-output-hq-intake.js';
 import { ProductionInputDemandReconnectionIntegration } from '../domain/production-input-demand-reconnection-integration.js';
+import { SettledOutputHqDeliveryDemandTrigger } from '../domain/settled-output-hq-delivery-demand-trigger.js';
 
 function requireComposition(value) {
   if (value?.kind !== 'active-runtime-composition' || !value.authoritative) throw new TypeError('active runtime composition required');
@@ -102,6 +103,39 @@ export class ActiveRuntimeProductionSupplyOrchestration {
       reservationIds:reconnectionReservationIds
     });
     return Object.freeze({...result,reconnection});
+  }
+
+  triggerSettledOutputHqDelivery({publication,resource=null,hqBuildingId=null,demandId=null,reservationId=null,demandIds=[],reservationIds=[]}={}){
+    const composition=requireComposition(this.#get()),owners=composition.authoritative;
+    if(!Array.isArray(demandIds)||!Array.isArray(reservationIds))throw new TypeError('demandIds and reservationIds must be arrays');
+    const transportJobs=new TransportJobService({jobStore:owners.domains.jobs,claims:owners.resourceClaims,demands:owners.resourceDemands,resourceState:owners.resourceState});
+    const resources=resource?[resource]:SettledOutputHqDeliveryDemandTrigger.resourcesFromPublication(publication);
+    const existing=requireArray(owners.buildingStockTransportReservations,'buildingStockTransportReservations');
+    let nextReservations=[...existing],created=0;
+    const results=resources.map((item,index)=>{
+      const result=SettledOutputHqDeliveryDemandTrigger.trigger({
+        domains:owners.domains,
+        resourceState:owners.resourceState,
+        claims:owners.resourceClaims,
+        demands:owners.resourceDemands,
+        jobs:transportJobs,
+        buildingStocks:owners.buildingStocks,
+        buildingStockTransportReservations:nextReservations,
+        resource:item,
+        hqBuildingId,
+        demandId:index===0&&demandId!=null?demandId:demandIds[index]??null,
+        reservationId:index===0&&reservationId!=null?reservationId:reservationIds[index]??null
+      });
+      if(result.mutation&&result.reservations.length){
+        nextReservations.push(...result.reservations);
+        created+=result.reservations.length;
+      }
+      return result;
+    });
+    if(created){
+      this.#publish(Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStockTransportReservations:Object.freeze(nextReservations)})}));
+    }
+    return Object.freeze({kind:'im36-settled-output-hq-delivery-demand-trigger-publication',status:results.some(result=>result.status==='TRIGGERED')?'TRIGGERED':'NOT_TRIGGERED',results:Object.freeze(results),mutation:created>0});
   }
 
   reconnectHqIntakeToProductionInputs({hqBuildingId,resourceTypeId,resourceId=null,reservationIds=[]}={}){
