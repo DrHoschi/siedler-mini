@@ -1,3 +1,42 @@
+## IM-37 Definition / Scope - 2026-10-13
+
+**Status:** DEFINED / NOT IMPLEMENTED
+
+**Baseline:** frozen IM-36 at `3e84cbb92a901b0c1a5a580013aa461f680a4830`.
+
+### Steering correction
+
+The current frozen IM-36 code line contains the implemented IM-32, IM-33, IM-34, IM-35 and IM-36 slices. The earlier roadmap header still starts at the old IM-32 definition state and is corrected by this documentation-only update. No product code, test code or runtime behavior is changed here.
+
+### IM-37 purpose
+
+IM-37 is the closed Runtime orchestration layer for the already-frozen production logistics loop:
+
+`settled production output -> output materialization -> HQ delivery demand -> existing logistics to HQ -> HQ intake -> production-input reconnection -> existing logistics back to producer -> production re-evaluation -> next-cycle registration`.
+
+### Scope
+
+IM-37 may only connect existing frozen seams:
+
+- IM-27 output materialization;
+- IM-36 settled-output HQ delivery demand trigger;
+- existing logistics delivery;
+- IM-32 source-bound HQ intake;
+- IM-34 / IM-33 HQ-stock production-input reconnection;
+- existing logistics return delivery;
+- IM-35 production-input return delivery re-evaluation request;
+- IM-29 / IM-26 next-cycle registration through the existing timed-production path.
+
+### Required later evidence
+
+A future implementation must prove exactly-once behavior across duplicate ticks/callbacks, partial delivery, missing demand, missing recipe/workforce, wrong source/target/type/owner/amount, Save -> Reload -> Continue at every intermediate loop phase, and no unauthorized new authority.
+
+### Non-scope
+
+No new logistics engine, no pathfinding/movement, no warehouse strategy, no UI, no SaveGame schema by default, no Pages/deploy fix, no main integration, no changes to frozen predecessor semantics.
+
+The next allowed step after this documentation update is a separate IM-37 Definition Documentation Verification / Scope Gate against the documentation commit. Implementation remains not authorized.
+
 ## IM-32 Definition Record — 2026-10-07
 
 **IM-32 – Source-Bound Output-to-HQ Delivery and Storage Intake: DEFINED / NOT IMPLEMENTED.**
