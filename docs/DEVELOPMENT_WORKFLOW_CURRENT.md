@@ -1,3 +1,111 @@
+## IM-37 Definition Record - 2026-10-13
+
+**IM-37 - Closed Runtime Production Logistics Loop Orchestration: DEFINED / NOT IMPLEMENTED.**
+
+**Definition baseline / frozen predecessor:** IM-36 frozen product head `3e84cbb92a901b0c1a5a580013aa461f680a4830` with marker `frozen/im-36-settled-production-output-source-bound-hq-delivery-demand-trigger`.
+
+### IM-32 through IM-36 reconciliation correction
+
+The frozen code line at IM-36 contains implemented and verified IM-32 through IM-36 capability slices even though the steering-document headers still show the older IM-32 definition record first. This documentation step corrects the steering state only. It does not modify product/runtime/test code and does not reclassify any implementation scope.
+
+Frozen predecessor chain represented by the IM-36 head:
+
+- IM-32 provides source-bound produced output HQ intake after existing logistics proves delivery to the designated HQ.
+- IM-33 materializes accepted HQ stock back into resource availability for open production-input demands.
+- IM-34 connects successful HQ intake to production-input demand reconnection through existing logistics.
+- IM-35 requests production re-evaluation only after returned production input is actually delivered back to the producing building.
+- IM-36 creates the missing settled-output-to-HQ delivery demand trigger after IM-27 output materialization, including source-bound demand, claim, TransportJob and BuildingStock reservation, without directly crediting HQ stock.
+
+### Reconciliation result
+
+The existing frozen slices now cover the individual handoff points of the production logistics loop:
+
+`production settlement -> IM-27 output materialization -> IM-36 HQ delivery demand -> existing logistics -> IM-32 HQ intake -> IM-34/IM-33 production-input reconnection -> existing logistics return delivery -> IM-35 re-evaluation -> IM-29/IM-26 next cycle registration`.
+
+The remaining gap is the closed Runtime orchestration that invokes these already-frozen seams automatically in the normal authoritative Runtime flow. The current pieces can be exercised by focused tests and explicit runtime calls, but the loop boundary is not yet owned as one deterministic completed-step orchestration.
+
+### Binding question
+
+How does the active Runtime connect one completed production cycle into a deterministic source-bound logistics loop so that produced output is automatically requested for HQ delivery, accepted at HQ only after existing logistics delivery, reconnected to waiting production input demand, returned through existing logistics, and then used to trigger exactly one valid production re-evaluation for the next cycle?
+
+### Capability boundary
+
+IM-37 may add only the missing orchestration glue between already-frozen authorities. It may call existing IM-27, IM-36, IM-32, IM-34/IM-33, IM-35, IM-29 and IM-26 seams in the correct order. It must not replace their authority or duplicate their data contracts.
+
+Required boundary:
+
+- after successful production settlement/output materialization, IM-37 may trigger the IM-36 source-bound HQ delivery demand;
+- after existing logistics delivery to the designated HQ, IM-37 may publish IM-32 intake through the existing Runtime supply publication seam;
+- after successful HQ intake, existing IM-34/IM-33 reconnection remains responsible for materializing HQ stock and connecting open production-input demands;
+- after existing logistics returns the input to the producing building, IM-37 may request the IM-35/IM-29 production re-evaluation;
+- re-evaluation may register a new cycle only through frozen IM-29 -> IM-26 and the already-frozen IM-31 timed progression path.
+
+### Exactly-once and idempotency boundary
+
+IM-37 must be replay-safe. Repeated Runtime ticks, repeated publication callbacks, Save -> Reload -> Continue, duplicate delivery notifications or already-processed settlement evidence must not create duplicate HQ demands, duplicate reservations, duplicate HQ stock credits, duplicate return jobs, duplicate re-evaluation requests or parallel cycle registrations.
+
+Idempotency must be derived from the existing authoritative evidence:
+
+- production settlement ids and effect receipts;
+- IM-27 resource materialization metadata;
+- IM-36 demand metadata and resource binding;
+- ResourceClaims / ResourceDemands state;
+- TransportJobs and BuildingStockTransportReservations;
+- delivery settlement / consumed claim evidence;
+- IM-32 released reservation / HQ intake evidence;
+- IM-33 HQ stock resource metadata;
+- IM-35 / IM-29 pending request and IM-26 active registration evidence.
+
+IM-37 must not introduce a parallel transfer ledger, second scheduler, second logistics executor, second settlement fence or new SaveGame schema by default.
+
+### Failure and fail-closed boundary
+
+Missing, contradictory or partial evidence must fail closed at the affected transition:
+
+- no produced IM-27 resource: no IM-36 demand trigger;
+- no valid HQ or source stock: no HQ delivery demand;
+- no existing logistics delivery: no HQ credit;
+- wrong target, wrong source, wrong resource type, wrong owner or wrong amount: no intake/reconnection;
+- no open production-input demand: HQ intake remains valid but no return job is created;
+- returned amount insufficient for readiness: production remains blocked and no cycle is registered;
+- missing recipe or workforce: re-evaluation remains not evaluated;
+- duplicate evidence: no second mutation.
+
+### Persistence and Continue boundary
+
+No SaveGame schema-version change is authorized by this definition. The implementation-scope reconciliation must prove whether existing persisted production receipts, resources, demands, claims, jobs, reservations, delivery settlement state, BuildingStock, workforce bindings and scheduler/rebind state are sufficient to restore the loop without duplication. A schema change may be proposed only if a concrete persistence gap is demonstrated in that separate scope gate.
+
+Save -> Reload -> Continue must preserve these states:
+
+- output produced but HQ demand not yet triggered;
+- HQ demand triggered but not yet delivered;
+- delivered to HQ but intake not yet published;
+- HQ intake complete but return connection not yet delivered;
+- return delivery complete but re-evaluation not yet flushed;
+- re-evaluation complete with either no registration, already registered, or newly registered timed cycle.
+
+### Required later implementation evidence
+
+A separately authorized implementation / verification must prove at minimum:
+
+1. one completed production output causes at most one IM-36 source-bound HQ delivery demand;
+2. demand, claim, job and reservation stay bound to the exact produced output, source building, resource type and amount;
+3. HQ stock is not credited before existing logistics proves delivery to the designated HQ;
+4. successful HQ intake automatically reconnects compatible open production-input demands through existing logistics;
+5. return delivery to the producer requests re-evaluation exactly once;
+6. IM-29/IM-26 registration remains the only next-cycle registration path;
+7. duplicate ticks, duplicate callbacks and repeated flushes produce no duplicate demands, jobs, reservations, HQ credits or cycle registrations;
+8. partial deliveries and insufficient returned input remain correctly partial/blocked;
+9. invalid HQ, wrong source/type/owner/amount, missing recipe/workforce and contradictory delivery evidence fail closed;
+10. Save -> Reload -> Continue at every intermediate loop phase preserves exact state and does not replay completed transitions; and
+11. IM-37 adds no pathfinding, movement, production-settlement, matching, scheduler, SaveGame, UI, renderer, warehouse-policy or general logistics authority.
+
+### Explicit NON-SCOPE
+
+No new resource definitions, buildings, recipes, balance values, warehouse strategy, route/pathfinding logic, movement implementation, UI/renderer/Inspector work, SaveGame schema change, deployment/Pages infrastructure fix, main integration, generic logistics redesign, ResourceMatching redesign, ResourceAssignment redesign, or changes to frozen IM-27/IM-32/IM-33/IM-34/IM-35/IM-36 semantics.
+
+This documentation step authorizes only the IM-37 definition and the steering correction for IM-32 through IM-36. It does not authorize implementation-scope reconciliation, Runtime code, tests, package/CI changes, branch integration or freeze.
+
 ## IM-32 Definition Record — 2026-10-07
 
 **IM-32 – Source-Bound Output-to-HQ Delivery and Storage Intake: DEFINED / NOT IMPLEMENTED.**
