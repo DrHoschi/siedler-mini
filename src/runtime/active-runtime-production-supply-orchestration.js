@@ -27,7 +27,7 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     this.#get=getComposition;this.#publish=publishComposition;
   }
 
-  evaluateAndConnect({buildingId,workforceAssignment,recipe,demandIds=[],reservationIds=[]}={}){
+  evaluateAndConnect({buildingId,workforceAssignment,recipe,demandIds=[],reservationIds=[],allocateReservationId=null}={}){
     const composition=requireComposition(this.#get()),owners=composition.authoritative;
     const productionIntegration=OperationalBuildingProductionRecipeIntegration.integrate({workforceAssignment,recipe});
     if(productionIntegration.buildingId!==buildingId)throw new Error('IM-24 production building mismatch');
@@ -47,12 +47,12 @@ export class ActiveRuntimeProductionSupplyOrchestration {
       const demand=owners.resourceDemands.get(requirement.demandId);
       if(['RESERVED','FULFILLED'].includes(demand?.status))return Object.freeze({kind:'im24-existing-supply-continuity',status:'EXISTING_BOUND_SUPPLY',demandId:demand.id,requirement});
       const needed=matching.matchDemand(requirement.demandId).selections.length;
-      const ids=reservationIds.slice(offset,offset+needed);offset+=needed;
+      const ids=allocateReservationId?Array.from({length:needed},()=>allocateReservationId()):reservationIds.slice(offset,offset+needed);offset+=needed;
       const result=supply.connect({requirement,sourceStocks:stocks,existingTransportReservations:nextReservations,reservationIds:ids});
       nextReservations.push(...result.reservations);
       return result;
     });
-    if(offset!==reservationIds.length)throw new Error('unused IM-24 transport reservation ids');
+    if(!allocateReservationId&&offset!==reservationIds.length)throw new Error('unused IM-24 transport reservation ids');
     if(nextReservations.length!==existing.length){
       this.#publish(Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStockTransportReservations:Object.freeze(nextReservations)})}));
     }
@@ -73,7 +73,7 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     return Object.freeze({kind:'im24-delivered-supply-publication',status:'DELIVERED_TO_BUILDING_STOCK',settlement:settled,consistency,productionTriggered:false});
   }
 
-  publishSourceBoundOutputToHq({dispatch,delivery,deliveryCommit,reservationId,workforceState,hqBuildingId,reconnectionResourceId=null,reconnectionReservationIds=[]}={}){
+  publishSourceBoundOutputToHq({dispatch,delivery,deliveryCommit,reservationId,workforceState,hqBuildingId,reconnectionResourceId=null,reconnectionReservationIds=[],allocateReservationId=null}={}){
     const composition=requireComposition(this.#get()),owners=composition.authoritative;
     if(!Array.isArray(reconnectionReservationIds))throw new TypeError('reconnectionReservationIds must be an array');
     const result=SourceBoundOutputHqIntake.settle({
@@ -100,7 +100,8 @@ export class ActiveRuntimeProductionSupplyOrchestration {
       hqBuildingId:result.hqBuildingId,
       resourceTypeId:result.targetStock.resourceTypeId,
       resourceId:reconnectionResourceId,
-      reservationIds:reconnectionReservationIds
+      reservationIds:reconnectionReservationIds,
+      allocateReservationId
     });
     return Object.freeze({...result,reconnection});
   }
@@ -138,7 +139,7 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     return Object.freeze({kind:'im36-settled-output-hq-delivery-demand-trigger-publication',status:results.some(result=>result.status==='TRIGGERED')?'TRIGGERED':'NOT_TRIGGERED',results:Object.freeze(results),mutation:created>0});
   }
 
-  reconnectHqIntakeToProductionInputs({hqBuildingId,resourceTypeId,resourceId=null,reservationIds=[]}={}){
+  reconnectHqIntakeToProductionInputs({hqBuildingId,resourceTypeId,resourceId=null,reservationIds=[],allocateReservationId=null}={}){
     const composition=requireComposition(this.#get()),owners=composition.authoritative;
     if(!Array.isArray(reservationIds))throw new TypeError('reservationIds must be an array');
     const materialization=ProductionInputDemandReconnectionIntegration.materializeHqStock({
@@ -160,7 +161,7 @@ export class ActiveRuntimeProductionSupplyOrchestration {
     const connections=demands.map(demand=>{
       const match=matching.matchDemand(demand.id);
       if(match.matchedAmount===0)return Object.freeze({kind:'im33-production-input-demand-reconnection',status:'WAITING_FOR_AVAILABLE_HQ_STOCK',demandId:demand.id,match,reservations:Object.freeze([])});
-      const ids=reservationIds.slice(offset,offset+match.selections.length);offset+=match.selections.length;
+      const ids=allocateReservationId?Array.from({length:match.selections.length},()=>allocateReservationId()):reservationIds.slice(offset,offset+match.selections.length);offset+=match.selections.length;
       const result=supply.connect({
         requirement:Object.freeze({kind:'production-input-requirement',buildingId:demand.consumerId,resourceTypeId:demand.definitionId,demandId:demand.id,missingAmount:demand.remainingAmount,created:false,demand}),
         sourceStocks:owners.buildingStocks,
@@ -170,7 +171,7 @@ export class ActiveRuntimeProductionSupplyOrchestration {
       nextReservations.push(...result.reservations);
       return result;
     });
-    if(offset!==reservationIds.length)throw new Error('unused IM-33 transport reservation ids');
+    if(!allocateReservationId&&offset!==reservationIds.length)throw new Error('unused IM-33 transport reservation ids');
     const changed=nextReservations.length!==owners.buildingStockTransportReservations.length;
     if(changed){
       this.#publish(Object.freeze({...composition,authoritative:Object.freeze({...owners,buildingStockTransportReservations:Object.freeze(nextReservations)})}));

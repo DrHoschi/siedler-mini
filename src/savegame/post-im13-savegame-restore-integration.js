@@ -51,7 +51,8 @@ function restoreCarrierBindings(values) {
   return Object.freeze(values.map(value => Object.freeze({
     kind: 'carrier-job-binding',
     jobId: String(value.jobId),
-    unitId: String(value.unitId)
+    unitId: String(value.unitId),
+    ...(value.workforceAssignmentId == null ? {} : { workforceAssignmentId: String(value.workforceAssignmentId) })
   })));
 }
 
@@ -63,6 +64,11 @@ function restoreValidatedV2BaseState(snapshot) {
   const originalBase = baseSnapshotFrom(snapshot);
   const compatibilityBase = clone(originalBase);
   compatibilityBase.domains.jobs.state.items = {};
+  // V2 already validates these refs against authoritative resource-type definitions.
+  // The V1 base reader only understands domain entity ids; restore original metadata below.
+  for (const resource of Object.values(compatibilityBase.domains.resources.state.items)) {
+    if (['IM-27_PRODUCTION_OUTPUT','IM-33_HQ_STOCK_RECONNECTION'].includes(resource.metadata?.source)) delete resource.metadata.resourceTypeId;
+  }
 
   const restored = SaveGameRestoreContract.restore(compatibilityBase);
   if (restored.status !== 'RESTORED') return restored;

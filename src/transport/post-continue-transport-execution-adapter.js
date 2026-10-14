@@ -5,6 +5,7 @@ import { DeliverySettlementService } from './delivery-settlement-service.js';
 import { MovementTransportExecutionIntegration } from './movement-transport-execution-integration.js';
 import { PickupExecutionService } from './pickup-execution-service.js';
 import { TransportCompletionService } from './transport-completion-service.js';
+import { TransportJobContract } from './transport-job-contract.js';
 
 const cargoFor = b => Object.freeze({ kind: 'carrier-cargo', jobId: b.job.id, unitId: b.unitId, resourceId: b.job.resourceId, amount: Number(b.job.amount) });
 function positionFor(state, location) {
@@ -43,6 +44,30 @@ export class PostContinueTransportExecutionAdapter {
     const binding = this.#bindings.get(descriptor?.jobId);
     if (!binding || binding.unitId !== descriptor.unitId) throw new Error(`missing restored transport binding: ${descriptor?.jobId}`);
     return (dtMs = 100) => this.#tick(binding, Math.max(0.01, Number(dtMs) / 100));
+  }
+  installDispatch(dispatch) {
+    const job = dispatch?.job, unitId = dispatch?.workforce?.personId;
+    if (dispatch?.kind !== 'workforce-aware-transport-dispatch' || !job || dispatch.execution?.jobId !== job.id || dispatch.execution.unitId !== unitId) throw new TypeError('frozen workforce transport dispatch required');
+    if (this.#bindings.has(job.id)) return false;
+    const current = this.#readSupply?.(this.#state) ?? this.#state;
+    const ownedJob = current.domains.jobs.get(job.id);
+    TransportJobContract.validateLinks(job, { claim: current.resourceClaims.get(job.claimId), demand: current.resourceDemands.get(job.demandId), resource: current.resourceState.get(job.resourceId) });
+    if (!ownedJob || ['claimId','demandId','resourceId','definitionId','targetId','amount','status'].some(key => ownedJob[key] !== job[key]) || ownedJob.sourceLocation?.refId !== job.sourceLocation?.refId) throw new Error('dispatch does not match authoritative transport job');
+    const reservation = current.buildingStockTransportReservations.find(value => value.id === dispatch.reservation?.id);
+    if (!reservation || reservation.state !== 'ACTIVE' || reservation.jobId !== job.id) throw new Error('dispatch requires exact current transport reservation');
+    const previous = current.workforceAssignments.find(value => value.personId === unitId);
+    if (previous?.availability !== 'FREE') throw new Error('transport dispatch requires current FREE workforce');
+    if (!current.workforceProfiles.find(value => value.personId === unitId)?.capabilities?.includes('CAN_SIMPLE_TRANSPORT')) throw new Error('current transport workforce capability required');
+    const movement = CarrierMovementContract.define({ unitId, currentPosition: current.domains.units.get(unitId)?.position, state: 'IDLE', targetPosition: null });
+    const assignment = this.__carrierAssignments.assign(job, { unitId });
+    if (assignment.unitId !== unitId) throw new Error('carrier/workforce dispatch mismatch');
+    const binding = Object.freeze({ jobId: job.id, unitId, job, assignment: { jobId: job.id, unitId }, execution: dispatch.execution, workforceAssignmentId: dispatch.workforce.assignmentId });
+    this.#bindings.set(job.id, binding); this.#executions.set(job.id, dispatch.execution);
+    this.#movement.set(job.id, movement);
+    this.#state = Object.freeze({ ...current, workforceAssignments: Object.freeze(current.workforceAssignments.map(value => value.personId === unitId ? dispatch.workforce.assignedState : value)) });
+    current.domains.units.update(unitId, draft => { draft.carrier = structuredClone(assignment.carrier); });
+    this.#publishSupplyState?.(this.#state);
+    return true;
   }
   #tick(binding, maxDistance) {
     const id = binding.jobId; let execution = this.#executions.get(id);
@@ -110,7 +135,7 @@ export class PostContinueTransportExecutionAdapter {
       const reservation = candidates[0];
       // The existing supply owner publishes on this candidate before terminal cleanup.
       // A missing/rejected publication leaves the consumed claim and DELIVERED execution intact.
-      const next = this.#publishSupply(Object.freeze({ state: this.#state, job, execution, delivery, deliveryCommit: commit, reservation }));
+      const next = this.#publishSupply(Object.freeze({ state: this.#state, job, execution, delivery, deliveryCommit: commit, reservation, workforceAssignmentId: binding.workforceAssignmentId ?? null }));
       if (!next || !Array.isArray(next.buildingStocks) || !Array.isArray(next.buildingStockTransportReservations) || !Array.isArray(next.workforceAssignments)) throw new Error('authoritative delivered supply publication required');
       const released = next.buildingStockTransportReservations.find(value => value.id === reservation.id);
       if (!released || released.state !== 'RELEASED' || ['sourceBuildingId','targetBuildingId','resourceTypeId','amount','jobId'].some(key => released[key] !== reservation[key])) throw new Error('supply publication must release the exact delivered reservation');
@@ -171,7 +196,7 @@ export class PostContinueTransportExecutionAdapter {
   authoritativeTransportState() {
     const snapshot = this.#completionAssignmentsSnapshot();
     return Object.freeze({
-      carrierBindings: Object.freeze(snapshot.assignments.map(value => Object.freeze({ kind: 'carrier-job-binding', jobId: value.jobId, unitId: value.unitId }))),
+      carrierBindings: Object.freeze(snapshot.assignments.map(value => Object.freeze({ kind: 'carrier-job-binding', jobId: value.jobId, unitId: value.unitId, ...(this.#bindings.get(value.jobId)?.workforceAssignmentId == null ? {} : { workforceAssignmentId: this.#bindings.get(value.jobId).workforceAssignmentId }) }))),
       transportExecutions: Object.freeze([...this.#executions.values()]),
       carriers: snapshot.carriers,
     });

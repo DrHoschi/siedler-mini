@@ -290,7 +290,8 @@ function normalizeCarrierBinding(value) {
   return deepFreeze({
     kind: 'carrier-job-binding',
     jobId: requireStableKind(value.jobId, 'transport-job', 'carrier binding job id'),
-    unitId: requireStableKind(value.unitId, 'unit', 'carrier binding unit id')
+    unitId: requireStableKind(value.unitId, 'unit', 'carrier binding unit id'),
+    ...(value.workforceAssignmentId == null ? {} : { workforceAssignmentId: requireStableKind(value.workforceAssignmentId, 'assignment', 'carrier workforce assignment id') })
   });
 }
 

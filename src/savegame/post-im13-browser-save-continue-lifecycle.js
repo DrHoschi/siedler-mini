@@ -140,23 +140,22 @@ export class PostIM13BrowserSaveContinueLifecycle {
 
     const state = restored.runtimeState;
     const delivered = state.transportExecutions.filter(value => value.state === 'DELIVERED');
-    if (delivered.length > 1) return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_REJECTED', recovery: 'MULTIPLE_DELIVERED_EXECUTIONS_UNSUPPORTED' });
-    const execution = delivered[0] ?? null;
-    const job = execution ? state.domains.jobs.get(execution.jobId) : null;
-    const binding = execution ? state.carrierBindings.find(value => value.jobId === execution.jobId) ?? null : null;
-    const unit = execution ? state.domains.units.get(execution.unitId) : null;
-    const recoveryPlan = PostIM13ExactlyOnceRecoveryReconciliation.plan({
-      productionReceipts: state.productionEffectReceipts,
-      goldReceipts: state.goldEffectReceipts,
-      productionSettlementIds: [...state.productionSettlementIds],
-      goldSettlementIds: [...state.goldSettlementIds],
-      transport: execution ? { job, execution, claim: state.resourceClaims.get(job?.claimId), carrierBinding: binding, carrier: unit?.carrier ?? null, schedulerRegistered: false } : null,
+    const recoveryPlans = (delivered.length ? delivered : [null]).map(execution => {
+      const job = execution ? state.domains.jobs.get(execution.jobId) : null;
+      const binding = execution ? state.carrierBindings.find(value => value.jobId === execution.jobId) ?? null : null;
+      const unit = execution ? state.domains.units.get(execution.unitId) : null;
+      return PostIM13ExactlyOnceRecoveryReconciliation.plan({
+        productionReceipts: state.productionEffectReceipts, goldReceipts: state.goldEffectReceipts,
+        productionSettlementIds: [...state.productionSettlementIds], goldSettlementIds: [...state.goldSettlementIds],
+        transport: execution ? {job,execution,claim:state.resourceClaims.get(job?.claimId),carrierBinding:binding,carrier:unit?.carrier??null,schedulerRegistered:false} : null,
+      });
     });
-    if (recoveryPlan.status !== 'PLANNED') return Object.freeze({ kind: 'im20e-continue-result', status: 'REJECTED', reason: 'RECOVERY_REJECTED', recoveryPlan });
+    const recoveryPlan = recoveryPlans[0];
+    if (recoveryPlans.some(plan => plan.status !== 'PLANNED')) return Object.freeze({kind:'im20e-continue-result',status:'REJECTED',reason:'RECOVERY_REJECTED',recoveryPlan,recoveryPlans});
 
     let recovered = restored;
     let recoveryExecution = null;
-    if (execution && recoveryPlan.transport?.decision !== PostIM13ExactlyOnceRecoveryReconciliation.decisions.ALREADY_COMPLETE_NOOP) {
+    if (delivered.some((execution,index) => recoveryPlans[index].transport?.decision !== PostIM13ExactlyOnceRecoveryReconciliation.decisions.ALREADY_COMPLETE_NOOP)) {
       try {
         // Recovery runs on a second, unpublished restore candidate. A partial failure can therefore
         // be discarded without mutating either the active runtime or the first validated restore.
@@ -166,7 +165,8 @@ export class PostIM13BrowserSaveContinueLifecycle {
         const provisionalRebound = PostIM13DerivedStateRebindingIntegration.rebind(recoveryCandidate);
         if (provisionalRebound.status !== 'REBOUND') throw new Error('IM-20F recovery candidate rebind failed');
         const candidateTransport = this.#createTransport({ state: candidateState, transport: provisionalRebound.derivedState.transport });
-        recoveryExecution = candidateTransport.recoverDelivered({ decision: recoveryPlan.transport.decision, jobId: execution.jobId });
+        const recoveredDeliveries = delivered.map((execution,index) => candidateTransport.recoverDelivered({decision:recoveryPlans[index].transport.decision,jobId:execution.jobId}));
+        recoveryExecution = recoveredDeliveries.length === 1 ? recoveredDeliveries[0] : Object.freeze(recoveredDeliveries);
         const evolved = candidateTransport.authoritativeTransportState();
         for (const carrier of evolved.carriers) candidateState.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
         const evolvedState = Object.freeze({

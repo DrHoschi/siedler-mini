@@ -54,13 +54,13 @@ export class CarrierAssignmentService {
     }
   }
 
-  assign(job) {
+  assign(job, { unitId = null } = {}) {
     const jobId = asTransportJobId(job?.id);
     const existingUnitId = this.#assignments.get(jobId);
     if (existingUnitId) return this.#result(jobId, existingUnitId, false);
 
     const candidate = [...this.#carriers.values()]
-      .filter(carrier => CarrierContract.isSuitableForJob(carrier, job))
+      .filter(carrier => (unitId == null || carrier.unitId === unitId) && CarrierContract.isSuitableForJob(carrier, job))
       .sort((a, b) => a.unitId.localeCompare(b.unitId))[0];
 
     if (!candidate) throw new Error(`no suitable available carrier for transport job: ${jobId}`);

@@ -390,6 +390,15 @@ function isResolvedPostIM13JobReferenceError(error, snapshot, demands, claims) {
   return demands.has(job.demandId);
 }
 
+function isResolvedProductionResourceTypeReference(error, snapshot, resourceTypeIds) {
+  if (error?.code !== 'DANGLING_DOMAIN_REFERENCE') return false;
+  const match = /^domains\.resources\.state\.items\.(resource:[^.]+)\.metadata\.resourceTypeId$/.exec(error.path ?? '');
+  if (!match) return false;
+  const resource = snapshot.domains.resources.state.items[match[1]];
+  return ['IM-27_PRODUCTION_OUTPUT','IM-33_HQ_STOCK_RECONNECTION'].includes(resource?.metadata?.source)
+    && resource.metadata.resourceTypeId === resource.definitionId && resourceTypeIds.has(resource.definitionId);
+}
+
 function validatePostIM13TransportJobLinks(snapshot, demands, claims, collector) {
   const jobs = snapshot?.domains?.jobs?.state?.items ?? {};
   const resources = snapshot?.domains?.resources?.state?.items ?? {};
@@ -456,11 +465,6 @@ function validateRebindingContinuity(snapshot, workforceAssignments, refs, colle
       if (building && !buildings[building.id]) collector.add('DANGLING_WORKFORCE_BINDING_BUILDING', `${path}.buildingId`);
     });
   }
-  for (const assignmentId of assignedIds) {
-    if (!workforceBindings.has(assignmentId)) {
-      collector.add('MISSING_WORKFORCE_BUILDING_BINDING', 'authoritative.workforceBindings');
-    }
-  }
 
   const carrierBindings = new Map();
   const boundUnits = new Set();
@@ -493,6 +497,27 @@ function validateRebindingContinuity(snapshot, workforceAssignments, refs, colle
         }
       }
     });
+  }
+
+  const transportWorkforce = new Set();
+  for (const binding of carrierBindings.values()) {
+    if (binding.workforceAssignmentId == null) continue;
+    const path = 'authoritative.carrierBindings';
+    const parsed = validateStableId(binding.workforceAssignmentId, 'assignment', path, collector);
+    if (!parsed) continue;
+    if (transportWorkforce.has(parsed.id) || workforceBindings.has(parsed.id)) collector.add('DUPLICATE_WORKFORCE_TRANSPORT_BINDING', path);
+    transportWorkforce.add(parsed.id);
+    const worker = workforceAssignments.find(value => value.personId === binding.unitId);
+    const job = jobs[binding.jobId];
+    const execution = (auth.transportExecutions ?? []).find(value => value.jobId === binding.jobId && value.unitId === binding.unitId);
+    const released = (auth.buildingStockTransportReservations ?? []).some(value => value.jobId === binding.jobId && value.state === 'RELEASED');
+    const cleanup = worker?.availability === 'FREE' && worker.assignmentId == null && execution?.state === 'DELIVERED' && auth.resourceClaims?.state?.items?.[job?.claimId]?.state === 'CONSUMED' && released;
+    if (!cleanup && (worker?.availability !== 'ASSIGNED' || worker.assignmentId !== parsed.id)) collector.add('TRANSPORT_WORKFORCE_ASSIGNMENT_MISMATCH', path);
+    const profile = auth.definitions?.workforceProfiles?.find(value => value.personId === binding.unitId);
+    if (!profile?.capabilities?.includes('CAN_SIMPLE_TRANSPORT')) collector.add('TRANSPORT_WORKFORCE_CAPABILITY_MISSING', path);
+  }
+  for (const assignmentId of assignedIds) {
+    if (!workforceBindings.has(assignmentId) && !transportWorkforce.has(assignmentId)) collector.add('MISSING_WORKFORCE_BUILDING_BINDING', 'authoritative.workforceBindings');
   }
 
   for (const [unitId, unitRecord] of Object.entries(units)) {
@@ -601,7 +626,7 @@ export class PostIM13SaveGameValidationContract {
       const claims = validateClaims(snapshot, demands, refs, collector);
       validateDemandClaimInvariants(demands, claims, collector);
       collector.addAll(baseErrors.filter(error =>
-        !isResolvedPostIM13JobReferenceError(error, snapshot, demands, claims)
+        !isResolvedPostIM13JobReferenceError(error, snapshot, demands, claims) && !isResolvedProductionResourceTypeReference(error, snapshot, resourceTypeIds)
       ));
       validatePostIM13TransportJobLinks(snapshot, demands, claims, collector);
 

@@ -451,6 +451,7 @@ function deriveTransportBindings(state) {
       kind: 'post-continue-transport-runtime-binding',
       jobId: normalizedJob.id,
       unitId: assignment.unitId,
+      workforceAssignmentId: binding.workforceAssignmentId ?? null,
       job: normalizedJob,
       carrier,
       assignment,

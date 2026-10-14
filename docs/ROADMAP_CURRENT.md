@@ -1,3 +1,40 @@
+## IM-37 Gate 2 implementation and verification - 2026-10-15
+
+**IM-37 - Closed Runtime Production Logistics Loop Orchestration: IMPLEMENTED / LOCALLY VERIFIED / COMPLETE_NOT_FROZEN.**
+
+**Baseline:** `22a442a5dab2c176a782153ed3b5b2c7439768eb` (transport/Continue prerequisite; GitHub CI Baseline run 38610824599 SUCCESS).
+**Working branch:** `feature/im-37-transport-continue-delivery-evidence`.
+**Authorization:** continuation of IM-37 Gate 2 plus the explicit 2026-10-14 approval to persist the transport Workforce assignment on the existing Carrier-to-TransportJob binding.
+
+### Implemented orchestration
+
+The normal completed-step flow now connects frozen output materialization and IM-36 demand/reservation creation to the existing Workforce dispatch, Carrier assignment and transport execution. The existing supply publication seam routes verified delivered output to IM-32 HQ intake/IM-34 reconnection and verified production inputs to BuildingStock. Persisted released return reservations and consumed Claims feed IM-35 -> IM-29 -> IM-26; IM-31 remains the only timed progression path. Outstanding output prevents reuse of its reserved source stock for another cycle.
+
+`production settlement -> IM-27/IM-28 -> IM-36 -> existing logistics -> IM-32/IM-34/IM-33 -> existing return logistics -> IM-35/IM-29/IM-26 -> IM-31 next cycle`.
+
+The new module is `src/runtime/active-runtime-production-logistics-loop-orchestration.js`. Main wires its existing production publication and Continue transport factory into the module. Input demands, claims, jobs, reservations, stock, settlement and cycle identities continue to be owned by their existing services. The module adds only derived adapter/registration caches; no transfer ledger, settlement fence, scheduler, movement/pathfinding algorithm, recipe, population or balance change is introduced.
+
+### Approved identity and persistence mapping
+
+`carrier-job-binding.workforceAssignmentId` is optional for legacy V2 and required for new Workforce-aware production shipments. Capture -> Restore -> Rebind -> active transport -> Capture preserves the exact assignment id. Validation distinguishes building Workforce from transport Workforce and rejects shared assignment ids, wrong people/capabilities, missing bindings and contradictory cleanup states. A transport worker remains separate from the building's production worker. Carrier assignment supports the already-selected eligible worker without changing default legacy selection.
+
+Continue reconciles multiple DELIVERED executions through the existing IM-20F decision/service path on one unpublished candidate. Failure in any delivery discards the whole candidate. The existing consumed-Claim/delivery/reservation evidence allows terminal cleanup after accepted intake without a second credit.
+
+The V2 validator resolves IM-27/IM-33 `metadata.resourceTypeId` against the authoritative resource-type definitions; wrong types remain rejected. The V1 compatibility reader omits that V2-only type reference while reading its candidate, then restores the original complete V2 domain data. Schema version remains 2, and original metadata remains intact.
+
+### Local evidence
+
+- Full repository-defined CI Baseline regression command: **EXIT 0**.
+- IM-37 focused tests: **16 checks / PASS / 0 blocker** (including the separately repeated multiple-delivery cases).
+- Frozen transport/Continue prerequisite: **10 checks / PASS / 0 blocker**.
+- Evidence covers real timed settlement -> outbound demand -> HQ delivery/intake -> input return -> second timed cycle; duplicate flushes; Save/Reload/Continue across in-flight phases; persisted output-before-trigger, intake-before-reconnection, delivered-before-intake, accepted-intake-before-cleanup and returned-input-before-re-evaluation windows; partial returned input; missing Carrier/recipe/Workforce/HQ; wrong target/type/source/amount/assignment; original metadata preservation; multiple-delivery recovery and second-recovery failure rollback.
+- The complete-loop scenario uses a synthetic self-feeding recipe and a dedicated Carrier in test fixtures only. Product definitions and population are unchanged.
+- Final-head GitHub CI is pending at commit creation. No Pages, browser/device or freeze PASS is claimed by this record.
+
+### Operational limits and remaining gate
+
+A missing eligible FREE Carrier leaves the shipment waiting; production Workforce is never borrowed and no extra person is spawned. Missing or insufficient input remains blocked. Pages/deploy infrastructure, renderer/Inspector, UI, gameplay population/recipes, main integration and freeze remain outside this change. Completion/evidence review and a frozen marker require the separate Gate 3.
+
 ## IM-37 transport/Continue evidence correction - 2026-10-14
 
 **Status:** IMPLEMENTED / LOCALLY VERIFIED / NOT FROZEN.
