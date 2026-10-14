@@ -16,10 +16,16 @@ function positionFor(state, location) {
 
 export class PostContinueTransportExecutionAdapter {
   #state; #bindings = new Map(); #executions = new Map(); #terminalEvidence = new Map(); #movement = new Map(); #cargo = new Map();
-  #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion; __carrierAssignments;
-  constructor({ state, transport, completionService = null } = {}) {
+  #pickup = new PickupExecutionService(); #delivery = new DeliveryExecutionService(); #settlement; #completion; #publishSupply; #readSupply; #publishSupplyState; __carrierAssignments;
+  constructor({ state, transport, completionService = null, publishDeliveredSupply = null, getSupplyState = null, publishSupplyState = null } = {}) {
     if (!state?.domains || !transport?.carrierAssignments) throw new TypeError('restored transport owners required');
     this.#state = state;
+    if (publishDeliveredSupply !== null && typeof publishDeliveredSupply !== 'function') throw new TypeError('delivered supply publication seam must be a function');
+    this.#publishSupply = publishDeliveredSupply;
+    if (getSupplyState !== null && typeof getSupplyState !== 'function') throw new TypeError('supply read seam must be a function');
+    this.#readSupply = getSupplyState;
+    if (publishSupplyState !== null && typeof publishSupplyState !== 'function') throw new TypeError('supply state publication seam must be a function');
+    this.#publishSupplyState = publishSupplyState;
     this.__carrierAssignments = transport.carrierAssignments;
     this.#settlement = new DeliverySettlementService({ resources: state.resourceState, claims: state.resourceClaims, demands: state.resourceDemands });
     this.#completion = completionService ?? new TransportCompletionService({ jobStore: state.domains.jobs, carrierAssignments: transport.carrierAssignments });
@@ -65,12 +71,61 @@ export class PostContinueTransportExecutionAdapter {
         const claim = this.#state.resourceClaims.get(binding.job.claimId), demand = this.#state.resourceDemands.get(binding.job.demandId), resource = this.#state.resourceState.get(binding.job.resourceId);
         const settlement = DeliverySettlementContract.fromDelivered({ job: binding.job, execution, delivery: delivered.delivery, claim, demand, resource });
         const commit = this.#settlement.commit({ settlement, job: binding.job, execution, delivery: delivered.delivery });
-        this.#completion.complete({ settlementCommit: commit, execution });
-        this.#finalizeTerminal(binding.jobId);
+        this.#finishDelivery({ binding, execution, delivery: delivered.delivery, commit });
       }
       return execution;
     }
+    if (execution.state === 'DELIVERED') {
+      const delivery = Object.freeze({ kind: 'delivered-cargo', jobId: binding.job.id, unitId: binding.unitId, resourceId: binding.job.resourceId, targetId: binding.job.targetId, amount: binding.job.amount });
+      this.#finishDelivery({ binding, execution, delivery, commit: this.#consumedCommit(binding.job, execution) });
+    }
     return execution;
+  }
+
+  #consumedCommit(job, execution) {
+    const claim = this.#state.resourceClaims.get(job.claimId);
+    if (claim?.state !== 'CONSUMED' || claim.resourceId !== job.resourceId || claim.demandId !== job.demandId || claim.consumerId !== job.targetId || claim.amount !== job.amount) throw new Error('pending supply publication requires matching consumed claim');
+    return Object.freeze({ kind: 'delivery-settlement-commit', settlement: DeliverySettlementContract.define({ jobId: job.id, executionJobId: execution.jobId, unitId: execution.unitId, resourceId: job.resourceId, claimId: job.claimId, demandId: job.demandId, targetId: job.targetId, amount: job.amount }), claim, resource: this.#state.resourceState.get(job.resourceId), demand: this.#state.resourceDemands.get(job.demandId), recoveredWithoutSettlementReplay: true });
+  }
+
+  #finishDelivery({ binding, execution, delivery, commit }) {
+    const current = this.#readSupply?.(this.#state);
+    if (current) {
+      if (current.resourceState !== this.#state.resourceState) throw new Error('supply read seam must preserve candidate identity');
+      this.#state = Object.freeze({ ...this.#state, buildingStocks: current.buildingStocks, buildingStockTransportReservations: current.buildingStockTransportReservations, workforceAssignments: current.workforceAssignments, workforceBindings: current.workforceBindings });
+    }
+    const job = binding.job;
+    const reservations = this.#state.buildingStockTransportReservations ?? [];
+    const linked = reservations.filter(value => value.jobId === job.id);
+    const compatible = value => value.sourceBuildingId === job.sourceLocation.refId && value.targetBuildingId === job.targetId && value.resourceTypeId === job.definitionId && value.amount === job.amount;
+    if (linked.some(value => !compatible(value))) throw new Error('bound BuildingStock reservation contradicts delivered job');
+    const matches = linked.length ? linked : reservations.filter(value => value.jobId == null && compatible(value));
+    if (linked.length > 1) throw new Error('ambiguous BuildingStock reservation for delivered transport');
+    const candidates = matches.filter(value => value.state === 'ACTIVE');
+    if (candidates.length > 1) throw new Error('ambiguous BuildingStock reservation for delivered transport');
+    const demandSource = this.#state.resourceDemands.get(job.demandId)?.metadata?.source;
+    if (!candidates.length && ['IM-36_SETTLED_OUTPUT_HQ_DELIVERY', 'IM-23_PRODUCTION_INPUT'].includes(demandSource) && (linked.length !== 1 || linked[0].state !== 'RELEASED')) throw new Error('missing or ambiguous BuildingStock publication evidence for production logistics delivery');
+    if (candidates.length) {
+      if (!this.#publishSupply) return Object.freeze({ status: 'AWAITING_SUPPLY_PUBLICATION', jobId: job.id });
+      const reservation = candidates[0];
+      // The existing supply owner publishes on this candidate before terminal cleanup.
+      // A missing/rejected publication leaves the consumed claim and DELIVERED execution intact.
+      const next = this.#publishSupply(Object.freeze({ state: this.#state, job, execution, delivery, deliveryCommit: commit, reservation }));
+      if (!next || !Array.isArray(next.buildingStocks) || !Array.isArray(next.buildingStockTransportReservations) || !Array.isArray(next.workforceAssignments)) throw new Error('authoritative delivered supply publication required');
+      const released = next.buildingStockTransportReservations.find(value => value.id === reservation.id);
+      if (!released || released.state !== 'RELEASED' || ['sourceBuildingId','targetBuildingId','resourceTypeId','amount','jobId'].some(key => released[key] !== reservation[key])) throw new Error('supply publication must release the exact delivered reservation');
+      const quantity = (stocks, id) => stocks.find(value => value.buildingId === id && value.resourceTypeId === job.definitionId)?.quantity ?? 0;
+      if (quantity(next.buildingStocks, reservation.sourceBuildingId) !== quantity(this.#state.buildingStocks, reservation.sourceBuildingId) - job.amount || quantity(next.buildingStocks, job.targetId) !== quantity(this.#state.buildingStocks, job.targetId) + job.amount) throw new Error('supply publication must conserve exact delivered stock');
+      this.#state = Object.freeze({ ...this.#state, buildingStocks: next.buildingStocks, buildingStockTransportReservations: next.buildingStockTransportReservations, workforceAssignments: next.workforceAssignments, workforceBindings: next.workforceBindings ?? this.#state.workforceBindings });
+      this.#publishSupplyState?.(this.#state);
+    }
+    const completion = this.#completion.complete({ settlementCommit: commit, execution });
+    this.#finalizeTerminal(job.id);
+    return Object.freeze({ status: 'COMPLETED', completion });
+  }
+
+  authoritativeSupplyState() {
+    return Object.freeze({ buildingStocks: this.#state.buildingStocks, buildingStockTransportReservations: this.#state.buildingStockTransportReservations, workforceAssignments: this.#state.workforceAssignments, workforceBindings: this.#state.workforceBindings });
   }
 
   recoverDelivered({ decision, jobId } = {}) {
@@ -98,9 +153,8 @@ export class PostContinueTransportExecutionAdapter {
         recoveredWithoutSettlementReplay: true,
       });
     } else throw new Error(`unsupported delivered recovery decision: ${decision}`);
-    const completion = this.#completion.complete({ settlementCommit: commit, execution });
-    this.#finalizeTerminal(binding.jobId);
-    return Object.freeze({ kind: 'im20f-delivered-recovery-result', decision, job: completion.job, carrierRelease: completion.carrierRelease, claim: this.#state.resourceClaims.get(job.claimId) });
+    const result = this.#finishDelivery({ binding, execution, delivery, commit });
+    return Object.freeze({ kind: 'im20f-delivered-recovery-result', decision, status: result.status, job: result.completion?.job ?? job, carrierRelease: result.completion?.carrierRelease ?? null, claim: this.#state.resourceClaims.get(job.claimId) });
   }
   #finalizeTerminal(jobId) {
     const terminalExecution = this.#executions.get(jobId);

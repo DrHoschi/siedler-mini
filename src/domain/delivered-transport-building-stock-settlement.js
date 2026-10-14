@@ -38,6 +38,7 @@ function normalizeDispatch(value) {
 
   const dispatchReservation = BuildingStockTransportReservationContract.define(value.reservation);
   const job = TransportJobContract.define(value.job);
+  if (dispatchReservation.jobId != null && dispatchReservation.jobId !== job.id) throw new Error('dispatch reservation transport job mismatch');
   const personId = requireStableKind(value.workforce?.personId, 'unit', 'dispatch person id');
   const assignedState = WorkforceAssignmentStateContract.define(value.workforce?.assignedState);
   const executionJobId = requireStableKind(value.executionAssignment?.jobId, 'transport-job', 'execution assignment job id');
@@ -67,7 +68,8 @@ function sameReservation(a, b) {
     && a.sourceBuildingId === b.sourceBuildingId
     && a.targetBuildingId === b.targetBuildingId
     && a.resourceTypeId === b.resourceTypeId
-    && a.amount === b.amount;
+    && a.amount === b.amount
+    && a.jobId === b.jobId;
 }
 
 export class DeliveredTransportBuildingStockSettlement {

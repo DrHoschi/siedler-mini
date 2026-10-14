@@ -404,6 +404,16 @@ function validatePostIM13TransportJobLinks(snapshot, demands, claims, collector)
     if (!resource) collector.add('DANGLING_TRANSPORT_JOB_RESOURCE', `${path}.resourceId`);
     if (!claim || !demand || !resource) continue;
     try {
+      if (claim.state === 'CONSUMED') {
+        const normalized = TransportJobContract.define(job);
+        if (claim.id !== normalized.claimId || claim.demandId !== normalized.demandId || claim.resourceId !== normalized.resourceId || claim.consumerId !== normalized.targetId || claim.amount !== normalized.amount || demand.id !== normalized.demandId || demand.consumerId !== normalized.targetId || demand.definitionId !== normalized.definitionId || resource.id !== normalized.resourceId || resource.definitionId !== normalized.definitionId || resource.amount < normalized.amount || resource.location?.kind !== normalized.sourceLocation.kind || resource.location?.refId !== normalized.sourceLocation.refId || demand.fulfilledAmount < normalized.amount) throw new Error('consumed transport identity mismatch');
+        const executions = (snapshot.authoritative.transportExecutions ?? []).filter(value => value.jobId === jobId);
+        const bindings = (snapshot.authoritative.carrierBindings ?? []).filter(value => value.jobId === jobId);
+        if (normalized.status === 'PENDING') {
+          if (executions.length !== 1 || executions[0].state !== 'DELIVERED' || bindings.length !== 1 || executions[0].unitId !== bindings[0].unitId) throw new Error('consumed pending transport requires exact delivered continuity');
+        } else if (normalized.status !== 'RELEASED' || executions.length || bindings.length) throw new Error('consumed terminal transport has contradictory continuity');
+        continue;
+      }
       TransportJobContract.validateLinks(job, { claim, demand: {
         ...demand,
         status: demand.state
@@ -630,6 +640,11 @@ export class PostIM13SaveGameValidationContract {
           if (!refs.has(value.sourceBuildingId)) collector.add('DANGLING_RESERVATION_SOURCE', `${path}.sourceBuildingId`);
           if (!refs.has(value.targetBuildingId)) collector.add('DANGLING_RESERVATION_TARGET', `${path}.targetBuildingId`);
           if (!resourceTypeIds.has(value.resourceTypeId)) collector.add('DANGLING_RESOURCE_TYPE_REFERENCE', `${path}.resourceTypeId`);
+          if (value.jobId != null) {
+            const job = snapshot.domains.jobs.state.items[value.jobId];
+            if (!job || job.sourceLocation?.kind !== 'owner' || job.sourceLocation.refId !== value.sourceBuildingId || job.targetId !== value.targetBuildingId || job.definitionId !== value.resourceTypeId || job.amount !== value.amount) collector.add('RESERVATION_TRANSPORT_JOB_MISMATCH', `${path}.jobId`);
+            if (auth.buildingStockTransportReservations.filter(other => other.jobId === value.jobId).length !== 1) collector.add('DUPLICATE_RESERVATION_TRANSPORT_JOB', `${path}.jobId`);
+          }
         }
       );
       const workforceAssignments = validateContractArray(

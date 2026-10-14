@@ -15,6 +15,10 @@ function compositionFrom(rebound, transport) {
       ...state,
       get carrierBindings() { return transport.authoritativeTransportState().carrierBindings; },
       get transportExecutions() { return transport.authoritativeTransportState().transportExecutions; },
+      get buildingStocks() { return transport.authoritativeSupplyState?.().buildingStocks ?? state.buildingStocks; },
+      get buildingStockTransportReservations() { return transport.authoritativeSupplyState?.().buildingStockTransportReservations ?? state.buildingStockTransportReservations; },
+      get workforceAssignments() { return transport.authoritativeSupplyState?.().workforceAssignments ?? state.workforceAssignments; },
+      get workforceBindings() { return transport.authoritativeSupplyState?.().workforceBindings ?? state.workforceBindings; },
       residentHousingAssignment: derived.housing.assignmentIntegration,
       populationProjection: derived.population,
       goldFlowAdmission: null,
@@ -52,7 +56,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
   #createTransport;
   #prepareProduction;
 
-  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation, createTransportAdapter, prepareProductionActivation } = {}) {
+  constructor({ storage, runtime, getComposition, publishComposition, resetCamera, clearSelection, capturePresentation, restorePresentation, createTransportAdapter, prepareProductionActivation, publishDeliveredSupply = null } = {}) {
     if (!storage || !runtime?.scheduler || typeof getComposition !== 'function' || typeof publishComposition !== 'function') {
       throw new TypeError('IM-20E lifecycle dependencies required');
     }
@@ -67,7 +71,24 @@ export class PostIM13BrowserSaveContinueLifecycle {
     this.#restorePresentation = typeof restorePresentation === 'function' ? restorePresentation : () => {};
     this.#createTransport = typeof createTransportAdapter === 'function'
       ? createTransportAdapter
-      : options => new PostContinueTransportExecutionAdapter(options);
+      : options => {
+        let adapter;
+        adapter = new PostContinueTransportExecutionAdapter({ ...options, publishDeliveredSupply, getSupplyState: state => {
+          const current = this.#getComposition()?.authoritative;
+          return current?.resourceState === state.resourceState ? current : null;
+        }, publishSupplyState: state => {
+          const current = this.#getComposition();
+          // Recovery candidates remain unpublished. Live publication always reads
+          // current owner slices, including production changes since activation.
+          if (current?.authoritative.resourceState !== state.resourceState) return;
+          this.#publish(Object.freeze({ ...current, authoritative: Object.freeze({ ...current.authoritative,
+            ...adapter.authoritativeSupplyState(),
+            get carrierBindings() { return adapter.authoritativeTransportState().carrierBindings; },
+            get transportExecutions() { return adapter.authoritativeTransportState().transportExecutions; },
+          }) }));
+        } });
+        return adapter;
+      };
   }
 
   save() {
@@ -150,6 +171,7 @@ export class PostIM13BrowserSaveContinueLifecycle {
         for (const carrier of evolved.carriers) candidateState.domains.units.update(carrier.unitId, draft => { draft.carrier = structuredClone(carrier); });
         const evolvedState = Object.freeze({
           ...candidateState,
+          ...candidateTransport.authoritativeSupplyState?.(),
           carrierBindings: evolved.carrierBindings,
           transportExecutions: evolved.transportExecutions,
         });
@@ -185,6 +207,19 @@ export class PostIM13BrowserSaveContinueLifecycle {
             return result;
           },
         });
+        unregister.push(off);
+      }
+      // IM-20F has already reconciled the consumed claim. Only the pending supply
+      // publication remains; no delivery settlement is replayed by this tick.
+      for (const pending of candidate.authoritative.transportExecutions.filter(value => value.state === 'DELIVERED')) {
+        const descriptor = { jobId: pending.jobId, unitId: pending.unitId, recoveryAction: 'RESUME_PENDING_SUPPLY_PUBLICATION' };
+        const transportTick = transport.tickFor(descriptor);
+        let off = () => {};
+        off = this.#runtime.scheduler.register({ id: `transport-supply-publication:${pending.jobId}`, phase: 'work', tick: dtMs => {
+          const result = transportTick(dtMs);
+          if (!transport.hasActiveExecution(pending.jobId)) off();
+          return result;
+        } });
         unregister.push(off);
       }
       this.#publish(candidate);

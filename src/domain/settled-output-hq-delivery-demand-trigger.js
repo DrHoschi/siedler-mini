@@ -79,7 +79,7 @@ export class SettledOutputHqDeliveryDemandTrigger {
     }, { id: demandId });
     const claim = demands.reserve({ demandId: demand.id, resourceId, amount, metadata: { source: SOURCE, resourceId, sourceBuildingId, hqBuildingId: targetHq.id } });
     const transportJobs = jobs.createFromClaimIds([claim.id]);
-    const reservation = BuildingStockTransportReservationContract.define({ id: reservationId, sourceBuildingId, targetBuildingId: targetHq.id, resourceTypeId, amount, state: 'ACTIVE' });
+    const reservation = BuildingStockTransportReservationContract.define({ id: reservationId, jobId: transportJobs.jobs[0].id, sourceBuildingId, targetBuildingId: targetHq.id, resourceTypeId, amount, state: 'ACTIVE' });
     BuildingStockTransportReservationService.reserve({ stock: sourceStock, reservations, reservation });
     return Object.freeze({ kind:'im36-settled-output-hq-delivery-demand-trigger', status:'TRIGGERED', mutation:true, resourceId, hqBuildingId:targetHq.id, stockKey:stockKey(sourceStock), demand:demands.get(demand.id), claim, transportJobs, reservations:Object.freeze([reservation]) });
   }

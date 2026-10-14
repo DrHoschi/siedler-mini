@@ -1,3 +1,36 @@
+## IM-37 transport/Continue evidence correction - 2026-10-14
+
+**Status:** IMPLEMENTED / LOCALLY VERIFIED / NOT FROZEN.
+
+**Implementation baseline:** `4895f04295c91866468b8d81908e0f2542c88b60`.
+**Branch:** `feature/im-37-transport-continue-delivery-evidence`.
+
+This is the authorized prerequisite correction for the IM-37 closed-loop orchestration. It is runtime and test work; it does not claim that the complete IM-37 loop is implemented.
+
+### Corrected boundary
+
+An existing logistics delivery with an outstanding BuildingStock reservation keeps its consumed Claim, PENDING Job, DELIVERED execution and occupied Carrier binding until the existing supply owner confirms the exact stock transfer and reservation release. The transport adapter invokes a synchronous `publishDeliveredSupply` seam before terminal cleanup. Missing publication preserves the pending evidence; invalid publication fails closed. Continue reconciles the consumed claim through existing IM-20F, retries only the supply publication and does not repeat delivery settlement. A publication failure on the unpublished recovery candidate preserves the active composition and stored save.
+
+New IM-23 return-supply and IM-36 output-to-HQ reservations carry their concrete `jobId`. The optional field is preserved by the existing reservation contract/capture/restore mapping and validated against source, target, resource type and amount. V2 remains schema version 2; old reservations without the field remain readable, with ambiguous legacy matching rejected. Already-released production reservations without a concrete job binding are not guessed as completed publication evidence. This is an identity binding on the existing reservation, not a second transfer ledger or settlement fence.
+
+The SaveGame validator admits consumed-Claim/PENDING-Job states only with the exact DELIVERED execution and matching Carrier binding; consumed terminal RELEASED jobs must have no active execution/binding. Invalid identities and contradictory continuation states remain rejected.
+
+### Verification scope
+
+Focused evidence covers pending delivery -> Save -> Reload -> Continue, repeated waiting ticks, exactly-once stock publication, failed publication and candidate discard, terminal-cleanup interruption after stock publication, old V2 compatibility, ambiguous reservations and contradictory consumed-delivery evidence. CI now also executes the existing IM-32 through IM-36 tests and the new transport/Continue test.
+
+### Local verification result
+
+- Focused transport/Continue evidence: **PASS / 10 checks / 0 blocker**.
+- Repository-defined CI Baseline command through IM-36 and the focused test: **EXIT 0**.
+- The final live-owner publication refinement has separate focused coverage; final-head GitHub CI is pending at commit creation.
+- Changed-file syntax checks and `git diff --check`: **PASS**.
+- No Pages, browser/device, full IM-37 loop or freeze PASS is claimed.
+
+### Remaining boundary
+
+The complete IM-37 normal-runtime production/logistics loop and its production-facing supply publication wiring remain pending. No UI, movement/pathfinding algorithm, new warehouse policy, Pages fix, main integration or freeze is included in this correction.
+
 ## IM-37 Definition Record - 2026-10-13
 
 **IM-37 - Closed Runtime Production Logistics Loop Orchestration: DEFINED / NOT IMPLEMENTED.**

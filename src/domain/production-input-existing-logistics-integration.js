@@ -60,7 +60,8 @@ export class ProductionInputExistingLogisticsIntegration{
     for(const id of assigned.claimIds){const claim=this.#claims.get(id);if(!claim||claim.state!=='ACTIVE'||claim.demandId!==demandId||claim.consumerId!==buildingId)throw new Error(`production input logistics claim invariant failed: ${id}`);}
     const jobs=this.#transportJobs.createFromAssignment(assigned);
     if(jobs.jobs.some(j=>j.demandId!==demandId||j.targetId!==buildingId||j.definitionId!==resourceTypeId))throw new Error('production input transport job invariant failed');
-    return Object.freeze({kind:'production-input-existing-logistics-integration',status:'DISPATCHED_TO_EXISTING_LOGISTICS',buildingId,demandId,resourceTypeId,match,assignment:assigned,reservations:Object.freeze(planned),transportJobs:jobs});
+    const boundReservations=planned.map((reservation,index)=>BuildingStockTransportReservationContract.define({...reservation,jobId:jobs.jobs[index].id}));
+    return Object.freeze({kind:'production-input-existing-logistics-integration',status:'DISPATCHED_TO_EXISTING_LOGISTICS',buildingId,demandId,resourceTypeId,match,assignment:assigned,reservations:Object.freeze(boundReservations),transportJobs:jobs});
   }
   #find(buildingId,resourceTypeId){return this.#demands.ids().map(id=>this.#demands.get(id)).find(d=>openDemand(d,buildingId,resourceTypeId))??null;}
 }

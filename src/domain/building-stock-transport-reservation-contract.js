@@ -38,6 +38,7 @@ export class BuildingStockTransportReservationContract {
     targetBuildingId,
     resourceTypeId,
     amount,
+    jobId = null,
     state = STATES.ACTIVE
   } = {}) {
     return Object.freeze({
@@ -47,6 +48,7 @@ export class BuildingStockTransportReservationContract {
       targetBuildingId: requireStableKind(targetBuildingId, 'building', 'target building id'),
       resourceTypeId: requireStableKind(resourceTypeId, 'resource-type', 'resource type id'),
       amount: requireAmount(amount),
+      ...(jobId == null ? {} : { jobId: requireStableKind(jobId, 'transport-job', 'transport job id') }),
       state: requireState(state)
     });
   }
