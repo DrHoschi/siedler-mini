@@ -123,6 +123,65 @@ await check('partial-return-keeps-input-demand-partial-and-production-blocked',(
   assert.equal(a.productionSettlementIds.length,0);assert.equal(a.productionCycleProgressions.length,0);assert.equal(a.buildingStocks.find(s=>s.buildingId===f.producer&&s.resourceTypeId===f.type).quantity,2);
   const d=a.resourceDemands.ids().map(id=>a.resourceDemands.get(id)).find(d=>d.metadata.source==='IM-23_PRODUCTION_INPUT');assert.equal(d.status,'PARTIAL');assert.equal(d.remainingAmount,1);h.capture();h.dispose();
 });
+function missingInputStockFixture() {
+  const f=fixture({input:0});
+  f.snapshot.authoritative.buildingStocks=f.snapshot.authoritative.buildingStocks.filter(s=>!(s.buildingId===f.producer&&s.resourceTypeId===f.type));
+  f.snapshot.authoritative.buildingStocks.push({kind:'building-stock',buildingId:f.hq,resourceTypeId:f.type,quantity:3});
+  assert.equal(Validation.validate(f.snapshot).status,'VALID');
+  return f;
+}
+function advanceToMissingStockReturn(h,f) {
+  for(let i=0;i<50;i++) {
+    h.step();h.capture();
+    const a=h.active.authoritative,execution=a.transportExecutions.find(e=>e.state==='TO_DROPOFF'&&a.resourceDemands.get(a.domains.jobs.get(e.jobId).demandId)?.metadata?.source==='IM-23_PRODUCTION_INPUT');
+    if(execution) {
+      assert.equal(a.buildingStocks.some(s=>s.buildingId===f.producer&&s.resourceTypeId===f.type),false);
+      return execution.jobId;
+    }
+  }
+  assert.fail('expected production input return before target stock exists');
+}
+async function savedSnapshot(h) {
+  h.runtime.pause();await h.lifecycle.save();
+  const snapshot=JSON.parse(h.storage.read());assert.equal(Validation.validate(snapshot).status,'VALID');return snapshot;
+}
+// Gate-3 regression: a missing stock row is a valid zero, not a missing building.
+await check('missing-target-stock-return-survives-save-reload-and-credits-once',async()=>{
+  const f=missingInputStockFixture(),h=harness(f.snapshot);let t,u;
+  try {
+    const jobId=advanceToMissingStockReturn(h,f);
+    t=harness(await savedSnapshot(h));
+    for(let i=0;i<20&&t.active.authoritative.domains.jobs.get(jobId).status!=='RELEASED';i++)t.step();
+    const a=t.active.authoritative;
+    assert.equal(a.domains.jobs.get(jobId).status,'RELEASED');
+    assert.equal(a.buildingStocks.find(s=>s.buildingId===f.producer&&s.resourceTypeId===f.type).quantity,3);
+    assert.equal(a.buildingStocks.find(s=>s.buildingId===f.hq&&s.resourceTypeId===f.type).quantity,0);
+    assert.equal(a.buildingStockTransportReservations.find(r=>r.jobId===jobId).state,'RELEASED');
+    assert.equal(a.workforceAssignments.find(w=>w.personId===f.carrier).availability,'FREE');
+    u=harness(await savedSnapshot(t));const before=u.capture();
+    u.loop.flush();u.loop.flush();assert.deepEqual(u.capture().authoritative.buildingStocks,before.authoritative.buildingStocks);
+    assert.equal(u.active.authoritative.domains.jobs.get(jobId).status,'RELEASED');
+    for(let i=0;i<20&&!u.active.authoritative.productionSettlementIds.length;i++)u.step();
+    assert.equal(u.active.authoritative.productionSettlementIds.length,1);u.capture();
+  } finally {u?.dispose();t?.dispose();h.dispose();}
+});
+await check('missing-target-stock-delivered-window-recovers-and-reloads-without-second-credit',async()=>{
+  const f=missingInputStockFixture(),h=harness(f.snapshot);let t,u;
+  try {
+    const jobId=advanceToMissingStockReturn(h,f);deliveredOptions(h);
+    const pending=await savedSnapshot(h);
+    assert.equal(pending.authoritative.transportExecutions.find(e=>e.jobId===jobId).state,'DELIVERED');
+    t=harness(pending);const a=t.active.authoritative;
+    assert.equal(a.domains.jobs.get(jobId).status,'RELEASED');
+    assert.equal(a.buildingStocks.find(s=>s.buildingId===f.producer&&s.resourceTypeId===f.type).quantity,3);
+    assert.equal(a.buildingStocks.find(s=>s.buildingId===f.hq&&s.resourceTypeId===f.type).quantity,0);
+    assert.equal(a.transportExecutions.length,0);assert.equal(a.carrierBindings.length,0);
+    const accepted=await savedSnapshot(t);u=harness(accepted);
+    assert.deepEqual(u.capture().authoritative.buildingStocks,accepted.authoritative.buildingStocks);
+    assert.equal(u.active.authoritative.domains.jobs.get(jobId).status,'RELEASED');
+    u.loop.flush();assert.deepEqual(u.capture().authoritative.buildingStocks,accepted.authoritative.buildingStocks);
+  } finally {u?.dispose();t?.dispose();h.dispose();}
+});
 await check('missing-recipe-and-workforce-register-no-cycle',()=>{
   for(const option of [{recipe:false},{workforce:false}]) {const f=fixture(option),h=harness(f.snapshot);for(let i=0;i<4;i++)h.step();assert.equal(h.active.authoritative.productionCycleProgressions.length,0);assert.equal(h.active.authoritative.productionSettlementIds.length,0);h.capture();h.dispose();}
 });

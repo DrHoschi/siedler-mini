@@ -1,4 +1,5 @@
 import { StableIdAllocator } from '../world/stable-id.js';
+import { BuildingStockContract } from '../domain/building-stock-contract.js';
 import { ActiveRuntimeProductionSupplyOrchestration as Supply } from './active-runtime-production-supply-orchestration.js';
 import { CarrierAssignmentService } from '../transport/carrier-assignment-service.js';
 import { CarrierContract } from '../transport/carrier-contract.js';
@@ -54,7 +55,10 @@ export class ActiveRuntimeProductionLogisticsLoopOrchestration {
       supply.publishSourceBoundOutputToHq({dispatch,delivery,deliveryCommit,reservationId:reservation.id,workforceState:worker,hqBuildingId:job.targetId,allocateReservationId:()=>ids.next('transport-reservation')});
     } else if (demand.metadata?.source==='IM-23_PRODUCTION_INPUT') {
       if (demand.metadata.buildingId!==job.targetId || demand.metadata.resourceTypeId!==job.definitionId) throw new Error('production input demand mismatch');
-      supply.publishDeliveredBuildingStock({dispatch,delivery,deliveryCommit,reservation,workforceState:worker,sourceStock:stock(reservation.sourceBuildingId),targetStock:stock(job.targetId)});
+      // Missing input stock rows already mean zero to production readiness.
+      // Only the verified delivery settlement may publish the first target row.
+      const targetStock=stock(job.targetId)??BuildingStockContract.define({buildingId:job.targetId,resourceTypeId:job.definitionId,quantity:0});
+      supply.publishDeliveredBuildingStock({dispatch,delivery,deliveryCommit,reservation,workforceState:worker,sourceStock:stock(reservation.sourceBuildingId),targetStock});
     } else throw new Error('production logistics publication requires IM-36 or IM-23 demand');
     return local.authoritative;
   }

@@ -1,3 +1,28 @@
+## IM-37 Gate 3 blocker correction / completion evidence - 2026-10-15
+
+**Status:** CORRECTED / LOCALLY VERIFIED / COMPLETE_NOT_FROZEN.
+
+**Review / correction baseline:** `b7836630261507a93ec40e45b0a6aa319fc27f0e`.
+**Working branch:** `feature/im-37-transport-continue-delivery-evidence`.
+
+The first Gate 3 review found one functional blocker despite successful existing tests and CI: a valid snapshot without the producer's input BuildingStock row could dispatch a return delivery, but publication passed an undefined target stock into the frozen settlement contract. The resulting DELIVERED/consumed-Claim snapshot remained valid while Continue rejected it with `RECOVERY_EXECUTION_FAILED`.
+
+### Bounded correction
+
+The IM-37 orchestration now supplies a zero-quantity target through the existing BuildingStockContract only when the exact target/type row is absent. This follows existing production-readiness and IM-32 intake semantics. It does not pre-credit or pre-publish stock. The existing delivered settlement still validates the source, target, type, amount, job, reservation and Workforce assignment, conserves stock, releases the reservation and frees transport Workforce. Missing source stock is not synthesized. No frozen domain contract, SaveGame mapping/schema, population, recipe, scheduler or transport algorithm changes.
+
+### Regression and Gate 3 evidence
+
+Two new regression checks first failed against the review baseline with the original publication/Continue errors. They cover a valid absent input-stock row with (1) an in-flight return saved/reloaded before arrival, normal publication, a second Save/Reload/Continue without another credit and next timed production settlement; and (2) a persisted DELIVERED/consumed-Claim window, Continue publication/cleanup and another reload without a second credit. Snapshot validation is exercised throughout using the existing browser-storage lifecycle adapter and in-memory storage; this is not browser/device evidence.
+
+- Focused IM-37 suite: **18 checks / PASS** (including the two new regressions).
+- Full repository-defined CI Baseline command, including the 10 transport/Continue prerequisite checks and all 18 IM-37 checks: **EXIT 0**.
+- Scope review: the correction changes only IM-37 orchestration, its tests and these two steering records. No new ledger, counter, fence, warehouse policy, authority or SaveGame schema is introduced.
+- Exact new-head GitHub CI: pending at commit creation; the successful baseline-head run does not prove this correction.
+- Repeated local Gate 3 runtime completion/evidence review: **PASS / 0 identified blockers**. Final exact-head CI confirmation remains separate; this is not a freeze authorization or marker.
+
+Freeze markers and legacy main remain untouched. No Pages/deploy, browser/device, freeze or main-integration PASS is claimed. The older Gate 2 evidence below is historical; the Gate 3 blocker and this correction supersede its unqualified zero-blocker interpretation.
+
 ## IM-37 Gate 2 implementation and verification - 2026-10-15
 
 **IM-37 - Closed Runtime Production Logistics Loop Orchestration: IMPLEMENTED / LOCALLY VERIFIED / COMPLETE_NOT_FROZEN.**
