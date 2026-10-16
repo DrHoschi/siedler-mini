@@ -1,3 +1,81 @@
+## IM-38 Definition Documentation and Scope Authorization - 2026-10-16
+
+**IM-38 - Authoritative New-Game Economy Bootstrap: DEFINED / NOT IMPLEMENTED.**
+
+**Authoritative functional baseline:** frozen IM-37 at `cc5115a2d3463068ef28af2ab8411c0f834529e0`.
+**Verified frozen marker:** `frozen/im-37-closed-runtime-production-logistics-loop-orchestration`.
+**Documentation working line:** `feature/im-37-transport-continue-delivery-evidence`, verified at that same commit before this documentation-only change.
+
+### Current steering reconciliation
+
+The frozen marker now resolves to the exact IM-37 functional baseline above. Older IM-37 entries below describe the historical pre-freeze state and do not override the verified frozen ref. This entry records that ref without moving it, modifying frozen code, or claiming new CI, Pages or device evidence.
+
+### Purpose and authority
+
+IM-38 defines a coherent authoritative economic starting state for an explicit New Game, replacing the diagnostic Miniworld in the normal game-start path. Existing Unit, Workforce, Housing/Home, BuildingStock, ResourceState and Gold owners retain their responsibilities. Population remains a projection of real resident identities and Home assignments; it is not a second person-creation authority.
+
+This authorization permits only these two steering-document updates. No implementation, runtime/test/package/workflow change, implementation branch, deployment, freeze or main integration is authorized. The next separate step is Definition Documentation Verification / Scope Gate against the resulting documentation commit. Gate 2 requires separate authorization and resolution of the proposed numerical baseline.
+
+### Proposed provisional start baseline - NOT YET BALANCE-APPROVED
+
+The following values remain proposals, not an approved balance policy or an implementation authorization:
+
+| Component | Proposed initial value |
+| --- | --- |
+| Buildings | One existing, completed HQ; no other starting building |
+| Founders | Six distinct persons: one Carrier, Builder, Lumberjack, Quarry Worker, Fisher and Hunter |
+| Workforce | All six FREE, assignmentId null; no building or transport assignment |
+| Capabilities | CAN_MOVE plus the respective existing specialist capability |
+| Carrier | CAN_SIMPLE_TRANSPORT and proposed capacity 4 goods units; AVAILABLE and unbound |
+| Homes | One distinct active Home assignment per founder, all referring to the same HQ |
+| HQ accommodation | Six temporary founder places, not population-generating ordinary housing |
+| HQ inventory | Proposed 20 wood and 20 stone |
+| Other goods and Gold | Zero; diagnostic boards are not adopted as a V1 starting good |
+
+Existing profile IDs are CARRIER / CAN_SIMPLE_TRANSPORT, BUILDER / CAN_BUILD, LUMBERJACK / CAN_LUMBERJACK, QUARRY_WORKER / CAN_QUARRY, FISHER / CAN_FISH and HUNTER / CAN_HUNT. Every profile also has CAN_MOVE. These are capabilities, not pre-created jobs or work assignments. Resource-type identities must come from authoritative definitions and stable allocators, not assumptions about diagnostic numerical IDs.
+
+### Bounded prospective implementation scope
+
+- A dedicated New-Game composition and minimal normal-start wiring, including the current boot-time and explicit New Game Miniworld creation points in src/main.js.
+- Exactly six Unit identities, six linked Workforce profiles/states and six Home bindings on the same authoritative persons. Record explicit founder provenance in the person data and preserve it after continuation; the exact provenance value must be defined before implementation.
+- Existing building identity/lifecycle and completed construction evidence for the HQ, without replaying a construction completion effect.
+- Existing stock/resource owners for start inventory and the existing HQ logistics materialization seam. BuildingStock and its logistics representation describe the same goods, not two additive inventories.
+- Gold starts at zero without a synthetic income settlement. No initial Claims, Demands, TransportJobs, reservations, Carrier bindings/executions, production cycles or already-settled economic effects.
+- Existing Population and player read-model projections are derived from that state. No new population counter, inventory ledger, scheduler or gameplay owner.
+
+### Explicit temporary-HQ Housing boundary
+
+The current DeterministicHousingPopulationIntegration fills available housing slots by creating GENERAL_RESIDENT persons with HOUSING_FREE_SLOT origin. A full six-place HQ at initial boot alone does not protect against later refill.
+
+IM-38 must explicitly distinguish temporary founder accommodation from ordinary population-generating housing. A vacated founder place must not create another person, before or after Save/Reload/Continue. Ordinary housing behavior must remain unchanged. A narrowly scoped Housing admission/population-policy contract extension and the mappings necessary to preserve that distinction are within the prospective IM-38 scope; a general Housing redesign, founder relocation and a general migration system are not.
+
+Existing ResidentHousingAssignmentIntegration may bind already existing founders. Continue rebinding uses persisted assignments with an empty person-creation/assignment input and must keep homeAssignmentsCreated at zero. The population-spawning integrator must not be used as a substitute founder factory or as a Continue repair.
+
+### Explicit persistence and failed-Restore boundary
+
+The current schema-V2 path already captures domain Unit records, resource definitions, Housing capabilities, Workforce profiles/states, Home assignments, Carrier state and BuildingStock. Founder provenance should use existing persisted person data where possible. Identity, provenance, capabilities, current availability, Carrier capacity, Home assignments and the temporary-HQ no-refill distinction must survive Capture -> Validate -> Restore -> Rebind -> Continue -> Capture.
+
+The existing Housing capability normalizers retain building identity and capacity only; an extra policy field must not be assumed to survive normalization. Any required policy or provenance mapping/validation gap must be addressed explicitly, with old V2 compatibility and fail-closed validation evidence. No schema-version bump or SaveGame redesign is preauthorized. If the selected solution requires either, stop and obtain separate scope authorization.
+
+Only explicit New Game may create founders and start stock. Continue restores the saved state, including reduced or exhausted inventory and any existing legitimate assignments. Missing, corrupt or failed Restore/recovery/rebind/activation must never silently invoke New Game, replenish stock, spawn founders or mutate the valid stored payload. The existing unpublished-candidate and activation rollback boundaries remain authoritative.
+
+### Required acceptance evidence for a later authorized implementation
+
+1. Six unique resident Unit IDs, six matching specialist profiles, six FREE states with no assignment ID and six distinct person-to-HQ Home bindings; derived population and HQ occupancy both six.
+2. Exact proposed-and-later-approved stock and Carrier values; all other starting goods and Gold zero; no boards recipe adoption, preallocated logistics or economic settlement receipts.
+3. Explicit founder provenance and complete existing capability coverage; no extra general residents from Housing.
+4. Repeated Save/Reload/Continue preserves IDs, provenance, Home bindings, capabilities, availability, Carrier capacity and current inventory, without bootstrap rerun.
+5. Save after actual stock reduction or exhaustion, then repeated Continue and another Save: no restoration of the original start quantities.
+6. A vacated temporary HQ place, repeated Housing evaluation and Save/Reload/Continue do not create replacement population. This may be a controlled fixture; implementing player-facing relocation is not required.
+7. Invalid/missing saves and failed restore/recovery/rebind/activation do not publish a fresh bootstrap or partially replace active owners; normal explicit New Game remains independently available.
+8. Existing ordinary Housing behavior, legacy valid V2 saves, frozen persistence/recovery and IM-37 predecessor regression remain intact. Automated evidence is not a substitute claim for real-device verification.
+
+### Explicit non-scope
+
+Building staffing after construction, founder relocation, real extraction from world targets, new production recipes, world-resource gameplay, new economy/logistics algorithms, general Housing or SaveGame redesign, UI expansion, Inspector redesign, Pages infrastructure, main integration and successor capabilities remain outside IM-38.
+
+---
+
 ## IM-37 Gate 3 blocker correction / completion evidence - 2026-10-15
 
 **Status:** CORRECTED / LOCALLY VERIFIED / COMPLETE_NOT_FROZEN.
