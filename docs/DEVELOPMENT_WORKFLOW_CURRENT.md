@@ -14,22 +14,22 @@ The frozen marker now resolves to the exact IM-37 functional baseline above. Old
 
 IM-38 defines a coherent authoritative economic starting state for an explicit New Game, replacing the diagnostic Miniworld in the normal game-start path. Existing Unit, Workforce, Housing/Home, BuildingStock, ResourceState and Gold owners retain their responsibilities. Population remains a projection of real resident identities and Home assignments; it is not a second person-creation authority.
 
-This authorization permits only these two steering-document updates. No implementation, runtime/test/package/workflow change, implementation branch, deployment, freeze or main integration is authorized. The next separate step is Definition Documentation Verification / Scope Gate against the resulting documentation commit. Gate 2 requires separate authorization and resolution of the proposed numerical baseline.
+This authorization permits only these two steering-document updates. No implementation, runtime/test/package/workflow change, implementation branch, deployment, freeze or main integration is authorized. The next separate step is Definition Documentation Verification / Scope Gate against the resulting documentation commit. The numerical start baseline was explicitly confirmed by the user on 2026-10-17 (Europe/Berlin). Gate 2 still requires separate implementation authorization.
 
-### Proposed provisional start baseline - NOT YET BALANCE-APPROVED
+### Confirmed IM-38 implementation start baseline - 2026-10-17
 
-The following values remain proposals, not an approved balance policy or an implementation authorization:
+The user explicitly confirmed the following start baseline. These are binding implementation and acceptance values for IM-38; later balancing may change them in a separate change. Confirmation does not authorize Gate 2 implementation, deployment, freeze or main integration.
 
-| Component | Proposed initial value |
+| Component | Confirmed initial value |
 | --- | --- |
 | Buildings | One existing, completed HQ; no other starting building |
 | Founders | Six distinct persons: one Carrier, Builder, Lumberjack, Quarry Worker, Fisher and Hunter |
 | Workforce | All six FREE, assignmentId null; no building or transport assignment |
 | Capabilities | CAN_MOVE plus the respective existing specialist capability |
-| Carrier | CAN_SIMPLE_TRANSPORT and proposed capacity 4 goods units; AVAILABLE and unbound |
+| Carrier | CAN_SIMPLE_TRANSPORT and capacity 4 goods units; AVAILABLE and unbound |
 | Homes | One distinct active Home assignment per founder, all referring to the same HQ |
 | HQ accommodation | Six temporary founder places, not population-generating ordinary housing |
-| HQ inventory | Proposed 20 wood and 20 stone |
+| HQ inventory | 20 wood and 20 stone |
 | Other goods and Gold | Zero; diagnostic boards are not adopted as a V1 starting good |
 
 Existing profile IDs are CARRIER / CAN_SIMPLE_TRANSPORT, BUILDER / CAN_BUILD, LUMBERJACK / CAN_LUMBERJACK, QUARRY_WORKER / CAN_QUARRY, FISHER / CAN_FISH and HUNTER / CAN_HUNT. Every profile also has CAN_MOVE. These are capabilities, not pre-created jobs or work assignments. Resource-type identities must come from authoritative definitions and stable allocators, not assumptions about diagnostic numerical IDs.
@@ -62,7 +62,7 @@ Only explicit New Game may create founders and start stock. Continue restores th
 ### Required acceptance evidence for a later authorized implementation
 
 1. Six unique resident Unit IDs, six matching specialist profiles, six FREE states with no assignment ID and six distinct person-to-HQ Home bindings; derived population and HQ occupancy both six.
-2. Exact proposed-and-later-approved stock and Carrier values; all other starting goods and Gold zero; no boards recipe adoption, preallocated logistics or economic settlement receipts.
+2. Exact confirmed stock and Carrier values; all other starting goods and Gold zero; no boards recipe adoption, preallocated logistics or economic settlement receipts.
 3. Explicit founder provenance and complete existing capability coverage; no extra general residents from Housing.
 4. Repeated Save/Reload/Continue preserves IDs, provenance, Home bindings, capabilities, availability, Carrier capacity and current inventory, without bootstrap rerun.
 5. Save after actual stock reduction or exhaustion, then repeated Continue and another Save: no restoration of the original start quantities.
