@@ -12,20 +12,23 @@ class Canvas extends Element {
   getContext() {return context;}
   getBoundingClientRect() {return {width:800,height:600,left:0,top:0};}
 }
+const hud=Object.fromEntries(['wood','stone','gold','population'].map(key=>['#hud-'+key,new Element()]));
 const canvas=new Canvas(), output=new Element(), status=new Element(), test=new Element(), storage=new Map();
 globalThis.Element=Element;
 globalThis.HTMLCanvasElement=Canvas;
 globalThis.window={devicePixelRatio:1,addEventListener(){},setInterval:()=>0,clearInterval(){},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)}};
-globalThis.document={readyState:'loading',addEventListener(){},querySelector:s=>s==='#game-canvas'?canvas:s==='#runtime-status'?status:s==='#test-status'?test:s==='[data-im19g-population-housing-gold-state]'?output:null,querySelectorAll:()=>[]};
+globalThis.document={readyState:'loading',addEventListener(){},querySelector:s=>hud[s]??(s==='#game-canvas'?canvas:s==='#runtime-status'?status:s==='#test-status'?test:s==='[data-im19g-population-housing-gold-state]'?output:null),querySelectorAll:()=>[]};
 const errors=[];
 process.on('unhandledRejection',e=>errors.push(String(e)));
 await import('../main.js');
 await new Promise(resolve=>setTimeout(resolve,100));
 assert.equal(window.CleanRuntime.domains.units.ids().length,0);
+await import('../ui/runtime-hud-projection.js');
 assert.equal(window.CleanRuntime.im21fNewGameLifecycle.startFresh().status,'STARTED');
 window.CleanRuntime.runtime.pause();
 window.CleanRuntime.renderCurrentWorld();
 assert.equal(output.dataset.population,'6');assert.equal(output.dataset.gold,'100');
+assert.deepEqual(Object.values(hud).map(x=>x.textContent),['20','20','100','6']);
 await window.CleanRuntime.saveToBrowserStorage();
 await import('../main.js?im38-reload-smoke=1');
 await new Promise(resolve=>setTimeout(resolve,100));
@@ -33,6 +36,7 @@ assert.equal(window.CleanRuntime.domains.units.ids().length,0);
 assert.equal(window.CleanRuntime.continueFromBrowserStorage().status,'CONTINUED');
 window.CleanRuntime.runtime.pause();
 assert.equal(output.dataset.population,'6');assert.equal(output.dataset.gold,'100');
+assert.deepEqual(Object.values(hud).map(x=>x.textContent),['20','20','100','6']);
 assert.deepEqual(errors,[]);
 console.info=info;
 console.log('IM-38 main entry/New Game/HUD/Save/reload/Continue DOM-stub smoke PASS');

@@ -1,3 +1,15 @@
+## IM-38 HUD refresh correction - 2026-10-25
+
+Browser verification of published `32ed0e08693158872095a5ea20d08af7e9d18616` exposed stale upper HUD values after New Game: the settlement panel correctly showed six residents and 100 Gold, while the upper HUD retained the empty boot values. The HUD module rendered only at initialization.
+
+The bounded correction refreshes the existing read-only HUD projection from the existing world-render path, including New Game and Continue. No economy, stock, population, persistence or Housing owner changes. The entry module cache key advances to im38-2. The main-entry smoke now loads the actual HUD module and asserts all four visible outputs after New Game and Save/reload/Continue; it reproduced four zero values before the fix and passes with 20 wood / 20 stone / 100 Gold / 6 residents afterwards.
+
+Pages infrastructure correction was completed separately: the exact IM-38 branch was allowed in the existing github-pages environment and Pages run 40076735420 attempt 2 succeeded on `32ed0e08693158872095a5ea20d08af7e9d18616`. No workflow or product file was needed for that setting correction. This record does not claim a real-device PASS. Final exact-head CI/Pages and live HUD verification must be checked on the resulting correction commit.
+
+Status remains **COMPLETE_NOT_FROZEN**. No freeze marker or legacy main change.
+
+---
+
 ## IM-38 Gate 2 implementation and verification - 2026-10-24
 
 **IM-38 - Authoritative New-Game Economy Bootstrap: IMPLEMENTED / LOCALLY VERIFIED / COMPLETE_NOT_FROZEN.**
