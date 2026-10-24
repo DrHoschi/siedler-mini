@@ -1,3 +1,40 @@
+## IM-38 Gate 2 implementation and verification - 2026-10-24
+
+**IM-38 - Authoritative New-Game Economy Bootstrap: IMPLEMENTED / LOCALLY VERIFIED / COMPLETE_NOT_FROZEN.**
+
+**Baseline:** `18ac1ec475abdb6115c3a804dd2ac4aca0ee8894`, on frozen IM-37 `cc5115a2d3463068ef28af2ab8411c0f834529e0`.
+**Branch:** `feature/im-38-authoritative-new-game-economy-bootstrap`.
+**Durable implementation checkpoint:** `afccf896e9ba545c42b244cfef8b85daaa65dfdd`.
+**Authorization:** confirmed Gate 2 with 100 initial Gold; restoration, full verification and publication explicitly requested on 2026-10-24. This record supersedes earlier pending/definition states for current steering.
+
+### Implemented result
+
+Explicit New Game produces one completed HQ, six unique founders with persisted NEW_GAME_FOUNDER provenance, six specialist profiles, six FREE Workforce states and six individual HQ Home bindings. Carrier capacity is 4 and initially AVAILABLE. HQ holds 20 wood and 20 stone. Initial Gold is **100**, directly initialized without an income receipt/fence; all other starting goods are zero. This supersedes the earlier zero-Gold proposal.
+
+Boot exposes only an empty technical Start-menu composition. Continue never calls the bootstrap and preserves current quantities and identities. The existing IM-33 resource representation exposes the same HQ stock to logistics, without double inventory credit. No diagnostic boards recipe, prepared jobs, demands, claims, transport bindings, reservations, production cycles or economic settlements are started.
+
+The optional Housing populationPolicy survives canonical capture and residential normalization. NO_AUTO_POPULATION prevents automatic person creation for temporary founder places; ordinary Housing and legacy absent-policy behavior remain unchanged. Invalid values reject. SaveGame remains schema 2. Existing full Unit persistence and existing restore/rebind paths preserve provenance, profiles and Home identity without new sections.
+
+The checkpoint describes the bounded Gold read-model/visible build identity adjustments and the failure-injection-proven Continue activation rollback correction. The additional main-entry smoke test executes real main/New Game/HUD/Save/reload/Continue wiring with DOM/canvas stubs. It is automated integration evidence, not real-browser or device evidence.
+
+### Verification evidence
+
+- Restored focused IM-38 suite: **13 checks / PASS**.
+- Actual main-entry / New Game / current HUD / Save / fresh module boot / Continue smoke: **PASS**.
+- Entire repository-defined CI Baseline shell command, including frozen predecessors, the 10 transport/Continue checks, all 18 IM-37 checks and IM-38: **EXIT 0** locally.
+- Changed-file syntax and git diff --check: **PASS**.
+- Scope review: no change to frozen stock, resource matching/assignment, production, transport movement, recipes or extraction algorithms. Only the reproduced non-running Continue rollback defect extends the originally expected capture/validation change boundary.
+- The failed-activation test rejects the candidate, preserves the previous composition and stored save and leaves Runtime non-running.
+- Start-stock evidence includes genuinely exhausted wood, reduced stone and an already-spent Gold fixture through three Save/Reload/Continue rounds; vacancy evidence uses a controlled moved-resident fixture without implementing relocation gameplay.
+
+Exact-head GitHub CI is pending at commit creation and must be checked on the resulting SHA. The automatic Pages run for checkpoint afccf896 failed; this block claims no deploy, browser or device PASS. Pages infrastructure is outside IM-38. A successful code regression must not be described as a successful test deployment.
+
+### Remaining gate and exclusions
+
+Completion/evidence review and freeze remain separate. No frozen marker or legacy main was changed. Building staffing, founder relocation gameplay, world extraction, new recipes, UI expansion, Pages repair and successor capabilities remain outside this block.
+
+---
+
 ## IM-38 Gate 2 restoration and implementation checkpoint - 2026-10-24
 
 **IM-38 - Authoritative New-Game Economy Bootstrap: IMPLEMENTED / FOCUSED VERIFIED / FULL REGRESSION PENDING / NOT FROZEN.**

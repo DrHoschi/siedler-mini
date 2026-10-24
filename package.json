@@ -1,6 +1,6 @@
 {
   "name":"neue-siedler","private":true,"type":"module","scripts":{
-    "test:im38":"node src/dev/im-38-self-test.node.js",
+    "test:im38":"node src/dev/im-38-self-test.node.js && node src/dev/im-38-main-smoke.node.js",
     "test:im37":"node src/dev/im-37-self-test.node.js",
     "test:im37-transport-evidence":"node src/dev/im-37-transport-continue-evidence-self-test.node.js",
     "verify":"node tools/verify-structure.js","check:syntax":"node tools/ci-check.mjs",

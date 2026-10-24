@@ -48,7 +48,7 @@ function createComposition(started) {
       identity:BuildingIdentityOwnershipContract.define({ buildingId, definitionId:'HQ' }),
       lifecycle:BuildingLifecycleStateContract.define({ buildingId }), position:{ x:2, y:2 },
     }, { id:buildingId });
-    const housing = Housing.defineHousing({ buildingIdentity:hq.identity, capacity:6, populationPolicy:'NO_AUTO_POPULATION' });
+    const housing = Housing.defineHousing({ buildingIdentity:hq.identity, capacity:NEW_GAME_ECONOMY_BASELINE.founderCount, populationPolicy:'NO_AUTO_POPULATION' });
     housingCapabilities.push(housing);
     const pending=Progress.define({ buildingId }), inProgress=Progress.advance(pending,0.5), complete=Progress.advance(inProgress,1);
     constructionProgress.push(complete);
@@ -60,7 +60,7 @@ function createComposition(started) {
       const personId=domains.units.allocateId(), identity=PersonResidentIdentityContract.define({ personId });
       const position={ x:1.25+index%3, y:3.25+Math.floor(index/3) };
       const person={ identity, position, residentClass:'GENERAL_RESIDENT', residentOrigin:NEW_GAME_FOUNDER_ORIGIN };
-      if (specialization==='CARRIER') person.carrier=CarrierContract.define({ unitId:personId, capacity:4, state:'AVAILABLE', location:{ kind:'cell', refId:map.cellIdAt(Math.floor(position.x),Math.floor(position.y)) } });
+      if (specialization==='CARRIER') person.carrier=CarrierContract.define({ unitId:personId, capacity:NEW_GAME_ECONOMY_BASELINE.carrierCapacity, state:'AVAILABLE', location:{ kind:'cell', refId:map.cellIdAt(Math.floor(position.x),Math.floor(position.y)) } });
       domains.units.create(person,{ id:personId }); personIdentities.push(identity);
       workforceProfiles.push(PersonWorkforceProfileContract.define({ personId, specialization, capabilities:['CAN_MOVE',capability] }));
       workforceAssignments.push(WorkforceAssignmentStateContract.define({ personId, availability:'FREE' }));
@@ -78,7 +78,7 @@ function createComposition(started) {
   const traversability=new WorldBackedTraversabilitySource({ map, domains });
   return Object.freeze({ kind:'active-runtime-composition', scenarioId:started?'IM38_NEW_GAME_ECONOMY':'IM38_START_MENU', authoritative:Object.freeze({
     world, map, domains, resourceState, resourceClaims, resourceDemands,
-    goldEconomy:new GoldEconomyOwner({ initialGold:started?100:0 }), goldFlowAdmission:null, goldSettlement:null,
+    goldEconomy:new GoldEconomyOwner({ initialGold:started?NEW_GAME_ECONOMY_BASELINE.gold:0 }), goldFlowAdmission:null, goldSettlement:null,
     housingCapabilities:frozen(housingCapabilities), residentHousingAssignment, populationProjection, homeAssignments:residentHousingAssignment.assignments,
     workforceProfiles:frozen(workforceProfiles), workforceAssignments:frozen(workforceAssignments),
     workforceRequirements:frozen([]), workforceBindings:frozen([]), carrierBindings:frozen([]), transportExecutions:frozen([]),
