@@ -1,5 +1,5 @@
 import { PersonResidentIdentityContract } from './person-resident-identity-contract.js';
-import { HousingHomeCapacityIntegrationContract } from './housing-home-capacity-integration-contract.js';
+import { HousingHomeCapacityIntegrationContract, housingPopulationPolicyFields } from './housing-home-capacity-integration-contract.js';
 import { HousingCapacityOccupancy } from './housing-capacity-occupancy.js';
 import { ResidentHomeAssignmentContract } from './resident-home-assignment-contract.js';
 
@@ -24,6 +24,7 @@ function requireHousings(housings) {
       kind: 'building-housing',
       buildingId: housing.buildingId,
       capacity: housing.capacity,
+      ...housingPopulationPolicyFields(housing.populationPolicy),
     });
   }).sort((a, b) => a.buildingId.localeCompare(b.buildingId));
 
@@ -74,8 +75,9 @@ function validateAssignmentTruth({ domains, housings, assignments }) {
   }
 }
 
-function firstHousingWithFreeSlot(housings, assignments) {
+function firstHousingWithFreeSlot(housings, assignments, { spawning = false } = {}) {
   return housings.find(housing => {
+    if (spawning && housing.populationPolicy === 'NO_AUTO_POPULATION') return false;
     const summary = HousingHomeCapacityIntegrationContract.summarizeHousing({ housing, assignments });
     return summary.availableSlots > 0;
   }) ?? null;
@@ -142,7 +144,7 @@ export class DeterministicHousingPopulationIntegration {
 
     const createdGeneralResidentIds = [];
     while (true) {
-      const housing = firstHousingWithFreeSlot(orderedHousings, nextAssignments);
+      const housing = firstHousingWithFreeSlot(orderedHousings, nextAssignments, { spawning: true });
       if (!housing) break;
       const person = createGeneralResident(stores);
       const assignment = HousingHomeCapacityIntegrationContract.assignHome({

@@ -2,6 +2,13 @@ import { parseStableId } from '../world/stable-id.js';
 import { HousingCapacityOccupancy } from './housing-capacity-occupancy.js';
 import { ResidentHomeAssignmentContract } from './resident-home-assignment-contract.js';
 
+// Missing policy preserves ordinary Housing and the canonical legacy V2 shape.
+export function housingPopulationPolicyFields(value) {
+  if (value === undefined) return {};
+  if (!['AUTO_FILL', 'NO_AUTO_POPULATION'].includes(value)) throw new TypeError('invalid housing population policy');
+  return { populationPolicy: value };
+}
+
 function deepFreeze(value) {
   if (value == null || typeof value !== 'object' || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
@@ -41,6 +48,7 @@ function requireHousing(value) {
     kind: 'building-housing',
     buildingId: capacityContract.buildingId,
     capacity: capacityContract.capacity,
+    ...housingPopulationPolicyFields(value.populationPolicy),
   });
 }
 
@@ -58,7 +66,7 @@ function assignedHomeForPerson(assignments, personId) {
 }
 
 export class HousingHomeCapacityIntegrationContract {
-  static defineHousing({ buildingIdentity, capacity } = {}) {
+  static defineHousing({ buildingIdentity, capacity, populationPolicy } = {}) {
     const identity = requireBuildingIdentity(buildingIdentity);
     const capacityContract = HousingCapacityOccupancy.defineCapacity({
       buildingId: identity.buildingId,
@@ -69,6 +77,7 @@ export class HousingHomeCapacityIntegrationContract {
       kind: 'building-housing',
       buildingId: identity.buildingId,
       capacity: capacityContract.capacity,
+      ...housingPopulationPolicyFields(populationPolicy),
     });
   }
 

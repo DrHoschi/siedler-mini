@@ -1,5 +1,6 @@
 import { ProductionCycleTimeContract as Time } from '../domain/production-cycle-time-contract.js';
 import { parseStableId } from '../world/stable-id.js';
+import { housingPopulationPolicyFields } from '../domain/housing-home-capacity-integration-contract.js';
 import { SaveGameValidationContract } from './savegame-validation-contract.js';
 import { BuildingConstructionProgressTransitionContract } from '../domain/building-construction-progress-transition-contract.js';
 import { BuildingStockContract } from '../domain/building-stock-contract.js';
@@ -167,6 +168,8 @@ function validateDefinitions(snapshot, collector, resourceTypeIds, refs) {
       if (!refs.has(building.id)) collector.add('DANGLING_HOUSING_BUILDING', `${path}.buildingId`);
     }
     if (!isSafeNonNegativeInteger(value?.capacity)) collector.add('INVALID_HOUSING_CAPACITY', `${path}.capacity`);
+    try { housingPopulationPolicyFields(value?.populationPolicy); }
+    catch { collector.add('INVALID_HOUSING_POPULATION_POLICY', `${path}.populationPolicy`); }
   });
 
   const workforcePeople = new Set();

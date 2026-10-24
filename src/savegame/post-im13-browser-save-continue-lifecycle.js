@@ -232,8 +232,12 @@ export class PostIM13BrowserSaveContinueLifecycle {
         schedulerRegistrationCount: unregister.length + (candidate.authoritative.productionCycleProgressions?.length ?? 0), restored, rebound, transport, recoveryPlan, recoveryExecution,
       });
     } catch (error) {
-      for (const off of unregister.reverse()) off();
       const rollbackErrors = [];
+      // Activation commit can fail after Runtime.start(): a rejected candidate
+      // must not leave the previous composition ticking.
+      try { if (this.#runtime.state === 'RUNNING') this.#runtime.pause(); }
+      catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
+      for (const off of unregister.reverse()) off();
       try { productionActivation?.rollback(); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
       try { this.#publish(previous); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }
       try { this.#restorePresentation(previousPresentation); } catch (rollbackError) { rollbackErrors.push(String(rollbackError.message)); }

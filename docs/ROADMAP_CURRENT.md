@@ -1,3 +1,35 @@
+## IM-38 Gate 2 restoration and implementation checkpoint - 2026-10-24
+
+**IM-38 - Authoritative New-Game Economy Bootstrap: IMPLEMENTED / FOCUSED VERIFIED / FULL REGRESSION PENDING / NOT FROZEN.**
+
+**Implementation baseline:** `18ac1ec475abdb6115c3a804dd2ac4aca0ee8894`; functional predecessor: frozen IM-37 `cc5115a2d3463068ef28af2ab8411c0f834529e0`.
+**Working branch:** `feature/im-38-authoritative-new-game-economy-bootstrap`.
+**Authorization:** the user confirmed 100 initial Gold and Gate 2 implementation/verification on 2026-10-17, and explicitly requested restoration, complete verification and publication on 2026-10-24. No freeze or main integration is authorized.
+
+### Confirmed baseline amendment
+
+Initial Gold is **100**, initialized directly by GoldEconomyOwner without an income settlement, receipt or fence. This supersedes the earlier zero-Gold definition below. The other confirmed values remain: one completed HQ, six founders (Carrier, Builder, Lumberjack, Quarry Worker, Fisher, Hunter), all FREE without assignments, Carrier capacity 4 / AVAILABLE, six HQ Home bindings, 20 wood and 20 stone, all other goods zero.
+
+### Restored implementation
+
+A dedicated new-game composition creates the authoritative founders with `residentOrigin: NEW_GAME_FOUNDER`, existing specialist profiles, Home assignments, stocks and Gold. Boot creates only an empty Start-menu composition; only explicit New Game creates the starting economy. Existing saves are preserved. Existing IM-33 HQ resource materialization represents the same BuildingStock, not an additional inventory.
+
+The optional Housing field `populationPolicy` accepts `AUTO_FILL` and `NO_AUTO_POPULATION`. The founder HQ uses the latter. Only automatic person creation skips those places; assigning existing residents remains possible. The policy survives capture and residential normalization and is validated on read. Absent fields retain legacy V2 behavior and serialized shape; invalid values fail closed. Existing full Unit persistence preserves provenance. Schema remains 2; no new persistence section or ledger.
+
+The existing current-state player projection handles initial Gold without inventing an income event. Main refreshes the read-only projection when rendering after New Game and Continue. Entry/config/visible identity is synchronized to `IM-38-AUTHORITATIVE-NEW-GAME-ECONOMY-BOOTSTRAP-TESTBUILD-1`. The predecessor IM-21C source check now accepts this exact successor identity while retaining all its gameplay/UI assertions.
+
+A reproduced activation failure after Runtime.start() exposed a rollback gap: the rejected Continue restored the old composition but left Runtime RUNNING. The bounded correction pauses Runtime before unregistering and rolling back the candidate. A direct failure-injection regression proves non-running state, old composition identity and unchanged stored save. This is a required failed-activation acceptance correction, not a new recovery policy.
+
+### Checkpoint evidence and remaining work
+
+The restored focused IM-38 suite passes **13 checks**. It covers exact identities/capabilities/baseline, normal IM-37 idle ticks, repeated New Game without overwriting storage, repeated Save/Reload/Continue with exhausted stock and reduced Gold, a genuinely vacant HQ place across reload, normal Housing and legacy missing-policy compatibility, invalid policy/saves and failed activation rollback.
+
+The repository-defined full CI Baseline command is running locally. This checkpoint does not claim full regression, exact-head GitHub CI, browser/device or deployment PASS. Verification completion and final evidence remain to be recorded on this same branch. Historical local evidence from the removed workspace is not reused as current verification.
+
+No building staffing, relocation feature, world extraction, recipe, UI expansion, Pages infrastructure, freeze or main integration is included.
+
+---
+
 ## IM-38 Definition Documentation and Scope Authorization - 2026-10-16
 
 **IM-38 - Authoritative New-Game Economy Bootstrap: DEFINED / NOT IMPLEMENTED.**

@@ -256,9 +256,16 @@ export function renderPlayerPopulationHousingGoldProjection(projection, surface 
 export function projectFromRuntime(runtime = window.CleanRuntime) {
   if (!runtime?.populationProjection
     || !runtime?.residentHousingAssignment
-    || !runtime?.goldSettlement
     || !runtime?.goldEconomy) {
     throw new TypeError('complete IM-19G runtime sources required');
+  }
+  if (!runtime.goldSettlement) {
+    return projectPlayerPopulationHousingGoldFromCurrentState({
+      populationProjection: runtime.populationProjection,
+      housingAssignmentIntegration: runtime.residentHousingAssignment,
+      currentGoldState: runtime.goldEconomy.snapshot(),
+      goldSettlementIds: [...(runtime.goldSettlementIds ?? [])]
+    });
   }
   return projectPlayerPopulationHousingGold({
     populationProjection: runtime.populationProjection,

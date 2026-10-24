@@ -1,5 +1,6 @@
 import { ProductionCycleTimeContract as Time } from '../domain/production-cycle-time-contract.js';
 import { parseStableId } from '../world/stable-id.js';
+import { housingPopulationPolicyFields } from '../domain/housing-home-capacity-integration-contract.js';
 import { SaveGameSnapshotContract } from './savegame-snapshot-contract.js';
 import { PersistentStateInventorySaveGameSchemaContract } from './persistent-state-inventory-schema-contract.js';
 import { BuildingConstructionProgressTransitionContract } from '../domain/building-construction-progress-transition-contract.js';
@@ -238,7 +239,8 @@ function normalizeHousingCapability(value) {
   return deepFreeze({
     kind: 'building-housing',
     buildingId: requireStableKind(value.buildingId, 'building', 'housing building id'),
-    capacity
+    capacity,
+    ...housingPopulationPolicyFields(value.populationPolicy)
   });
 }
 

@@ -1,5 +1,5 @@
 import { BuildingIdentityOwnershipContract } from './building-identity-ownership-contract.js';
-import { HousingHomeCapacityIntegrationContract } from './housing-home-capacity-integration-contract.js';
+import { HousingHomeCapacityIntegrationContract, housingPopulationPolicyFields } from './housing-home-capacity-integration-contract.js';
 import { OperationalBuildingAdmissionContract } from './operational-building-admission-contract.js';
 
 const STATUS = Object.freeze({
@@ -44,7 +44,8 @@ function normalizeHousingCapability(value) {
   return Object.freeze({
     kind: 'building-housing',
     buildingId: summary.buildingId,
-    capacity: summary.capacity
+    capacity: summary.capacity,
+    ...housingPopulationPolicyFields(value.populationPolicy)
   });
 }
 

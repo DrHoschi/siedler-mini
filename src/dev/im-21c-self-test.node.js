@@ -60,9 +60,9 @@ assert.match(selectionSource, /options: IM21C_SUPPORTED_PLACEMENT_OPTIONS/);
 assert.match(integrationSource, /selectionController\.clear\(\)/);
 assert.match(integrationSource, /placementController\.subscribe/);
 assert.match(integrationSource, /inactiveDestination === 'catalog'/);
-assert.match(main, /IM-21(?:C|D) · TESTBUILD 1/, 'IM-21C contract may run under the authorized IM-21D successor build identity');
+assert.match(main, /(?:IM-21(?:C|D)|IM-38) · TESTBUILD 1/, 'IM-21C contract may run under the authorized IM-21D/IM-38 successor build identity');
 assert.doesNotMatch(main, /buildWorkspace\.hidden/);
-assert.match(config, /IM-21(?:C-BUILD-CATALOG-PLACEMENT-PLAYER-UX|D-WORK-AREA-PLAYER-UX)-INTEGRATION-TESTBUILD-1/, 'IM-21C contract may run under the authorized IM-21D successor runtime build identity');
+assert.match(config, /(?:IM-21(?:C-BUILD-CATALOG-PLACEMENT-PLAYER-UX|D-WORK-AREA-PLAYER-UX)-INTEGRATION|IM-38-AUTHORITATIVE-NEW-GAME-ECONOMY-BOOTSTRAP)-TESTBUILD-1/, 'IM-21C contract may run under the authorized IM-21D/IM-38 successor runtime build identity');
 assert.match(ci, /im-21b-self-test\.node\.js/);
 assert.match(ci, /im-21c-self-test\.node\.js/);
 
